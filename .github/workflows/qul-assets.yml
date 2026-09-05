@@ -8,7 +8,7 @@
 # What gets committed (when committing is on):
 #   packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts   the compiled layout (ASCII)
 #   scripts/cdn-etags.json                                                 ETags of every CDN font
-#   example/public/fonts/<mushaf>/p{1,10,604}.{ttf,woff2}                  fixture fonts (development only:
+#   example/public/fonts/<mushaf>/p{1,10,187,604}.{ttf,woff2}                  fixture fonts (development only:
 #   packages/remotion-mushaf-line-renderer/test/fixtures/fonts/<mushaf>/... see .gitignore for the rule)
 #
 # Fonts of other pages are downloaded when asked for (`fonts: all`) but stay ignored by git.
@@ -19,7 +19,7 @@ on:
     inputs:
       fonts:
         description: 'Pages whose fonts to download: a list/ranges such as "1,10,604" or "1-20", or "all"'
-        default: '1,10,604'
+        default: '1,10,187,604'
         type: string
       compile:
         description: 'Compile the layout data from QUL preview pages (604 requests, cached between runs)'
@@ -49,7 +49,7 @@ jobs:
     timeout-minutes: 90
     env:
       # Empty on push events; the shell falls back to the defaults.
-      FONTS: ${{ inputs.fonts || '1,10,604' }}
+      FONTS: ${{ inputs.fonts || '1,10,187,604' }}
       COMPILE: ${{ github.event_name == 'push' || inputs.compile }}
       COMMIT: ${{ github.event_name == 'push' || inputs.commit }}
     steps:

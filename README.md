@@ -22,7 +22,7 @@ to the branch it was started on:
 2. The run compiles and validates the layout, downloads the fonts with the parity and glyph checks,
    records the CDN ETags, checks the CDN (both font sets, CORS), runs the package's data tests, and
    commits `packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts`,
-   `scripts/cdn-etags.json` and the fixture fonts of pages 1, 10 and 604.
+   `scripts/cdn-etags.json` and the fixture fonts of pages 1, 10, 187 and 604.
 3. Pull the branch; the browser and render suites now run offline, and the render suite writes
    `test/render/p10-l3.png` for a visual check against the printed page.
 
