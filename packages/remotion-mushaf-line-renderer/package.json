@@ -1,0 +1,68 @@
+{
+  "name": "remotion-mushaf-line-renderer",
+  "version": "0.1.0",
+  "description": "Render a single line of the KFGQPC V4 (1441H) mushaf in Remotion, pixel-faithful, with @remotion/transitions entrance animations.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tlawat/remotion-mushaf-line-renderer.git",
+    "directory": "packages/remotion-mushaf-line-renderer"
+  },
+  "keywords": [
+    "remotion",
+    "quran",
+    "mushaf",
+    "qul",
+    "kfgqpc",
+    "arabic",
+    "video"
+  ],
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.mjs",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.js"
+    },
+    "./presentations/reveal-rtl": {
+      "types": "./dist/types/presentations/reveal-rtl.d.ts",
+      "import": "./dist/esm/presentations/reveal-rtl.mjs",
+      "require": "./dist/cjs/presentations/reveal-rtl.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "presentations/reveal-rtl": [
+        "./dist/types/presentations/reveal-rtl.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:types": "tsc --noEmit -p tsconfig.test-types.json",
+    "test:browser": "playwright test -c test/browser/playwright.config.ts",
+    "test:render": "vitest run --project render"
+  },
+  "peerDependencies": {
+    "@remotion/transitions": ">=4.0.374",
+    "react": ">=18.0.0",
+    "remotion": ">=4.0.374"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "4.0.521",
+    "@remotion/player": "4.0.521",
+    "@remotion/renderer": "4.0.521",
+    "@remotion/transitions": "4.0.521",
+    "remotion": "4.0.521"
+  }
+}

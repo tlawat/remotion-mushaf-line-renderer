@@ -1,0 +1,40 @@
+{
+  "name": "remotion-mushaf-line-renderer-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Monorepo for remotion-mushaf-line-renderer: render one line of the KFGQPC V4 mushaf in Remotion.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "example"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "npm run build --workspace packages/remotion-mushaf-line-renderer",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:types": "npm run test:types --workspace packages/remotion-mushaf-line-renderer",
+    "test:browser": "npm run test:browser --workspace packages/remotion-mushaf-line-renderer",
+    "test:render": "npm run test:render --workspace packages/remotion-mushaf-line-renderer",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "fetch-data": "node scripts/fetch-qul.mjs",
+    "verify:cdn": "node scripts/verify-cdn.mjs"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@playwright/test": "1.56.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "jsdom": "^27.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
