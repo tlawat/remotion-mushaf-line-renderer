@@ -6,9 +6,10 @@ First release.
 
 - `<MushafLine>` renders one `ayah` line of the KFGQPC V4 (1441H) mushaf with QUL's per-page glyph
   fonts, one DOM element per word, justified or centred exactly as printed.
-- `enter` takes any DOM presentation from `@remotion/transitions` (`fade`, `slide`, `wipe`, `flip`,
-  `clockWipe`, `iris`, `pushCut`, `none`) plus the bundled `revealRtl`; timing comes from the
-  enclosing `<Sequence>`.
+- `enter` and `exit` take any DOM presentation from `@remotion/transitions` (`fade`, `slide`,
+  `wipe`, `flip`, `clockWipe`, `iris`, `pushCut`, `none`) plus the bundled `revealRtl`; timing comes
+  from the enclosing `<Sequence>`: the entrance runs from its start, the exit over its last frames, so
+  overlapping Sequences replace lines in place.
 - `getMushafLine()` resolves plain JSON line data for `calculateMetadata()`. The bundled layout is
   compiled from QUL's mushaf layout 19: 604 pages, 9,046 lines, 83,668 words, 6,236 ayahs, 30
   centred lines, validated structurally on every rebuild.

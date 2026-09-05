@@ -6,7 +6,7 @@ KFGQPC V4 (1441H) mushaf, with an entrance animation written in `@remotion/trans
 - Word-for-word, glyph-for-glyph fidelity: the line is set with the per-page glyph fonts published by
   the [Quranic Universal Library (QUL)](https://qul.tarteel.ai) and the line breaks of the printed page.
   One DOM element per word.
-- Remotion-native: timing comes from the enclosing `<Sequence from>`, animations are
+- Remotion-native: timing comes from the enclosing `<Sequence>`, entrances and exits are
   `{presentation, timing}` pairs (`fade()`, `slide()`, `linearTiming()`, ...), fonts are loaded behind
   `delayRender()`, line data is plain JSON for `calculateMetadata()`.
 - Deterministic: nothing is painted before the page font is loaded, so a render never captures a
@@ -82,6 +82,7 @@ A complete project with this composition, a `<Player>` page and the test harness
 | `line`                     | `MushafLineData`                                              | From `getMushafLine()`. Preferred.                                                                                                                                          |
 | `mushaf` + `page` + `line` | `MushafId`, `number`, `number`                                | Convenience form: resolves the line at render time behind its own `delayRender()`.                                                                                          |
 | `enter`                    | `{presentation: TransitionPresentation, timing: TransitionTiming}` | Entrance animation. Progress runs over the local frame of the enclosing `<Sequence>`; the presentation stays mounted for the whole sequence.                          |
+| `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>`. A line leaves because its Sequence ends. |
 | `fontSize`                 | `number` (px)                                                 | Default `floor(useVideoConfig().width × 2500 / 42501)`, see [Sizing](#sizing).                                                                                              |
 | `lineHeight`               | `number` (px)                                                 | Default `round(2.2 × fontSize)`. The height of the root element.                                                                                                            |
 | `style`, `className`       |                                                               | Applied to the root element. Colour is inherited from here (plain fonts only).                                                                                              |
@@ -163,9 +164,10 @@ Justified lines (all but the centred ones) fill the box exactly as printed: the 
 `justify-content: space-between`, which only distributes the small slack the printed page also
 distributes. Centred lines use `justify-content: center`.
 
-## Entrances
+## Entrances and exits
 
-`enter` takes the entering side of any DOM presentation from `@remotion/transitions`:
+`enter` takes the entering side, and `exit` the exiting side, of any DOM presentation from
+`@remotion/transitions`:
 
 | Presentation                                   | Works |
 | ---------------------------------------------- | ----- |
@@ -175,10 +177,45 @@ distributes. Centred lines use `justify-content: center`.
 | `revealRtl()` (this package)                   | yes   |
 | `dissolve()`, `ripple()`, `crosswarp()`, `crossZoom()`, `swap()`, `bookFlip()`, `zoomBlur()`, `dreamyZoom()`, `filmBurn()`, `linearBlur()`, `zoomInOut()` | no: these capture the scene to a canvas and need an exiting scene. The line throws `CANVAS_PRESENTATION`. |
 
-Progress is `timing.getProgress({frame: localFrame, fps})`, clamped to `1` after
-`timing.getDurationInFrames({fps})`. The presentation is rendered exactly as `<TransitionSeries>`
-renders its entering side (`presentationDirection="entering"`, `passedProps`, and so on), so custom
-presentations written for `TransitionSeries` work unchanged.
+Entrance progress is `timing.getProgress({frame: localFrame, fps})`, clamped to `1` after
+`timing.getDurationInFrames({fps})`. The exit runs over the last `getDurationInFrames` frames of the
+enclosing `<Sequence>` (its `durationInFrames`, which `useVideoConfig()` reports inside the Sequence)
+and is `0` before that window, so there is no extra timeline prop: a line leaves because its Sequence
+ends. Both sides are rendered exactly as `<TransitionSeries>` renders them (`presentationDirection`,
+`passedProps`, the exiting presentation wrapped around the entering one), so custom presentations
+written for `TransitionSeries` work unchanged.
+
+Exiting sides of the stock presentations: `slide` pushes the line out, `wipe`, `flip`, `clockWipe` and
+`iris` uncover or fold it away, `revealRtl` hides it in reading direction, `none` does nothing, and
+`fade()` keeps the exiting line fully visible unless you ask for `fade({shouldFadeOutExitingScene:
+true})`.
+
+### Replacing lines
+
+To show one line after another in the same place, overlap the Sequences: each line's exit window is
+the next line's entrance window.
+
+```tsx
+const HOLD = 60; // frames a line is on screen before the next one starts replacing it
+const ENTER = 30;
+const timing = linearTiming({durationInFrames: ENTER});
+
+{lines.map((line, i) => (
+  <Sequence key={line.line} from={i * HOLD} durationInFrames={HOLD + ENTER} premountFor={fps} style={{top, height: lineHeight}}>
+    <MushafLine
+      line={line}
+      enter={{presentation: slide({direction: 'from-right'}), timing}}
+      exit={{presentation: slide({direction: 'from-right'}), timing}}
+    />
+  </Sequence>
+))}
+```
+
+Line *i* runs from `i × HOLD` for `HOLD + ENTER` frames; during its last `ENTER` frames it slides out
+to the left while line *i + 1* slides in from the right. The example's `ThreeLines` composition does
+this in its `replace` mode (fade, slide and revealRtl in turn). `<TransitionSeries>` from
+`@remotion/transitions` works too: put each `<MushafLine>` (without `enter`/`exit`) in a
+`<TransitionSeries.Sequence>` and let the series drive both sides.
 
 ## Fonts
 
@@ -274,6 +311,7 @@ Works in the Studio, `renderMedia()` / `renderStill()` / the CLI, Lambda and the
 | `BAD_LINE_DATA`          | `line` is not a `MushafLineData` from this package version (the message names the field).                                                        |
 | `UNSUPPORTED_LINE_TYPE`  | A `surah_name` or `basmallah` line; only `ayah` lines render in this version.                                                                     |
 | `BAD_ENTER`              | `enter.presentation` must be `{component, props}` and `enter.timing` a `TransitionTiming`.                                                        |
+| `BAD_EXIT`               | Same for `exit`; also raised when the enclosing Sequence has no finite length to count back from.                                                 |
 | `BAD_SIZE`               | `fontSize` / `lineHeight` must be positive finite numbers.                                                                                        |
 | `DATA_NOT_COMPILED`, `DATA_LOAD_FAILED` | The layout chunk is missing or broken; check the bundle / `publicPath`, or re-run the data script when building from source.       |
 | `BAD_FONT_URL`           | `url` / `fontUrl` is not an absolute URL, a `staticFile()` path or a root-relative path.                                                          |
@@ -293,8 +331,7 @@ failed.
 ## Roadmap
 
 Additions planned without changing the v0.1 API: per-word highlighting (`highlight` / `renderWord`
-props over the existing word elements and `words[].id`), an `exit` animation using the same
-presentation machinery, header (`surah_name`) and basmallah lines, a Studio-editable wrapper via
+props over the existing word elements and `words[].id`), header (`surah_name`) and basmallah lines, a Studio-editable wrapper via
 `Interactive.withSchema`, further mushaf layouts from QUL.
 
 ## Data and licences

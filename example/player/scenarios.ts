@@ -1,6 +1,6 @@
 // Scenarios for the <Player> harness page (?scenario=<name>), shared with the Playwright suite.
 import {syntheticLine} from '../../packages/remotion-mushaf-line-renderer/test/fixtures/synthetic-lines';
-import type {LineHarnessProps} from '../src/harness/LineHarness';
+import {defaultLineHarnessProps, type LineHarnessProps} from '../src/harness/LineHarness';
 
 /** The page-10 tajweed font, copied by `node scripts/fetch-qul.mjs --fonts 10` into example/public. */
 export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
@@ -12,15 +12,9 @@ const centered = () => syntheticLine(1, 2);
 const twoCodePoints = () => syntheticLine(3, 1);
 
 const base: LineHarnessProps = {
+  ...defaultLineHarnessProps,
   lines: [justified(), centered(), twoCodePoints()],
-  enter: 'plain',
-  enterFrames: 20,
-  from: 0,
-  premountFor: 0,
-  fontFile: null,
   fontUrl: FIXTURE_FONT_URL,
-  fontSize: null,
-  lineHeight: null,
 };
 
 export const scenarios: Record<string, LineHarnessProps> = {
@@ -32,6 +26,11 @@ export const scenarios: Record<string, LineHarnessProps> = {
   none: {...base, enter: 'none'},
   dissolve: {...base, enter: 'dissolve'},
   premount: {...base, enter: 'fade', from: 60, premountFor: 30},
+  /** One line whose Sequence ends at frame 60; the exit runs over frames 40-59. */
+  'exit-fade': {...base, lines: [justified()], exit: 'fade', exitFrames: 20, durationInFrames: 60},
+  'exit-slide': {...base, lines: [justified()], exit: 'slide', exitFrames: 20, durationInFrames: 60},
+  /** Two lines in one slot: the second starts (frame 40) as the first begins to leave; both fade. */
+  replace: {...base, lines: [justified(), centered()], slot: 'same', enter: 'fade', enterFrames: 20, exit: 'fade', exitFrames: 20, durationInFrames: 60, stagger: 40},
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
   /** No pin: the CDN URL of the registry (needs network). */
