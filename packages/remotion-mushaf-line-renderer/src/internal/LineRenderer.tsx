@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import {useCurrentFrame, useDelayRender, useRemotionEnvironment, useVideoConfig} from 'remotion';
-import {getEnterState} from '../enter-state';
+import {getEnterState, getExitState} from '../enter-state';
 import {MushafError} from '../errors';
 import {fontKey, getFontEntry, getFontStatus, subscribeFontStore, type FontStatus} from '../font-store';
 import {assertSize, buildRootStyle, buildRowStyle, defaultLineHeight, fontSizeForWidth} from '../layout';
@@ -15,6 +15,7 @@ import {Word} from './Word';
 export type LineRendererProps = {
   readonly line: MushafLineData;
   readonly enter: MushafLineAnimation | undefined;
+  readonly exit: MushafLineAnimation | undefined;
   readonly fontSize: number | undefined;
   readonly lineHeight: number | undefined;
   readonly style: React.CSSProperties | undefined;
@@ -39,9 +40,9 @@ const canvasPresentationError = () =>
  * document.fonts) and the entrance animation. Hooks are all above the early returns so the hook
  * order is stable; the parent keys this component by mushaf/page/line.
  */
-export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize, lineHeight, style, className}) => {
+export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, exit, fontSize, lineHeight, style, className}) => {
   const def = getMushafDefinition(line.mushaf);
-  const {width, fps} = useVideoConfig(); // honours <Sequence width>
+  const {width, fps, durationInFrames} = useVideoConfig(); // honours <Sequence width>; durationInFrames is the Sequence's
   const frame = useCurrentFrame(); // local to the enclosing <Sequence from>; 0 while premounted
   const env = useRemotionEnvironment();
   const {delayRender, continueRender, cancelRender} = useDelayRender();
@@ -96,9 +97,10 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
   // <canvas>. Checked before the first paint so no frame is ever captured with a blank canvas.
   const rootRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
-  const presentationComponent = enter?.presentation.component;
+  const enterComponent = enter?.presentation.component;
+  const exitComponent = exit?.presentation.component;
   useIsomorphicLayoutEffect(() => {
-    if (!presentationComponent || presentationError) return;
+    if ((!enterComponent && !exitComponent) || presentationError) return;
     const root = rootRef.current;
     for (let node = rowRef.current?.parentElement ?? null; node && node !== root; node = node.parentElement) {
       if (node.tagName === 'CANVAS') {
@@ -106,7 +108,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
         return;
       }
     }
-  }, [presentationComponent, presentationError, rejectCanvasPresentation]);
+  }, [enterComponent, exitComponent, presentationError, rejectCanvasPresentation]);
 
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width, def);
   const resolvedLineHeight = lineHeight ?? defaultLineHeight(resolvedFontSize);
@@ -128,6 +130,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
   assertSize('fontSize', resolvedFontSize);
   assertSize('lineHeight', resolvedLineHeight);
   const enterState = enter ? getEnterState({enter, frame, fps}) : null;
+  const exitState = exit ? getExitState({exit, frame, fps, durationInFrames}) : null;
 
   const row = (
     <div ref={rowRef} className="mushaf-line__row" style={buildRowStyle({fontFamily: line.fontFamily, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, centered: line.centered, visible: ready})}>
@@ -136,6 +139,23 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
       ))}
     </div>
   );
+  // Nested exactly as <TransitionSeries> nests a scene that both enters and exits: the exiting
+  // presentation wraps the entering one.
+  let presented: React.ReactNode = row;
+  if (enter && enterState) {
+    presented = (
+      <Presented presentation={enter.presentation} direction="entering" progress={enterState.progress} durationInFrames={enterState.durationInFrames} onElementImage={onElementImage} bothEnteringAndExiting={Boolean(exit)}>
+        {presented}
+      </Presented>
+    );
+  }
+  if (exit && exitState) {
+    presented = (
+      <Presented presentation={exit.presentation} direction="exiting" progress={exitState.progress} durationInFrames={exitState.durationInFrames} onElementImage={onElementImage} bothEnteringAndExiting={Boolean(enter)}>
+        {presented}
+      </Presented>
+    );
+  }
 
   return (
     <LineContext.Provider value={ctx}>
@@ -149,13 +169,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
         data-centered={line.centered ? 'true' : 'false'}
         style={buildRootStyle(resolvedLineHeight, style)}
       >
-        {enterState && enter ? (
-          <Presented presentation={enter.presentation} direction="entering" progress={enterState.progress} durationInFrames={enterState.durationInFrames} onElementImage={onElementImage}>
-            {row}
-          </Presented>
-        ) : (
-          row
-        )}
+        {presented}
       </div>
     </LineContext.Provider>
   );

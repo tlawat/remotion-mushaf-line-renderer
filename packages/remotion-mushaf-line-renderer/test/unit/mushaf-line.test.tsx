@@ -238,6 +238,44 @@ describe('<MushafLine>', () => {
     }
   });
 
+  it('drives the exiting side over the last frames of the sequence, nested outside the entrance', () => {
+    const enter = {presentation: fade(), timing: linearTiming({durationInFrames: 10})};
+    const exit = {presentation: fade({shouldFadeOutExitingScene: true}), timing: linearTiming({durationInFrames: 20})};
+    remotion.state.durationInFrames = 120; // the enclosing <Sequence durationInFrames>
+    remotion.state.frame = 50;
+    const {container, rerender} = render(<MushafLine line={line} enter={enter} exit={exit} />);
+    const root = container.querySelector<HTMLElement>('.mushaf-line')!;
+    const fills = root.querySelectorAll<HTMLElement>('[data-absolute-fill]');
+    expect(fills).toHaveLength(2);
+    const [outer, inner] = [fills[0]!, fills[1]!];
+    expect(outer.parentElement).toBe(root); // exiting presentation outside ...
+    expect(inner.parentElement).toBe(outer); // ... the entering one, like TransitionSeries
+    expect(inner.querySelector('.mushaf-line__row')).not.toBeNull();
+    expect(inner.style.opacity).toBe('1'); // entrance finished
+    expect(outer.style.opacity).toBe('1'); // exit not started
+    for (const [frame, opacity] of [[99, 1], [100, 1], [110, 0.5], [119, 0.05]] as const) {
+      remotion.state.frame = frame;
+      rerender(<MushafLine line={line} enter={enter} exit={exit} />);
+      expect(Number(root.querySelector<HTMLElement>('[data-absolute-fill]')!.style.opacity)).toBeCloseTo(opacity, 5);
+    }
+    // Exit alone: a single wrapper.
+    remotion.state.frame = 110;
+    const alone = render(<MushafLine line={line} exit={exit} />);
+    const wrappers = alone.container.querySelectorAll<HTMLElement>('[data-absolute-fill]');
+    expect(wrappers).toHaveLength(1);
+    expect(Number(wrappers[0]!.style.opacity)).toBeCloseTo(0.5, 5);
+  });
+
+  it('throws BAD_EXIT for a malformed exit prop', () => {
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        <MushafLine line={line} exit={{presentation: fade(), timing: 'fast'} as never} />
+      </Boundary>,
+    );
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_EXIT'});
+  });
+
   it('accepts slide(), none() and revealRtl() and keeps the same DOM shape', () => {
     remotion.state.frame = 5;
     const timing = linearTiming({durationInFrames: 10});

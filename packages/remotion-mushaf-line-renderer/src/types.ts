@@ -74,6 +74,14 @@ export type MushafLineAnimation = {
 export type MushafLineCommonProps = {
   /** Entrance animation, in `@remotion/transitions` vocabulary. Progress runs over the local frame of the enclosing `<Sequence>`. */
   readonly enter?: MushafLineAnimation;
+  /**
+   * Exit animation, same vocabulary: the presentation's exiting side runs over the last
+   * `timing.getDurationInFrames()` frames of the enclosing `<Sequence>` (its `durationInFrames`), so a
+   * line leaves because its Sequence ends. To replace lines in place, start the next line's
+   * `<Sequence from>` at the beginning of this window. Note `fade()` keeps the exiting side fully
+   * visible unless `fade({shouldFadeOutExitingScene: true})`.
+   */
+  readonly exit?: MushafLineAnimation;
   /** px. Default: `floor(useVideoConfig().width × 2500 / 42501)` — one type size for every page (the widest line is 42,501 font units). */
   readonly fontSize?: number;
   /** px. Default: `round(2.2 × fontSize)` — the 15-line grid unit; keeps the +1.37 / −0.73 em glyph extremes inside the box. */
