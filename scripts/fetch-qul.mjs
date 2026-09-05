@@ -13,7 +13,9 @@
 //   --concurrency <n>     parallel page requests (default 3, be polite to QUL)
 //   --pages a-b,c         subset of pages to fetch/parse (validation then runs with relaxed counts)
 //   --fonts <list|all>    download page fonts for these pages (both sets, woff2 + ttf) into
-//                         example/public/fonts/<set>/ and packages/…/test/fixtures/fonts/<set>/
+//                         example/public/fonts/<set>/ (and, for the fixture pages 1, 10, 187 and
+//                         604, packages/…/test/fixtures/fonts/<set>/); where the CDN has no woff2
+//                         (page 328 of the tajweed set) the woff it serves instead is mirrored
 //   --etags               HEAD every CDN woff2 URL and write scripts/cdn-etags.json
 //   --allow-zero-advance  do not fail when a standalone word has zero advance in the fixture fonts
 //   --no-validate         skip validation (for debugging only; never commit such output)
@@ -156,41 +158,59 @@ const fetchPages = async (pages) => {
   return parsed;
 };
 
-const fontFixtureDirs = (set) => [
+/** Pages whose fonts the package's own test fixtures carry (the suites use page 10; 1, 187 and 604 are spot checks). */
+const FIXTURE_PAGES = [1, 10, 187, 604];
+
+const fontDirs = (set, page) => [
   path.join(ROOT, 'example/public/fonts', set),
-  path.join(ROOT, 'packages/remotion-mushaf-line-renderer/test/fixtures/fonts', set),
+  ...(FIXTURE_PAGES.includes(page) ? [path.join(ROOT, 'packages/remotion-mushaf-line-renderer/test/fixtures/fonts', set)] : []),
 ];
 
 const downloadFonts = async (pages, layout) => {
   const etags = {};
-  const report = [];
   let failed = false;
-  for (const page of pages) {
+  let done = 0;
+  const perPage = await runPool(pages, Math.max(2, Number(args.concurrency)), async (page) => {
+    const report = [];
     const parsedBySet = {};
     for (const set of Object.keys(def.fontSets)) {
-      for (const format of ['woff2', 'ttf']) {
-        const url = def.fontUrl(set, page, format);
-        let res;
-        try {
-          res = await fetchWithRetry(url, {accept: '*/*', origin: 'https://example.com'}); // like a browser, so the CORS header is recorded
-        } catch (e) {
-          report.push(`${set} p${page}.${format}: ${e.message}`);
+      for (const wanted of ['woff2', 'ttf']) {
+        // The CDN has gaps (page 328 of the tajweed set has no woff2): mirror the format it serves
+        // instead, the same one the package's registry routes that page to.
+        const formats = wanted === 'woff2' ? ['woff2', 'woff'] : ['ttf'];
+        let saved = null;
+        let lastError = null;
+        for (const format of formats) {
+          const url = def.fontUrl(set, page, format);
+          let res;
+          try {
+            res = await fetchWithRetry(url, {accept: '*/*', origin: 'https://example.com'}); // like a browser, so the CORS header is recorded
+          } catch (e) {
+            lastError = e;
+            if (/^HTTP 404 /.test(String(e.message))) continue;
+            break;
+          }
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          const magic = detectFontMagic(bytes);
+          if (magic !== format && !(format === 'ttf' && magic === 'otf')) {
+            lastError = new Error(`not a ${format} file (magic ${magic ?? 'unknown'}, ${bytes.length} bytes)`);
+            break;
+          }
+          etags[url] = {etag: res.headers.get('etag'), contentType: res.headers.get('content-type'), contentLength: bytes.length, cors: res.headers.get('access-control-allow-origin')};
+          for (const dir of fontDirs(set, page)) {
+            fs.mkdirSync(dir, {recursive: true});
+            fs.writeFileSync(path.join(dir, `p${page}.${format}`), bytes);
+          }
+          if (format === 'ttf') parsedBySet[set] = parseSfnt(bytes);
+          saved = format;
+          break;
+        }
+        if (saved === null) {
+          report.push(`${set} p${page}.${wanted}: ${lastError?.message ?? 'not downloaded'}`);
           failed = true;
-          continue;
+        } else if (saved !== wanted) {
+          report.push(`${set} p${page}: the CDN has no ${wanted} for this page; mirrored its ${saved} instead`);
         }
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        const magic = detectFontMagic(bytes);
-        if (magic !== format && !(format === 'ttf' && magic === 'otf')) {
-          report.push(`${set} p${page}.${format}: not a ${format} file (magic ${magic ?? 'unknown'}, ${bytes.length} bytes)`);
-          failed = true;
-          continue;
-        }
-        etags[url] = {etag: res.headers.get('etag'), contentType: res.headers.get('content-type'), contentLength: bytes.length, cors: res.headers.get('access-control-allow-origin')};
-        for (const dir of fontFixtureDirs(set)) {
-          fs.mkdirSync(dir, {recursive: true});
-          fs.writeFileSync(path.join(dir, `p${page}.${format}`), bytes);
-        }
-        if (format === 'ttf') parsedBySet[set] = parseSfnt(bytes);
       }
     }
     const plain = parsedBySet['qpc-v4'];
@@ -227,8 +247,11 @@ const downloadFonts = async (pages, layout) => {
       }
       if (!unmapped.length && !zero.length) report.push(`p${page}: every word maps to a glyph with a positive advance`);
     }
-  }
-  return {etags, report, failed};
+    done++;
+    if (pages.length > 20 && done % 50 === 0) log(`fonts: ${done}/${pages.length} pages`);
+    return report;
+  });
+  return {etags, report: perPage.flat(), failed};
 };
 
 const headStatus = async (url) => {

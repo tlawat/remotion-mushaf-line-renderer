@@ -17,7 +17,7 @@ workflow (`.github/workflows/qul-assets.yml`) fetches both on a GitHub runner an
 to the branch it was started on:
 
 1. Actions tab → *QUL assets* → *Run workflow* (or `gh workflow run "QUL assets" --ref <branch>`),
-   inputs: `fonts` (pages whose fonts to download, default `1,10,604`, or `all`), `compile`
+   inputs: `fonts` (pages whose fonts to download, default `1,10,187,604`, or `all`), `compile`
    (default on), `commit` (default on).
 2. The run compiles and validates the layout, downloads the fonts with the parity and glyph checks,
    records the CDN ETags, checks the CDN (both font sets, CORS), runs the package's data tests, and
@@ -26,12 +26,30 @@ to the branch it was started on:
 3. Pull the branch; the browser and render suites now run offline, and the render suite writes
    `test/render/p10-l3.png` for a visual check against the printed page.
 
+### Mirror every page locally
+
+To work offline on any page (the Studio, the `Recitation` composition, your own renders), pull the
+whole mirror on a machine that can reach QUL. Node 18+ and git are all it needs:
+
+```bash
+bash scripts/pull-all-assets.sh
+```
+
+It downloads both font sets of every page (woff2 and ttf; where the CDN has no woff2, page 328 of the
+tajweed set, the woff it serves instead), refreshes `scripts/cdn-etags.json`, commits what
+`.gitignore` admits (every page's woff2, about 95 MB, plus the fixture pages' ttf) and pushes the
+current branch. `FONTS=187-207` limits the pages, `PUSH=0` commits without pushing, `COMPILE=1`
+recompiles the layout as well. Point the example at the mirror with `fontFile:
+'fonts/qpc-v4-tajweed/p10.woff2'` (`ThreeLines`) or `fontFilePattern:
+'fonts/qpc-v4-tajweed/p{page}.woff2'` (`Recitation`).
+
 Licence rule: the fonts are King Fahd Complex fonts published by QUL and are **not redistributed** by
-this project. The fixture fonts of three pages are committed during development only, so the suites
-run without network access; the npm package never contains fonts (`pnpm check:package` fails if the
-tarball does) and the package code never depends on committed fonts (CDN by default, an explicit
-`fontUrl` pin when you host them yourself). Release checklist: delete the six `!**/…/p1.*`-style
-negation lines from `.gitignore`, run
+this project. The fixture fonts of four pages, and the example's mirror if you pulled it, are
+committed during development only, so the suites run without network access; the npm package never
+contains fonts (`pnpm check:package` fails if the tarball does) and the package code never depends
+on committed fonts (CDN by default, an explicit `fontUrl` pin when you host them yourself). Release
+checklist: delete the `!**/…/p1.*`-style negation lines and the two `!example/public/fonts/**` lines
+from `.gitignore`, run
 `git rm -r --cached example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts`,
 commit; CI keeps working because it downloads the page-10 fixture font itself when it is missing.
 
@@ -55,10 +73,10 @@ What it does:
    contiguous word ids, one ayah marker per ayah, the known page shapes) and refuses to write on any
    mismatch.
 3. Writes `packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts` (ASCII-only, commit it).
-4. `--fonts 1,10,604` downloads those page fonts (plain and tajweed sets, woff2 + ttf) into
-   `example/public/fonts/<mushaf>/` and the package's `test/fixtures/fonts/<mushaf>/` (only pages 1, 10
-   and 604 are visible to git, see `.gitignore`), checks that the two sets agree glyph for glyph, and
-   checks that no standalone word has zero advance.
+4. `--fonts 1,10,604` (or `all`) downloads those page fonts (plain and tajweed sets, woff2 + ttf) into
+   `example/public/fonts/<mushaf>/` and, for the fixture pages 1, 10, 187 and 604, the package's
+   `test/fixtures/fonts/<mushaf>/` (what git sees is governed by `.gitignore`), reports where the two
+   sets differ, and checks that no standalone word has zero advance.
 5. `--etags` records the ETag of every CDN font in `scripts/cdn-etags.json` (commit it) so later runs
    of `node scripts/verify-cdn.mjs` can detect a republished font.
 

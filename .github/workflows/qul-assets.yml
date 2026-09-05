@@ -11,7 +11,8 @@
 #   example/public/fonts/<mushaf>/p{1,10,187,604}.{ttf,woff2}                  fixture fonts (development only:
 #   packages/remotion-mushaf-line-renderer/test/fixtures/fonts/<mushaf>/... see .gitignore for the rule)
 #
-# Fonts of other pages are downloaded when asked for (`fonts: all`) but stay ignored by git.
+# With `fonts: all` the example's mirror of every page's woff2 is committed as well (development
+# only, see .gitignore); scripts/pull-all-assets.sh does the same from a developer's machine.
 name: QUL assets
 
 on:
@@ -118,8 +119,8 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # Only files that .gitignore allows are picked up: the module, the ETags, and the fixture
-          # fonts of pages 1, 10 and 604. Fonts of other pages stay out of the repository.
+          # Only files that .gitignore allows are picked up: the module, the ETags, the fixture fonts
+          # of pages 1, 10, 187 and 604, and (development only) the example's woff2 mirror.
           git add packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts scripts/cdn-etags.json
           git add example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts
           if git diff --cached --quiet; then
