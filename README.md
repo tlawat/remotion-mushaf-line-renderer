@@ -133,3 +133,8 @@ that `@playwright/test` installed (`npx playwright install chromium` if missing)
 `MUSHAF_BROWSER_EXECUTABLE` (and `MUSHAF_CHROME_MODE=headless-shell|chrome-for-testing`) to use
 another browser for the render suite. `pnpm --filter remotion-mushaf-line-renderer-example dev`
 opens the Remotion Studio on the example.
+
+History is linear: no merge commits. Rebase onto `main` (`git pull --rebase`) and push fast-forward
+only; the commits the QUL assets workflow pushes are plain commits on the branch it ran on, so
+rebase over them the same way. `git config pull.ff only` and `git config merge.ff only` in a clone
+make git refuse anything else.
