@@ -203,7 +203,7 @@ describe('loadPageFont', () => {
     vi.useFakeTimers();
     fetchMock.mockResolvedValue(response(503, new ArrayBuffer(0)));
     const font = loadPageFont({mushaf: 'qpc-v4', page: 10});
-    const settled = font.waitUntilDone().then(() => 'ok', (e: MushafError) => e);
+    const settled = font.waitUntilDone().then(() => 'ok', (e: InstanceType<typeof MushafError>) => e);
     await vi.advanceTimersByTimeAsync(5_000);
     const result = await settled;
     expect(result).toMatchObject({code: 'FONT_HTTP', message: expect.stringContaining('attempt 3/3')});
@@ -224,7 +224,7 @@ describe('loadPageFont', () => {
     fetchMock.mockImplementation((_url: string, init: {signal: AbortSignal}) => new Promise((_resolve, reject) => {
       init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
     }));
-    const slow = loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone().then(() => 'ok', (e: MushafError) => e);
+    const slow = loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone().then(() => 'ok', (e: InstanceType<typeof MushafError>) => e);
     await vi.advanceTimersByTimeAsync(3 * 15_000 + 3 * 500 + 100);
     expect(await slow).toMatchObject({code: 'FONT_TIMEOUT'});
     vi.useRealTimers();
@@ -297,7 +297,7 @@ describe('getFontLoadBudget', () => {
     (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout = 40_000;
     vi.useFakeTimers();
     fetchMock.mockResolvedValue(response(503, new ArrayBuffer(0)));
-    const failed = loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone().then(() => 'ok', (e: MushafError) => e);
+    const failed = loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone().then(() => 'ok', (e: InstanceType<typeof MushafError>) => e);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(await failed).toMatchObject({code: 'FONT_HTTP', message: expect.stringContaining('attempt 2/2')});
     delete (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout;

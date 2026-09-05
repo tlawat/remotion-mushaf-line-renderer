@@ -16,6 +16,12 @@ export default defineConfig({
           environment: 'node',
           include: ['packages/*/test/unit/**/*.test.ts', 'packages/*/test/unit/**/*.test.tsx'],
           setupFiles: ['packages/remotion-mushaf-line-renderer/test/setup.ts'],
+          server: {
+            deps: {
+              // Inline so that `vi.mock('remotion')` also applies to the presentations' own `remotion` imports.
+              inline: [/@remotion\/transitions/],
+            },
+          },
         },
       },
       {
