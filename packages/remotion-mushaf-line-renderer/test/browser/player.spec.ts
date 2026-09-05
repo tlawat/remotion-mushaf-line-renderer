@@ -311,6 +311,38 @@ test.describe('font failures', () => {
   });
 });
 
+test.describe('real data', () => {
+  // Runs once the layout module has been compiled (scripts/fetch-qul.mjs or the QUL assets workflow).
+  test('page 10 line 3 renders every word right to left, justified, with the ayah marker', async ({page}) => {
+    // Through the built package (plain ESM), which is what the harness consumes too.
+    const pkg = (await import('../../dist/esm/index.mjs')) as typeof import('../../src/index');
+    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3}).catch((e: {code?: string}) => {
+      test.skip(e.code === 'DATA_NOT_COMPILED', 'the layout data is not compiled');
+      throw e;
+    });
+    expect(line.words.length).toBeGreaterThan(5);
+    expect(line.words[0]!.id).toBe('2:62:18'); // ... عِندَ | رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا
+    expect(line.words.some((w) => w.kind === 'end' && w.ayah === 62)).toBe(true);
+    expect(line.words.at(-1)!.id).toBe('2:63:2');
+
+    await open(page, 'static');
+    await rowsVisible(page, 3);
+    await page.evaluate((data) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps({lines: [{...data, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'}]}), line);
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-page', '10');
+    await expect(page.locator(ROOT).first().locator('.mushaf-word')).toHaveCount(line.words.length);
+    await expect(page.locator(ROOT).first().locator('.mushaf-word').first()).toHaveAttribute('data-location', '2:62:18');
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p10'])).toBe(true);
+
+    const root = await box(page, ROOT, 0);
+    const words = await wordBoxes(page, 0);
+    for (let k = 1; k < words.length; k++) expect(words[k]!.x).toBeLessThan(words[k - 1]!.x);
+    expect(Math.abs(Math.max(...words.map((w) => w.right)) - (root.x + root.width))).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(Math.min(...words.map((w) => w.x)) - root.x)).toBeLessThanOrEqual(1.5);
+    for (const w of words) expect(w.width).toBeGreaterThan(5);
+  });
+});
+
 test.describe('network', () => {
   const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p1.woff2?v=3.1';
 

@@ -190,6 +190,9 @@ page 10 line 3: waiting for font ...`).
 
 - **Slow or cold CDN during a render:** raise the render budget, `npx remotion render --timeout=60000`
   (or `timeoutInMilliseconds` in the Node APIs). The fetch budget adapts to it.
+- **CDN gaps:** the registry knows the pages whose woff2 is missing on the CDN (page 328 of the
+  tajweed set is served as woff) and fetches the format that exists; a survey of all 1,208 URLs is
+  kept in the repository and checked by the unit tests.
 - **Mirror the fonts** for offline, faster or reproducible renders: download them into `public/`
   (`node scripts/fetch-qul.mjs --fonts 10` in this repository does that for both sets) and pin them
   in `calculateMetadata()` so every render tab gets the same JSON:

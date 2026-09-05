@@ -71,13 +71,13 @@ const parsePageList = (spec, max) => {
   return [...out].sort((x, y) => x - y);
 };
 
-const fetchWithRetry = async (url, {attempts = 4, timeoutMs = 30_000, accept = 'text/html'} = {}) => {
+const fetchWithRetry = async (url, {attempts = 4, timeoutMs = 30_000, accept = 'text/html', origin} = {}) => {
   let last;
   for (let i = 1; i <= attempts; i++) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {headers: {'user-agent': USER_AGENT, accept}, signal: ctrl.signal, redirect: 'follow'});
+      const res = await fetch(url, {headers: {'user-agent': USER_AGENT, accept, ...(origin ? {origin} : {})}, signal: ctrl.signal, redirect: 'follow'});
       if (res.status === 403 || res.status === 401) {
         throw new Error(`HTTP ${res.status} for ${url} — QUL refused the request (bot protection or login). Try again later, or use --layout-sqlite/--words with an export.`);
       }
@@ -172,7 +172,7 @@ const downloadFonts = async (pages, layout) => {
         const url = def.fontUrl(set, page, format);
         let res;
         try {
-          res = await fetchWithRetry(url, {accept: '*/*'});
+          res = await fetchWithRetry(url, {accept: '*/*', origin: 'https://example.com'}); // like a browser, so the CORS header is recorded
         } catch (e) {
           report.push(`${set} p${page}.${format}: ${e.message}`);
           failed = true;
@@ -342,8 +342,15 @@ const main = async () => {
     if (!partial) {
       const module = emitModule(layout);
       fs.mkdirSync(path.dirname(args.out), {recursive: true});
-      fs.writeFileSync(args.out, module);
-      log(`wrote ${path.relative(ROOT, args.out)} (${(module.length / 1024).toFixed(0)} KB, ${layout.wordCount} words)`);
+      // Do not churn the committed module when only the generation timestamp would change.
+      const withoutTimestamp = (s) => s.replace(/generated \S+\./g, 'generated X.').replace(/\\?"generatedAt\\?":\\?"[^"\\]*\\?"/g, '"generatedAt":"X"');
+      const existing = fs.existsSync(args.out) ? fs.readFileSync(args.out, 'utf8') : null;
+      if (existing !== null && withoutTimestamp(existing) === withoutTimestamp(module)) {
+        log(`${path.relative(ROOT, args.out)} is unchanged (${layout.wordCount} words); kept the committed generation time`);
+      } else {
+        fs.writeFileSync(args.out, module);
+        log(`wrote ${path.relative(ROOT, args.out)} (${(module.length / 1024).toFixed(0)} KB, ${layout.wordCount} words)`);
+      }
       fs.mkdirSync(args.cache, {recursive: true});
       fs.writeFileSync(path.join(args.cache, 'report.json'), JSON.stringify({generatedAt: layout.generatedAt, source, wordCount: layout.wordCount}, null, 1));
     }
