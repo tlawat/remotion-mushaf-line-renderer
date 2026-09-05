@@ -32,6 +32,7 @@ on:
   push:
     paths:
       - '.github/workflows/qul-assets.yml'
+      - '.npmrc'
       - 'scripts/fetch-qul.mjs'
       - 'scripts/lib/**'
 
