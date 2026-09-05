@@ -2,11 +2,12 @@
   "name": "remotion-mushaf-line-renderer-example",
   "private": true,
   "version": "0.0.0",
-  "description": "Example Remotion project for remotion-mushaf-line-renderer: three lines of a page with fade, slide and revealRtl entrances, plus a <Player> page used by the browser tests.",
+  "description": "Example Remotion project for remotion-mushaf-line-renderer: three lines of a page with fade, slide and revealRtl entrances, a recited passage driven by a timings JSON, plus a <Player> page used by the browser tests.",
   "scripts": {
     "dev": "remotion studio --no-open",
     "render": "remotion render ThreeLines out/three-lines.mp4",
     "still": "remotion still ThreeLines out/three-lines.png --frame=150",
+    "render:recitation": "remotion render Recitation out/recitation.mp4",
     "player": "vite --port 4173 --strictPort",
     "typecheck": "tsc --noEmit"
   },
