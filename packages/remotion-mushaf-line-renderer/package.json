@@ -1,0 +1,80 @@
+{
+  "name": "remotion-mushaf-line-renderer",
+  "version": "0.1.0",
+  "description": "Render a single line of the KFGQPC V4 (1441H) mushaf in Remotion, pixel-faithful, with @remotion/transitions entrance animations.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tlawat/remotion-mushaf-line-renderer.git",
+    "directory": "packages/remotion-mushaf-line-renderer"
+  },
+  "keywords": [
+    "remotion",
+    "quran",
+    "mushaf",
+    "qul",
+    "kfgqpc",
+    "arabic",
+    "video"
+  ],
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.mjs",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./presentations/reveal-rtl": {
+      "import": {
+        "types": "./dist/esm/presentations/reveal-rtl.d.mts",
+        "default": "./dist/esm/presentations/reveal-rtl.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/presentations/reveal-rtl.d.ts",
+        "default": "./dist/cjs/presentations/reveal-rtl.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "presentations/reveal-rtl": [
+        "./dist/cjs/presentations/reveal-rtl.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', {recursive: true, force: true})\" && tsup",
+    "check:package": "node scripts/check-package.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:types": "tsc --noEmit -p tsconfig.test-types.json",
+    "test:browser": "playwright test -c test/browser/playwright.config.mts",
+    "test:render": "vitest run --project render",
+    "prepublishOnly": "pnpm run build && pnpm run check:package"
+  },
+  "peerDependencies": {
+    "@remotion/transitions": ">=4.0.374",
+    "react": ">=18.0.0",
+    "remotion": ">=4.0.374"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "4.0.521",
+    "@remotion/player": "4.0.521",
+    "@remotion/renderer": "4.0.521",
+    "@remotion/transitions": "4.0.521",
+    "remotion": "4.0.521"
+  }
+}

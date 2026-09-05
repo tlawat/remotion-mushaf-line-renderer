@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests (compiler + package)
+        run: pnpm test
+
+      - name: Build the package
+        run: pnpm build
+
+      - name: Typecheck sources, tests and the example (the example consumes the built package)
+        run: |
+          pnpm test:types
+          pnpm typecheck
+
+      - name: Packaging checks (exports, sizes, tarball, arethetypeswrong)
+        run: pnpm check:package
+
+      - name: Fixture font for the browser and render suites (when not committed)
+        run: test -f example/public/fonts/qpc-v4-tajweed/p10.ttf || node scripts/fetch-qul.mjs --fonts 10
+
+      - name: Install Chromium for Playwright and Remotion
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser suite (Playwright against the example's Player harness)
+        run: pnpm test:browser
+
+      - name: Render suite (@remotion/bundler + @remotion/renderer)
+        run: pnpm test:render
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            packages/remotion-mushaf-line-renderer/test-results
+            packages/remotion-mushaf-line-renderer/test/render/*.png
