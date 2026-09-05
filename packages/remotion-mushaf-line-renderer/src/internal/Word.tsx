@@ -5,7 +5,7 @@ import type {MushafWord} from '../types';
 import {LineContext} from './LineContext';
 
 /**
- * One DOM element per word. The text always comes from data and is rendered as-is (1–2 code points
+ * One DOM element per word. The text always comes from data and is rendered as-is (1–4 code points
  * in the page font's private range). Adjacent words carry no whitespace between them.
  *
  * DOM contract (stable under semver):

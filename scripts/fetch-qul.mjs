@@ -140,7 +140,9 @@ const fetchPages = async (pages) => {
       return parsePageHtml(html, page);
     } catch (e) {
       if (e instanceof QulParseError) {
-        fs.rmSync(file, {force: true}); // do not cache a page that failed to parse (may be an error page)
+        // Do not cache a response that is not a QUL page (login wall, error page); keep real pages
+        // that merely failed a structural check so re-runs and diagnostics are cheap.
+        if (/does not look like a QUL page|empty response|no lines found/.test(e.message)) fs.rmSync(file, {force: true});
         failures.push(e.message);
         return null;
       }
@@ -290,7 +292,14 @@ const main = async () => {
       const have = new Set(parsedPages.map((p) => p.page));
       for (let p = 1; p <= compileDef.pages; p++) if (!have.has(p)) parsedPages.push({page: p, lines: []});
     }
-    layout = compileLayout(parsedPages, compileDef, {source, generatedAt: new Date().toISOString()});
+    const compileReport = {};
+    layout = compileLayout(parsedPages, compileDef, {source, generatedAt: new Date().toISOString()}, compileReport);
+    log(`compiled: ${compileReport.regularWords} regular words, ${compileReport.markerWords} marker glyphs, code points per glyph ${JSON.stringify(compileReport.codePointLengths)}`);
+    if (compileReport.markers.length) {
+      const byKind = {};
+      for (const m of compileReport.markers) byKind[m.kind] = (byKind[m.kind] ?? 0) + 1;
+      log(`marker glyphs by kind: ${JSON.stringify(byKind)}; first ones: ${compileReport.markers.slice(0, 12).map((m) => `p${m.page} l${m.line} ${m.kind} ${m.location} (QUL id ${m.qulId})`).join('; ')}`);
+    }
     if (!args['no-validate'] && !partial) {
       const report = validateLayout(layout, def);
       log('validation passed:', JSON.stringify(report));

@@ -132,7 +132,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
   const row = (
     <div ref={rowRef} className="mushaf-line__row" style={buildRowStyle({fontFamily: line.fontFamily, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, centered: line.centered, visible: ready})}>
       {line.words.map((word) => (
-        <Word key={word.id} word={word} />
+        <Word key={word.wordId} word={word} /> // a marker glyph can share the location (`id`) of its word
       ))}
     </div>
   );

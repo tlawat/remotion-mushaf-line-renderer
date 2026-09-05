@@ -1,20 +1,20 @@
 /**
  * Compiled layout format produced by `scripts/fetch-qul.mjs` and consumed by `getMushafLine()`.
  *
- * Everything relies on two invariants of QUL's layout export that the compiler asserts:
- *  - word ids on a page are contiguous and appear in line order (line 1 words, then line 2 words, …);
- *  - ayah runs on a page are consecutive id ranges in page order.
+ * The compiler numbers every glyph (regular words and standalone marker glyphs) sequentially in
+ * reading order, so on a page the ids are contiguous and appear in line order (line 1 glyphs, then
+ * line 2 glyphs, …) and ayah runs are consecutive id ranges in page order.
  *
- * Per page we therefore only store the first global word id, the glyph text per word, one kind
- * character per word, the ayah runs and the line descriptors; everything else is reconstructed.
+ * Per page we therefore only store the first id, the glyph text per word, one kind character per
+ * word, the ayah runs and the line descriptors; everything else is reconstructed.
  */
 
 import type {MushafLineType, MushafWordKind} from '../types';
 
 export type CompiledPage = {
-  /** First global word id on the page (QUL `word_index`, 1-based). */
+  /** First word id on the page (sequential reading-order index, 1-based). */
   readonly w: number;
-  /** Glyph text per word, index = wordId − w. Each entry is 1–2 code points in U+FC41–U+FCFC. */
+  /** Glyph text per word, index = wordId − w. Each entry is 1–4 code points in U+FC41–U+FCFC. */
   readonly t: readonly string[];
   /** One character per word: w = word, e = end (ayah marker), p = pause, s = sajdah, h = rub-el-hizb. */
   readonly k: string;

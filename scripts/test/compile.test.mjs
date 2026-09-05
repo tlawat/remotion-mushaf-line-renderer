@@ -30,9 +30,32 @@ describe('parsePageHtml', () => {
     expect(() => parsePageHtml(base.replace('data-line="2"', 'data-line="9"'), 1)).toThrow(/line numbers are not 1\.\.n/);
   });
 
-  it('rejects words with more than two code points', () => {
-    const html = renderQulPageHtml(SYNTH_PAGES[0]).replace(/>\s*ﱁ\s*</, '>ﱁﱂﱃ<');
-    expect(() => parsePageHtml(html, 1)).toThrow(/3 code points/);
+  it('accepts up to four code points per word and rejects more', () => {
+    const four = renderQulPageHtml(SYNTH_PAGES[0]).replace(/>\s*ﱁ\s*</, '>ﱁﱂﱃﱄ<');
+    expect(parsePageHtml(four, 1).lines[1].words[0].text).toBe('ﱁﱂﱃﱄ');
+    const five = renderQulPageHtml(SYNTH_PAGES[0]).replace(/>\s*ﱁ\s*</, '>ﱁﱂﱃﱄﱅ<');
+    expect(() => parsePageHtml(five, 1)).toThrow(/5 code points/);
+  });
+
+  it('drops trailing empty ayah lines (pages 1 and 2 render an empty ninth line) but no others', () => {
+    const empty = (n) => `            <div class="line-container" data-line="${n}">\n              <div class="line" id="line-${n}">                </div>\n            </div>\n`;
+    const base = renderQulPageHtml(SYNTH_PAGES[0]);
+    const trailing = base.replace('          </div>\n    </div>', `${empty(4)}          </div>\n    </div>`);
+    expect(trailing).not.toBe(base);
+    expect(parsePageHtml(trailing, 1).lines).toHaveLength(3);
+    const middle = base.replace('<div class="line-container" data-line="2">', `${empty(2)}<div class="line-container" data-line="4">`);
+    expect(() => parsePageHtml(middle.replace('id="line-2"', 'id="line-4"'), 1)).toThrow(/line 2: ayah line without words/);
+  });
+
+  it('tolerates marker glyphs with arbitrary ids and missing locations', () => {
+    const page = structuredClone(SYNTH_PAGES[2]);
+    const html = renderQulPageHtml(page)
+      .replace('data-word-id="9001"', 'data-word-id="83892"')
+      .replace(/data-location="2:3:1"\s+data-ayah="2:3"\s+data-position="1"\s+data-id="909001"/, 'data-id="909001"');
+    const parsed = parsePageHtml(html, 3);
+    const marker = parsed.lines[0].words[2];
+    expect(marker).toMatchObject({wordId: 83892, kind: 'rub-el-hizb', surah: 2, ayah: 2, position: 5}); // borrowed from the previous word
+    expect(parsed.lines[0].words.map((w) => w.wordId)).toEqual([13, 14, 83892, 15]);
   });
 });
 
@@ -49,13 +72,25 @@ describe('compileLayout + validateLayout', () => {
     expect(layout.pages[2].k).toBe('wehwwewewwwe');
     expect(layout.pages[1].l).toEqual([1, 1, 2, 2, 1, 2, 0, 0, 4, 0, 0, 3]);
     const report = validateLayout(layout, SYNTH);
-    expect(report).toMatchObject({lines: 11, ayahLines: 7, surahNameLines: 3, basmallahLines: 1, centeredAyahLines: 3, words: 24, twoCodePointWords: 1, ayahs: 7, kinds: {word: 16, end: 7, 'rub-el-hizb': 1}});
+    expect(report).toMatchObject({lines: 11, ayahLines: 7, surahNameLines: 3, basmallahLines: 1, centeredAyahLines: 3, words: 23, markerWords: 1, twoCodePointWords: 1, ayahs: 7, kinds: {word: 16, end: 7, 'rub-el-hizb': 1}});
+    expect(report.codePointLengths).toEqual({1: 23, 2: 1});
+  });
+
+  it('numbers glyphs sequentially in reading order and reports QUL ids of markers', () => {
+    const compileReport = {};
+    const layout = compileLayout(SYNTH_PAGES, SYNTH, {source: 'test'}, compileReport);
+    expect(compileReport).toMatchObject({regularWords: 23, markerWords: 1, codePointLengths: {1: 23, 2: 1}});
+    expect(compileReport.markers).toEqual([{page: 3, line: 1, qulId: 9001, kind: 'rub-el-hizb', location: '2:3:1', text: 'ﱃ'}]);
+    // The marker shares the location of the word it precedes; it gets a run of its own and the
+    // regular words of 2:3 (positions 1..3 across two lines) form the next run.
+    expect(layout.pages[2].a.slice(0, 12)).toEqual([2, 2, 4, 2, 2, 3, 1, 1, 2, 3, 1, 3]);
+    expect(expandPage(layout, 3).lines[0].words.map((w) => w.wordId)).toEqual([13, 14, 15, 16]);
   });
 
   it('expands pages back into lines with locations and kinds', () => {
     const layout = compileSynthetic();
     const p3 = expandPage(layout, 3);
-    expect(p3.lines[0].words.map((w) => w.location)).toEqual(['2:2:4', '2:2:5', '2:3:1', '2:3:2']);
+    expect(p3.lines[0].words.map((w) => w.location)).toEqual(['2:2:4', '2:2:5', '2:3:1', '2:3:1']);
     expect(p3.lines[0].words[2].kind).toBe('rub-el-hizb');
     expect(p3.lines[0].words[3].text).toBe('ﱄﱅ');
     expect(p3.lines[2]).toMatchObject({type: 'surah_name', surah: 3, centered: true});
@@ -72,7 +107,7 @@ describe('compileLayout + validateLayout', () => {
     expect(() => validateLayout(tampered, SYNTH)).toThrow(/ayah 1:1: 0 end markers/);
 
     const wrongCounts = {...SYNTH, invariants: {...SYNTH.invariants, words: 25}};
-    expect(() => validateLayout(layout, wrongCounts)).toThrow(/words: 24, expected 25/);
+    expect(() => validateLayout(layout, wrongCounts)).toThrow(/words: 23, expected 25/);
 
     const wrongExpectation = {...SYNTH, expectations: [{page: 1, line: 2, lastLocation: '1:1:4'}]};
     expect(() => validateLayout(layout, wrongExpectation)).toThrow(/last word 1:1:3, expected 1:1:4/);

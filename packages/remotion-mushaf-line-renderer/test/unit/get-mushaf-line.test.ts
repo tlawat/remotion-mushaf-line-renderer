@@ -42,7 +42,8 @@ describe('getMushafLine', () => {
     const line = await getMushafLine({mushaf: 'qpc-v4-tajweed', page: 3, line: 1});
     expect(line.fontFamily).toBe('mushaf-qpc-v4-tajweed-p3');
     expect(line.centered).toBe(false);
-    expect(line.words.map((w) => w.id)).toEqual(['2:2:4', '2:2:5', '2:3:1', '2:3:2']);
+    // The rub-el-hizb marker shares the location of the word it precedes (so `id` is not unique; `wordId` is).
+    expect(line.words.map((w) => w.id)).toEqual(['2:2:4', '2:2:5', '2:3:1', '2:3:1']);
     expect(line.words.map((w) => w.wordId)).toEqual([13, 14, 15, 16]);
     expect(line.words.map((w) => w.kind)).toEqual(['word', 'end', 'rub-el-hizb', 'word']);
     expect(line.words[3]?.text).toBe(cp(3) + cp(4));
@@ -95,7 +96,7 @@ describe('assertLineData', () => {
     expect(bad({page: 700})).toThrow(/page must be an integer/);
     expect(bad({fontFamily: 'Arial'})).toThrow(/fontFamily is invalid: expected "mushaf-qpc-v4-p1"/);
     expect(bad({type: 'header'})).toThrow(/type is invalid/);
-    expect(bad({words: [{...good.words[0], text: 'abc'}]})).toThrow(/words\[0\].text is invalid: expected 1–2 code points/);
+    expect(bad({words: [{...good.words[0], text: 'abcde'}]})).toThrow(/words\[0\].text is invalid: expected 1–4 code points/);
     expect(bad({words: [good.words[1], good.words[0]]})).toThrow(/ordered by wordId/);
     expect(bad({fontUrl: ''})).toThrow(/fontUrl/);
     expect(() => assertLineData('nope')).toThrow(/must be the object returned by getMushafLine/);

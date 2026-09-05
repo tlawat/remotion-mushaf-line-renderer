@@ -1,11 +1,22 @@
 // Compiles parsed QUL pages into the package's CompiledLayout format, validates every invariant
 // the renderer relies on, and emits the ASCII-only TypeScript module.
+//
+// Word model: QUL's preview markup lists, in reading order, the regular words of the mushaf (kinds
+// `word` and `end`, whose QUL ids are contiguous 1..83668) plus standalone marker glyphs (kinds
+// `pause`, `sajdah`, `rub-el-hizb`) whose QUL ids and positions follow no sequence. The compiled
+// layout numbers every glyph sequentially in reading order (that number is the package's `wordId`)
+// and stores QUL's own ids only in the compile report.
 
 import {KNOWN_KINDS} from './datasets.mjs';
 
+export const REGULAR_KINDS = new Set(['word', 'end']);
+export const MAX_CODE_POINTS = 4;
+const MAX_PROBLEMS = 60;
+
 export class LayoutValidationError extends Error {
   constructor(problems) {
-    super(`Layout validation failed with ${problems.length} problem(s):\n - ${problems.join('\n - ')}`);
+    const shown = problems.slice(0, MAX_PROBLEMS);
+    super(`Layout validation failed with ${problems.length} problem(s):\n - ${shown.join('\n - ')}${problems.length > shown.length ? `\n - … ${problems.length - shown.length} more` : ''}`);
     this.problems = problems;
   }
 }
@@ -14,14 +25,18 @@ export class LayoutValidationError extends Error {
  * @param {Array<{page:number, lines:Array}>} parsedPages  one entry per page, any order
  * @param {{dataset:string, layoutId:number, pages:number, linesOnPage:(p:number)=>number}} def
  * @param {{source?:string, generatedAt?:string}} [meta]
+ * @param {object} [report]  filled with {markers, regularWords, markerWords, codePointLengths}
  */
-export const compileLayout = (parsedPages, def, meta = {}) => {
+export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
   const byPage = new Map(parsedPages.map((p) => [p.page, p]));
   const pages = [];
-  let nextId = 1;
+  let expectedQulId = 1;
   let carriedSurah = 0;
   let wordCount = 0;
   const problems = [];
+  const markers = [];
+  const codePointLengths = {};
+  let regularWords = 0;
 
   for (let page = 1; page <= def.pages; page++) {
     const parsed = byPage.get(page);
@@ -46,28 +61,42 @@ export const compileLayout = (parsedPages, def, meta = {}) => {
       }
       l.push(0, line.centered ? 1 : 0, line.words.length);
       for (const w of line.words) {
-        if (w.wordId !== nextId) {
-          problems.push(`page ${page} line ${line.line}: expected word id ${nextId}, got ${w.wordId} (${w.surah}:${w.ayah}:${w.position})`);
-          nextId = w.wordId; // resynchronise so one gap does not cascade into thousands of messages
+        const regular = REGULAR_KINDS.has(w.kind);
+        if (regular) {
+          regularWords++;
+          if (w.wordId !== expectedQulId) {
+            if (problems.length < MAX_PROBLEMS) problems.push(`page ${page} line ${line.line}: expected QUL word id ${expectedQulId}, got ${w.wordId} (${w.kind} ${w.surah}:${w.ayah}:${w.position})`);
+            expectedQulId = w.wordId; // resynchronise so one gap does not cascade
+          }
+          expectedQulId++;
+        } else {
+          markers.push({page, line: line.line, qulId: w.wordId, kind: w.kind, location: `${w.surah}:${w.ayah}:${w.position}`, text: w.text});
         }
-        nextId++;
+        const cps = Array.from(w.text).length;
+        codePointLengths[cps] = (codePointLengths[cps] ?? 0) + 1;
         t.push(w.text);
         k.push(KNOWN_KINDS[w.kind] ?? '?');
-        if (run && run.surah === w.surah && run.ayah === w.ayah) {
-          if (w.position !== run.firstPosition + run.count) {
-            problems.push(`page ${page} line ${line.line}: word ${w.surah}:${w.ayah}:${w.position} breaks the position sequence`);
-          }
+        // Ayah runs: consecutive regular words of one ayah with consecutive positions share a run;
+        // a marker always gets a run of its own (its position follows no sequence).
+        if (regular && run && !run.marker && run.surah === w.surah && run.ayah === w.ayah && w.position === run.firstPosition + run.count) {
           run.count++;
         } else {
+          if (regular && run && !run.marker && run.surah === w.surah && run.ayah === w.ayah) {
+            problems.push(`page ${page} line ${line.line}: word ${w.surah}:${w.ayah}:${w.position} breaks the position sequence (expected ${run.firstPosition + run.count})`);
+          }
           if (run) a.push(run.surah, run.ayah, run.firstPosition, run.count);
-          run = {surah: w.surah, ayah: w.ayah, firstPosition: w.position, count: 1};
+          run = {surah: w.surah, ayah: w.ayah, firstPosition: w.position, count: 1, marker: !regular};
         }
       }
     }
     if (run) a.push(run.surah, run.ayah, run.firstPosition, run.count);
+    pages.push({w: wordCount + 1, t, k: k.join(''), a, l});
     wordCount += t.length;
-    pages.push({w: t.length ? nextId - t.length : nextId, t, k: k.join(''), a, l});
   }
+  report.markers = markers;
+  report.regularWords = regularWords;
+  report.markerWords = markers.length;
+  report.codePointLengths = codePointLengths;
   if (problems.length) throw new LayoutValidationError(problems);
 
   return {
@@ -121,11 +150,12 @@ export const expandPage = (layout, pageNumber) => {
 
 /**
  * Validates a compiled layout against a dataset descriptor. Returns a report object; throws
- * LayoutValidationError when anything is off.
+ * LayoutValidationError when anything is off. `words` in the report and in the descriptor's
+ * invariants count regular words (kinds word/end); marker glyphs are reported as `markerWords`.
  */
 export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
   const problems = [];
-  const report = {pages: layout.pages.length, lines: 0, ayahLines: 0, surahNameLines: 0, basmallahLines: 0, centeredAyahLines: 0, words: 0, twoCodePointWords: 0, kinds: {}, ayahs: 0};
+  const report = {pages: layout.pages.length, lines: 0, ayahLines: 0, surahNameLines: 0, basmallahLines: 0, centeredAyahLines: 0, words: 0, markerWords: 0, twoCodePointWords: 0, codePointLengths: {}, kinds: {}, ayahs: 0};
   const inv = def.invariants ?? {};
   const cpMin = inv.codePointMin ?? 0xfc41;
   const cpMax = inv.codePointMax ?? 0xfcfc;
@@ -134,9 +164,10 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
   if (layout.dataset !== def.dataset) problems.push(`dataset is ${layout.dataset}, expected ${def.dataset}`);
   if (layout.pages.length !== def.pages) problems.push(`has ${layout.pages.length} pages, expected ${def.pages}`);
 
-  const ayahState = new Map(); // "s:a" -> {count, ends, lastPositionSeen, endIsLast}
+  const ayahState = new Map(); // "s:a" -> {count, ends, lastPosition, endPosition}
   let expectedNextId = 1;
   let lastSurahHeader = 0;
+  let totalWords = 0;
 
   for (let p = 1; p <= layout.pages.length; p++) {
     let expanded;
@@ -171,15 +202,21 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         }
       }
       for (const w of line.words) {
-        report.words++;
+        totalWords++;
         report.kinds[w.kind ?? '?'] = (report.kinds[w.kind ?? '?'] ?? 0) + 1;
         if (!w.kind) problems.push(`page ${p} line ${line.line}: word ${w.location} has unknown kind char`);
         const cps = Array.from(w.text).map((c) => c.codePointAt(0));
-        if (cps.length < 1 || cps.length > 2) problems.push(`page ${p} line ${line.line}: word ${w.location} has ${cps.length} code points`);
+        if (cps.length < 1 || cps.length > MAX_CODE_POINTS) problems.push(`page ${p} line ${line.line}: word ${w.location} has ${cps.length} code points`);
         if (cps.length === 2) report.twoCodePointWords++;
+        report.codePointLengths[cps.length] = (report.codePointLengths[cps.length] ?? 0) + 1;
         for (const cp of cps) {
           if (cp < cpMin || cp > cpMax) problems.push(`page ${p} line ${line.line}: word ${w.location} code point U+${cp.toString(16).toUpperCase()} outside U+${cpMin.toString(16).toUpperCase()}–U+${cpMax.toString(16).toUpperCase()}`);
         }
+        if (!REGULAR_KINDS.has(w.kind)) {
+          report.markerWords++;
+          continue;
+        }
+        report.words++;
         const key = `${w.surah}:${w.ayah}`;
         let st = ayahState.get(key);
         if (!st) {
@@ -202,10 +239,10 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
     if (st.ends !== 1) problems.push(`ayah ${key}: ${st.ends} end markers`);
     else if (st.endPosition !== st.lastPosition) problems.push(`ayah ${key}: end marker at position ${st.endPosition} is not the last word (${st.lastPosition})`);
   }
-  if (layout.wordCount !== report.words) problems.push(`wordCount ${layout.wordCount} but ${report.words} words found`);
+  if (layout.wordCount !== totalWords) problems.push(`wordCount ${layout.wordCount} but ${totalWords} words found`);
 
   if (strictCounts) {
-    for (const key of ['lines', 'ayahLines', 'surahNameLines', 'basmallahLines', 'centeredAyahLines', 'words', 'ayahs']) {
+    for (const key of ['lines', 'ayahLines', 'surahNameLines', 'basmallahLines', 'centeredAyahLines', 'words', 'markerWords', 'ayahs']) {
       if (inv[key] !== undefined && report[key] !== inv[key]) problems.push(`${key}: ${report[key]}, expected ${inv[key]}`);
     }
   }

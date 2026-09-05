@@ -116,8 +116,10 @@ type MushafLineData = {
 ```
 
 `words[].id` is QUL's location key (`2:62:1`), the join key for word timestamps. `kind: 'end'` is the
-ayah-number marker, a real word with a real width. `text` is one or two private-use code points that
-only mean something together with `fontFamily`; never normalise it.
+ayah-number marker, a real word with a real width. Standalone marker glyphs (`pause`, `sajdah`,
+`rub-el-hizb`) are words too, numbered where they appear; one may share the location of the word it
+precedes, so key elements by `wordId`. `text` is one to four private-use code points that only mean
+something together with `fontFamily`; never normalise it.
 
 ### `loadPageFont({mushaf, page, url?}): {fontFamily, waitUntilDone}`
 

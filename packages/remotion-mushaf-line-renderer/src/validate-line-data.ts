@@ -48,7 +48,7 @@ export const assertLineData = (value: unknown): MushafLineData => {
     if (!WORD_KINDS.includes(word.kind as MushafWordKind)) fail(`words[${i}].kind`, `expected one of ${WORD_KINDS.join(', ')}`, word.kind);
     if (typeof word.text !== 'string') fail(`words[${i}].text`, 'expected a string', word.text);
     const length = Array.from(word.text as string).length;
-    if (length < 1 || length > 2) fail(`words[${i}].text`, 'expected 1–2 code points', word.text);
+    if (length < 1 || length > 4) fail(`words[${i}].text`, 'expected 1–4 code points', word.text);
     if (i > 0 && (word.wordId as number) <= ((words[i - 1] as Record<string, unknown>).wordId as number)) fail(`words[${i}].wordId`, 'words must be ordered by wordId');
   });
   if (data.type !== 'ayah' && words.length > 0) fail('words', `${data.type} lines carry no words`);

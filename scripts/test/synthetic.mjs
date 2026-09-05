@@ -1,7 +1,8 @@
 // A three-page synthetic "mushaf" in QUL's shapes, used to test the compiler without network access.
 // Page 1: header + 2 centred ayah lines (like Al-Fatihah); page 2: header, basmallah, two justified
 // ayah lines, one of which continues an ayah onto the next page; page 3: the continuation, a
-// two-code-point word, a standalone rub-el-hizb word, a centred last line, and a second surah.
+// two-code-point word, a standalone rub-el-hizb marker (QUL id 9001, outside the regular
+// sequence, sharing the location of the word it precedes), a centred last line, and a second surah.
 
 const cp = (n) => String.fromCodePoint(0xfc41 + n);
 
@@ -11,7 +12,7 @@ export const SYNTH = {
   pages: 3,
   linesPerPage: 4,
   linesOnPage: (page) => (page === 1 ? 3 : 4),
-  invariants: {lines: 11, ayahLines: 7, surahNameLines: 3, basmallahLines: 1, centeredAyahLines: 3, words: 24, ayahs: 7, codePointMin: 0xfc41, codePointMax: 0xfcfc},
+  invariants: {lines: 11, ayahLines: 7, surahNameLines: 3, basmallahLines: 1, centeredAyahLines: 3, words: 23, markerWords: 1, ayahs: 7, codePointMin: 0xfc41, codePointMax: 0xfcfc},
   expectations: [
     {page: 1, line: 1, type: 'surah_name', surah: 1},
     {page: 1, line: 2, type: 'ayah', firstLocation: '1:1:1', lastLocation: '1:1:3', lastKind: 'end', centered: true},
@@ -22,7 +23,7 @@ export const SYNTH = {
   ],
 };
 
-// Words: [wordId, surah, ayah, position, kind, text]
+// Words: [QUL word id, surah, ayah, position, kind, text]. Regular word ids are contiguous 1..23.
 const W = (id, s, a, p, kind, text) => ({wordId: id, surah: s, ayah: a, position: p, kind, text});
 
 export const SYNTH_PAGES = [
@@ -46,10 +47,10 @@ export const SYNTH_PAGES = [
   {
     page: 3,
     lines: [
-      {line: 1, type: 'ayah', centered: false, words: [W(13, 2, 2, 4, 'word', cp(0)), W(14, 2, 2, 5, 'end', cp(1)), W(15, 2, 3, 1, 'rub-el-hizb', cp(2)), W(16, 2, 3, 2, 'word', cp(3) + cp(4))]},
-      {line: 2, type: 'ayah', centered: false, words: [W(17, 2, 3, 3, 'word', cp(5)), W(18, 2, 3, 4, 'end', cp(6)), W(19, 2, 4, 1, 'word', cp(7)), W(20, 2, 4, 2, 'end', cp(8))]},
+      {line: 1, type: 'ayah', centered: false, words: [W(13, 2, 2, 4, 'word', cp(0)), W(14, 2, 2, 5, 'end', cp(1)), W(9001, 2, 3, 1, 'rub-el-hizb', cp(2)), W(15, 2, 3, 1, 'word', cp(3) + cp(4))]},
+      {line: 2, type: 'ayah', centered: false, words: [W(16, 2, 3, 2, 'word', cp(5)), W(17, 2, 3, 3, 'end', cp(6)), W(18, 2, 4, 1, 'word', cp(7)), W(19, 2, 4, 2, 'end', cp(8))]},
       {line: 3, type: 'surah_name', centered: true, surah: 3, words: []},
-      {line: 4, type: 'ayah', centered: true, words: [W(21, 3, 1, 1, 'word', cp(9)), W(22, 3, 1, 2, 'word', cp(10)), W(23, 3, 1, 3, 'word', cp(11)), W(24, 3, 1, 4, 'end', cp(12))]},
+      {line: 4, type: 'ayah', centered: true, words: [W(20, 3, 1, 1, 'word', cp(9)), W(21, 3, 1, 2, 'word', cp(10)), W(22, 3, 1, 3, 'word', cp(11)), W(23, 3, 1, 4, 'end', cp(12))]},
     ],
   },
 ];

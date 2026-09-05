@@ -19,7 +19,11 @@ export type MushafWordKind = 'word' | 'end' | 'pause' | 'sajdah' | 'rub-el-hizb'
 export type MushafWord = {
   /** "surah:ayah:position" — QUL's `location`. Stable across mushafs; the join key for word timestamps. */
   readonly id: string;
-  /** QUL global word index (1..83668 for V4), shared by QUL layouts; the ordering key. */
+  /**
+   * Sequential index of the glyph in mushaf reading order (1-based, marker glyphs included); the
+   * ordering key. Regular words follow QUL's global word order; standalone markers (pause, sajdah,
+   * rub-el-hizb) are numbered where they appear.
+   */
   readonly wordId: number;
   readonly surah: number;
   readonly ayah: number;
@@ -27,7 +31,7 @@ export type MushafWord = {
   readonly position: number;
   /** `end` is the ayah-number marker glyph — a real word that carries width. */
   readonly kind: MushafWordKind;
-  /** 1–2 code points in U+FC41–U+FCFC. Opaque: only meaningful together with `fontFamily`. Never normalise. */
+  /** 1–4 code points in U+FC41–U+FCFC. Opaque: only meaningful together with `fontFamily`. Never normalise. */
   readonly text: string;
 };
 
