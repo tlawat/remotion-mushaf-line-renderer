@@ -8,9 +8,24 @@ coverage/
 test-results/
 playwright-report/
 
-# Fonts are fetched by scripts/fetch-qul.mjs and never committed (licence check pending).
-**/public/fonts/**
-**/test/fixtures/fonts/**
+# QUL fonts are fetched by scripts/fetch-qul.mjs (or the "QUL assets" workflow) and are not
+# redistributed. During development only, the fixture pages 1, 10 and 604 are committed so the
+# browser and render suites run without network access. Before the public release delete the six
+# negation lines below and run:
+#   git rm -r --cached example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts
+# (CI downloads the fixture font itself when it is missing; the npm package never contains fonts.)
+**/public/fonts/**/*.ttf
+**/public/fonts/**/*.woff
+**/public/fonts/**/*.woff2
+**/test/fixtures/fonts/**/*.ttf
+**/test/fixtures/fonts/**/*.woff
+**/test/fixtures/fonts/**/*.woff2
+!**/public/fonts/**/p1.*
+!**/public/fonts/**/p10.*
+!**/public/fonts/**/p604.*
+!**/test/fixtures/fonts/**/p1.*
+!**/test/fixtures/fonts/**/p10.*
+!**/test/fixtures/fonts/**/p604.*
 
 # Stills written by the render suite for visual comparison.
 packages/remotion-mushaf-line-renderer/test/render/*.png

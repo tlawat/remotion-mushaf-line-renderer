@@ -196,7 +196,9 @@ page 10 line 3: waiting for font ...`).
   const lines = resolved.map((line) => ({...line, fontUrl: staticFile(`fonts/${line.mushaf}/p${line.page}.woff2`)}));
   ```
 
-  `fontUrl` is an explicit source; it also works with any URL of your own mirror.
+  `fontUrl` is an explicit source; it also works with any URL of your own mirror. Mirroring is for
+  your own renders: the fonts are King Fahd Complex fonts published by QUL, so do not redistribute
+  them (in a public site or a package) unless their licence allows it.
 - **`<Player>` warm-up:** the Player does not run `calculateMetadata`, and a line mounted at frame 0
   would show nothing until its font arrives. Call `loadPageFont({mushaf, page})` when your page loads
   (or use `preloadFont()` from `@remotion/preload` with the CDN URL), or mount the line early with
