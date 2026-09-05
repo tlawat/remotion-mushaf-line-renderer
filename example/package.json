@@ -1,6 +1,28 @@
 {
-  "name": "example",
+  "name": "remotion-mushaf-line-renderer-example",
   "private": true,
   "version": "0.0.0",
-  "description": "Placeholder; replaced by the create-video scaffold in a later step."
+  "description": "Example Remotion project for remotion-mushaf-line-renderer: three lines of a page with fade, slide and revealRtl entrances, plus a <Player> page used by the browser tests.",
+  "scripts": {
+    "dev": "remotion studio --no-open",
+    "render": "remotion render ThreeLines out/three-lines.mp4",
+    "still": "remotion still ThreeLines out/three-lines.png --frame=150",
+    "player": "vite --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.521",
+    "@remotion/player": "4.0.521",
+    "@remotion/transitions": "4.0.521",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "4.0.521",
+    "remotion-mushaf-line-renderer": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "typescript": "~5.9.3",
+    "vite": "^8.2.2"
+  }
 }

@@ -275,6 +275,28 @@ describe('<MushafLine>', () => {
     expect(remotion.hook.cancelRender).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects a presentation that mounts the line inside a <canvas>, before the first paint', async () => {
+    // HTML-in-canvas presentations put their children inside the canvas element; browsers without
+    // paint events for it would otherwise show a blank canvas.
+    const CanvasWrapper: React.FC<{children: React.ReactNode}> = ({children}) => (
+      <div>
+        <canvas>{children}</canvas>
+      </div>
+    );
+    const enter = {presentation: {component: CanvasWrapper as never, props: {}}, timing: linearTiming({durationInFrames: 10})};
+    remotion.state.env = {...remotion.state.env, isRendering: true};
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        <MushafLine line={line} enter={enter} />
+      </Boundary>,
+    );
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'CANVAS_PRESENTATION'});
+    expect(remotion.hook.cancelRender).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.mushaf-line')).toBeNull();
+  });
+
   it('throws BAD_ENTER for a malformed enter prop', () => {
     const onError = vi.fn();
     render(

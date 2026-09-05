@@ -11,3 +11,6 @@ playwright-report/
 # Fonts are fetched by scripts/fetch-qul.mjs and never committed (licence check pending).
 **/public/fonts/**
 **/test/fixtures/fonts/**
+
+# Stills written by the render suite for visual comparison.
+packages/remotion-mushaf-line-renderer/test/render/*.png

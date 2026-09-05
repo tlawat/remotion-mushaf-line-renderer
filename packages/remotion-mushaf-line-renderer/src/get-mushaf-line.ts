@@ -1,8 +1,8 @@
-import {KIND_BY_CHAR, indexPage, runAt} from './data/format';
+import {KIND_BY_CHAR, indexPage, runAt, type CompiledLayout} from './data/format';
 import {loadLayout} from './data/load-layout';
 import {MushafError} from './errors';
 import {assertLine, assertPage, getMushafDefinition} from './mushafs';
-import type {GetMushafLineOptions, MushafLineData, MushafWord, MushafWordKind} from './types';
+import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafWordKind} from './types';
 
 /**
  * Resolves one line of a mushaf page to plain, JSON-serialisable data.
@@ -16,6 +16,14 @@ export const getMushafLine = async ({mushaf, page, line}: GetMushafLineOptions):
   assertPage(def, page);
   assertLine(def, page, line);
   const layout = await loadLayout(def.dataset);
+  return lineFromLayout(layout, mushaf, page, line);
+};
+
+/** Synchronous core of `getMushafLine()` for an already loaded layout (also used by test fixtures). */
+export const lineFromLayout = (layout: CompiledLayout, mushaf: MushafId, page: number, line: number): MushafLineData => {
+  const def = getMushafDefinition(mushaf);
+  assertPage(def, page);
+  assertLine(def, page, line);
   if (page > layout.pages.length) {
     throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Re-run scripts/fetch-qul.mjs.`, {mushaf, page});
   }

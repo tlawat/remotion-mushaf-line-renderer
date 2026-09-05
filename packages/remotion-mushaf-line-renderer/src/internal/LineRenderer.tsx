@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import {useCurrentFrame, useDelayRender, useRemotionEnvironment, useVideoConfig} from 'remotion';
 import {getEnterState} from '../enter-state';
 import {MushafError} from '../errors';
@@ -22,6 +22,8 @@ export type LineRendererProps = {
 };
 
 const serverSnapshot = (): FontStatus => 'idle';
+// useLayoutEffect warns during server rendering; nothing here has a DOM to inspect there anyway.
+const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
 const CANVAS_PRESENTATIONS = 'dissolve, ripple, crosswarp, crossZoom, swap, bookFlip, zoomBlur, dreamyZoom, filmBurn, linearBlur, zoomInOut';
 const DOM_PRESENTATIONS = 'fade(), slide(), wipe(), flip(), clockWipe({width, height}), iris({width, height}), pushCut(), none() or revealRtl()';
@@ -75,11 +77,10 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
 
   const [presentationError, setPresentationError] = useState<MushafError | null>(null);
   const isRendering = env.isRendering;
-  const onElementImage = useCallback<OnElementImage>(() => {
-    // Only HTML-in-canvas presentations call this, from a DOM paint listener where a throw would
-    // never reach React. Record it and throw from the next render; cancel the render right away.
+  const rejectCanvasPresentation = useCallback(() => {
+    // Record the error and throw it from the next render; when rendering, cancel right away.
     const err = canvasPresentationError();
-    setPresentationError(err);
+    setPresentationError((current) => current ?? err);
     if (isRendering) {
       try {
         cancelRender(err);
@@ -88,6 +89,24 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
       }
     }
   }, [isRendering, cancelRender]);
+  // HTML-in-canvas presentations call this from a DOM paint listener, where a throw would never
+  // reach React.
+  const onElementImage = useCallback<OnElementImage>(() => rejectCanvasPresentation(), [rejectCanvasPresentation]);
+  // ... and, whether or not the browser fires paint events for them, they mount the line inside a
+  // <canvas>. Checked before the first paint so no frame is ever captured with a blank canvas.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const presentationComponent = enter?.presentation.component;
+  useIsomorphicLayoutEffect(() => {
+    if (!presentationComponent || presentationError) return;
+    const root = rootRef.current;
+    for (let node = rowRef.current?.parentElement ?? null; node && node !== root; node = node.parentElement) {
+      if (node.tagName === 'CANVAS') {
+        rejectCanvasPresentation();
+        return;
+      }
+    }
+  }, [presentationComponent, presentationError, rejectCanvasPresentation]);
 
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width, def);
   const resolvedLineHeight = lineHeight ?? defaultLineHeight(resolvedFontSize);
@@ -111,7 +130,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
   const enterState = enter ? getEnterState({enter, frame, fps}) : null;
 
   const row = (
-    <div className="mushaf-line__row" style={buildRowStyle({fontFamily: line.fontFamily, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, centered: line.centered, visible: ready})}>
+    <div ref={rowRef} className="mushaf-line__row" style={buildRowStyle({fontFamily: line.fontFamily, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, centered: line.centered, visible: ready})}>
       {line.words.map((word) => (
         <Word key={word.id} word={word} />
       ))}
@@ -121,6 +140,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, fontSize
   return (
     <LineContext.Provider value={ctx}>
       <div
+        ref={rootRef}
         className={className ? `mushaf-line ${className}` : 'mushaf-line'}
         data-mushaf={line.mushaf}
         data-page={line.page}
