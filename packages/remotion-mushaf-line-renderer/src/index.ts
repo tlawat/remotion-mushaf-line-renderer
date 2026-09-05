@@ -1,4 +1,5 @@
 export {getMushafLine} from './get-mushaf-line';
+export {loadPageFont} from './load-page-font';
 export {MushafError} from './errors';
 export type {MushafErrorCode} from './errors';
 export type {
