@@ -122,6 +122,14 @@ describe('compileLayout + validateLayout', () => {
     const split = structuredClone(layout);
     split.pages[0].a = [1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 3, 1, 1, 2, 2, 1]; // 1:1 resumes after 1:2 started
     expect(() => validateLayout(split, SYNTH)).toThrow(/ayah 1:1 is split by other ayahs/);
+    const centred = structuredClone(layout);
+    centred.pages[2].l[1] = 1; // page 3 line 1 (a full line followed by another ayah line) marked centred
+    expect(() => validateLayout(centred, {...SYNTH, invariants: {...SYNTH.invariants, centeredAyahLines: 4}})).toThrow(/page 3 line 1: centred ayah line is not the last line of a surah \(next: page 3 line 2 ayah\)/);
+    expect(validateLayout(layout, SYNTH).centeredAyahLineList).toEqual([
+      {page: 1, line: 2, first: '1:1:1', words: 3},
+      {page: 1, line: 3, first: '1:2:1', words: 2},
+      {page: 3, line: 4, first: '3:1:1', words: 4},
+    ]);
 
     const wrongCounts = {...SYNTH, invariants: {...SYNTH.invariants, words: 25}};
     expect(() => validateLayout(layout, wrongCounts)).toThrow(/words: 23, expected 25/);
@@ -149,7 +157,7 @@ describe('compileLayout + validateLayout', () => {
     expect(QPC_V4.pages).toBe(604);
     expect(QPC_V4.linesOnPage(1)).toBe(8);
     expect(QPC_V4.linesOnPage(3)).toBe(15);
-    expect(QPC_V4.invariants).toMatchObject({lines: 9046, ayahLines: 8820, surahNameLines: 114, basmallahLines: 112, centeredAyahLines: 29, words: 83668, ayahs: 6236});
+    expect(QPC_V4.invariants).toMatchObject({lines: 9046, ayahLines: 8820, surahNameLines: 114, basmallahLines: 112, centeredAyahLines: 30, words: 83668, ayahs: 6236});
     expect(QPC_V4.fontUrl('qpc-v4-tajweed', 10, 'ttf')).toBe('https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p10.ttf?v=3.1');
     expect(QPC_V4.fontUrl('qpc-v4', 10, 'woff2')).toBe('https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2');
     expect(QPC_V4.previewUrl(19)).toBe('https://qul.tarteel.ai/mushaf_layouts/19?page_number=19');

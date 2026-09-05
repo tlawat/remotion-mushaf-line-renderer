@@ -49,7 +49,7 @@ const v4 = (id: string, dir: 'v4' | 'v4-tajweed', colr: boolean): MushafDefiniti
   fontUrl: (page) => `${CDN}/${dir}/woff2/p${page}.woff2${colr ? '?v=3.1' : ''}`,
   colr,
   metrics: {unitsPerEm: 2500, ascent: 3940, descent: -2520, referenceLineWidth: 42501},
-  invariants: {lines: 9046, ayahLines: 8820, surahNameLines: 114, basmallahLines: 112, centeredAyahLines: 29, words: 83668},
+  invariants: {lines: 9046, ayahLines: 8820, surahNameLines: 114, basmallahLines: 112, centeredAyahLines: 30, words: 83668},
 });
 
 /** Internal registry. Adding a mushaf is one row here plus one compiled dataset. */

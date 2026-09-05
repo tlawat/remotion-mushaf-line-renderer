@@ -167,7 +167,8 @@ export const expandPage = (layout, pageNumber) => {
  */
 export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
   const problems = [];
-  const report = {pages: layout.pages.length, lines: 0, ayahLines: 0, surahNameLines: 0, basmallahLines: 0, centeredAyahLines: 0, words: 0, markerWords: 0, twoCodePointWords: 0, codePointLengths: {}, kinds: {}, ayahs: 0};
+  const report = {pages: layout.pages.length, lines: 0, ayahLines: 0, surahNameLines: 0, basmallahLines: 0, centeredAyahLines: 0, centeredAyahLineList: [], words: 0, markerWords: 0, twoCodePointWords: 0, codePointLengths: {}, kinds: {}, ayahs: 0};
+  const allLines = []; // every line of the mushaf in order, for the centred-line rule
   const inv = def.invariants ?? {};
   const cpMin = inv.codePointMin ?? 0xfc41;
   const cpMax = inv.codePointMax ?? 0xfcfc;
@@ -199,9 +200,13 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
 
     for (const line of expanded.lines) {
       report.lines++;
+      allLines.push({page: p, ...line});
       if (line.type === 'ayah') {
         report.ayahLines++;
-        if (line.centered) report.centeredAyahLines++;
+        if (line.centered) {
+          report.centeredAyahLines++;
+          report.centeredAyahLineList.push({page: p, line: line.line, first: line.words[0]?.location, words: line.words.length});
+        }
         if (line.words.length === 0) problems.push(`page ${p} line ${line.line}: ayah line without words`);
       } else {
         if (!line.centered) problems.push(`page ${p} line ${line.line}: ${line.type} line must be centered`);
@@ -251,6 +256,15 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         }
       }
     }
+  }
+
+  // A centred ayah line is either on pages 1-2 or the short last line of a surah: the next line
+  // of the mushaf is a surah header (or there is none).
+  for (let i = 0; i < allLines.length; i++) {
+    const line = allLines[i];
+    if (line.type !== 'ayah' || !line.centered || line.page <= 2) continue;
+    const next = allLines[i + 1];
+    if (next && next.type !== 'surah_name') problems.push(`page ${line.page} line ${line.line}: centred ayah line is not the last line of a surah (next: page ${next.page} line ${next.line} ${next.type})`);
   }
 
   report.ayahs = ayahState.size;

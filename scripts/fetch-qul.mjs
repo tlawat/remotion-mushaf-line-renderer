@@ -304,8 +304,9 @@ const main = async () => {
       log(`marker glyphs by kind: ${JSON.stringify(byKind)}; first ones: ${compileReport.markers.slice(0, 12).map((m) => `p${m.page} l${m.line} ${m.kind} ${m.location} (QUL id ${m.qulId})`).join('; ')}`);
     }
     if (!args['no-validate'] && !partial) {
-      const report = validateLayout(layout, def);
+      const {centeredAyahLineList, ...report} = validateLayout(layout, def);
       log('validation passed:', JSON.stringify(report));
+      log(`centred ayah lines: ${centeredAyahLineList.map((c) => `p${c.page} l${c.line} (${c.first}, ${c.words} words)`).join('; ')}`);
     } else if (partial) {
       log(`partial run (${subset.length} page(s)): validation skipped, output NOT written`);
     }

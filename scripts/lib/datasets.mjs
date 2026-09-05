@@ -27,7 +27,10 @@ export const QPC_V4 = {
     ayahLines: 8820,
     surahNameLines: 114,
     basmallahLines: 112,
-    centeredAyahLines: 29,
+    // Pages 1-2 (13 lines) plus the short last line of a surah elsewhere. The uploaded notes count
+    // 29 from an older SQLite export; QUL's current layout marks 30 (every one at the end of a
+    // surah, which validateLayout checks structurally).
+    centeredAyahLines: 30,
     words: 83668,
     ayahs: 6236,
     codePointMin: 0xfc41,
