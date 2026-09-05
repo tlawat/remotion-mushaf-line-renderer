@@ -62,8 +62,13 @@ type HarnessProps = {
   lines: unknown[];
   enter: 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'dissolve';
   enterFrames: number;
+  exit: 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'dissolve';
+  exitFrames: number;
   from: number;
+  stagger: number;
+  durationInFrames: number | null;
   premountFor: number;
+  slot: 'stack' | 'same';
   fontFile: string | null;
   fontUrl: string | null;
   fontSize: number | null;
@@ -74,8 +79,13 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   lines: [syntheticLine(2, 3), syntheticLine(1, 2), syntheticLine(3, 1)],
   enter: 'plain',
   enterFrames: 20,
+  exit: 'plain',
+  exitFrames: 20,
   from: 0,
+  stagger: 0,
+  durationInFrames: null,
   premountFor: 0,
+  slot: 'stack',
   fontFile: FIXTURE_FONT,
   fontUrl: null,
   fontSize: null,
@@ -156,8 +166,9 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     writeFileSync(path.join(here, 'last-still.png'), a);
   });
 
-  it('renders the fade entrance frame by frame and settles after it', async () => {
-    const inputProps = harnessProps({enter: 'fade', enterFrames: 10});
+  it('renders the fade entrance frame by frame, settles, then leaves through the exit', async () => {
+    // Sequence of 14 frames: entrance over 0-9, settled at 10, exit over 10-13, gone from 14 on.
+    const inputProps = harnessProps({enter: 'fade', enterFrames: 10, exit: 'fade', exitFrames: 4, durationInFrames: 14});
     const composition = await selectComposition({serveUrl, id: 'LineHarness', inputProps, ...renderer});
     const outputDir = path.join(workDir, 'frames');
     await renderFrames({
@@ -166,7 +177,7 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       inputProps,
       imageFormat: 'png',
       outputDir,
-      frameRange: [0, 14],
+      frameRange: [0, 16],
       concurrency: 2,
       onStart: () => undefined,
       onFrameUpdate: () => undefined,
@@ -175,19 +186,21 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     const files = readdirSync(outputDir)
       .filter((f) => f.endsWith('.png'))
       .sort((x, y) => Number(x.match(/\d+/)?.[0]) - Number(y.match(/\d+/)?.[0]));
-    expect(files).toHaveLength(15);
+    expect(files).toHaveLength(17);
     const frames = files.map((f) => readFileSync(path.join(outputDir, f)));
     // Frame 0 is fully transparent for the line (opacity 0): identical to an empty harness.
     const blank = await still(serveUrl, harnessProps({lines: []}));
     expect(frames[0]!.equals(blank)).toBe(true);
-    // Mid-entrance frames differ from each other and from the end state.
+    // Mid-entrance frames differ from each other and from the settled state.
     expect(frames[3]!.equals(frames[6]!)).toBe(false);
     expect(frames[6]!.equals(frames[10]!)).toBe(false);
-    // After the entrance every frame is byte-identical.
-    for (let i = 11; i < frames.length; i++) expect(frames[i]!.equals(frames[10]!)).toBe(true);
-    // ... and identical to a plain render of the same lines.
+    // Settled frame: identical to a plain render of the same lines (the presentations are at rest).
     const plain = await still(serveUrl, harnessProps());
-    expect(frames[14]!.equals(plain)).toBe(true);
+    expect(frames[10]!.equals(plain)).toBe(true);
+    // Exit: frame 12 is half faded, and once the Sequence has ended the frames equal the blank one.
+    expect(frames[12]!.equals(plain)).toBe(false);
+    expect(frames[12]!.equals(blank)).toBe(false);
+    for (let i = 14; i < frames.length; i++) expect(frames[i]!.equals(blank)).toBe(true);
   });
 
   it('a missing font fails the render fast with FONT_HTTP', async () => {

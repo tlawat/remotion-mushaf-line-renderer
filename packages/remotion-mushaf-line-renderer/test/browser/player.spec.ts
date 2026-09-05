@@ -294,6 +294,63 @@ test.describe('entrances', () => {
   });
 });
 
+test.describe('exits and replacing', () => {
+  const wrappers = (page: Page, i = 0) =>
+    page.locator(ROOT).nth(i).evaluate((root) => {
+      const outer = root.children[0] as HTMLElement | undefined;
+      const inner = outer?.children[0] as HTMLElement | undefined;
+      return {outer: outer?.style.opacity ?? null, inner: inner?.style.opacity ?? null, innerIsRow: inner?.classList.contains('mushaf-line__row') ?? false};
+    });
+
+  test('exit fade runs over the last frames of the sequence and the line leaves with it', async ({page}) => {
+    await open(page, 'exit-fade');
+    await rowsVisible(page, 1);
+    await seek(page, 20);
+    expect((await wrappers(page)).outer).toBe('1');
+    await seek(page, 50);
+    expect(Number((await wrappers(page)).outer)).toBeCloseTo(0.5, 5);
+    await seek(page, 59);
+    expect(Number((await wrappers(page)).outer)).toBeCloseTo(0.05, 5);
+    await seek(page, 60);
+    await expect(page.locator(ROOT)).toHaveCount(0); // the Sequence ended
+  });
+
+  test('exit slide pushes the line out to the left', async ({page}) => {
+    await open(page, 'exit-slide');
+    await rowsVisible(page, 1);
+    await seek(page, 20);
+    const root = await box(page, ROOT, 0);
+    const before = await wordBoxes(page, 0);
+    await seek(page, 50);
+    const after = await wordBoxes(page, 0);
+    for (let k = 0; k < before.length; k++) expect(before[k]!.x - after[k]!.x).toBeGreaterThan(root.width * 0.4);
+  });
+
+  test('replacing: the next line enters while the previous one leaves, in one slot', async ({page}) => {
+    await open(page, 'replace');
+    await seek(page, 30);
+    await expect(page.locator(ROOT)).toHaveCount(1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-line', '3');
+    await rowsVisible(page, 1);
+    await seek(page, 50); // frame 10 of the overlap: the old line is half gone, the new one half in
+    await expect(page.locator(ROOT)).toHaveCount(2);
+    await rowsVisible(page, 2);
+    const old = await wrappers(page, 0);
+    const next = await wrappers(page, 1);
+    expect(Number(old.outer)).toBeCloseTo(0.5, 5); // exit wrapper (outer) fading out ...
+    expect(old.inner).toBe('1'); // ... around a finished entrance
+    expect(next.outer).toBe('1'); // exit not started ...
+    expect(Number(next.inner)).toBeCloseTo(0.5, 5); // ... entrance half way
+    const a = await box(page, ROOT, 0);
+    const b = await box(page, ROOT, 1);
+    expect(b.y).toBeCloseTo(a.y, 0); // same slot
+    await seek(page, 70);
+    await expect(page.locator(ROOT)).toHaveCount(1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-line', '2');
+    expect((await wrappers(page, 0)).inner).toBe('1');
+  });
+});
+
 test.describe('font failures', () => {
   test('404 fails fast with FONT_HTTP', async ({page}) => {
     await open(page, 'font-404');

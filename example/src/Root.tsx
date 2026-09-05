@@ -6,7 +6,8 @@ import {ThreeLines, calculateThreeLinesMetadata} from './ThreeLines';
 export const RemotionRoot: React.FC = () => {
   return (
     <>
-      {/* Three consecutive lines of one page, staggered, each with a different entrance. */}
+      {/* Three consecutive lines of one page: in 'replace' mode each line leaves as the next enters (one slot);
+          in 'stack' mode they stack down the page. A different entrance/exit pair per line. */}
       <Composition
         id="ThreeLines"
         component={ThreeLines}
@@ -23,6 +24,7 @@ export const RemotionRoot: React.FC = () => {
           // Set to e.g. 'fonts/qpc-v4-tajweed/p10.woff2' (downloaded by `node scripts/fetch-qul.mjs --fonts 10`)
           // to serve the font from the public folder instead of QUL's CDN.
           fontFile: null,
+          mode: 'replace',
         }}
       />
       {/* Test harness used by the browser and render suites: explicit lines, one entrance for all. */}
