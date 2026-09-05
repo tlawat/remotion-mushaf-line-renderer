@@ -86,6 +86,34 @@ If QUL rejects the requests (bot protection), retry later or use an official QUL
 At render time the package fetches fonts from `https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/…`
 unless a line carries an explicit `fontUrl`.
 
+## Real-life example: a recited passage
+
+`example/src/Recitation.tsx` uses the package the way a recitation app would. A JSON listing the ayat
+of a passage with their timeframes (and, optionally, per-word times) drives which printed line is on
+screen while the audio plays:
+
+- `calculateMetadata()` reads the JSON (`timingsFile` in the public folder, or `timings` inline),
+  resolves the printed lines that carry those ayahs with `getMushafLine()` from the surah's first
+  page onwards, pins the fonts when `fontFilePattern` is set, and schedules one `<Sequence>` per line:
+  the line is fully in when its first word is heard (`leadInSeconds` early) and leaves as the next
+  line arrives.
+- Every line is one `<MushafLine line enter exit>`; the vertical slide + fade is an ordinary
+  `@remotion/transitions` presentation (`verticalSlideFade()` in the same file), used for both sides.
+- `cutAtSeconds: 60` stops after the last ayah that ends before the minute (`null` plays everything),
+  so the video ends at an ayah end.
+
+```bash
+cd example && pnpm exec remotion render Recitation out/recitation.mp4 \
+  --props='{"fontFilePattern":"fonts/qpc-v4-tajweed/p{page}.woff2"}'
+```
+
+The timings of the committed example (`example/public/audio/tawbah-timings.json`, At-Tawbah 9:1-11)
+were produced by `example/tools/align-recitation.py`: pause detection, Whisper (medium, via
+sherpa-onnx) on each segment, and an alignment of the recognised words to the reference text in
+`example/tools/tawbah-9-1-13.json`. It is a development tool with the accuracy of that model, not part
+of the package. The audio itself is the reciter's and is not committed: put your recording at
+`example/public/audio/tawbah.mp3` (or change `audioFile`) before rendering.
+
 ## Development
 
 ```bash

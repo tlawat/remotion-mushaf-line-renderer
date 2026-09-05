@@ -309,10 +309,18 @@ const recordEtags = async (extra = {}) => {
     }
   });
   const file = path.join(ROOT, 'scripts/cdn-etags.json');
-  // Sorted by URL so re-runs produce a stable, reviewable diff (requests finish in any order).
+  // Sorted by URL so re-runs produce a stable, reviewable diff (requests finish in any order), and
+  // the committed file is left alone when only its generation time would change.
   const sorted = Object.fromEntries(Object.keys(entries).sort().map((url) => [url, entries[url]]));
-  fs.writeFileSync(file, JSON.stringify({generatedAt: new Date().toISOString(), base: def.fontUrl('qpc-v4-tajweed', 1, 'woff2').replace(/\/p1\.woff2.*$/, ''), entries: sorted, problems}, null, 1) + '\n');
-  log(`wrote ${path.relative(ROOT, file)} (${Object.keys(entries).length} entries)`);
+  const base = def.fontUrl('qpc-v4-tajweed', 1, 'woff2').replace(/\/p1\.woff2.*$/, '');
+  const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (existing && existing.base === base && same(existing.entries, sorted) && same(existing.problems, problems)) {
+    log(`${path.relative(ROOT, file)} is unchanged (${Object.keys(entries).length} entries); kept the committed generation time`);
+  } else {
+    fs.writeFileSync(file, JSON.stringify({generatedAt: new Date().toISOString(), base, entries: sorted, problems}, null, 1) + '\n');
+    log(`wrote ${path.relative(ROOT, file)} (${Object.keys(entries).length} entries)`);
+  }
   // Gaps are recorded, not fatal: the layout and the fixture fonts are still valid, and the
   // registry handles known gaps explicitly.
   if (problems.length) log(`etags: ${problems.length} CDN gap(s), recorded in cdn-etags.json:\n - ${problems.slice(0, 20).join('\n - ')}`);
