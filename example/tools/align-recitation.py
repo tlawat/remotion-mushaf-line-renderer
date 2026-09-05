@@ -119,9 +119,19 @@ def recognise(recognizer, x, sr, a, b):
         else:
             words[-1]["text"] += tok
     words = [w for w in words if normalize(w["text"])]
-    # absolute times: token timestamp when available, else spread evenly over the segment
-    for i, w in enumerate(words):
-        w["start"] = a + w["t"] if w["t"] is not None else a + (b - a) * i / max(1, len(words))
+    # absolute times: token timestamp when available; otherwise (models exported without attention
+    # outputs give none) the segment is shared out in proportion to the words' letter counts, which
+    # tracks recitation far better than an even spread.
+    if any(w["t"] is not None for w in words):
+        for i, w in enumerate(words):
+            w["start"] = a + w["t"] if w["t"] is not None else a + (b - a) * i / max(1, len(words))
+    else:
+        weights = [len(normalize(w["text"])) + 1 for w in words]
+        total = float(sum(weights)) or 1.0
+        cum = 0
+        for w, weight in zip(words, weights):
+            w["start"] = a + (b - a) * cum / total
+            cum += weight
     for i, w in enumerate(words):
         w["end"] = words[i + 1]["start"] if i + 1 < len(words) else b
         w["end"] = min(max(w["end"], w["start"] + 0.05), b)
