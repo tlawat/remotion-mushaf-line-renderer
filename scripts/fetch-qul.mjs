@@ -295,6 +295,9 @@ const main = async () => {
     const compileReport = {};
     layout = compileLayout(parsedPages, compileDef, {source, generatedAt: new Date().toISOString()}, compileReport);
     log(`compiled: ${compileReport.regularWords} regular words, ${compileReport.markerWords} marker glyphs, code points per glyph ${JSON.stringify(compileReport.codePointLengths)}`);
+    if (compileReport.idOrderViolations.length) {
+      log(`QUL word ids out of reading order (database row ids of re-created words; harmless): ${compileReport.idOrderViolations.length}: ${compileReport.idOrderViolations.slice(0, 8).map((v) => `p${v.page} l${v.line} ${v.location} id ${v.qulId} after ${v.previousQulId}`).join('; ')}`);
+    }
     if (compileReport.markers.length) {
       const byKind = {};
       for (const m of compileReport.markers) byKind[m.kind] = (byKind[m.kind] ?? 0) + 1;

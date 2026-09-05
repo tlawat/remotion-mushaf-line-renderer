@@ -2,10 +2,12 @@
 // the renderer relies on, and emits the ASCII-only TypeScript module.
 //
 // Word model: QUL's preview markup lists, in reading order, the regular words of the mushaf (kinds
-// `word` and `end`, whose QUL ids are contiguous 1..83668) plus standalone marker glyphs (kinds
-// `pause`, `sajdah`, `rub-el-hizb`) whose QUL ids and positions follow no sequence. The compiled
-// layout numbers every glyph sequentially in reading order (that number is the package's `wordId`)
-// and stores QUL's own ids only in the compile report.
+// `word` and `end`, whose locations s:a:w run through every ayah in order, positions 1..n with the
+// ayah marker last) plus standalone marker glyphs (kinds `pause`, `sajdah`, `rub-el-hizb`) whose
+// positions follow no sequence. QUL's data-word-id is a database row id (usually increasing along
+// the reading order, but re-created rows carry high ids), so it is only reported, never relied on.
+// The compiled layout numbers every glyph sequentially in reading order (that number is the
+// package's `wordId`).
 
 import {KNOWN_KINDS} from './datasets.mjs';
 
@@ -25,18 +27,23 @@ export class LayoutValidationError extends Error {
  * @param {Array<{page:number, lines:Array}>} parsedPages  one entry per page, any order
  * @param {{dataset:string, layoutId:number, pages:number, linesOnPage:(p:number)=>number}} def
  * @param {{source?:string, generatedAt?:string}} [meta]
- * @param {object} [report]  filled with {markers, regularWords, markerWords, codePointLengths}
+ * @param {object} [report]  filled with {markers, regularWords, markerWords, codePointLengths, idOrderViolations}
  */
 export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
   const byPage = new Map(parsedPages.map((p) => [p.page, p]));
   const pages = [];
-  let expectedQulId = 1;
   let carriedSurah = 0;
   let wordCount = 0;
   const problems = [];
+  const problem = (msg) => {
+    if (problems.length < MAX_PROBLEMS) problems.push(msg);
+  };
   const markers = [];
   const codePointLengths = {};
+  const idOrderViolations = [];
   let regularWords = 0;
+  let last = null; // last regular word {surah, ayah, position}
+  let lastQulId = 0;
 
   for (let page = 1; page <= def.pages; page++) {
     const parsed = byPage.get(page);
@@ -62,13 +69,20 @@ export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
       l.push(0, line.centered ? 1 : 0, line.words.length);
       for (const w of line.words) {
         const regular = REGULAR_KINDS.has(w.kind);
+        const location = `${w.surah}:${w.ayah}:${w.position}`;
         if (regular) {
           regularWords++;
-          if (w.wordId !== expectedQulId) {
-            if (problems.length < MAX_PROBLEMS) problems.push(`page ${page} line ${line.line}: expected QUL word id ${expectedQulId}, got ${w.wordId} (${w.kind} ${w.surah}:${w.ayah}:${w.position})`);
-            expectedQulId = w.wordId; // resynchronise so one gap does not cascade
+          // Reading order: within an ayah positions increase by one; a new ayah comes after the
+          // previous one and starts at position 1.
+          if (last && w.surah === last.surah && w.ayah === last.ayah) {
+            if (w.position !== last.position + 1) problem(`page ${page} line ${line.line}: word ${location} follows ${last.surah}:${last.ayah}:${last.position}`);
+          } else {
+            if (last && (w.surah < last.surah || (w.surah === last.surah && w.ayah < last.ayah))) problem(`page ${page} line ${line.line}: word ${location} comes after ${last.surah}:${last.ayah}:${last.position}`);
+            if (w.position !== 1) problem(`page ${page} line ${line.line}: ayah ${w.surah}:${w.ayah} starts at position ${w.position}`);
           }
-          expectedQulId++;
+          last = {surah: w.surah, ayah: w.ayah, position: w.position};
+          if (w.wordId <= lastQulId) idOrderViolations.push({page, line: line.line, location, qulId: w.wordId, previousQulId: lastQulId});
+          lastQulId = w.wordId;
         } else {
           markers.push({page, line: line.line, qulId: w.wordId, kind: w.kind, location: `${w.surah}:${w.ayah}:${w.position}`, text: w.text});
         }
@@ -81,9 +95,6 @@ export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
         if (regular && run && !run.marker && run.surah === w.surah && run.ayah === w.ayah && w.position === run.firstPosition + run.count) {
           run.count++;
         } else {
-          if (regular && run && !run.marker && run.surah === w.surah && run.ayah === w.ayah) {
-            problems.push(`page ${page} line ${line.line}: word ${w.surah}:${w.ayah}:${w.position} breaks the position sequence (expected ${run.firstPosition + run.count})`);
-          }
           if (run) a.push(run.surah, run.ayah, run.firstPosition, run.count);
           run = {surah: w.surah, ayah: w.ayah, firstPosition: w.position, count: 1, marker: !regular};
         }
@@ -97,6 +108,7 @@ export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
   report.regularWords = regularWords;
   report.markerWords = markers.length;
   report.codePointLengths = codePointLengths;
+  report.idOrderViolations = idOrderViolations;
   if (problems.length) throw new LayoutValidationError(problems);
 
   return {
@@ -168,6 +180,7 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
   let expectedNextId = 1;
   let lastSurahHeader = 0;
   let totalWords = 0;
+  let currentAyah = null; // {key, surah, ayah} of the regular word seen last
 
   for (let p = 1; p <= layout.pages.length; p++) {
     let expanded;
@@ -222,7 +235,13 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         if (!st) {
           st = {count: 0, ends: 0, lastPosition: 0, endPosition: 0};
           ayahState.set(key, st);
+          if (currentAyah && (w.surah < currentAyah.surah || (w.surah === currentAyah.surah && w.ayah < currentAyah.ayah))) {
+            problems.push(`page ${p} line ${line.line}: ayah ${key} comes after ${currentAyah.key}`);
+          }
+        } else if (currentAyah && currentAyah.key !== key) {
+          problems.push(`page ${p} line ${line.line}: ayah ${key} is split by other ayahs`);
         }
+        currentAyah = {key, surah: w.surah, ayah: w.ayah};
         if (w.position !== st.lastPosition + 1) problems.push(`page ${p} line ${line.line}: word ${w.location} expected position ${st.lastPosition + 1}`);
         st.lastPosition = w.position;
         st.count++;

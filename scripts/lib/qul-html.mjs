@@ -122,15 +122,9 @@ export const parsePageHtml = (html, page) => {
     if (type !== 'ayah' && words.length > 0) {
       throw new QulParseError(`page ${page} line ${lineNumber}: ${type} line contains ${words.length} words`);
     }
-    // Document order must equal id order for regular words (the notes warn about ordering by
-    // position instead); marker ids are arbitrary.
-    const regularWords = words.filter((w) => REGULAR_KINDS.has(w.kind));
-    for (let i = 1; i < regularWords.length; i++) {
-      if (regularWords[i].wordId <= regularWords[i - 1].wordId) {
-        const dump = words.map((w) => `${w.wordId}/${w.kind}/${w.surah}:${w.ayah}:${w.position}/${codePoints(w.text).map((c) => c.toString(16)).join('+')}`).join(' ');
-        throw new QulParseError(`page ${page} line ${lineNumber}: words not in id order at ${regularWords[i].wordId} [${dump}]`);
-      }
-    }
+    // Document order is the reading order. QUL's data-word-id is a database row id that is usually,
+    // but not always, increasing along it (re-created rows get high ids such as 88247 for 8:6:5), so
+    // the compiler validates locations instead and merely reports id-order exceptions.
     lines.push({line: lineNumber, type, centered: isCenter || type !== 'ayah', ...(surah ? {surah} : {}), words});
   }
   if (lines.length === 0) throw new QulParseError(`page ${page}: no lines found`);

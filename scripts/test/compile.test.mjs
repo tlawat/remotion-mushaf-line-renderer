@@ -25,7 +25,8 @@ describe('parsePageHtml', () => {
     const base = renderQulPageHtml(SYNTH_PAGES[0]);
     expect(() => parsePageHtml(base.replace('char-word', 'char-word word--missing'), 1)).toThrow(QulParseError);
     expect(() => parsePageHtml(base.replace('char-word', 'char-mystery'), 1)).toThrow(/unknown char type "mystery"/);
-    expect(() => parsePageHtml(base.replace('data-word-id="2"', 'data-word-id="1"'), 1)).toThrow(/not in id order/);
+    // QUL ids are database row ids: an out-of-order id is data, not an error (the compiler reports it).
+    expect(parsePageHtml(base.replace('data-word-id="2"', 'data-word-id="1"'), 1).lines[1].words.map((w) => w.wordId)).toEqual([1, 1, 3]);
     expect(() => parsePageHtml('<html><body>Login required</body></html>', 1)).toThrow(/does not look like a QUL page/);
     expect(() => parsePageHtml(base.replace('data-line="2"', 'data-line="9"'), 1)).toThrow(/line numbers are not 1\.\.n/);
   });
@@ -96,15 +97,31 @@ describe('compileLayout + validateLayout', () => {
     expect(p3.lines[2]).toMatchObject({type: 'surah_name', surah: 3, centered: true});
   });
 
-  it('detects gaps in word ids, wrong positions and structural mismatches', () => {
+  it('detects broken reading order, wrong positions and structural mismatches', () => {
     const broken = structuredClone(SYNTH_PAGES);
-    broken[1].lines[2].words[1].wordId = 99;
-    expect(() => compileLayout(broken, SYNTH)).toThrow(LayoutValidationError);
+    broken[1].lines[2].words[1].position = 7;
+    expect(() => compileLayout(broken, SYNTH)).toThrow(/word 2:1:7 follows 2:1:1/);
+    const backwards = structuredClone(SYNTH_PAGES);
+    backwards[2].lines[3].words = backwards[2].lines[3].words.map((w) => ({...w, surah: 1, ayah: 3}));
+    expect(() => compileLayout(backwards, SYNTH)).toThrow(/word 1:3:1 comes after 2:4:2/);
+    const midAyah = structuredClone(SYNTH_PAGES);
+    midAyah[2].lines[3].words = midAyah[2].lines[3].words.map((w) => ({...w, position: w.position + 1}));
+    expect(() => compileLayout(midAyah, SYNTH)).toThrow(/ayah 3:1 starts at position 2/);
+
+    // Out-of-order QUL ids are tolerated and reported.
+    const oddIds = structuredClone(SYNTH_PAGES);
+    oddIds[1].lines[2].words[1].wordId = 99;
+    const idReport = {};
+    compileLayout(oddIds, SYNTH, {}, idReport);
+    expect(idReport.idOrderViolations).toEqual([{page: 2, line: 3, location: '2:1:3', qulId: 8, previousQulId: 99}]);
 
     const layout = compileSynthetic();
     const tampered = structuredClone(layout);
     tampered.pages[0].k = 'wwwwe'; // ayah 1:1 loses its end marker
     expect(() => validateLayout(tampered, SYNTH)).toThrow(/ayah 1:1: 0 end markers/);
+    const split = structuredClone(layout);
+    split.pages[0].a = [1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 3, 1, 1, 2, 2, 1]; // 1:1 resumes after 1:2 started
+    expect(() => validateLayout(split, SYNTH)).toThrow(/ayah 1:1 is split by other ayahs/);
 
     const wrongCounts = {...SYNTH, invariants: {...SYNTH.invariants, words: 25}};
     expect(() => validateLayout(layout, wrongCounts)).toThrow(/words: 23, expected 25/);
