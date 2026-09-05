@@ -20,24 +20,34 @@
   "sideEffects": false,
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.mjs",
-  "types": "./dist/types/index.d.ts",
+  "types": "./dist/cjs/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.mjs",
-      "require": "./dist/cjs/index.js"
+      "import": {
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./presentations/reveal-rtl": {
-      "types": "./dist/types/presentations/reveal-rtl.d.ts",
-      "import": "./dist/esm/presentations/reveal-rtl.mjs",
-      "require": "./dist/cjs/presentations/reveal-rtl.js"
+      "import": {
+        "types": "./dist/esm/presentations/reveal-rtl.d.mts",
+        "default": "./dist/esm/presentations/reveal-rtl.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/presentations/reveal-rtl.d.ts",
+        "default": "./dist/cjs/presentations/reveal-rtl.js"
+      }
     },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
       "presentations/reveal-rtl": [
-        "./dist/types/presentations/reveal-rtl.d.ts"
+        "./dist/cjs/presentations/reveal-rtl.d.ts"
       ]
     }
   },
@@ -47,11 +57,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "node -e \"require('node:fs').rmSync('dist', {recursive: true, force: true})\" && tsup",
+    "check:package": "node scripts/check-package.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:types": "tsc --noEmit -p tsconfig.test-types.json",
     "test:browser": "playwright test -c test/browser/playwright.config.ts",
-    "test:render": "vitest run --project render"
+    "test:render": "vitest run --project render",
+    "prepublishOnly": "pnpm run build && pnpm run check:package"
   },
   "peerDependencies": {
     "@remotion/transitions": ">=4.0.374",

@@ -13,13 +13,14 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "npm run build --workspace packages/remotion-mushaf-line-renderer",
+    "build": "pnpm --filter remotion-mushaf-line-renderer build",
+    "check:package": "pnpm --filter remotion-mushaf-line-renderer check:package",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:types": "npm run test:types --workspace packages/remotion-mushaf-line-renderer",
-    "test:browser": "npm run test:browser --workspace packages/remotion-mushaf-line-renderer",
-    "test:render": "npm run test:render --workspace packages/remotion-mushaf-line-renderer",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:types": "pnpm --filter remotion-mushaf-line-renderer test:types",
+    "test:browser": "pnpm --filter remotion-mushaf-line-renderer test:browser",
+    "test:render": "pnpm --filter remotion-mushaf-line-renderer test:render",
+    "typecheck": "pnpm -r --if-present typecheck",
     "fetch-data": "node scripts/fetch-qul.mjs",
     "verify:cdn": "node scripts/verify-cdn.mjs"
   },

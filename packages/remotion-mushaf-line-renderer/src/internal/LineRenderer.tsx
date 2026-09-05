@@ -1,4 +1,5 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
+import * as React from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import {useCurrentFrame, useDelayRender, useRemotionEnvironment, useVideoConfig} from 'remotion';
 import {getEnterState} from '../enter-state';
 import {MushafError} from '../errors';

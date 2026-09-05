@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import type {TransitionPresentation, TransitionPresentationComponentProps} from '@remotion/transitions';
 
 type AnyProps = Record<string, unknown>;

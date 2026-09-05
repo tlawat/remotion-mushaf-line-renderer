@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import {Sequence} from 'remotion';
 import {MushafError, describeValue} from './errors';
 import {LineRenderer} from './internal/LineRenderer';

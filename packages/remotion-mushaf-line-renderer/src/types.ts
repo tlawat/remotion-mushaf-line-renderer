@@ -1,4 +1,4 @@
-import type React from 'react';
+import type * as React from 'react';
 // Type-only import: erased at runtime, so @remotion/transitions stays a peer without runtime coupling.
 import type {TransitionPresentation, TransitionTiming} from '@remotion/transitions';
 import type {MUSHAFS} from './mushafs';

@@ -1,4 +1,5 @@
-import React, {useContext} from 'react';
+import * as React from 'react';
+import {useContext} from 'react';
 import {WORD_STYLE} from '../layout';
 import type {MushafWord} from '../types';
 import {LineContext} from './LineContext';
