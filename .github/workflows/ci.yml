@@ -29,13 +29,13 @@ jobs:
       - name: Unit tests (compiler + package)
         run: pnpm test
 
-      - name: Typecheck sources, tests and the example
+      - name: Build the package
+        run: pnpm build
+
+      - name: Typecheck sources, tests and the example (the example consumes the built package)
         run: |
           pnpm test:types
           pnpm typecheck
-
-      - name: Build the package
-        run: pnpm build
 
       - name: Packaging checks (exports, sizes, tarball, arethetypeswrong)
         run: pnpm check:package
