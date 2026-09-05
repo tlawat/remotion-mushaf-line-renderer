@@ -20,7 +20,7 @@
     "test:watch": "vitest --project scripts --project unit",
     "test:types": "pnpm --filter remotion-mushaf-line-renderer test:types",
     "test:browser": "pnpm --filter remotion-mushaf-line-renderer test:browser",
-    "test:render": "pnpm --filter remotion-mushaf-line-renderer test:render",
+    "test:render": "vitest run --project render",
     "typecheck": "pnpm -r --if-present typecheck",
     "fetch-data": "node scripts/fetch-qul.mjs",
     "verify:cdn": "node scripts/verify-cdn.mjs"

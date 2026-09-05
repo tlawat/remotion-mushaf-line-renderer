@@ -62,7 +62,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:types": "tsc --noEmit -p tsconfig.test-types.json",
     "test:browser": "playwright test -c test/browser/playwright.config.mts",
-    "test:render": "vitest run --project render",
+    "test:render": "vitest run --project render --root ../..",
     "prepublishOnly": "pnpm run build && pnpm run check:package"
   },
   "peerDependencies": {
