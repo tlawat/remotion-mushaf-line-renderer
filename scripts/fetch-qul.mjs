@@ -230,6 +230,32 @@ const downloadFonts = async (pages, layout) => {
   return {etags, report, failed};
 };
 
+const headStatus = async (url) => {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20_000);
+    const res = await fetch(url, {method: 'HEAD', headers: {'user-agent': USER_AGENT, origin: 'https://example.com'}, signal: ctrl.signal});
+    clearTimeout(t);
+    return res;
+  } catch (e) {
+    return {ok: false, status: 0, statusText: e.message, headers: new Headers()};
+  }
+};
+
+/** Other CDN locations of the same page font (other format, without the cache-busting query, other set). */
+const fontUrlVariants = (set, page, url) => {
+  const out = [];
+  for (const s of Object.keys(def.fontSets)) {
+    for (const format of ['woff2', 'woff', 'ttf']) {
+      const withQuery = def.fontUrl(s, page, format);
+      for (const candidate of [withQuery, withQuery.replace(/\?.*$/, '')]) {
+        if (candidate !== url && !out.includes(candidate)) out.push(candidate);
+      }
+    }
+  }
+  return out;
+};
+
 const recordEtags = async (extra = {}) => {
   const entries = {...extra};
   const urls = [];
@@ -238,29 +264,32 @@ const recordEtags = async (extra = {}) => {
   }
   let done = 0;
   const problems = [];
-  await runPool(urls, 6, async ({url}) => {
+  await runPool(urls, 6, async ({set, page, url}) => {
     if (entries[url]) return;
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 20_000);
-      const res = await fetch(url, {method: 'HEAD', headers: {'user-agent': USER_AGENT, origin: 'https://example.com'}, signal: ctrl.signal});
-      clearTimeout(t);
+      const res = await headStatus(url);
       if (!res.ok) {
-        problems.push(`${url}: HTTP ${res.status}`);
+        // A gap on the CDN: find out what does exist for that page so the registry can route around it.
+        const available = [];
+        for (const alt of fontUrlVariants(set, page, url)) {
+          const r = await headStatus(alt);
+          if (r.ok) available.push(`${alt} (${r.headers.get('content-type')}, ${r.headers.get('content-length')} bytes)`);
+        }
+        problems.push(`${url}: HTTP ${res.status}${res.status === 0 ? ` ${res.statusText}` : ''}${available.length ? `; available instead: ${available.join(', ')}` : '; no other format or set has this page either'}`);
         return;
       }
       entries[url] = {etag: res.headers.get('etag'), contentType: res.headers.get('content-type'), contentLength: Number(res.headers.get('content-length')) || null, cors: res.headers.get('access-control-allow-origin')};
-    } catch (e) {
-      problems.push(`${url}: ${e.message}`);
     } finally {
       done++;
       if (done % 200 === 0) log(`etags: ${done}/${urls.length}`);
     }
   });
   const file = path.join(ROOT, 'scripts/cdn-etags.json');
-  fs.writeFileSync(file, JSON.stringify({generatedAt: new Date().toISOString(), base: def.fontUrl('qpc-v4-tajweed', 1, 'woff2').replace(/\/p1\.woff2.*$/, ''), entries}, null, 1) + '\n');
+  fs.writeFileSync(file, JSON.stringify({generatedAt: new Date().toISOString(), base: def.fontUrl('qpc-v4-tajweed', 1, 'woff2').replace(/\/p1\.woff2.*$/, ''), entries, problems}, null, 1) + '\n');
   log(`wrote ${path.relative(ROOT, file)} (${Object.keys(entries).length} entries)`);
-  if (problems.length) log(`etags: ${problems.length} problem(s):\n - ${problems.slice(0, 20).join('\n - ')}`);
+  // Gaps are recorded, not fatal: the layout and the fixture fonts are still valid, and the
+  // registry handles known gaps explicitly.
+  if (problems.length) log(`etags: ${problems.length} CDN gap(s), recorded in cdn-etags.json:\n - ${problems.slice(0, 20).join('\n - ')}`);
   return problems;
 };
 
@@ -338,8 +367,7 @@ const main = async () => {
     }
   }
   if (args.etags) {
-    const problems = await recordEtags(fontEtags);
-    if (problems.length) process.exitCode = 1;
+    await recordEtags(fontEtags);
   }
   if (process.exitCode) log('finished with errors');
   else log('done');
