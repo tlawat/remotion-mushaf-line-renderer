@@ -36,3 +36,6 @@ packages/remotion-mushaf-line-renderer/test/render/*.png
 example/public/audio/*.mp3
 example/public/audio/*.m4a
 example/public/audio/*.wav
+
+# Python bytecode from the example tools
+__pycache__/
