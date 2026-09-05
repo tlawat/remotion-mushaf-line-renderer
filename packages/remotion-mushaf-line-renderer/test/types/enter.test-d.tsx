@@ -42,6 +42,17 @@ export const ok = (
   </>
 );
 
+// `exit` takes the same shape as `enter`.
+export const okExit = (
+  <>
+    <MushafLine line={data} exit={{presentation: fade({shouldFadeOutExitingScene: true}), timing}} />
+    <MushafLine line={data} enter={{presentation: fade(), timing}} exit={{presentation: slide({direction: 'from-right'}), timing}} />
+    <MushafLine mushaf="qpc-v4-tajweed" page={10} line={3} exit={{presentation: revealRtl(), timing}} />
+  </>
+);
+// @ts-expect-error a string is not a presentation
+export const badExit = <MushafLine line={data} exit={{presentation: 'fade', timing}} />;
+
 // @ts-expect-error no layout prop (the root is a normal-flow block)
 export const noLayout = <MushafLine line={data} layout="none" />;
 // @ts-expect-error line must be data or a number

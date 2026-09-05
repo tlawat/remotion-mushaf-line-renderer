@@ -1,7 +1,7 @@
 import {linearTiming, springTiming} from '@remotion/transitions';
 import {fade} from '@remotion/transitions/fade';
 import {describe, expect, it} from 'vitest';
-import {getEnterState} from '../../src/enter-state';
+import {getEnterState, getExitState} from '../../src/enter-state';
 
 describe('getEnterState', () => {
   const timing = linearTiming({durationInFrames: 10});
@@ -41,6 +41,38 @@ describe('getEnterState', () => {
       bad({presentation: 'fade', timing})();
     } catch (e) {
       expect(e).toMatchObject({code: 'BAD_ENTER'});
+    }
+  });
+});
+
+describe('getExitState', () => {
+  const timing = linearTiming({durationInFrames: 10});
+  const exit = {presentation: fade({shouldFadeOutExitingScene: true}), timing};
+  const at = (frame: number, durationInFrames = 60) => getExitState({exit, frame, fps: 30, durationInFrames}).progress;
+
+  it('runs over the last frames of the enclosing sequence', () => {
+    expect(getExitState({exit, frame: 0, fps: 30, durationInFrames: 60})).toEqual({progress: 0, durationInFrames: 10});
+    expect(at(49)).toBe(0);
+    expect(at(50)).toBe(0); // window start
+    expect(at(55)).toBeCloseTo(0.5);
+    expect(at(59)).toBeCloseTo(0.9); // last frame the sequence shows
+    expect(at(60)).toBe(1);
+  });
+
+  it('starts at once when the sequence is shorter than the timing', () => {
+    expect(at(0, 5)).toBeCloseTo(0.5);
+    expect(at(4, 5)).toBeCloseTo(0.9);
+  });
+
+  it('rejects malformed values and an unbounded sequence with BAD_EXIT', () => {
+    const bad = (value: unknown, durationInFrames = 60) => () => getExitState({exit: value as never, frame: 0, fps: 30, durationInFrames});
+    expect(bad({presentation: 'fade', timing})).toThrow(/exit\.presentation. must be a TransitionPresentation/);
+    expect(bad({presentation: fade(), timing: {getProgress: () => 0}})).toThrow(/exit\.timing. must be a TransitionTiming/);
+    expect(bad(exit, Number.POSITIVE_INFINITY)).toThrow(/finite sequence length/);
+    try {
+      bad({presentation: 'fade', timing})();
+    } catch (e) {
+      expect(e).toMatchObject({code: 'BAD_EXIT'});
     }
   });
 });

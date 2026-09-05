@@ -6,6 +6,7 @@ export type MushafErrorCode =
   | 'BAD_LINE_DATA'
   | 'UNSUPPORTED_LINE_TYPE'
   | 'BAD_ENTER'
+  | 'BAD_EXIT'
   | 'BAD_SIZE'
   | 'DATA_NOT_COMPILED'
   | 'DATA_LOAD_FAILED'
