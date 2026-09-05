@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-05T20:22:46.781Z",
+ "generatedAt": "2026-09-05T21:22:56.638Z",
  "base": "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2",
  "entries": {
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p1.ttf?v=3.1": {
@@ -12,6 +12,12 @@
    "etag": "W/\"a13d1c416e9208c87fc31a66eb538eb8\"",
    "contentType": "font/ttf",
    "contentLength": 295052,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p187.ttf?v=3.1": {
+   "etag": "W/\"0e430611f854066d8004975e4d1e0266\"",
+   "contentType": "font/ttf",
+   "contentLength": 274932,
    "cors": "*"
   },
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p604.ttf?v=3.1": {
@@ -3648,6 +3654,12 @@
    "etag": "W/\"b42eac33d2e0f4110c247d1074f3c969\"",
    "contentType": "font/ttf",
    "contentLength": 161976,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/ttf/p187.ttf": {
+   "etag": "W/\"a17850e89ec14a126f5f0a960657640c\"",
+   "contentType": "font/ttf",
+   "contentLength": 149432,
    "cors": "*"
   },
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/ttf/p604.ttf": {
