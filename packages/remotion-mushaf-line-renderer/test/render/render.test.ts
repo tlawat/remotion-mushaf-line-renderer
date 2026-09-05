@@ -20,8 +20,43 @@ const exampleDir = path.resolve(here, '../../../../example');
 const FIXTURE_FONT = 'fonts/qpc-v4-tajweed/p10.ttf';
 const hasFixtureFont = existsSync(path.join(exampleDir, 'public', FIXTURE_FONT));
 
-const browserExecutable = process.env.MUSHAF_BROWSER_EXECUTABLE ?? (existsSync(chromium.executablePath()) ? chromium.executablePath() : null);
-const renderer = {browserExecutable, logLevel: 'error' as const, chromiumOptions: {}};
+type ChromeMode = 'headless-shell' | 'chrome-for-testing';
+
+/** Playwright's headless shell next to its Chromium (the same kind of binary Remotion downloads). */
+const findHeadlessShell = (chromiumPath: string): string | null => {
+  const parts = chromiumPath.split(path.sep);
+  const i = parts.findIndex((p) => /^chromium-\d+$/.test(p));
+  if (i < 0) return null;
+  const root = parts.slice(0, i + 1).join(path.sep).replace(/chromium-(\d+)$/, 'chromium_headless_shell-$1');
+  const search = (dir: string, depth: number): string | null => {
+    if (depth > 3 || !existsSync(dir)) return null;
+    for (const entry of readdirSync(dir, {withFileTypes: true})) {
+      const full = path.join(dir, entry.name);
+      if (entry.isFile() && /^headless_shell(\.exe)?$/.test(entry.name)) return full;
+      if (entry.isDirectory()) {
+        const found = search(full, depth + 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  return search(root, 0);
+};
+
+// Browser: MUSHAF_BROWSER_EXECUTABLE (+ MUSHAF_CHROME_MODE) if set; else Playwright's headless shell
+// (Remotion's default mode); else Playwright's full Chromium in new-headless mode; else let Remotion
+// download its own Chrome Headless Shell.
+const pickBrowser = (): {browserExecutable: string | null; chromeMode: ChromeMode} => {
+  if (process.env.MUSHAF_BROWSER_EXECUTABLE) {
+    return {browserExecutable: process.env.MUSHAF_BROWSER_EXECUTABLE, chromeMode: (process.env.MUSHAF_CHROME_MODE as ChromeMode | undefined) ?? 'headless-shell'};
+  }
+  const full = chromium.executablePath();
+  if (!existsSync(full)) return {browserExecutable: null, chromeMode: 'headless-shell'};
+  const shell = findHeadlessShell(full);
+  return shell ? {browserExecutable: shell, chromeMode: 'headless-shell'} : {browserExecutable: full, chromeMode: 'chrome-for-testing'};
+};
+
+const renderer = {...pickBrowser(), logLevel: 'error' as const, chromiumOptions: {}};
 
 type HarnessProps = {
   lines: unknown[];
@@ -162,7 +197,8 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
   });
 
   it('an HTML response for the font fails with FONT_INVALID', async () => {
-    await expect(still(serveUrl, harnessProps({fontFile: 'index.html', fontUrl: null}))).rejects.toThrow(/FONT_INVALID|not a font/);
+    // The bundle's own index.html, served at the site root.
+    await expect(still(serveUrl, harnessProps({fontFile: null, fontUrl: '/index.html'}))).rejects.toThrow(/FONT_INVALID|not a font/);
   });
 
   it('a stalled font server times out with the labelled delayRender()', async () => {

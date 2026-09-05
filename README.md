@@ -42,6 +42,17 @@ never committed to this repository.
 
 ```bash
 pnpm install
-pnpm test            # unit tests (vitest)
-pnpm build           # ESM + CJS + types for the package
+pnpm test            # compiler tests + package unit tests (vitest, jsdom)
+pnpm build           # ESM + CJS + bundled declarations for the package
+pnpm test:types      # tsc over the package sources and every test, incl. compile-time API assertions
+pnpm check:package   # exports map, chunk sizes, both builds load in Node, pnpm pack + attw
+pnpm test:browser    # Playwright against the example's <Player> harness (needs `pnpm build` and the p10 fixture font)
+pnpm test:render     # @remotion/bundler + @remotion/renderer renders of the example (same prerequisites)
 ```
+
+The browser and render suites need `example/public/fonts/qpc-v4-tajweed/p10.ttf` (downloaded by
+`node scripts/fetch-qul.mjs --fonts 10`); they skip or fail loudly without it. They use the Chromium
+that `@playwright/test` installed (`npx playwright install chromium` if missing); set
+`MUSHAF_BROWSER_EXECUTABLE` (and `MUSHAF_CHROME_MODE=headless-shell|chrome-for-testing`) to use
+another browser for the render suite. `pnpm --filter remotion-mushaf-line-renderer-example dev`
+opens the Remotion Studio on the example.
