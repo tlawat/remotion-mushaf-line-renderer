@@ -258,12 +258,14 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
     }
   }
 
-  // A centred ayah line is either on pages 1-2 or the short last line of a surah: the next line
-  // of the mushaf is a surah header (or there is none).
+  // A centred ayah line is either on pages 1-2 or part of the short closing line(s) of a surah:
+  // after the run of centred lines comes a surah header, or nothing (page 604 closes with two).
   for (let i = 0; i < allLines.length; i++) {
     const line = allLines[i];
     if (line.type !== 'ayah' || !line.centered || line.page <= 2) continue;
-    const next = allLines[i + 1];
+    let j = i + 1;
+    while (j < allLines.length && allLines[j].type === 'ayah' && allLines[j].centered) j++;
+    const next = allLines[j];
     if (next && next.type !== 'surah_name') problems.push(`page ${line.page} line ${line.line}: centred ayah line is not the last line of a surah (next: page ${next.page} line ${next.line} ${next.type})`);
   }
 
