@@ -9,7 +9,9 @@ First release.
 - `enter` takes any DOM presentation from `@remotion/transitions` (`fade`, `slide`, `wipe`, `flip`,
   `clockWipe`, `iris`, `pushCut`, `none`) plus the bundled `revealRtl`; timing comes from the
   enclosing `<Sequence>`.
-- `getMushafLine()` resolves plain JSON line data for `calculateMetadata()`.
+- `getMushafLine()` resolves plain JSON line data for `calculateMetadata()`. The bundled layout is
+  compiled from QUL's mushaf layout 19: 604 pages, 9,046 lines, 83,668 words, 6,236 ayahs, 30
+  centred lines, validated structurally on every rebuild.
 - `loadPageFont()` loads a page font google-fonts style with `delayRender()` handled internally.
 - Two mushaf ids: `qpc-v4` (plain glyphs, follow CSS `color`) and `qpc-v4-tajweed` (COLR/CPAL
   tajweed colours).
