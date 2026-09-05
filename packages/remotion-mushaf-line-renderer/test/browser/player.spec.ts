@@ -101,7 +101,8 @@ test.describe('static line', () => {
     await open(page, 'static');
     await rowsVisible(page, 3);
     const words = await wordBoxes(page, 2);
-    const two = await page.locator(ROOT).nth(2).locator('.mushaf-word[data-position="2"][data-ayah="3"]').evaluate((el) => ({
+    // 2:3:1 is both the rub-el-hizb marker and the first (two-code-point) word; pick the word.
+    const two = await page.locator(ROOT).nth(2).locator('.mushaf-word[data-kind="word"][data-position="1"][data-ayah="3"]').evaluate((el) => ({
       text: el.textContent ?? '',
       width: el.getBoundingClientRect().width,
     }));
@@ -322,7 +323,8 @@ test.describe('network', () => {
       reachable = false;
     }
     test.skip(!reachable, `${CDN} is not reachable from this environment`);
-    const res = await fetch(CDN, {signal: AbortSignal.timeout(20_000)});
+    // The CDN answers CORS headers only to requests that carry an Origin, like a browser's.
+    const res = await fetch(CDN, {headers: {origin: 'https://example.com'}, signal: AbortSignal.timeout(20_000)});
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const head = new Uint8Array(await res.arrayBuffer()).slice(0, 4);
     expect(String.fromCharCode(...head)).toBe('wOF2');
