@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {Composition} from 'remotion';
 import {LineHarness, calculateLineHarnessMetadata, defaultLineHarnessProps} from './harness/LineHarness';
+import {Recitation, calculateRecitationMetadata, defaultRecitationProps} from './Recitation';
 import {ThreeLines, calculateThreeLinesMetadata} from './ThreeLines';
 
 export const RemotionRoot: React.FC = () => {
@@ -26,6 +27,17 @@ export const RemotionRoot: React.FC = () => {
           fontFile: null,
           mode: 'replace',
         }}
+      />
+      {/* A recited passage: the printed lines follow the audio from a timings JSON (see tools/align-recitation.py). */}
+      <Composition
+        id="Recitation"
+        component={Recitation}
+        calculateMetadata={calculateRecitationMetadata}
+        width={1920}
+        height={1080}
+        fps={30}
+        durationInFrames={30}
+        defaultProps={defaultRecitationProps}
       />
       {/* Test harness used by the browser and render suites: explicit lines, one entrance for all. */}
       <Composition
