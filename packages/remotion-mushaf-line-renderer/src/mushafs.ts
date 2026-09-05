@@ -35,6 +35,14 @@ export type MushafDefinition = {
 
 const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts';
 
+/**
+ * Gaps on QUL's CDN found by `scripts/fetch-qul.mjs --etags` (recorded in scripts/cdn-etags.json):
+ * page → the format that is served instead of woff2. A unit test keeps this in sync with the file.
+ */
+const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<number, 'woff' | 'ttf'>>>> = {
+  'qpc-v4-tajweed': {328: 'woff'},
+};
+
 const v4 = (id: string, dir: 'v4' | 'v4-tajweed', colr: boolean): MushafDefinition => ({
   id,
   name: colr ? 'KFGQPC V4 1441H (tajweed)' : 'KFGQPC V4 1441H',
@@ -46,7 +54,10 @@ const v4 = (id: string, dir: 'v4' | 'v4-tajweed', colr: boolean): MushafDefiniti
   fontFamily: (page) => `mushaf-${id}-p${page}`,
   // QUL's own pages request the tajweed set with `?v=3.1`, so that cache key is the warm one on
   // Cloudflare; the plain set is never requested by QUL, so it stays a bare path.
-  fontUrl: (page) => `${CDN}/${dir}/woff2/p${page}.woff2${colr ? '?v=3.1' : ''}`,
+  fontUrl: (page) => {
+    const format = CDN_FORMAT_EXCEPTIONS[id]?.[page] ?? 'woff2';
+    return `${CDN}/${dir}/${format}/p${page}.${format}${colr ? '?v=3.1' : ''}`;
+  },
   colr,
   metrics: {unitsPerEm: 2500, ascent: 3940, descent: -2520, referenceLineWidth: 42501},
   invariants: {lines: 9046, ayahLines: 8820, surahNameLines: 114, basmallahLines: 112, centeredAyahLines: 30, words: 83668},

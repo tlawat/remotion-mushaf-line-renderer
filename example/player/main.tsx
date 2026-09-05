@@ -5,6 +5,7 @@
 import {Player, type PlayerRef} from '@remotion/player';
 import * as React from 'react';
 import {createRoot} from 'react-dom/client';
+import {getMushafLine} from 'remotion-mushaf-line-renderer';
 import {LineHarness, type LineHarnessProps} from '../src/harness/LineHarness';
 import {scenarioNames, scenarios} from './scenarios';
 
@@ -16,6 +17,9 @@ declare global {
       getCurrentFrame: () => number;
       remount: () => void;
       setScenario: (name: string) => void;
+      /** Overrides merged into the scenario's props (e.g. real lines resolved with getMushafLine). */
+      setProps: (overrides: Partial<LineHarnessProps>) => void;
+      getMushafLine: typeof getMushafLine;
       mounts: number;
     };
   }
@@ -39,8 +43,10 @@ const errorFallback = ({error}: {error: Error}): React.ReactNode => (
 const App: React.FC = () => {
   const [scenario, setScenario] = React.useState(initialScenario);
   const [mountKey, setMountKey] = React.useState(0);
+  const [overrides, setOverrides] = React.useState<Partial<LineHarnessProps>>({});
   const ref = React.useRef<PlayerRef>(null);
-  const props: LineHarnessProps | undefined = scenarios[scenario];
+  const base: LineHarnessProps | undefined = scenarios[scenario];
+  const props = base ? {...base, ...overrides} : undefined;
   React.useEffect(() => {
     window.__harness = {
       scenario,
@@ -48,7 +54,12 @@ const App: React.FC = () => {
       seekTo: (frame) => ref.current?.seekTo(frame),
       getCurrentFrame: () => ref.current?.getCurrentFrame() ?? -1,
       remount: () => setMountKey((k) => k + 1),
-      setScenario,
+      setScenario: (name) => {
+        setOverrides({});
+        setScenario(name);
+      },
+      setProps: setOverrides,
+      getMushafLine,
     };
   }, [scenario, mountKey]);
   if (!props) {
