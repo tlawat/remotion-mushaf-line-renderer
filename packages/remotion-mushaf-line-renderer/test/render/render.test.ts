@@ -292,5 +292,15 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       writeFileSync(path.join(here, 'p10-l3.png'), png);
       expect(png.length).toBeGreaterThan(1000);
     });
+
+    it('renders the mandala palette: same glyphs, different colours than full tajweed', async () => {
+      const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
+      const tajweed = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
+      // The palette rides on the data, so the renderer needs nothing else to paint the mandala look.
+      const mandala = await still(serveUrl, harnessProps({lines: [{...line, palette: 3}], fit: 'line'}));
+      writeFileSync(path.join(here, 'p10-l3-mandala.png'), mandala);
+      expect(mandala.equals(tajweed)).toBe(false);
+      expect(mandala.length).toBeGreaterThan(1000);
+    });
   });
 });

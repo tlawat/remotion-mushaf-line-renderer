@@ -54,6 +54,8 @@ export type RowStyleInput = {
   readonly lineHeight: number;
   readonly centered: boolean;
   readonly visible: boolean;
+  /** `font-palette` ident for a colour font, from `paletteIdent()`. Omitted leaves the font's default palette. */
+  readonly fontPalette?: string;
 };
 
 /**
@@ -65,7 +67,7 @@ export type RowStyleInput = {
  *
  * Everything that could change glyph widths is pinned so inherited CSS cannot leak in.
  */
-export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visible}: RowStyleInput): React.CSSProperties => ({
+export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visible, fontPalette}: RowStyleInput): React.CSSProperties => ({
   position: 'absolute',
   top: 0,
   right: 0,
@@ -80,6 +82,9 @@ export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visib
   unicodeBidi: 'isolate',
   whiteSpace: 'nowrap',
   fontFamily: `"${fontFamily}"`,
+  // Set only when the data asks for a palette: left alone, `font-palette` inherits, so a caller can
+  // still choose one on an ancestor with their own @font-palette-values rule.
+  ...(fontPalette === undefined ? {} : {fontPalette}),
   fontSize: `${fontSize}px`,
   lineHeight: `${lineHeight}px`,
   fontWeight: 400,

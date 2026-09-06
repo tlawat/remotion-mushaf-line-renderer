@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {useEffect, useRef, useState} from 'react';
 import {useDelayRender} from 'remotion';
-import {getMushafLine} from '../get-mushaf-line';
+import {getMushafLine, withPalette} from '../get-mushaf-line';
 import {loadPageFont} from '../load-page-font';
 import {assertLine, assertPage, getMushafDefinition} from '../mushafs';
 import type {MushafId, MushafLineData} from '../types';
@@ -9,6 +9,8 @@ import {LineRenderer, type LineRendererProps} from './LineRenderer';
 
 type ResolveLineProps = Omit<LineRendererProps, 'line'> & {
   readonly mushaf: MushafId;
+  /** CPAL base palette, already resolved from `tajweed` / `mandala` by `<MushafLine>`. */
+  readonly palette: number | undefined;
   readonly page: number;
   readonly line: number;
 };
@@ -20,12 +22,12 @@ type State = {readonly key: string; readonly data?: MushafLineData; readonly err
  * `delayRender()` handle. Prefer resolving in `calculateMetadata()` and passing `line` instead: it
  * runs once rather than per render tab, and the Player never runs calculateMetadata.
  */
-export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, page, line, ...common}) => {
+export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, palette, page, line, ...common}) => {
   const def = getMushafDefinition(mushaf);
   assertPage(def, page);
   assertLine(def, page, line);
   const {delayRender, continueRender} = useDelayRender();
-  const key = `${mushaf}/${page}/${line}`;
+  const key = `${mushaf}/${palette ?? 'default'}/${page}/${line}`;
   const [state, setState] = useState<State | null>(null);
   const resolved = state?.key === key ? state : null;
   const handleRef = useRef<{key: string; handle: number} | null>(null);
@@ -39,7 +41,7 @@ export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, page, line, ...
     loadPageFont({mushaf, page}); // start the font early; idempotent; adopts any registered override
     getMushafLine({mushaf, page, line}).then(
       (data) => {
-        if (alive) setState({key, data});
+        if (alive) setState({key, data: withPalette(data, palette)});
       },
       (error: unknown) => {
         if (alive) setState({key, error: error instanceof Error ? error : new Error(String(error))});

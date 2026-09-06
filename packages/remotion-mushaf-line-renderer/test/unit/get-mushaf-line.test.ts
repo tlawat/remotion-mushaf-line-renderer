@@ -50,6 +50,26 @@ describe('getMushafLine', () => {
     expect(Array.from(line.words[3]?.text ?? '')).toHaveLength(2);
   });
 
+  it('records the colour choice in the data: the font set, and the palette for mandala', async () => {
+    const plain = await getMushafLine({page: 1, line: 2});
+    expect(plain.mushaf).toBe('qpc-v4');
+    expect(Object.keys(plain)).not.toContain('palette');
+
+    const tajweed = await getMushafLine({page: 1, line: 2, tajweed: true});
+    expect(tajweed.mushaf).toBe('qpc-v4-tajweed');
+    // No palette: the colour font paints its own default (palette 0, the tajweed colours).
+    expect(Object.keys(tajweed)).not.toContain('palette');
+
+    // Mandala is the same colour font at palette 3 — black letters, coloured ayah markers.
+    const mandala = await getMushafLine({page: 1, line: 2, mandala: true});
+    expect(mandala.mushaf).toBe('qpc-v4-tajweed');
+    expect(mandala.palette).toBe(3);
+    expect(mandala.fontFamily).toBe('mushaf-qpc-v4-tajweed-p1');
+    expect(assertLineData(mandala)).toBe(mandala);
+    // Tajweed wins when both are given.
+    expect(await getMushafLine({page: 1, line: 2, tajweed: true, mandala: true})).toEqual(tajweed);
+  });
+
   it('types header and basmallah lines with no words and the surah number', async () => {
     const header = await getMushafLine({mushaf: 'qpc-v4', page: 2, line: 1});
     expect(header).toMatchObject({type: 'surah_name', centered: true, surahNumber: 2, words: []});
@@ -99,6 +119,12 @@ describe('assertLineData', () => {
     expect(bad({words: [{...good.words[0], text: 'abcde'}]})).toThrow(/words\[0\].text is invalid: expected 1–4 code points/);
     expect(bad({words: [good.words[1], good.words[0]]})).toThrow(/ordered by wordId/);
     expect(bad({fontUrl: ''})).toThrow(/fontUrl/);
+    // A palette only means something for the colour font, and only the ones it actually carries.
+    expect(bad({palette: 3})).toThrow(/"qpc-v4" is a monochrome font set and has no palettes/);
+    const colour = await getMushafLine({page: 1, line: 2, mandala: true});
+    expect(() => assertLineData({...colour, palette: 9})).toThrow(/palette is invalid: expected one of 0, 1, 2, 3, 4, 5/);
+    expect(() => assertLineData({...colour, palette: '3'})).toThrow(/palette is invalid/);
+    expect(assertLineData({...colour, palette: 0})).toBeTruthy();
     expect(() => assertLineData('nope')).toThrow(/must be the object returned by getMushafLine/);
     expect(assertLineData({...good, fontUrl: 'https://cdn.example/p1.woff2'})).toBeTruthy();
   });

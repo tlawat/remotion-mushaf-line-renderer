@@ -42,6 +42,10 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'fade-through': {...base, lines: [justified(), centered()], slot: 'same', enter: 'slide-fade', enterFrames: 20, exit: 'slide-fade', exitFrames: 20, durationInFrames: 40, stagger: 40},
   /** Plain glyph set: the words follow CSS `color` (the harness paints the page black on white). */
   plain: {...base, lines: [syntheticLine(2, 3, {}, 'qpc-v4')], fontUrl: '/fonts/qpc-v4/p10.ttf'},
+  /** The colour font at its default palette (0): the full tajweed colours. */
+  tajweed: {...base, lines: [syntheticLine(2, 3, {}, 'qpc-v4-tajweed')]},
+  /** Mandala: the same colour font at palette 3 — black letters, coloured ayah markers. */
+  mandala: {...base, lines: [syntheticLine(2, 3, {palette: 3}, 'qpc-v4-tajweed')]},
   /** One word marked as current, the rest dimmed — the karaoke-style follow. */
   highlight: {...base, lines: [justified()], activeWordId: '2:1:2', dimOthersTo: 0.35},
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},

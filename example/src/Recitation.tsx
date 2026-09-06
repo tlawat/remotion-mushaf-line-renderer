@@ -33,6 +33,8 @@ export type RecitationProps = {
   mushaf: MushafId;
   /** Colour font (tajweed) instead of plain black glyphs. */
   tajweed: boolean;
+  /** Black text with the ayah rosettes in colour (the tajweed font at palette 3). */
+  mandala: boolean;
   /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
   timingsFile: string | null;
   timings: RecitationTimings | null;
@@ -52,6 +54,7 @@ export type RecitationProps = {
 export const defaultRecitationProps: RecitationProps = {
   mushaf: 'qpc-v4',
   tajweed: false,
+  mandala: false,
   timingsFile: 'audio/tawbah-timings.json',
   timings: null,
   audioFile: 'audio/tawbah.mp3',
@@ -97,6 +100,7 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   const lines = await getMushafLines({
     mushaf: props.mushaf,
     tajweed: props.tajweed,
+    mandala: props.mandala,
     surah: timings.surah,
     fromAyah: firstAyah,
     toAyah: lastAyah,

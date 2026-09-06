@@ -231,7 +231,7 @@ describe('<MushafLine>', () => {
     expect(rowOf(coloured.container).style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
   });
 
-  it('refuses tajweed next to resolved line data, which carries its own font set', () => {
+  it('refuses tajweed and mandala next to resolved line data, which carries its own font set', () => {
     const onError = vi.fn();
     render(
       <Boundary onError={onError}>
@@ -241,6 +241,32 @@ describe('<MushafLine>', () => {
     );
     expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
     expect(onError.mock.calls[0]?.[0].message).toMatch(/pass `tajweed` to getMushafLine/i);
+
+    const onMandalaError = vi.fn();
+    render(
+      <Boundary onError={onMandalaError}>
+        {/* @ts-expect-error same rule for the mandala flag */}
+        <MushafLine line={line} mandala />
+      </Boundary>,
+    );
+    expect(onMandalaError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
+    expect(onMandalaError.mock.calls[0]?.[0].message).toMatch(/pass `mandala` to getMushafLine/i);
+  });
+
+  it('selects the mandala palette on the row, and leaves font-palette alone without it', async () => {
+    const mandala = render(<MushafLine page={2} line={3} mandala />);
+    await waitFor(() => expect(mandala.container.querySelector('.mushaf-line')).not.toBeNull());
+    expect(mandala.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
+    const row = rowOf(mandala.container);
+    expect(row.style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
+    expect(row.style.getPropertyValue('font-palette')).toBe('--mushaf-qpc-v4-tajweed-p2-palette-3');
+    cleanup();
+
+    // Resolved data carries the palette just the same, and nothing is set without one.
+    const fromData = render(<MushafLine line={{...justified, mushaf: 'qpc-v4-tajweed', fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3}} />);
+    expect(rowOf(fromData.container).style.getPropertyValue('font-palette')).toBe('--mushaf-qpc-v4-tajweed-p2-palette-3');
+    cleanup();
+    expect(rowOf(render(<MushafLine line={justified} />).container).style.getPropertyValue('font-palette')).toBe('');
   });
 
   it('styles and marks individual words through the per-word hooks', () => {

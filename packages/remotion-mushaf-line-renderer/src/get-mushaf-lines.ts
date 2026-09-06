@@ -1,8 +1,8 @@
 import {ayahKey, indexAyahs, indexPage, type CompiledLayout} from './data/format';
 import {loadLayout} from './data/load-layout';
 import {MushafError, describeValue} from './errors';
-import {lineFromLayout} from './get-mushaf-line';
-import {assertPage, getMushafDefinition, resolveMushafId, type MushafDefinition} from './mushafs';
+import {lineFromLayout, withPalette} from './get-mushaf-line';
+import {assertPage, getMushafDefinition, paletteFor, resolveMushafId, type MushafDefinition} from './mushafs';
 import type {GetMushafLinesOptions, GetMushafLocationOptions, MushafFontUrl, MushafId, MushafLineData, MushafLocation} from './types';
 
 /** The ayahs a line carries, ascending. Empty for `surah_name` and `basmallah` lines. */
@@ -86,9 +86,11 @@ const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined, mu
  * Pure and Remotion-free, like `getMushafLine()`. `fontUrl` pins a mirror on every returned line.
  */
 export const getMushafLines = async (options: GetMushafLinesOptions): Promise<MushafLineData[]> => {
-  const id = resolveMushafId(options.mushaf, options.tajweed);
+  const id = resolveMushafId(options.mushaf, options.tajweed, options.mandala);
   const def = getMushafDefinition(id);
   const layout = await loadLayout(def.dataset);
+  const palette = paletteFor(options);
+  const resolved = (line: MushafLineData): MushafLineData => withPalette(pinFontUrl(line, options.fontUrl, id), palette);
 
   if (options.page !== undefined) {
     const page = assertPage(def, options.page);
@@ -96,7 +98,7 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
       throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Re-run scripts/fetch-qul.mjs.`, {mushaf: id, page});
     }
     const index = indexPage(layout, page);
-    return index.lines.map((_, i) => pinFontUrl(lineFromLayout(layout, id, page, i + 1), options.fontUrl, id));
+    return index.lines.map((_, i) => resolved(lineFromLayout(layout, id, page, i + 1)));
   }
 
   const surah = assertSurah(options.surah);
@@ -116,7 +118,7 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
       const runs = index.runs.filter((run) => run.start <= entry.last && run.end >= entry.first);
       const overlaps = runs.some((run) => run.surah === surah && run.ayah >= fromAyah && run.ayah <= toAyah);
       if (overlaps) {
-        out.push(pinFontUrl(lineFromLayout(layout, id, page, line), options.fontUrl, id));
+        out.push(resolved(lineFromLayout(layout, id, page, line)));
         continue;
       }
       // Every word of this line is past the range (later surah, or a later ayah): done.

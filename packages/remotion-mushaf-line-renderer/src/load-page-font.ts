@@ -2,6 +2,7 @@ import {cancelRender, continueRender, delayRender, getRemotionEnvironment} from 
 import {MushafError, describeValue} from './errors';
 import {fontKey, getFontEntry, notifyFontStore, setFontEntry, type FontEntry} from './font-store';
 import {assertPage, getMushafDefinition, resolveMushafId, type MushafDefinition} from './mushafs';
+import {registerPalettes} from './palette-store';
 import type {LoadPageFontOptions, LoadedPageFont} from './types';
 
 /**
@@ -19,8 +20,8 @@ import type {LoadPageFontOptions, LoadedPageFont} from './types';
  * and registered through `new FontFace(family, bytes, descriptors)` with the mushaf's metrics
  * pinned, so the line box is identical on every platform.
  */
-export const loadPageFont = ({mushaf, tajweed, page, url}: LoadPageFontOptions): LoadedPageFont => {
-  const id = resolveMushafId(mushaf, tajweed);
+export const loadPageFont = ({mushaf, tajweed, mandala, page, url}: LoadPageFontOptions): LoadedPageFont => {
+  const id = resolveMushafId(mushaf, tajweed, mandala);
   const def = getMushafDefinition(id);
   assertPage(def, page);
   if (url !== undefined && (typeof url !== 'string' || url === '')) {
@@ -187,6 +188,9 @@ const run = async (entry: FontEntry, generation: number, def: MushafDefinition, 
   }
   if (entry.generation !== generation) throw new MushafError('FONT_SUPERSEDED', 'internal: superseded');
   document.fonts.add(face);
+  // Declared with the face, so `font-palette: --<family>-palette-<n>` can never resolve to nothing
+  // while the family is usable. No-op for the monochrome set.
+  registerPalettes(entry.fontFamily, def.palettes);
   if (face.status !== 'loaded' || !document.fonts.has(face)) {
     // document.fonts.check() is vacuously true for an unregistered family, so it is not used here.
     throw new MushafError('FONT_NOT_AVAILABLE', `Font ${entry.fontFamily} was not registered in document.fonts (status ${face.status}).`, {url: entry.url, page});

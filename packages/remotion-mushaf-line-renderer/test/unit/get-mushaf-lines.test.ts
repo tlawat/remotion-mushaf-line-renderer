@@ -39,6 +39,16 @@ describe('getMushafLines({page})', () => {
     expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
   });
 
+  it('carries the mandala palette on every line, alongside the pinned font url', async () => {
+    const lines = await getMushafLines({page: 1, mandala: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`});
+    expect(lines.every((l) => l.mushaf === 'qpc-v4-tajweed' && l.palette === 3)).toBe(true);
+    expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
+    // The ayah-range form resolves the same way.
+    const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, mandala: true});
+    expect(range.every((l) => l.palette === 3)).toBe(true);
+    expect((await getMushafLines({page: 1})).every((l) => l.palette === undefined)).toBe(true);
+  });
+
   it('rejects a page outside the mushaf, and one the data does not reach', async () => {
     await expect(getMushafLines({page: 605})).rejects.toMatchObject({code: 'PAGE_OUT_OF_RANGE'});
     await expect(getMushafLines({page: 4})).rejects.toMatchObject({code: 'DATA_LOAD_FAILED'});

@@ -69,6 +69,9 @@ export const ok = (
     <MushafLine page={10} line={3} />
     <MushafLine page={10} line={3} tajweed />
     <MushafLine page={10} line={3} mushaf="qpc-v4" tajweed={false} />
+    {/* mandala: the colour font at palette 3 (black text, coloured ayah rosettes) */}
+    <MushafLine page={10} line={3} mandala />
+    <MushafLine page={10} line={3} mandala={false} tajweed />
     {/* a bare presentation uses the package's default timing */}
     <MushafLine line={data} enter={slideFade()} exit={slideFade()} />
     <MushafLine line={data} enter={fade()} />
@@ -90,6 +93,8 @@ export const ok = (
 
 // @ts-expect-error resolved data carries its own font set
 export const tajweedWithData = <MushafLine line={data} tajweed />;
+// @ts-expect-error ... and its own palette
+export const mandalaWithData = <MushafLine line={data} mandala />;
 // @ts-expect-error only 'line' and 'mushaf' fit the line
 export const badFit = <MushafLine line={data} fit="stretch" />;
 // @ts-expect-error wordStyle must return CSS properties
@@ -99,6 +104,8 @@ export const badWordStyle = <MushafLine line={data} wordStyle={() => 'red'} />;
 export const helpers = [
   getMushafLine({page: 187, line: 2}),
   getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, tajweed: true}),
+  getMushafLine({page: 187, line: 2, mandala: true}),
+  getMushafLines({surah: 9, mandala: true}),
   getMushafLines({page: 187}),
   getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),
