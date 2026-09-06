@@ -1,7 +1,7 @@
 import {KIND_BY_CHAR, indexPage, runAt, type CompiledLayout} from './data/format';
 import {loadLayout} from './data/load-layout';
 import {MushafError} from './errors';
-import {assertLine, assertPage, getMushafDefinition, resolveMushafId} from './mushafs';
+import {assertLine, assertPage, getMushafDefinition, paletteFor, resolveMushafId} from './mushafs';
 import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafWordKind} from './types';
 
 /**
@@ -12,17 +12,24 @@ import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafW
  * compiled layout, which is cached after the first call.
  *
  * `mushaf` defaults to the plain `'qpc-v4'` glyphs (black, following CSS `color`); pass
- * `tajweed: true` for QUL's colour font. The returned `mushaf` is the resolved font set, so the data
+ * `tajweed: true` for QUL's colour font, or `mandala: true` for its black text with coloured ayah
+ * rosettes. The returned `mushaf` and `palette` are the resolved font set and palette, so the data
  * alone determines how the line is painted.
  */
-export const getMushafLine = async ({mushaf, tajweed, page, line}: GetMushafLineOptions): Promise<MushafLineData> => {
-  const id = resolveMushafId(mushaf, tajweed);
+export const getMushafLine = async ({mushaf, tajweed, mandala, page, line}: GetMushafLineOptions): Promise<MushafLineData> => {
+  const id = resolveMushafId(mushaf, tajweed, mandala);
   const def = getMushafDefinition(id);
   assertPage(def, page);
   assertLine(def, page, line);
   const layout = await loadLayout(def.dataset);
-  return lineFromLayout(layout, id, page, line);
+  return withPalette(lineFromLayout(layout, id, page, line), paletteFor({tajweed, mandala}));
 };
+
+/**
+ * Records the palette on a resolved line. The key is omitted rather than set to `undefined` when
+ * there is none, so JSON round-trips stay byte-identical.
+ */
+export const withPalette = (line: MushafLineData, palette: number | undefined): MushafLineData => (palette === undefined ? line : {...line, palette});
 
 /** Synchronous core of `getMushafLine()` for an already loaded layout (also used by test fixtures). */
 export const lineFromLayout = (layout: CompiledLayout, mushaf: MushafId, page: number, line: number): MushafLineData => {

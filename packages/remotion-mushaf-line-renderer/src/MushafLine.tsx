@@ -3,7 +3,7 @@ import {Sequence} from 'remotion';
 import {MushafError, describeValue} from './errors';
 import {LineRenderer} from './internal/LineRenderer';
 import {ResolveLine} from './internal/ResolveLine';
-import {resolveMushafId} from './mushafs';
+import {paletteFor, resolveMushafId} from './mushafs';
 import type {MushafId, MushafLineProps} from './types';
 import {assertLineData} from './validate-line-data';
 
@@ -24,15 +24,19 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
   const common = {style, className, enter, exit, fit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
   let body: React.ReactElement;
   if (typeof props.line === 'number') {
-    const {mushaf, tajweed, page, line} = props as {mushaf?: MushafId; tajweed?: boolean; page: number; line: number};
-    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed)} page={page} line={line} {...common} />;
+    const {mushaf, tajweed, mandala, page, line} = props as {mushaf?: MushafId; tajweed?: boolean; mandala?: boolean; page: number; line: number};
+    const palette = paletteFor({tajweed, mandala});
+    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed, mandala)} palette={palette} page={page} line={line} {...common} />;
   } else if (props.line !== null && typeof props.line === 'object') {
-    if ((props as {tajweed?: unknown}).tajweed !== undefined) {
-      throw new MushafError(
-        'BAD_LINE_PROP',
-        'Resolved line data already carries its font set, so `tajweed` cannot be set alongside `line={MushafLineData}`. Pass `tajweed` to getMushafLine()/getMushafLines() where the data is resolved.',
-        {tajweed: (props as {tajweed?: unknown}).tajweed},
-      );
+    for (const flag of ['tajweed', 'mandala'] as const) {
+      const value = (props as Record<string, unknown>)[flag];
+      if (value !== undefined) {
+        throw new MushafError(
+          'BAD_LINE_PROP',
+          `Resolved line data already carries its font set and palette, so \`${flag}\` cannot be set alongside \`line={MushafLineData}\`. Pass \`${flag}\` to getMushafLine()/getMushafLines() where the data is resolved.`,
+          {[flag]: value},
+        );
+      }
     }
     const line = assertLineData(props.line);
     body = <LineRenderer key={`${line.mushaf}/${line.page}/${line.line}`} line={line} {...common} />;

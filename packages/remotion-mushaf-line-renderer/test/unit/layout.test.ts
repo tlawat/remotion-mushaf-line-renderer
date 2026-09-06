@@ -31,4 +31,10 @@ describe('layout helpers', () => {
     const centered = buildRowStyle({fontFamily: 'f', fontSize: 10, lineHeight: 22, centered: true, visible: true});
     expect(centered).toMatchObject({justifyContent: 'center', visibility: 'visible'});
   });
+
+  it('sets font-palette only when one was asked for, so it can otherwise be inherited', () => {
+    const base = {fontFamily: 'mushaf-qpc-v4-tajweed-p10', fontSize: 112, lineHeight: 246, centered: false, visible: true} as const;
+    expect(buildRowStyle(base)).not.toHaveProperty('fontPalette');
+    expect(buildRowStyle({...base, fontPalette: '--mushaf-qpc-v4-tajweed-p10-palette-3'})).toMatchObject({fontPalette: '--mushaf-qpc-v4-tajweed-p10-palette-3'});
+  });
 });

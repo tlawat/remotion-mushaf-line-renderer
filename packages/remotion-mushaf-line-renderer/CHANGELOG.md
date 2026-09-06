@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Mandala colouring.** `mandala: true` — on `<MushafLine>` (convenience form), `getMushafLine()`,
+  `getMushafLines()` and `loadPageFont()` — sets the line black with the ayah-end rosette in its
+  colours, the way most printed mushafs read outside a tajweed edition. It is the tajweed font at
+  CPAL palette 3, so nothing extra is downloaded, and it is recorded on the resolved data as
+  `palette`, which travels through `inputProps` like the rest of the line. `MushafLineData.palette`
+  takes any palette the font carries (4 is the white-text counterpart for dark backgrounds); the
+  `@font-palette-values` rule for it is injected with the font face. New error code `BAD_MANDALA`.
+
 - **Fixed: the word gaps were too wide.** A line was set at a size derived from a 42,501-unit
   reference while real lines are around 40,000 units, and `justify-content: space-between` then
   spread the leftover 4–8 % of the measure into the gaps between words — every gap came out roughly

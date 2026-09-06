@@ -32,6 +32,11 @@ export const assertLineData = (value: unknown): MushafLineData => {
   if (typeof data.centered !== 'boolean') fail('centered', 'expected a boolean', data.centered);
   if (data.fontFamily !== def.fontFamily(page)) fail('fontFamily', `expected "${def.fontFamily(page)}"`, data.fontFamily);
   if (data.fontUrl !== undefined && (typeof data.fontUrl !== 'string' || data.fontUrl === '')) fail('fontUrl', 'expected a non-empty string when present', data.fontUrl);
+  // Only palettes the font actually has: an unknown ident would silently paint the default palette,
+  // and the @font-palette-values rules are injected from this same list (see palette-store.ts).
+  if (data.palette !== undefined && !def.palettes.includes(data.palette as number)) {
+    fail('palette', def.palettes.length === 0 ? `"${def.id}" is a monochrome font set and has no palettes (resolve the line with tajweed or mandala instead)` : `expected one of ${def.palettes.join(', ')} when present`, data.palette);
+  }
   if (data.surahNumber !== undefined && (typeof data.surahNumber !== 'number' || !Number.isInteger(data.surahNumber) || data.surahNumber < 1 || data.surahNumber > 114)) {
     fail('surahNumber', 'expected an integer from 1 to 114 when present', data.surahNumber);
   }

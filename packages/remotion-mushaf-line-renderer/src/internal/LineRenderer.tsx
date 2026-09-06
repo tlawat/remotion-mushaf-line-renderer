@@ -7,6 +7,7 @@ import {fontKey, getFontEntry, getFontStatus, subscribeFontStore, type FontStatu
 import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from '../layout';
 import {loadPageFont} from '../load-page-font';
 import {getMushafDefinition} from '../mushafs';
+import {paletteIdent} from '../palette-store';
 import type {MushafLineAnimationProp, MushafLineCommonProps, MushafLineData} from '../types';
 import {LineContext, type LineContextValue} from './LineContext';
 import {Presented, type OnElementImage} from './Presented';
@@ -185,7 +186,19 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   const exitState = exit ? getExitState({exit, frame, fps, durationInFrames}) : null;
 
   const row = (
-    <div ref={rowRef} className="mushaf-line__row" style={buildRowStyle({fontFamily: line.fontFamily, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, centered: line.centered, visible: ready})}>
+    <div
+      ref={rowRef}
+      className="mushaf-line__row"
+      style={buildRowStyle({
+        fontFamily: line.fontFamily,
+        fontSize: resolvedFontSize,
+        lineHeight: resolvedLineHeight,
+        centered: line.centered,
+        visible: ready,
+        // The matching @font-palette-values rule is injected with the FontFace (palette-store.ts).
+        ...(line.palette === undefined ? {} : {fontPalette: paletteIdent(line.fontFamily, line.palette)}),
+      })}
+    >
       {line.words.map((word) => (
         <Word key={word.wordId} word={word} /> // a marker glyph can share the location (`id`) of its word
       ))}

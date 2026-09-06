@@ -20,6 +20,8 @@ export type ThreeLinesProps = {
   mushaf: MushafId;
   /** Colour font (tajweed) instead of plain black glyphs. */
   tajweed: boolean;
+  /** Black text with the ayah rosettes in colour (the tajweed font at palette 3). */
+  mandala: boolean;
   page: number;
   lineNumbers: number[];
   /** Resolved once by calculateMetadata (null in defaultProps), so every render tab receives the same JSON. */
@@ -54,6 +56,7 @@ export const calculateThreeLinesMetadata: CalculateMetadataFunction<ThreeLinesPr
     const page = await getMushafLines({
       mushaf: props.mushaf,
       tajweed: props.tajweed,
+      mandala: props.mandala,
       page: props.page,
       ...(pattern ? {fontUrl: (p: number, mushaf: MushafId) => staticFile(pattern.replace('{mushaf}', mushaf).replace('{page}', String(p)))} : {}),
     });

@@ -60,6 +60,12 @@ export type MushafLineData = {
    * tab receives it as plain JSON. Passed to `loadPageFont({url})` as an explicit source.
    */
   readonly fontUrl?: string;
+  /**
+   * CPAL base palette to paint the colour font with; absent means the font's own default (palette 0,
+   * the full tajweed colours). Set to 3 by `mandala: true` — black letters, coloured ayah rosettes.
+   * Meaningless for the plain glyph set, which has no palettes.
+   */
+  readonly palette?: number;
   /** Present on surah_name lines (the header's surah) and basmallah lines (carried forward). */
   readonly surahNumber?: number;
   /** Ordered by wordId. Empty for surah_name / basmallah lines. */
@@ -148,11 +154,11 @@ export type MushafLineCommonProps = {
 export type MushafLineProps = MushafLineCommonProps &
   (
     // Resolved data decides its own mushaf and colouring (pass `tajweed` to getMushafLine() instead).
-    | {readonly line: MushafLineData; readonly mushaf?: never; readonly page?: never; readonly tajweed?: never}
+    | {readonly line: MushafLineData; readonly mushaf?: never; readonly page?: never; readonly tajweed?: never; readonly mandala?: never}
     | (MushafSelection & {readonly page: number; readonly line: number})
   );
 
-/** Chooses the mushaf and its colouring. Both are optional: the default is plain `'qpc-v4'`. */
+/** Chooses the mushaf and its colouring. All optional: the default is plain `'qpc-v4'`. */
 export type MushafSelection = {
   /** Default `'qpc-v4'`. */
   readonly mushaf?: MushafId;
@@ -162,6 +168,12 @@ export type MushafSelection = {
    * when combined with a `mushaf` id that says otherwise.
    */
   readonly tajweed?: boolean;
+  /**
+   * `true` renders the text black with the ayah-end rosette in its colours — the same colour font
+   * as `tajweed` at CPAL palette 3, so CSS `color` does not reach the glyphs either. `tajweed: true`
+   * wins when both are given.
+   */
+  readonly mandala?: boolean;
 };
 
 export type GetMushafLineOptions = MushafSelection & {

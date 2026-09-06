@@ -1,6 +1,7 @@
 export type MushafErrorCode =
   | 'UNKNOWN_MUSHAF'
   | 'BAD_TAJWEED'
+  | 'BAD_MANDALA'
   | 'PAGE_OUT_OF_RANGE'
   | 'AYAH_NOT_FOUND'
   | 'LINE_OUT_OF_RANGE'

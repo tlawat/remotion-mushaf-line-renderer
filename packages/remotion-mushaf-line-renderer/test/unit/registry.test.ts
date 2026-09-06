@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 // @ts-expect-error — plain JS module from scripts/
 import {QPC_V4} from '../../../../scripts/lib/datasets.mjs';
-import {MUSHAFS, MUSHAF_IDS, assertLine, assertPage, getMushafDefinition, isMushafId} from '../../src/mushafs';
+import {MANDALA_PALETTE, MUSHAFS, MUSHAF_IDS, assertLine, assertPage, getMushafDefinition, isMushafId, paletteFor, resolveMushafId} from '../../src/mushafs';
 
 describe('mushaf registry', () => {
   it('agrees with the compiler dataset descriptor', () => {
@@ -30,6 +30,33 @@ describe('mushaf registry', () => {
     expect(MUSHAFS['qpc-v4-tajweed'].fontUrl(10)).toBe('https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p10.woff2?v=3.1');
     expect(MUSHAFS['qpc-v4'].colr).toBe(false);
     expect(MUSHAFS['qpc-v4-tajweed'].colr).toBe(true);
+    expect(MUSHAFS['qpc-v4'].palettes).toEqual([]);
+    expect(MUSHAFS['qpc-v4-tajweed'].palettes).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(MUSHAFS['qpc-v4-tajweed'].palettes).toContain(MANDALA_PALETTE);
+  });
+
+  it('resolves the font set and the palette from tajweed and mandala', () => {
+    // Nothing said: the plain set, at the font's own colours (none).
+    expect(resolveMushafId(undefined, undefined)).toBe('qpc-v4');
+    expect(paletteFor({})).toBeUndefined();
+    // A flag decides over an id that says otherwise; an id alone still stands.
+    expect(resolveMushafId('qpc-v4', true)).toBe('qpc-v4-tajweed');
+    expect(resolveMushafId('qpc-v4-tajweed', false)).toBe('qpc-v4');
+    expect(resolveMushafId('qpc-v4-tajweed', undefined)).toBe('qpc-v4-tajweed');
+    // Mandala lives in the colour font, so it resolves to it — even next to `tajweed: false`.
+    expect(resolveMushafId(undefined, undefined, true)).toBe('qpc-v4-tajweed');
+    expect(resolveMushafId('qpc-v4', false, true)).toBe('qpc-v4-tajweed');
+    expect(paletteFor({mandala: true})).toBe(MANDALA_PALETTE);
+    expect(paletteFor({tajweed: false, mandala: true})).toBe(MANDALA_PALETTE);
+    // Tajweed is the more specific ask, so it wins and keeps the font's default palette.
+    expect(resolveMushafId(undefined, true, true)).toBe('qpc-v4-tajweed');
+    expect(paletteFor({tajweed: true, mandala: true})).toBeUndefined();
+    expect(paletteFor({mandala: false})).toBeUndefined();
+    // Both flags are booleans, and each names itself when it is not.
+    expect(() => resolveMushafId(undefined, 'yes')).toThrow(/tajweed must be true or false when given, got "yes"/);
+    expect(() => resolveMushafId(undefined, undefined, 1)).toThrow(/mandala must be true or false when given, got 1/);
+    expect(() => paletteFor({mandala: null})).toThrow(/mandala must be true or false/);
+    expect(() => resolveMushafId(undefined, 0)).toThrow(/tajweed must be true or false/);
   });
 
   it('validates ids, pages and lines', () => {

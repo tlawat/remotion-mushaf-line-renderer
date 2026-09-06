@@ -19,8 +19,10 @@ export const RemotionRoot: React.FC = () => {
         durationInFrames={180}
         defaultProps={{
           mushaf: 'qpc-v4',
-          // Plain black glyphs by default; `true` switches to QUL's tajweed colour font.
+          // Plain black glyphs by default; `tajweed` switches to QUL's colour font, `mandala` to the
+          // same font at palette 3 (black text, coloured ayah rosettes).
           tajweed: false,
+          mandala: false,
           page: 10,
           lineNumbers: [3, 4, 5],
           lines: null,

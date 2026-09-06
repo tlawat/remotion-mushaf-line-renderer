@@ -428,6 +428,36 @@ test.describe('colour and per-word hooks', () => {
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(false);
   });
 
+  test('mandala paints the colour font at palette 3', async ({page}) => {
+    await open(page, 'mandala');
+    await rowsVisible(page, 1);
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(true);
+    const ident = '--mushaf-qpc-v4-tajweed-p2-palette-3';
+    // The row selects the palette and the words inherit it (font-palette is an inherited property).
+    await expect(page.locator(ROW)).toHaveCSS('font-palette', ident);
+    await expect(page.locator('.mushaf-word').first()).toHaveCSS('font-palette', ident);
+    // ... and the rule it names was injected with the FontFace, so the ident actually resolves.
+    const rule = await page.evaluate((wanted) => {
+      for (const sheet of Array.from(document.styleSheets)) {
+        for (const r of Array.from(sheet.cssRules)) {
+          const text = r.cssText;
+          if (text.startsWith('@font-palette-values') && text.includes(wanted)) return text;
+        }
+      }
+      return null;
+    }, ident);
+    expect(rule).toContain('base-palette: 3');
+    expect(rule).toContain('mushaf-qpc-v4-tajweed-p2');
+    // The palette reaches the glyphs, not just the CSSOM: the same line at the font's default
+    // palette (the full tajweed colours) paints different pixels.
+    const mandala = await page.locator(ROW).screenshot();
+    await open(page, 'tajweed');
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROW)).toHaveCSS('font-palette', 'normal');
+    const tajweed = await page.locator(ROW).screenshot();
+    expect(mandala.equals(tajweed)).toBe(false);
+  });
+
   test('activeWordId and wordStyle reach exactly one word', async ({page}) => {
     await open(page, 'highlight');
     await rowsVisible(page, 1);
