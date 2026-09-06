@@ -21,7 +21,7 @@ export type ThreeLinesProps = {
   mushaf: MushafId;
   /** Colour font (tajweed) instead of plain black glyphs. */
   tajweed: boolean;
-  /** The ayah rosettes in colour with the text following CSS `color`; an object recolours parts. */
+  /** The ayah rosettes in colour with the text following CSS `color`; `{text, accent, background}` recolours it. */
   mandala: boolean | MushafColors;
   page: number;
   lineNumbers: number[];

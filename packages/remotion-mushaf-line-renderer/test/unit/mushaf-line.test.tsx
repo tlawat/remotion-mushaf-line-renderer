@@ -304,7 +304,7 @@ describe('<MushafLine>', () => {
     cleanup();
 
     // An explicit colour needs no resolution, and a part is painted on top of the rosette's own.
-    const explicit = render(<MushafLine line={{...colourLine, paletteColors: {text: '#1b6f3f', outline: '#c8a45c'}}} />);
+    const explicit = render(<MushafLine line={{...colourLine, paletteColors: {text: '#1b6f3f', accent: '#c8a45c'}}} />);
     const explicitRule = paletteRuleFor(rowOf(explicit.container));
     expect(explicitRule).toContain('0 #1b6f3f');
     expect(explicitRule).toContain('13 #c8a45c');

@@ -472,7 +472,7 @@ test.describe('colour and per-word hooks', () => {
     await rowsVisible(page, 1);
     const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
     const rule = await paletteRule(page, ident);
-    // Letters, the rosette's strokes and ornaments (13, 11, 10), and the disc behind the number (12).
+    // Letters (text), the rosette's frame, number, petals and jewel (accent), and the disc (background).
     expect(rule).toContain('0 rgb(27, 27, 27)');
     expect(rule).toContain('10 rgb(200, 164, 92)');
     expect(rule).toContain('11 rgb(200, 164, 92)');

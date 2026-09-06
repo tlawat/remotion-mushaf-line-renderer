@@ -73,7 +73,7 @@ export const ok = (
     <MushafLine page={10} line={3} mandala />
     <MushafLine page={10} line={3} mandala={false} tajweed />
     <MushafLine page={10} line={3} mandala={{text: 'crimson'}} />
-    <MushafLine page={10} line={3} mandala={{rosette: '#c8a45c', fill: 'transparent', outline: 'rgb(27 27 27)'}} />
+    <MushafLine page={10} line={3} mandala={{accent: '#c8a45c', background: 'transparent'}} />
     {/* a bare presentation uses the package's default timing */}
     <MushafLine line={data} enter={slideFade()} exit={slideFade()} />
     <MushafLine line={data} enter={fade()} />
@@ -109,9 +109,9 @@ export const helpers = [
   getMushafLine({page: 187, line: 2}),
   getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, tajweed: true}),
   getMushafLine({page: 187, line: 2, mandala: true}),
-  getMushafLine({page: 187, line: 2, mandala: {text: 'currentColor', jewel: '#0aa'}}),
+  getMushafLine({page: 187, line: 2, mandala: {text: 'currentColor', accent: '#0aa'}}),
   getMushafLines({surah: 9, mandala: true}),
-  getMushafLines({surah: 9, mandala: {petals: 'crimson'}}),
+  getMushafLines({surah: 9, mandala: {accent: 'crimson'}}),
   getMushafLines({page: 187}),
   getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),

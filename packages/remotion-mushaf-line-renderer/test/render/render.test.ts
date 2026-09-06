@@ -309,7 +309,7 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       const black = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {text: 'currentColor'}}], fit: 'line', color: '#000000'}));
       expect(black.equals(mandala)).toBe(false);
       // ... and so does a recoloured rosette.
-      const gold = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {text: 'currentColor', rosette: '#c8a45c'}}], fit: 'line', color: '#000000'}));
+      const gold = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {text: 'currentColor', accent: '#c8a45c'}}], fit: 'line', color: '#000000'}));
       expect(gold.equals(black)).toBe(false);
     });
   });

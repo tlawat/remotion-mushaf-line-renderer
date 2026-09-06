@@ -4,28 +4,25 @@ import type {MushafColors} from './types';
 
 export type DatasetId = 'qpc-v4';
 
-/** CPAL entries by what they paint. One entry belongs to exactly one part. */
+/** CPAL entries by what they paint — the three colours of `MushafColors`. Every entry belongs to one. */
 export type PaletteRoles = {
   /** Every entry that colours letters. */
   readonly text: readonly number[];
-  /** The ayah rosette's frame, its curls and the number inside it. */
-  readonly outline: readonly number[];
-  /** The petal flourishes above and below the rosette. */
-  readonly petals: readonly number[];
-  /** The small jewel at the top of the rosette. */
-  readonly jewel: readonly number[];
+  /** The ayah rosette: its frame and curls, the number inside it, and the petals and jewel. */
+  readonly accent: readonly number[];
   /** The disc behind the ayah number. */
-  readonly fill: readonly number[];
+  readonly background: readonly number[];
 };
 
 /**
  * The V4 colour font's sixteen CPAL entries, read from its CPAL table and confirmed by overriding
  * one entry at a time in Chromium: 0-9, 14 and 15 colour letters (1, 2 and 15 are the greys of the
- * silent letters), and 10-13 the ayah-end rosette.
+ * silent letters); the rosette is 13 (frame, curls and the number), 11 (petals), 10 (jewel) and 12
+ * (the disc behind the number).
  */
-const V4_PALETTE_ROLES: PaletteRoles = {text: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15], outline: [13], petals: [11], jewel: [10], fill: [12]};
+const V4_PALETTE_ROLES: PaletteRoles = {text: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15], accent: [10, 11, 13], background: [12]};
 
-const NO_PALETTE_ROLES: PaletteRoles = {text: [], outline: [], petals: [], jewel: [], fill: []};
+const NO_PALETTE_ROLES: PaletteRoles = {text: [], accent: [], background: []};
 
 export type MushafDefinition = {
   readonly id: string;
@@ -111,7 +108,7 @@ const TAJWEED_OF: Readonly<Record<keyof typeof MUSHAFS, keyof typeof MUSHAFS>> =
 const PLAIN_OF: Readonly<Record<keyof typeof MUSHAFS, keyof typeof MUSHAFS>> = {'qpc-v4': 'qpc-v4', 'qpc-v4-tajweed': 'qpc-v4'};
 
 /**
- * The CPAL palette that paints the letters black and leaves the ayah-end rosette in its colours —
+ * The CPAL palette that leaves the ayah-end rosette in its colours and the letters plain —
  * "mandala" mode, how most printed mushafs read outside a tajweed edition. Palette 4 is its
  * white-text counterpart; both live in the same colour font, so mandala needs no extra download.
  */
@@ -136,7 +133,7 @@ const assertMandala = (value: unknown): boolean | MushafColors | undefined => {
  * its colouring; the registry keys the colouring together with the glyphs because the plain and the
  * colour set are two different files on QUL's CDN. Omitting all three gives plain black glyphs.
  *
- * `tajweed` (full colour) and `mandala` (black text, coloured ayah rosettes) both live in the colour
+ * `tajweed` (full colour) and `mandala` (plain text, coloured ayah rosettes) both live in the colour
  * font, so either one resolves to it — `{tajweed: false, mandala: true}` included; which palette of
  * it is painted is `paletteFor()`'s answer. A `mushaf` id that says otherwise loses to the flags
  * (they are the newer, more specific API): `{mushaf: 'qpc-v4-tajweed', tajweed: false}` resolves to

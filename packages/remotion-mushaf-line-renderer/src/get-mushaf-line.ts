@@ -12,8 +12,8 @@ import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafW
  * compiled layout, which is cached after the first call.
  *
  * `mushaf` defaults to the plain `'qpc-v4'` glyphs (black, following CSS `color`); pass
- * `tajweed: true` for QUL's colour font, or `mandala: true` for its black text with coloured ayah
- * rosettes. The returned `mushaf` and `palette` are the resolved font set and palette, so the data
+ * `tajweed: true` for QUL's colour font, or `mandala` for its coloured ayah rosettes with the text
+ * in the inherited CSS `color`. The returned `mushaf`, `palette` and `paletteColors` are the resolved look, so the data
  * alone determines how the line is painted.
  */
 export const getMushafLine = async ({mushaf, tajweed, mandala, page, line}: GetMushafLineOptions): Promise<MushafLineData> => {

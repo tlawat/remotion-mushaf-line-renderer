@@ -62,7 +62,7 @@ export type MushafLineData = {
   readonly fontUrl?: string;
   /**
    * CPAL base palette to paint the colour font with; absent means the font's own default (palette 0,
-   * the full tajweed colours). Set to 3 by `mandala` — black letters, coloured ayah rosettes.
+   * the full tajweed colours). Set to 3 by `mandala` — plain letters, coloured ayah rosettes.
    * Meaningless for the plain glyph set, which has no palettes.
    */
   readonly palette?: number;
@@ -194,16 +194,10 @@ export type MushafSelection = {
 export type MushafColors = {
   /** The letters. `mandala` defaults this to `'currentColor'`. */
   readonly text?: string;
-  /** Shorthand for `outline` + `petals` + `jewel` — the whole rosette except the disc behind the number. */
-  readonly rosette?: string;
-  /** The rosette's frame and curls, and the ayah number inside it. */
-  readonly outline?: string;
-  /** The petal flourishes above and below the rosette. */
-  readonly petals?: string;
-  /** The small jewel at the top of the rosette. */
-  readonly jewel?: string;
+  /** The ayah rosette: its frame and curls, the number inside it, and the petals and jewel. */
+  readonly accent?: string;
   /** The disc behind the ayah number. */
-  readonly fill?: string;
+  readonly background?: string;
 };
 
 export type GetMushafLineOptions = MushafSelection & {

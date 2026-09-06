@@ -6,9 +6,10 @@
   `getMushafLine()`, `getMushafLines()` and `loadPageFont()` — keeps the ayah-end rosette in its
   colours and sets the letters in the inherited CSS `color`, the way most printed mushafs read
   outside a tajweed edition. It is the tajweed font at CPAL palette 3, so nothing extra is
-  downloaded. Every part takes a CSS colour: `mandala={{text: 'rgb(27 111 63)', rosette: '#c8a45c',
-  fill: 'transparent'}}`, with `outline`, `petals` and `jewel` for the rosette's parts and `rosette`
-  as their shorthand. COLR glyphs ignore CSS `color`, so `'currentColor'` (the default for `text`)
+  downloaded. Three colours paint everything the font paints — `text` (the letters), `accent` (the
+  rosette: its frame, the ayah number, the petals and the jewel) and `background` (the disc behind
+  the number): `mandala={{text: 'rgb(27 111 63)', accent: '#c8a45c', background: 'transparent'}}`.
+  COLR glyphs ignore CSS `color`, so `'currentColor'` (the default for `text`)
   is resolved from the line's computed colour and written into the palette; that is per line, so
   per-word colours still need the plain set. The look is recorded on the resolved data as `palette`
   and `paletteColors` and travels through `inputProps` like the rest of the line, and
