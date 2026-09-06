@@ -442,7 +442,7 @@ test.describe('colour and per-word hooks', () => {
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(false);
   });
 
-  test('mandala paints palette 3 with the letters in the inherited CSS color', async ({page}) => {
+  test('mandala paints palette 3 with the ink in the inherited CSS color', async ({page}) => {
     await open(page, 'mandala');
     await rowsVisible(page, 1);
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(true);
@@ -450,14 +450,16 @@ test.describe('colour and per-word hooks', () => {
     const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
     expect(ident).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
     await expect(page.locator('.mushaf-word').first()).toHaveCSS('font-palette', ident);
-    // ... and the rule it names is in the document, carrying the page's colour for the letters and
-    // nothing for the rosette's own entries (10-13).
+    // ... and the rule it names is in the document, carrying the page's colour for everything
+    // written — the letters and the rosette's frame and number (13) — and nothing for the
+    // ornaments (10, 11) or the disc (12).
     const rule = await paletteRule(page, ident);
     expect(rule).toContain('base-palette: 3');
     expect(rule).toContain('mushaf-qpc-v4-tajweed-p2');
     expect(rule).toContain('0 rgb(27, 111, 63)');
+    expect(rule).toContain('13 rgb(27, 111, 63)');
     expect(rule).toContain('15 rgb(27, 111, 63)');
-    expect(rule).not.toMatch(/1[0-3] rgb\(27/);
+    expect(rule).not.toMatch(/1[0-2] rgb\(27/);
     // The palette reaches the glyphs, not just the CSSOM: the same line at the font's default
     // palette (the full tajweed colours) paints different pixels.
     const mandala = await page.locator(ROW).screenshot();
@@ -472,12 +474,13 @@ test.describe('colour and per-word hooks', () => {
     await rowsVisible(page, 1);
     const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
     const rule = await paletteRule(page, ident);
-    // Letters (text), the rosette's frame, number, petals and jewel (accent), and the disc (background).
+    // One entry per part: ink (letters, and 13 = frame + number), detail (10 = jewel),
+    // accent (11 = petals), background (12 = the disc).
     expect(rule).toContain('0 rgb(27, 27, 27)');
-    expect(rule).toContain('10 rgb(200, 164, 92)');
+    expect(rule).toContain('13 rgb(27, 27, 27)');
+    expect(rule).toContain('10 rgb(27, 111, 63)');
     expect(rule).toContain('11 rgb(200, 164, 92)');
     expect(rule).toContain('12 transparent');
-    expect(rule).toContain('13 rgb(200, 164, 92)');
     // A recoloured rosette is a different picture from the font's own.
     const gold = await page.locator(ROW).screenshot();
     await open(page, 'mandala');

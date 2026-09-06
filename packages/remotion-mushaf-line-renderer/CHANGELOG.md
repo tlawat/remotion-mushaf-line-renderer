@@ -4,14 +4,15 @@
 
 - **Mandala colouring, in CSS colours.** `mandala` — on `<MushafLine>` (convenience form),
   `getMushafLine()`, `getMushafLines()` and `loadPageFont()` — keeps the ayah-end rosette in its
-  colours and sets the letters in the inherited CSS `color`, the way most printed mushafs read
+  colours and writes the line in the inherited CSS `color`, the way most printed mushafs read
   outside a tajweed edition. It is the tajweed font at CPAL palette 3, so nothing extra is
-  downloaded. Three colours paint everything the font paints — `text` (the letters), `accent` (the
-  rosette: its frame, the ayah number, the petals and the jewel) and `background` (the disc behind
-  the number): `mandala={{text: 'rgb(27 111 63)', accent: '#c8a45c', background: 'transparent'}}`.
-  COLR glyphs ignore CSS `color`, so `'currentColor'` (the default for `text`)
-  is resolved from the line's computed colour and written into the palette; that is per line, so
-  per-word colours still need the plain set. The look is recorded on the resolved data as `palette`
+  downloaded. Four colours paint everything the font paints — `ink` (everything written: the letters
+  and the rosette's frame, curls and ayah number, which the font paints in the letter colour),
+  `accent` (the petals), `detail` (the jewel) and `background` (the disc behind the number):
+  `mandala={{ink: 'rgb(27 111 63)', accent: '#c8a45c', background: 'transparent'}}`. COLR glyphs
+  ignore CSS `color`, so `'currentColor'` (the default for `ink`) is resolved from the line's
+  computed colour and written into the palette; that is per line, so per-word colours still need the
+  plain set. The look is recorded on the resolved data as `palette`
   and `paletteColors` and travels through `inputProps` like the rest of the line, and
   `<MushafLine>` declares the `@font-palette-values` rule before it paints, keeping the line hidden
   until the rule is in the document. New error codes `BAD_MANDALA` and `BAD_COLOR`.

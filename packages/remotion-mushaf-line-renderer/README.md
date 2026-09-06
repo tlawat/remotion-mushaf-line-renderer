@@ -82,7 +82,7 @@ A complete project with this composition, a `<Player>` page and the test harness
 | `line`                     | `MushafLineData`                                              | From `getMushafLine()` / `getMushafLines()`. Preferred.                                                                                                                     |
 | `page` + `line`            | `number`, `number`                                            | Convenience form: resolves the line at render time behind its own `delayRender()`. Add `mushaf` / `tajweed` / `mandala` to pick the colouring.                              |
 | `tajweed`                  | `boolean`                                                     | Convenience form only. `false` (default) renders plain black glyphs that follow CSS `color`; `true` uses QUL's tajweed colour font. See [Colour](#colour).                  |
-| `mandala`                  | `boolean \| MushafColors`                                     | Convenience form only. The ayah-end rosette in its colours with the text in the inherited CSS `color` — the colour font at palette 3. `{text, accent, background}` recolours it. `tajweed` wins if both are set. See [Colour](#colour). |
+| `mandala`                  | `boolean \| MushafColors`                                     | Convenience form only. The ayah-end rosette in its colours with the writing in the inherited CSS `color` — the colour font at palette 3. `{ink, accent, detail, background}` recolours it. `tajweed` wins if both are set. See [Colour](#colour). |
 | `enter`                    | `{presentation, timing?}` or a bare `TransitionPresentation`  | Entrance animation. Progress runs over the local frame of the enclosing `<Sequence>`; the presentation stays mounted for the whole sequence. `timing` defaults to `enterTiming()`. |
 | `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>` (`exitTiming()` by default). A line leaves because its Sequence ends. |
 | `activeWordId`             | `string \| number \| null`                                    | Marks one word as current (`word.id` like `"9:1:3"`, or `word.wordId`): it gets `data-active="true"`, `.mushaf-word--active` and `activeWordStyle`.                          |
@@ -122,7 +122,7 @@ type MushafLineData = {
   fontFamily: string;         // "mushaf-<mushaf>-p<page>"
   fontUrl?: string;           // optional font source pin, see Fonts
   palette?: number;           // CPAL palette of the colour font (3 = mandala), see Colour
-  paletteColors?: {text?: string; accent?: string; background?: string};  // CSS colours over that palette
+  paletteColors?: {ink?: string; accent?: string; detail?: string; background?: string};  // CSS colours over that palette
   surahNumber?: number;       // headers and basmallah lines
   words: Array<{id: string /* "surah:ayah:position" */; wordId: number; surah: number; ayah: number; position: number; kind: 'word' | 'end' | 'pause' | 'sajdah' | 'rub-el-hizb'; text: string}>;
 };
@@ -361,7 +361,7 @@ data is made.
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | plain (default) | Monochrome outlines (`v4`). Follows CSS `color`, so it inherits from `style` or any ancestor.                                                |
 | `tajweed`       | The COLR/CPAL colour font (`v4-tajweed`) at its own palette: the tajweed colours, baked into the font.                                       |
-| `mandala`       | The same colour font at palette 3: the ayah-end rosette in its colours, the letters in the inherited CSS `color`. Every part is recolourable. |
+| `mandala`       | The same colour font at palette 3: the ayah-end rosette in its colours, everything written in the inherited CSS `color`. Every part is recolourable. |
 
 ### Mandala
 
@@ -370,13 +370,13 @@ is the tajweed font painted from a different CPAL palette — and the whole look
 
 ```tsx
 <AbsoluteFill style={{color: '#1b1b1b'}}>
-  {/* letters #1b1b1b (the inherited `color`), rosette as the font paints it */}
+  {/* written in #1b1b1b (the inherited `color`), rosette as the font paints it */}
   <MushafLine page={187} line={2} mandala />
 
-  {/* an explicit letter colour instead */}
-  <MushafLine page={187} line={2} mandala={{text: 'rgb(27 111 63)'}} />
+  {/* an explicit ink colour instead */}
+  <MushafLine page={187} line={2} mandala={{ink: 'rgb(27 111 63)'}} />
 
-  {/* a gold rosette on a plain disc */}
+  {/* gold petals on a plain disc */}
   <MushafLine page={187} line={2} mandala={{accent: '#c8a45c', background: 'transparent'}} />
 </AbsoluteFill>
 ```
@@ -385,25 +385,30 @@ COLR glyphs ignore CSS `color` — the colours live in the font — so `mandala`
 `color` at render time and writes it into the palette instead. That is per line, not per word: to
 colour words individually (`wordStyle`, `activeWordStyle`), use the plain set.
 
-Three colours paint everything the font can paint:
+Four colours paint everything the font can paint:
 
-| Part         | Paints                                                                             | Default                 |
-| ------------ | ---------------------------------------------------------------------------------- | ----------------------- |
-| `text`       | Every letter (CPAL entries 0-9, 14, 15)                                            | `'currentColor'`        |
-| `accent`     | The rosette: its frame and curls, the ayah number, the petals and the jewel (13, 11, 10) | the font's (black, pink, teal) |
-| `background` | The disc behind the ayah number (12)                                               | the font's (pale green) |
+| Part         | Paints                                                                                  | Default                 |
+| ------------ | ---------------------------------------------------------------------------------------- | ----------------------- |
+| `ink`        | Everything written: the letters, and the rosette's frame, curls and ayah number (CPAL 0-9, 13, 14, 15) | `'currentColor'`        |
+| `accent`     | The petal flourishes above and below the rosette (11)                                   | the font's pink         |
+| `detail`     | The small jewel at the top of the rosette (10)                                          | the font's teal         |
+| `background` | The disc behind the ayah number (12)                                                    | the font's pale green   |
+
+The frame and the number are `ink` rather than ornament because that is how the font paints them —
+black in palette 3, white in palette 4, always the letter colour — so text and frame stay together
+when you recolour either.
 
 Values are ordinary CSS colours — `'#1b6f3f'`, `'#1b6f3fcc'`, `'rgb(27 111 63)'`, `'hsl(150 60% 27%)'`,
 `'crimson'`, `'transparent'`, `'currentColor'`. Anything left out keeps the font's own colour, which is
-what makes a mandala line a coloured rosette on plain text. A value that is not a colour is a
-`BAD_COLOR` error, not a silently dropped rule.
+what makes a mandala line a coloured rosette on plainly written text. A value that is not a colour is
+a `BAD_COLOR` error, not a silently dropped rule.
 
 The choice is recorded on the resolved data, so a line carries its own look through `inputProps` and
 every render tab:
 
 ```ts
 const line = await getMushafLine({page: 187, line: 2, mandala: {accent: '#c8a45c'}});
-// {mushaf: 'qpc-v4-tajweed', palette: 3, paletteColors: {text: 'currentColor', accent: '#c8a45c'}, ...}
+// {mushaf: 'qpc-v4-tajweed', palette: 3, paletteColors: {ink: 'currentColor', accent: '#c8a45c'}, ...}
 ```
 
 `<MushafLine>` declares the `@font-palette-values` rule those colours need before it paints the line,
@@ -421,12 +426,12 @@ counterpart and 5 an alternative marker colouring. `palette` on the line data ta
 colour-set line — the plain set has no palettes and rejects one), and `paletteColors` recolours it:
 
 ```tsx
-<MushafLine line={{...line, palette: 5, paletteColors: {text: 'currentColor'}}} />
+<MushafLine line={{...line, palette: 5, paletteColors: {ink: 'currentColor'}}} />
 ```
 
-For anything finer — one CPAL entry at a time, say the jewel (10) apart from the petals (11) — declare
-your own palette and set `font-palette` on an ancestor; it is inherited, and the row only pins it when
-the data asks for a palette:
+For anything finer — one CPAL entry at a time, say the rosette's frame (13) apart from the letters —
+declare your own palette and set `font-palette` on an ancestor; it is inherited, and the row only
+pins it when the data asks for a palette:
 
 ```css
 @font-palette-values --mushaf-ink {

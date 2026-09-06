@@ -273,7 +273,7 @@ describe('<MushafLine>', () => {
     expect(mandala.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
     const row = rowOf(mandala.container);
     expect(row.style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
-    // jsdom reports a computed colour, so `text: 'currentColor'` resolves and the ident is hashed.
+    // jsdom reports a computed colour, so `ink: 'currentColor'` resolves and the ident is hashed.
     expect(row.style.getPropertyValue('font-palette')).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
     cleanup();
 
@@ -285,29 +285,34 @@ describe('<MushafLine>', () => {
     expect(rowOf(render(<MushafLine line={justified} />).container).style.getPropertyValue('font-palette')).toBe('');
   });
 
-  it('resolves the letter colour from the inherited CSS color, and follows an explicit one', async () => {
+  it('resolves the ink from the inherited CSS color, and follows an explicit one', async () => {
     const colourLine = {...justified, mushaf: 'qpc-v4-tajweed' as const, fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3};
-    // The whole point of mandala: the words take the CSS colour that plain glyphs would take, and
-    // only the rosette keeps the font's own colours. COLR glyphs ignore `color`, so the colour is
-    // read from the row and written into the palette rule.
+    // The whole point of mandala: everything written takes the CSS colour that plain glyphs would
+    // take, and only the rosette's ornaments keep the font's own colours. COLR glyphs ignore
+    // `color`, so the colour is read from the row and written into the palette rule.
     const inherited = render(
       <div style={{color: 'rgb(27, 111, 63)'}}>
-        <MushafLine line={{...colourLine, paletteColors: {text: 'currentColor'}}} />
+        <MushafLine line={{...colourLine, paletteColors: {ink: 'currentColor'}}} />
       </div>,
     );
     const rule = paletteRuleFor(rowOf(inherited.container));
     expect(rule).toContain('base-palette:3');
-    // Every letter entry, the greys included; the rosette's entries (10-13) are left alone.
+    // Every letter entry (the greys included) and 13 — the rosette's frame and the ayah number.
     expect(rule).toContain('override-colors:0 rgb(27, 111, 63)');
+    expect(rule).toContain('13 rgb(27, 111, 63)');
     expect(rule).toContain('15 rgb(27, 111, 63)');
-    expect(rule).not.toMatch(/1[0-3] rgb/);
+    // The petals (11), the jewel (10) and the disc (12) are left to the font.
+    expect(rule).not.toMatch(/1[0-2] rgb/);
     cleanup();
 
-    // An explicit colour needs no resolution, and a part is painted on top of the rosette's own.
-    const explicit = render(<MushafLine line={{...colourLine, paletteColors: {text: '#1b6f3f', accent: '#c8a45c'}}} />);
+    // An explicit colour needs no resolution, and each part paints only its own entries.
+    const explicit = render(<MushafLine line={{...colourLine, paletteColors: {ink: '#1b6f3f', accent: '#c8a45c', detail: '#0aa', background: 'transparent'}}} />);
     const explicitRule = paletteRuleFor(rowOf(explicit.container));
     expect(explicitRule).toContain('0 #1b6f3f');
-    expect(explicitRule).toContain('13 #c8a45c');
+    expect(explicitRule).toContain('10 #0aa');
+    expect(explicitRule).toContain('11 #c8a45c');
+    expect(explicitRule).toContain('12 transparent');
+    expect(explicitRule).toContain('13 #1b6f3f');
   });
 
   it('styles and marks individual words through the per-word hooks', () => {

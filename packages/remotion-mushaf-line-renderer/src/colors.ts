@@ -10,7 +10,7 @@ import type {MushafColors} from './types';
 export const CURRENT_COLOR = 'currentColor';
 
 /** The parts a palette can be recoloured by. Between them they cover every entry the font paints. */
-export const COLOR_PARTS = ['text', 'accent', 'background'] as const;
+export const COLOR_PARTS = ['ink', 'accent', 'detail', 'background'] as const;
 
 export type ColorPart = (typeof COLOR_PARTS)[number];
 

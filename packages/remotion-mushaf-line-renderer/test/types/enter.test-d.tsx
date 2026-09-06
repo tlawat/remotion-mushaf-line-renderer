@@ -72,8 +72,8 @@ export const ok = (
     {/* mandala: the colour font at palette 3 (CSS-coloured text, coloured ayah rosettes) */}
     <MushafLine page={10} line={3} mandala />
     <MushafLine page={10} line={3} mandala={false} tajweed />
-    <MushafLine page={10} line={3} mandala={{text: 'crimson'}} />
-    <MushafLine page={10} line={3} mandala={{accent: '#c8a45c', background: 'transparent'}} />
+    <MushafLine page={10} line={3} mandala={{ink: 'crimson'}} />
+    <MushafLine page={10} line={3} mandala={{accent: '#c8a45c', detail: '#0aa', background: 'transparent'}} />
     {/* a bare presentation uses the package's default timing */}
     <MushafLine line={data} enter={slideFade()} exit={slideFade()} />
     <MushafLine line={data} enter={fade()} />
@@ -109,7 +109,7 @@ export const helpers = [
   getMushafLine({page: 187, line: 2}),
   getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, tajweed: true}),
   getMushafLine({page: 187, line: 2, mandala: true}),
-  getMushafLine({page: 187, line: 2, mandala: {text: 'currentColor', accent: '#0aa'}}),
+  getMushafLine({page: 187, line: 2, mandala: {ink: 'currentColor', accent: '#0aa'}}),
   getMushafLines({surah: 9, mandala: true}),
   getMushafLines({surah: 9, mandala: {accent: 'crimson'}}),
   getMushafLines({page: 187}),
