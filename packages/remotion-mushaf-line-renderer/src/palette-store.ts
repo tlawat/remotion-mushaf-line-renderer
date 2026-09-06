@@ -1,15 +1,34 @@
 /**
  * CSS side of colour-font palettes. A COLR/CPAL font paints itself from one of its palettes, and CSS
  * selects one with `font-palette: <ident>`, where the ident is defined by an `@font-palette-values`
- * rule that names the family and the base palette. There is no way to say "palette 3" inline, so the
- * rules have to exist in the document — this module owns them.
+ * rule naming the family, the base palette and any per-entry colour. There is no inline way to say
+ * "palette 3, letters green", so the rules have to exist in the document — this module owns them.
  *
- * They are injected next to the `FontFace` registration (see load-page-font.ts), so a palette rule
- * can never be missing while its family is usable, and the row is hidden until then anyway.
+ * `<MushafLine>` registers the rule it needs in a layout effect, before the browser paints, and
+ * keeps the row hidden until then, so a frame is never captured with the wrong palette.
  */
 
-/** The `font-palette` ident for a family and a base palette. Both parts are already CSS-safe idents. */
-export const paletteIdent = (fontFamily: string, palette: number): string => `--${fontFamily}-palette-${palette}`;
+/** An entry of `override-colors`: which CPAL entry, and the CSS colour to paint it with. */
+export type PaletteEntry = readonly [entry: number, color: string];
+
+/** FNV-1a, so the same colours always give the same ident and different ones practically never do. */
+const hash = (text: string): string => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+};
+
+const overrideText = (entries: readonly PaletteEntry[]): string => entries.map(([entry, color]) => `${entry} ${color}`).join(',');
+
+/**
+ * The `font-palette` ident for a family, a base palette and its overrides. Pure: the renderer can
+ * name the ident while rendering and register the rule for it afterwards.
+ */
+export const paletteIdent = (fontFamily: string, base: number, entries: readonly PaletteEntry[] = []): string =>
+  entries.length === 0 ? `--${fontFamily}-palette-${base}` : `--${fontFamily}-palette-${base}-${hash(overrideText(entries))}`;
 
 type Store = {
   readonly style: HTMLStyleElement;
@@ -42,24 +61,21 @@ const getStore = (): Store => {
 const supportsFontPalette = (): boolean => typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('font-palette', '--mushaf-probe');
 
 /**
- * Declares `font-palette` idents for a family, one per palette. Idempotent, and a no-op outside a
- * document (server rendering), for a monochrome family (no palettes), or where `font-palette` is
- * not supported.
+ * Declares one `font-palette` ident and returns it. Idempotent; the rule is injected only where
+ * there is a document that understands it, but the ident is always returned so the row can name it
+ * (an ident with no rule simply leaves the font on its own palette).
  */
-export const registerPalettes = (fontFamily: string, palettes: readonly number[]): void => {
-  if (palettes.length === 0 || typeof document === 'undefined' || !supportsFontPalette()) return;
+export const registerPalette = (fontFamily: string, base: number, entries: readonly PaletteEntry[] = []): string => {
+  const ident = paletteIdent(fontFamily, base, entries);
+  if (typeof document === 'undefined' || !supportsFontPalette()) return ident;
   const store = getStore();
-  let css = '';
-  for (const palette of palettes) {
-    const ident = paletteIdent(fontFamily, palette);
-    if (store.rules.has(ident)) continue;
-    store.rules.add(ident);
-    css += `@font-palette-values ${ident}{font-family:"${fontFamily}";base-palette:${palette}}\n`;
-  }
-  if (css === '') return;
+  if (store.rules.has(ident)) return ident;
+  store.rules.add(ident);
+  const overrides = entries.length === 0 ? '' : `override-colors:${overrideText(entries)};`;
   // Appending text rather than insertRule(): one reparse of a tiny sheet, and it survives a browser
   // that rejects the at-rule (the sheet stays valid, the ident simply never resolves).
-  store.style.appendChild(document.createTextNode(css));
+  store.style.appendChild(document.createTextNode(`@font-palette-values ${ident}{font-family:"${fontFamily}";base-palette:${base};${overrides}}\n`));
+  return ident;
 };
 
 /** Test hook: drop the injected rules and the style element. */

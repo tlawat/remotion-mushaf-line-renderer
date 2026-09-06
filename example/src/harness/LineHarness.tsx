@@ -41,6 +41,8 @@ export type LineHarnessProps = {
   activeWordId: string | number | null;
   /** When set, every word gets this opacity unless it is the active one. */
   dimOthersTo: number | null;
+  /** CSS `color` of the page. Plain glyphs follow it; so do mandala letters, through the palette. */
+  color: string;
 };
 
 export const defaultLineHarnessProps: LineHarnessProps = {
@@ -61,6 +63,7 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   lineHeight: null,
   activeWordId: null,
   dimOthersTo: null,
+  color: '#000000',
 };
 
 export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarnessProps> = ({props}) => {
@@ -104,6 +107,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   lineHeight,
   activeWordId,
   dimOthersTo,
+  color,
 }) => {
   const {width} = useVideoConfig();
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width);
@@ -112,7 +116,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   const enterAnimation = enter === 'plain' ? undefined : presentation(enter, linearTiming({durationInFrames: enterFrames}), 'enter');
   const exitAnimation = exit === 'plain' ? undefined : presentation(exit, linearTiming({durationInFrames: exitFrames}), 'exit');
   return (
-    <AbsoluteFill style={{backgroundColor: '#ffffff', color: '#000000'}}>
+    <AbsoluteFill style={{backgroundColor: '#ffffff', color}}>
       {lines.map((line, i) => {
         const data = fontUrl ? {...line, fontUrl} : line;
         return (

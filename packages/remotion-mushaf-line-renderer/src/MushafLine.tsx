@@ -4,7 +4,7 @@ import {MushafError, describeValue} from './errors';
 import {LineRenderer} from './internal/LineRenderer';
 import {ResolveLine} from './internal/ResolveLine';
 import {paletteFor, resolveMushafId} from './mushafs';
-import type {MushafId, MushafLineProps} from './types';
+import type {MushafLineProps, MushafSelection} from './types';
 import {assertLineData} from './validate-line-data';
 
 /**
@@ -24,9 +24,8 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
   const common = {style, className, enter, exit, fit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
   let body: React.ReactElement;
   if (typeof props.line === 'number') {
-    const {mushaf, tajweed, mandala, page, line} = props as {mushaf?: MushafId; tajweed?: boolean; mandala?: boolean; page: number; line: number};
-    const palette = paletteFor({tajweed, mandala});
-    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed, mandala)} palette={palette} page={page} line={line} {...common} />;
+    const {mushaf, tajweed, mandala, page, line} = props as MushafSelection & {page: number; line: number};
+    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed, mandala)} palette={paletteFor({tajweed, mandala})} page={page} line={line} {...common} />;
   } else if (props.line !== null && typeof props.line === 'object') {
     for (const flag of ['tajweed', 'mandala'] as const) {
       const value = (props as Record<string, unknown>)[flag];

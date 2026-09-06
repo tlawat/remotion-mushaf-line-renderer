@@ -7,7 +7,8 @@ import {fontKey, getFontEntry, getFontStatus, subscribeFontStore, type FontStatu
 import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from '../layout';
 import {loadPageFont} from '../load-page-font';
 import {getMushafDefinition} from '../mushafs';
-import {paletteIdent} from '../palette-store';
+import {CURRENT_COLOR, entryColors} from '../colors';
+import {registerPalette} from '../palette-store';
 import type {MushafLineAnimationProp, MushafLineCommonProps, MushafLineData} from '../types';
 import {LineContext, type LineContextValue} from './LineContext';
 import {Presented, type OnElementImage} from './Presented';
@@ -160,9 +161,28 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
     setFitted({key: fitKey, scale});
   }, [fits, fontLoaded, fitKey, fitted]);
 
+  // The colour font's palette. The rule that names it has to be in the document before the row is
+  // painted, and `currentColor` has to be resolved from the row's computed colour first (COLR glyphs
+  // ignore CSS `color`, and Chromium drops `currentColor` inside `override-colors`), so both happen
+  // in a layout effect — before the browser paints, with the row still hidden.
+  const paletteKey = line.palette === undefined && line.paletteColors === undefined ? null : `${line.fontFamily}/${line.palette ?? 0}/${JSON.stringify(line.paletteColors ?? {})}`;
+  const [registered, setRegistered] = useState<{key: string; ident: string} | null>(null);
+  const paletteIdent = paletteKey === null ? undefined : registered?.key === paletteKey ? registered.ident : null;
+  useIsomorphicLayoutEffect(() => {
+    if (paletteKey === null || registered?.key === paletteKey) return;
+    const row = rowRef.current;
+    const inherited = row && typeof getComputedStyle === 'function' ? getComputedStyle(row).color : '';
+    const entries = entryColors(def, line.paletteColors ?? {})
+      // Where the inherited colour cannot be read, the entry is left out and the palette's own
+      // colour stands, rather than guessing one.
+      .map(([entry, color]) => [entry, color === CURRENT_COLOR ? inherited : color] as const)
+      .filter((pair): pair is readonly [number, string] => pair[1] !== '');
+    setRegistered({key: paletteKey, ident: registerPalette(line.fontFamily, line.palette ?? 0, entries)});
+  }, [paletteKey, registered, def, line.fontFamily, line.palette, line.paletteColors]);
+
   const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
-  // Nothing is painted before the line is both in its page font and at its final size.
-  const ready = fontLoaded && fitScale !== null;
+  // Nothing is painted before the line is in its page font, at its final size and in its palette.
+  const ready = fontLoaded && fitScale !== null && paletteIdent !== null;
   const ctx = useMemo<LineContextValue>(
     () => ({line, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName}),
     [line, resolvedFontSize, resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName],
@@ -195,8 +215,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
         lineHeight: resolvedLineHeight,
         centered: line.centered,
         visible: ready,
-        // The matching @font-palette-values rule is injected with the FontFace (palette-store.ts).
-        ...(line.palette === undefined ? {} : {fontPalette: paletteIdent(line.fontFamily, line.palette)}),
+        ...(paletteIdent ? {fontPalette: paletteIdent} : {}),
       })}
     >
       {line.words.map((word) => (

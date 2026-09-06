@@ -2,13 +2,18 @@
 
 ## Unreleased
 
-- **Mandala colouring.** `mandala: true` — on `<MushafLine>` (convenience form), `getMushafLine()`,
-  `getMushafLines()` and `loadPageFont()` — sets the line black with the ayah-end rosette in its
-  colours, the way most printed mushafs read outside a tajweed edition. It is the tajweed font at
-  CPAL palette 3, so nothing extra is downloaded, and it is recorded on the resolved data as
-  `palette`, which travels through `inputProps` like the rest of the line. `MushafLineData.palette`
-  takes any palette the font carries (4 is the white-text counterpart for dark backgrounds); the
-  `@font-palette-values` rule for it is injected with the font face. New error code `BAD_MANDALA`.
+- **Mandala colouring, in CSS colours.** `mandala` — on `<MushafLine>` (convenience form),
+  `getMushafLine()`, `getMushafLines()` and `loadPageFont()` — keeps the ayah-end rosette in its
+  colours and sets the letters in the inherited CSS `color`, the way most printed mushafs read
+  outside a tajweed edition. It is the tajweed font at CPAL palette 3, so nothing extra is
+  downloaded. Every part takes a CSS colour: `mandala={{text: 'rgb(27 111 63)', rosette: '#c8a45c',
+  fill: 'transparent'}}`, with `outline`, `petals` and `jewel` for the rosette's parts and `rosette`
+  as their shorthand. COLR glyphs ignore CSS `color`, so `'currentColor'` (the default for `text`)
+  is resolved from the line's computed colour and written into the palette; that is per line, so
+  per-word colours still need the plain set. The look is recorded on the resolved data as `palette`
+  and `paletteColors` and travels through `inputProps` like the rest of the line, and
+  `<MushafLine>` declares the `@font-palette-values` rule before it paints, keeping the line hidden
+  until the rule is in the document. New error codes `BAD_MANDALA` and `BAD_COLOR`.
 
 - **Fixed: the word gaps were too wide.** A line was set at a size derived from a 42,501-unit
   reference while real lines are around 40,000 units, and `justify-content: space-between` then

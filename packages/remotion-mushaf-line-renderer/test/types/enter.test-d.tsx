@@ -69,9 +69,11 @@ export const ok = (
     <MushafLine page={10} line={3} />
     <MushafLine page={10} line={3} tajweed />
     <MushafLine page={10} line={3} mushaf="qpc-v4" tajweed={false} />
-    {/* mandala: the colour font at palette 3 (black text, coloured ayah rosettes) */}
+    {/* mandala: the colour font at palette 3 (CSS-coloured text, coloured ayah rosettes) */}
     <MushafLine page={10} line={3} mandala />
     <MushafLine page={10} line={3} mandala={false} tajweed />
+    <MushafLine page={10} line={3} mandala={{text: 'crimson'}} />
+    <MushafLine page={10} line={3} mandala={{rosette: '#c8a45c', fill: 'transparent', outline: 'rgb(27 27 27)'}} />
     {/* a bare presentation uses the package's default timing */}
     <MushafLine line={data} enter={slideFade()} exit={slideFade()} />
     <MushafLine line={data} enter={fade()} />
@@ -95,6 +97,8 @@ export const ok = (
 export const tajweedWithData = <MushafLine line={data} tajweed />;
 // @ts-expect-error ... and its own palette
 export const mandalaWithData = <MushafLine line={data} mandala />;
+// @ts-expect-error only the parts the font paints can be coloured
+export const badPart = <MushafLine page={10} line={3} mandala={{glow: 'red'}} />;
 // @ts-expect-error only 'line' and 'mushaf' fit the line
 export const badFit = <MushafLine line={data} fit="stretch" />;
 // @ts-expect-error wordStyle must return CSS properties
@@ -105,7 +109,9 @@ export const helpers = [
   getMushafLine({page: 187, line: 2}),
   getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, tajweed: true}),
   getMushafLine({page: 187, line: 2, mandala: true}),
+  getMushafLine({page: 187, line: 2, mandala: {text: 'currentColor', jewel: '#0aa'}}),
   getMushafLines({surah: 9, mandala: true}),
+  getMushafLines({surah: 9, mandala: {petals: 'crimson'}}),
   getMushafLines({page: 187}),
   getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),

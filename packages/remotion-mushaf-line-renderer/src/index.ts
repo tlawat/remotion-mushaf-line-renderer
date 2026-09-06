@@ -9,6 +9,7 @@ export type {MushafSpringTimingOptions, MushafTimingOptions} from './timings';
 export {MushafError} from './errors';
 export type {MushafErrorCode} from './errors';
 export type {
+  MushafColors,
   GetMushafLineOptions,
   GetMushafLinesOptions,
   GetMushafLocationOptions,

@@ -3,14 +3,14 @@ import {useEffect, useRef, useState} from 'react';
 import {useDelayRender} from 'remotion';
 import {getMushafLine, withPalette} from '../get-mushaf-line';
 import {loadPageFont} from '../load-page-font';
-import {assertLine, assertPage, getMushafDefinition} from '../mushafs';
+import {assertLine, assertPage, getMushafDefinition, type ResolvedPalette} from '../mushafs';
 import type {MushafId, MushafLineData} from '../types';
 import {LineRenderer, type LineRendererProps} from './LineRenderer';
 
 type ResolveLineProps = Omit<LineRendererProps, 'line'> & {
   readonly mushaf: MushafId;
-  /** CPAL base palette, already resolved from `tajweed` / `mandala` by `<MushafLine>`. */
-  readonly palette: number | undefined;
+  /** Palette and colours, already resolved from `tajweed` / `mandala` by `<MushafLine>`. */
+  readonly palette: ResolvedPalette | undefined;
   readonly page: number;
   readonly line: number;
 };
@@ -27,7 +27,7 @@ export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, palette, page, 
   assertPage(def, page);
   assertLine(def, page, line);
   const {delayRender, continueRender} = useDelayRender();
-  const key = `${mushaf}/${palette ?? 'default'}/${page}/${line}`;
+  const key = `${mushaf}/${palette ? `${palette.palette}/${JSON.stringify(palette.paletteColors)}` : 'default'}/${page}/${line}`;
   const [state, setState] = useState<State | null>(null);
   const resolved = state?.key === key ? state : null;
   const handleRef = useRef<{key: string; handle: number} | null>(null);

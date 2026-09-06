@@ -40,6 +40,20 @@ const wordBoxes = (page: Page, lineIndex: number) =>
     }),
   );
 
+/** The `@font-palette-values` rule an ident names, as the browser parsed it. */
+const paletteRule = async (page: Page, ident: string): Promise<string> => {
+  const rule = await page.evaluate((wanted) => {
+    for (const sheet of Array.from(document.styleSheets)) {
+      for (const r of Array.from(sheet.cssRules)) {
+        if (r.cssText.startsWith('@font-palette-values') && r.cssText.includes(wanted)) return r.cssText;
+      }
+    }
+    return null;
+  }, ident);
+  if (rule === null) throw new Error(`no @font-palette-values rule for ${ident}`);
+  return rule;
+};
+
 // A loaded FontFace with that family is in document.fonts. (`document.fonts.check()` is not usable
 // here: it also answers true while no face of the family is registered yet.)
 const fontsLoaded = (page: Page, families: string[]) =>
@@ -428,34 +442,47 @@ test.describe('colour and per-word hooks', () => {
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(false);
   });
 
-  test('mandala paints the colour font at palette 3', async ({page}) => {
+  test('mandala paints palette 3 with the letters in the inherited CSS color', async ({page}) => {
     await open(page, 'mandala');
     await rowsVisible(page, 1);
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(true);
-    const ident = '--mushaf-qpc-v4-tajweed-p2-palette-3';
     // The row selects the palette and the words inherit it (font-palette is an inherited property).
-    await expect(page.locator(ROW)).toHaveCSS('font-palette', ident);
+    const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
+    expect(ident).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
     await expect(page.locator('.mushaf-word').first()).toHaveCSS('font-palette', ident);
-    // ... and the rule it names was injected with the FontFace, so the ident actually resolves.
-    const rule = await page.evaluate((wanted) => {
-      for (const sheet of Array.from(document.styleSheets)) {
-        for (const r of Array.from(sheet.cssRules)) {
-          const text = r.cssText;
-          if (text.startsWith('@font-palette-values') && text.includes(wanted)) return text;
-        }
-      }
-      return null;
-    }, ident);
+    // ... and the rule it names is in the document, carrying the page's colour for the letters and
+    // nothing for the rosette's own entries (10-13).
+    const rule = await paletteRule(page, ident);
     expect(rule).toContain('base-palette: 3');
     expect(rule).toContain('mushaf-qpc-v4-tajweed-p2');
+    expect(rule).toContain('0 rgb(27, 111, 63)');
+    expect(rule).toContain('15 rgb(27, 111, 63)');
+    expect(rule).not.toMatch(/1[0-3] rgb\(27/);
     // The palette reaches the glyphs, not just the CSSOM: the same line at the font's default
     // palette (the full tajweed colours) paints different pixels.
     const mandala = await page.locator(ROW).screenshot();
     await open(page, 'tajweed');
     await rowsVisible(page, 1);
     await expect(page.locator(ROW)).toHaveCSS('font-palette', 'normal');
-    const tajweed = await page.locator(ROW).screenshot();
-    expect(mandala.equals(tajweed)).toBe(false);
+    expect(mandala.equals(await page.locator(ROW).screenshot())).toBe(false);
+  });
+
+  test('every part of the mandala takes a CSS colour', async ({page}) => {
+    await open(page, 'mandala-gold');
+    await rowsVisible(page, 1);
+    const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
+    const rule = await paletteRule(page, ident);
+    // Letters, the rosette's strokes and ornaments (13, 11, 10), and the disc behind the number (12).
+    expect(rule).toContain('0 rgb(27, 27, 27)');
+    expect(rule).toContain('10 rgb(200, 164, 92)');
+    expect(rule).toContain('11 rgb(200, 164, 92)');
+    expect(rule).toContain('12 transparent');
+    expect(rule).toContain('13 rgb(200, 164, 92)');
+    // A recoloured rosette is a different picture from the font's own.
+    const gold = await page.locator(ROW).screenshot();
+    await open(page, 'mandala');
+    await rowsVisible(page, 1);
+    expect(gold.equals(await page.locator(ROW).screenshot())).toBe(false);
   });
 
   test('activeWordId and wordStyle reach exactly one word', async ({page}) => {
