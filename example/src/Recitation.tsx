@@ -1,12 +1,21 @@
 // A real-life use of the package: a recited passage with the printed lines shown in time with the
 // audio. Input: a timings JSON (one entry per ayah with a start/end and, optionally, per-word times)
-// produced by tools/align-recitation.py. The composition resolves the printed lines that carry those
-// ayahs, schedules one <Sequence> per line from the time of its first word, and animates each line
-// in with a vertical slide + fade and out the same way while the next one arrives.
+// produced by tools/align-recitation.py. The composition asks the package for the lines that carry
+// those ayahs, schedules one <Sequence> per line from the time of its first word, and animates each
+// line in and out with the package's slide+fade.
 import * as React from 'react';
 import {AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig, type CalculateMetadataFunction} from 'remotion';
-import {linearTiming, type TransitionPresentation, type TransitionPresentationComponentProps} from '@remotion/transitions';
-import {MushafLine, getMushafLine, type MushafId, type MushafLineData} from 'remotion-mushaf-line-renderer';
+import {
+  MushafLine,
+  enterTiming,
+  exitTiming,
+  fontSizeForWidth,
+  getMushafLines,
+  lineHeightForFontSize,
+  type MushafId,
+  type MushafLineData,
+} from 'remotion-mushaf-line-renderer';
+import {slideFade} from 'remotion-mushaf-line-renderer/presentations/slide-fade';
 
 export type WordTiming = {id: string; start: number; end: number};
 export type AyahTiming = {ayah: number; start: number; end: number; complete?: boolean; words?: WordTiming[]};
@@ -22,41 +31,44 @@ export type LineSchedule = {
 
 export type RecitationProps = {
   mushaf: MushafId;
-  /** First page of the surah (page 187 for At-Tawbah); the lines are found from there. */
-  startPage: number;
+  /** Colour font (tajweed) instead of plain black glyphs. */
+  tajweed: boolean;
   /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
   timingsFile: string | null;
   timings: RecitationTimings | null;
   /** Audio in the public folder, e.g. 'audio/tawbah.mp3'. */
   audioFile: string;
-  /** Font pin pattern in the public folder ('fonts/qpc-v4-tajweed/p{page}.woff2'); null uses QUL's CDN. */
+  /** Font pin pattern in the public folder ('fonts/{mushaf}/p{page}.woff2'); null uses QUL's CDN. */
   fontFilePattern: string | null;
   /** Stop after the last ayah that ends before this many seconds; null plays the whole recitation. */
   cutAtSeconds: number | null;
   /** Seconds a line is on screen before its first word is heard. */
   leadInSeconds: number;
-  /** Seconds the entrance/exit animation lasts. */
-  transitionSeconds: number;
   /** Filled in by calculateMetadata. */
   lines: MushafLineData[] | null;
   schedule: LineSchedule[] | null;
 };
 
 export const defaultRecitationProps: RecitationProps = {
-  mushaf: 'qpc-v4-tajweed',
-  startPage: 187,
+  mushaf: 'qpc-v4',
+  tajweed: false,
   timingsFile: 'audio/tawbah-timings.json',
   timings: null,
   audioFile: 'audio/tawbah.mp3',
   fontFilePattern: null,
   cutAtSeconds: 60,
   leadInSeconds: 0.4,
-  transitionSeconds: 0.4,
   lines: null,
   schedule: null,
 };
 
 const MARGIN_X = 120;
+
+// One pair for every line: the package's slide+fade with its default timings — 0.5 s decelerating
+// in, 0.32 s accelerating out. The exit of a line finishes where the next line's entrance starts
+// (see `from`/`durationInFrames` below), so two lines of text never cross-fade through each other.
+const ENTER = {presentation: slideFade(), timing: enterTiming()};
+const EXIT = {presentation: slideFade(), timing: exitTiming()};
 
 const parseId = (id: string) => {
   const [s, a, w] = id.split(':').map(Number);
@@ -70,31 +82,6 @@ const wordStart = (timing: AyahTiming, position: number, wordCount: number): num
   return timing.start + ((timing.end - timing.start) * (position - 1)) / Math.max(1, wordCount);
 };
 
-/** The printed lines that carry ayahs first..last of `surah`, scanning pages from `startPage`. */
-const findLines = async (mushaf: MushafId, startPage: number, surah: number, firstAyah: number, lastAyah: number): Promise<MushafLineData[]> => {
-  const out: MushafLineData[] = [];
-  let started = false;
-  for (let page = startPage; page <= startPage + 40; page++) {
-    for (let line = 1; line <= (page <= 2 ? 8 : 15); line++) {
-      const data = await getMushafLine({mushaf, page, line});
-      if (data.type !== 'ayah' || data.words.length === 0) continue;
-      const last = data.words[data.words.length - 1]!;
-      const beyond = last.surah > surah || (last.surah === surah && last.ayah > lastAyah);
-      if (!started) {
-        const covers = data.words.some((w) => w.surah === surah && w.ayah === firstAyah);
-        if (!covers) {
-          if (beyond) return out;
-          continue;
-        }
-        started = true;
-      }
-      out.push(data);
-      if (beyond || (last.surah === surah && last.ayah === lastAyah && last.kind === 'end')) return out;
-    }
-  }
-  return out;
-};
-
 export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationProps> = async ({props}) => {
   const timings: RecitationTimings | null = props.timings ?? (props.timingsFile ? await (await fetch(staticFile(props.timingsFile))).json() : null);
   if (!timings || timings.ayat.length === 0) throw new Error('Recitation: pass `timings` or a `timingsFile` with at least one ayah.');
@@ -105,11 +92,15 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   const lastAyah = chosen[chosen.length - 1]!.ayah;
   const byAyah = new Map(chosen.map((a) => [a.ayah, a]));
 
-  const lines = await findLines(props.mushaf, props.startPage, timings.surah, firstAyah, lastAyah);
-  const fontUrl = (page: number) => (props.fontFilePattern ? staticFile(props.fontFilePattern.replace('{page}', String(page))) : null);
-  const pinned = lines.map((line) => {
-    const url = fontUrl(line.page);
-    return url ? {...line, fontUrl: url} : line;
+  // One call: the package finds the page itself and pins the font of every line it returns.
+  const pattern = props.fontFilePattern;
+  const lines = await getMushafLines({
+    mushaf: props.mushaf,
+    tajweed: props.tajweed,
+    surah: timings.surah,
+    fromAyah: firstAyah,
+    toAyah: lastAyah,
+    ...(pattern ? {fontUrl: (page: number, mushaf: MushafId) => staticFile(pattern.replace('{mushaf}', mushaf).replace('{page}', String(page)))} : {}),
   });
 
   // A line starts when its first recited word starts and ends when the next line starts.
@@ -131,43 +122,39 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   });
   const fps = 30;
   const durationInFrames = Math.ceil((lastEnd + 1) * fps);
-  return {props: {...props, lines: pinned, schedule}, durationInFrames};
+  return {props: {...props, lines, schedule}, durationInFrames};
 };
 
-// Vertical slide + fade, written the way any @remotion/transitions presentation is: entering
-// rises from below while fading in; exiting continues upwards while fading out.
-type SlideFadeProps = {distancePercent?: number};
-const VerticalSlideFade: React.FC<TransitionPresentationComponentProps<SlideFadeProps>> = ({children, presentationDirection, presentationProgress, passedProps}) => {
-  const distance = passedProps.distancePercent ?? 60;
-  const p = presentationProgress;
-  const style: React.CSSProperties =
-    presentationDirection === 'entering' ? {opacity: p, transform: `translateY(${((1 - p) * distance).toFixed(3)}%)`} : {opacity: 1 - p, transform: `translateY(${(-p * distance).toFixed(3)}%)`};
-  return <AbsoluteFill style={style}>{children}</AbsoluteFill>;
-};
-export const verticalSlideFade = (props: SlideFadeProps = {}): TransitionPresentation<SlideFadeProps> => ({component: VerticalSlideFade, props});
-
-export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFile, leadInSeconds, transitionSeconds}) => {
+export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFile, leadInSeconds}) => {
   const {width, height, fps} = useVideoConfig();
   if (!lines || !schedule) throw new Error('Recitation: `lines`/`schedule` are null; calculateMetadata fills them in.');
   const measure = width - 2 * MARGIN_X;
-  const fontSize = Math.floor((measure * 2500) / 42501);
-  const lineHeight = Math.round(2.2 * fontSize);
+  const fontSize = fontSizeForWidth(measure);
+  const lineHeight = lineHeightForFontSize(fontSize);
   const top = Math.round((height - lineHeight) / 2);
-  const transition = Math.max(1, Math.round(transitionSeconds * fps));
-  const timing = linearTiming({durationInFrames: transition});
-  const animation = {presentation: verticalSlideFade(), timing};
+  const enterFrames = enterTiming().getDurationInFrames({fps});
+  const exitFrames = exitTiming().getDurationInFrames({fps});
   return (
-    <AbsoluteFill style={{backgroundColor: '#fbf7ee'}}>
+    <AbsoluteFill style={{backgroundColor: '#fbf7ee', color: '#1b1b1b'}}>
       <Audio src={staticFile(audioFile)} />
       {schedule.map((slot, i) => {
         const line = lines[slot.line]!;
-        // Fully in when the first word is heard; leaves while the next line comes in.
-        const from = Math.max(0, Math.round((slot.start - leadInSeconds) * fps) - transition);
-        const nextFrom = i + 1 < schedule.length ? Math.max(0, Math.round((schedule[i + 1]!.start - leadInSeconds) * fps) - transition) : null;
-        const end = nextFrom !== null ? nextFrom + transition : Math.round((slot.end + 1) * fps);
+        // Fully in place when its first word is heard, `leadInSeconds` earlier.
+        const from = Math.max(0, Math.round((slot.start - leadInSeconds) * fps) - enterFrames);
+        const nextFrom = i + 1 < schedule.length ? Math.max(0, Math.round((schedule[i + 1]!.start - leadInSeconds) * fps) - enterFrames) : null;
+        // Fade through rather than cross-fade: this line's exit ends where the next one's entrance
+        // begins, so the slot never holds two half-visible lines of text at once.
+        const end = nextFrom !== null ? nextFrom : Math.round((slot.end + 1) * fps);
         return (
-          <Sequence key={`${line.page}/${line.line}`} from={from} durationInFrames={Math.max(1, end - from)} premountFor={fps} name={`p${line.page} l${line.line} (${line.words[0]!.id})`} style={{top, height: lineHeight, left: MARGIN_X, width: measure}}>
-            <MushafLine line={line} fontSize={fontSize} lineHeight={lineHeight} enter={animation} exit={animation} style={{color: '#1b1b1b'}} />
+          <Sequence
+            key={`${line.page}/${line.line}`}
+            from={from}
+            durationInFrames={Math.max(exitFrames + 1, end - from)}
+            premountFor={fps}
+            name={`p${line.page} l${line.line} (${line.words[0]!.id})`}
+            style={{top, height: lineHeight, left: MARGIN_X, width: measure}}
+          >
+            <MushafLine line={line} fontSize={fontSize} lineHeight={lineHeight} enter={ENTER} exit={EXIT} />
           </Sequence>
         );
       })}

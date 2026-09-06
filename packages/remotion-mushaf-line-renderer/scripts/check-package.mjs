@@ -31,7 +31,7 @@ if (failures.length === 0) ok(`all ${exportFiles.length + 3} files referenced fr
 
 // 2. sizes and charset ----------------------------------------------------------------------------
 const MAX_INDEX_BYTES = 100 * 1024;
-for (const f of ['dist/esm/index.mjs', 'dist/cjs/index.js', 'dist/esm/presentations/reveal-rtl.mjs', 'dist/cjs/presentations/reveal-rtl.js']) {
+for (const f of ['dist/esm/index.mjs', 'dist/cjs/index.js', 'dist/esm/presentations/reveal-rtl.mjs', 'dist/cjs/presentations/reveal-rtl.js', 'dist/esm/presentations/slide-fade.mjs', 'dist/cjs/presentations/slide-fade.js']) {
   const size = statSync(path.join(pkgDir, f)).size;
   if (size > MAX_INDEX_BYTES) fail(`${f} is ${size} bytes; the data must stay out of the main chunk (limit ${MAX_INDEX_BYTES})`);
   else ok(`${f}: ${(size / 1024).toFixed(1)} KB`);
@@ -50,7 +50,7 @@ if (!/import\(["']\.\/data\/qpc-v4\.mjs["']\)/.test(esmIndex)) fail('dist/esm/in
 if (!/require\(["']\.\/data\/qpc-v4\.js["']\)/.test(cjsIndex)) fail('dist/cjs/index.js does not lazy-require ./data/qpc-v4.js');
 if (/\bimport\(/.test(cjsIndex)) fail('dist/cjs/index.js contains a dynamic import(); the CJS build must not need ESM support from its host');
 if (/\brequire\(/.test(esmIndex)) fail('dist/esm/index.mjs contains a require()');
-for (const f of ['dist/esm/index.d.mts', 'dist/cjs/index.d.ts', 'dist/esm/presentations/reveal-rtl.d.mts', 'dist/cjs/presentations/reveal-rtl.d.ts']) {
+for (const f of ['dist/esm/index.d.mts', 'dist/cjs/index.d.ts', 'dist/esm/presentations/reveal-rtl.d.mts', 'dist/cjs/presentations/reveal-rtl.d.ts', 'dist/esm/presentations/slide-fade.d.mts', 'dist/cjs/presentations/slide-fade.d.ts']) {
   const text = readFileSync(path.join(pkgDir, f), 'utf8');
   if (/from ['"]\.\.?\//.test(text)) fail(`${f} has relative imports; declarations must be bundled`);
 }
@@ -73,12 +73,20 @@ await checkApi('esm', esm);
 const require = createRequire(import.meta.url);
 const cjs = require(path.join(pkgDir, 'dist/cjs/index.js'));
 await checkApi('cjs', cjs);
-const esmReveal = await import(pathToFileURL(path.join(pkgDir, 'dist/esm/presentations/reveal-rtl.mjs')).href);
-const cjsReveal = require(path.join(pkgDir, 'dist/cjs/presentations/reveal-rtl.js'));
-for (const [label, m] of [['esm', esmReveal], ['cjs', cjsReveal]]) {
-  const p = m.revealRtl?.();
-  if (typeof p?.component !== 'function' || typeof p?.props !== 'object') fail(`${label}: revealRtl() does not return a presentation`);
-  else ok(`${label}: presentations/reveal-rtl loads`);
+for (const [name, factory] of [
+  ['reveal-rtl', 'revealRtl'],
+  ['slide-fade', 'slideFade'],
+]) {
+  const esmModule = await import(pathToFileURL(path.join(pkgDir, `dist/esm/presentations/${name}.mjs`)).href);
+  const cjsModule = require(path.join(pkgDir, `dist/cjs/presentations/${name}.js`));
+  for (const [label, m] of [
+    ['esm', esmModule],
+    ['cjs', cjsModule],
+  ]) {
+    const p = m[factory]?.();
+    if (typeof p?.component !== 'function' || typeof p?.props !== 'object') fail(`${label}: ${factory}() does not return a presentation`);
+    else ok(`${label}: presentations/${name} loads`);
+  }
 }
 
 // 4. pack + attw ----------------------------------------------------------------------------------

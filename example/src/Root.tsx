@@ -18,12 +18,14 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         durationInFrames={180}
         defaultProps={{
-          mushaf: 'qpc-v4-tajweed',
+          mushaf: 'qpc-v4',
+          // Plain black glyphs by default; `true` switches to QUL's tajweed colour font.
+          tajweed: false,
           page: 10,
           lineNumbers: [3, 4, 5],
           lines: null,
-          // Set to e.g. 'fonts/qpc-v4-tajweed/p10.woff2' (downloaded by `node scripts/fetch-qul.mjs --fonts 10`)
-          // to serve the font from the public folder instead of QUL's CDN.
+          // Set to 'fonts/{mushaf}/p{page}.woff2' (mirrored by `bash scripts/pull-all-assets.sh`)
+          // to serve the fonts from the public folder instead of QUL's CDN.
           fontFile: null,
           mode: 'replace',
         }}

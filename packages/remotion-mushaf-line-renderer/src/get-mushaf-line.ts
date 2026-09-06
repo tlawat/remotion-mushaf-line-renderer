@@ -1,7 +1,7 @@
 import {KIND_BY_CHAR, indexPage, runAt, type CompiledLayout} from './data/format';
 import {loadLayout} from './data/load-layout';
 import {MushafError} from './errors';
-import {assertLine, assertPage, getMushafDefinition} from './mushafs';
+import {assertLine, assertPage, getMushafDefinition, resolveMushafId} from './mushafs';
 import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafWordKind} from './types';
 
 /**
@@ -10,13 +10,18 @@ import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafW
  * Pure and Remotion-free: safe to call in `calculateMetadata()`, in a Node script that prepares
  * `inputProps`, or in a `<Player>` host. The only asynchronous step is the lazy import of the
  * compiled layout, which is cached after the first call.
+ *
+ * `mushaf` defaults to the plain `'qpc-v4'` glyphs (black, following CSS `color`); pass
+ * `tajweed: true` for QUL's colour font. The returned `mushaf` is the resolved font set, so the data
+ * alone determines how the line is painted.
  */
-export const getMushafLine = async ({mushaf, page, line}: GetMushafLineOptions): Promise<MushafLineData> => {
-  const def = getMushafDefinition(mushaf);
+export const getMushafLine = async ({mushaf, tajweed, page, line}: GetMushafLineOptions): Promise<MushafLineData> => {
+  const id = resolveMushafId(mushaf, tajweed);
+  const def = getMushafDefinition(id);
   assertPage(def, page);
   assertLine(def, page, line);
   const layout = await loadLayout(def.dataset);
-  return lineFromLayout(layout, mushaf, page, line);
+  return lineFromLayout(layout, id, page, line);
 };
 
 /** Synchronous core of `getMushafLine()` for an already loaded layout (also used by test fixtures). */

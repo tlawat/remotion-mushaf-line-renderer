@@ -1,25 +1,29 @@
 import * as React from 'react';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import {useCurrentFrame, useDelayRender, useRemotionEnvironment, useVideoConfig} from 'remotion';
-import {getEnterState, getExitState} from '../enter-state';
+import {getEnterState, getExitState, normaliseAnimation} from '../enter-state';
 import {MushafError} from '../errors';
 import {fontKey, getFontEntry, getFontStatus, subscribeFontStore, type FontStatus} from '../font-store';
-import {assertSize, buildRootStyle, buildRowStyle, defaultLineHeight, fontSizeForWidth} from '../layout';
+import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from '../layout';
 import {loadPageFont} from '../load-page-font';
 import {getMushafDefinition} from '../mushafs';
-import type {MushafLineAnimation, MushafLineData} from '../types';
+import type {MushafLineAnimationProp, MushafLineCommonProps, MushafLineData} from '../types';
 import {LineContext, type LineContextValue} from './LineContext';
 import {Presented, type OnElementImage} from './Presented';
 import {Word} from './Word';
 
 export type LineRendererProps = {
   readonly line: MushafLineData;
-  readonly enter: MushafLineAnimation | undefined;
-  readonly exit: MushafLineAnimation | undefined;
+  readonly enter: MushafLineAnimationProp | undefined;
+  readonly exit: MushafLineAnimationProp | undefined;
   readonly fontSize: number | undefined;
   readonly lineHeight: number | undefined;
   readonly style: React.CSSProperties | undefined;
   readonly className: string | undefined;
+  readonly activeWordId: MushafLineCommonProps['activeWordId'];
+  readonly activeWordStyle: MushafLineCommonProps['activeWordStyle'];
+  readonly wordStyle: MushafLineCommonProps['wordStyle'];
+  readonly wordClassName: MushafLineCommonProps['wordClassName'];
 };
 
 const serverSnapshot = (): FontStatus => 'idle';
@@ -40,7 +44,9 @@ const canvasPresentationError = () =>
  * document.fonts) and the entrance animation. Hooks are all above the early returns so the hook
  * order is stable; the parent keys this component by mushaf/page/line.
  */
-export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, exit, fontSize, lineHeight, style, className}) => {
+export const LineRenderer: React.FC<LineRendererProps> = ({line, enter: enterProp, exit: exitProp, fontSize, lineHeight, style, className, activeWordId, activeWordStyle, wordStyle, wordClassName}) => {
+  const enter = normaliseAnimation('enter', enterProp);
+  const exit = normaliseAnimation('exit', exitProp);
   const def = getMushafDefinition(line.mushaf);
   const {width, fps, durationInFrames} = useVideoConfig(); // honours <Sequence width>; durationInFrames is the Sequence's
   const frame = useCurrentFrame(); // local to the enclosing <Sequence from>; 0 while premounted
@@ -110,10 +116,13 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter, exit, fo
     }
   }, [enterComponent, exitComponent, presentationError, rejectCanvasPresentation]);
 
-  const resolvedFontSize = fontSize ?? fontSizeForWidth(width, def);
-  const resolvedLineHeight = lineHeight ?? defaultLineHeight(resolvedFontSize);
+  const resolvedFontSize = fontSize ?? fontSizeForWidth(width, line.mushaf);
+  const resolvedLineHeight = lineHeight ?? lineHeightForFontSize(resolvedFontSize);
   const ready = status === 'loaded';
-  const ctx = useMemo<LineContextValue>(() => ({line, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, ready, frame, fps}), [line, resolvedFontSize, resolvedLineHeight, ready, frame, fps]);
+  const ctx = useMemo<LineContextValue>(
+    () => ({line, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName}),
+    [line, resolvedFontSize, resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName],
+  );
 
   // ---- hooks done; validation and throws below ----
   if (presentationError) throw presentationError;

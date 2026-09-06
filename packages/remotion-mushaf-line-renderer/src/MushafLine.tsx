@@ -3,6 +3,7 @@ import {Sequence} from 'remotion';
 import {MushafError, describeValue} from './errors';
 import {LineRenderer} from './internal/LineRenderer';
 import {ResolveLine} from './internal/ResolveLine';
+import {resolveMushafId} from './mushafs';
 import type {MushafId, MushafLineProps} from './types';
 import {assertLineData} from './validate-line-data';
 
@@ -11,19 +12,28 @@ import {assertLineData} from './validate-line-data';
  *
  * - Timing comes from the enclosing `<Sequence from>`: the entrance runs over the local frame.
  * - Pass `line` (from `getMushafLine()`, ideally resolved in `calculateMetadata()`), or
- *   `mushaf` + `page` + `line` to resolve at render time behind `delayRender()`.
+ *   `page` + `line` (+ optional `mushaf` / `tajweed`) to resolve at render time behind
+ *   `delayRender()`. Glyphs are plain black by default and follow the inherited CSS `color`;
+ *   `tajweed` switches to QUL's colour font.
  * - The root is a normal-flow block of height `lineHeight` (default 2.2 × fontSize); stack fifteen
  *   of them for a page, or position one with `style` / the enclosing `<Sequence style>`.
  * - Nothing is painted until the page font is loaded (a fallback font would show wrong words).
  */
 export const MushafLine: React.FC<MushafLineProps> = (props) => {
-  const {name, style, className, enter, exit, fontSize, lineHeight} = props;
-  const common = {style, className, enter, exit, fontSize, lineHeight};
+  const {name, style, className, enter, exit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName} = props;
+  const common = {style, className, enter, exit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
   let body: React.ReactElement;
   if (typeof props.line === 'number') {
-    const {mushaf, page, line} = props as {mushaf: MushafId; page: number; line: number};
-    body = <ResolveLine mushaf={mushaf} page={page} line={line} {...common} />;
+    const {mushaf, tajweed, page, line} = props as {mushaf?: MushafId; tajweed?: boolean; page: number; line: number};
+    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed)} page={page} line={line} {...common} />;
   } else if (props.line !== null && typeof props.line === 'object') {
+    if ((props as {tajweed?: unknown}).tajweed !== undefined) {
+      throw new MushafError(
+        'BAD_LINE_PROP',
+        'Resolved line data already carries its font set, so `tajweed` cannot be set alongside `line={MushafLineData}`. Pass `tajweed` to getMushafLine()/getMushafLines() where the data is resolved.',
+        {tajweed: (props as {tajweed?: unknown}).tajweed},
+      );
+    }
     const line = assertLineData(props.line);
     body = <LineRenderer key={`${line.mushaf}/${line.page}/${line.line}`} line={line} {...common} />;
   } else {

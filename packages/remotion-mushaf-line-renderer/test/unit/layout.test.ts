@@ -1,21 +1,20 @@
 import {describe, expect, it} from 'vitest';
-import {assertSize, buildRootStyle, buildRowStyle, defaultLineHeight, fontSizeForWidth} from '../../src/layout';
-import {MUSHAFS} from '../../src/mushafs';
+import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from '../../src/layout';
 
 describe('layout helpers', () => {
-  const def = MUSHAFS['qpc-v4'];
-
   it('derives the font size from the widest line (W/17 rule)', () => {
-    expect(fontSizeForWidth(1920, def)).toBe(112);
-    expect(fontSizeForWidth(1080, def)).toBe(63);
-    expect(fontSizeForWidth(3840, def)).toBe(225);
+    expect(fontSizeForWidth(1920)).toBe(112);
+    expect(fontSizeForWidth(1080)).toBe(63);
+    expect(fontSizeForWidth(3840)).toBe(225);
+    // Both font sets share the metrics, and the default is the plain one.
+    expect(fontSizeForWidth(1920, 'qpc-v4-tajweed')).toBe(112);
     // The widest line (42,501 units) fits the box at that size.
-    for (const w of [1080, 1920, 3840]) expect((fontSizeForWidth(w, def) * 42501) / 2500).toBeLessThanOrEqual(w);
+    for (const w of [1080, 1920, 3840]) expect((fontSizeForWidth(w) * 42501) / 2500).toBeLessThanOrEqual(w);
   });
 
   it('defaults the line height to 2.2 em', () => {
-    expect(defaultLineHeight(112)).toBe(246);
-    expect(defaultLineHeight(63)).toBe(139);
+    expect(lineHeightForFontSize(112)).toBe(246);
+    expect(lineHeightForFontSize(63)).toBe(139);
   });
 
   it('validates sizes', () => {

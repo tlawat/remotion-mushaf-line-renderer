@@ -1,20 +1,30 @@
 import type * as React from 'react';
 import {MushafError, describeValue} from './errors';
-import type {MushafDefinition} from './mushafs';
+import {getMushafMetrics} from './mushafs';
+import type {MushafId} from './types';
 
 /**
- * The widest line in the mushaf is `referenceLineWidth` font units (42,501 for V4), so this size
- * lets every full line fit a box of the given width: 1920 → 112 px, 1080 → 63 px, 3840 → 225 px.
- * Integer so box edges stay on whole pixels.
+ * The type size at which every full line of the mushaf fits a box `width` pixels wide — one size for
+ * the whole mushaf, exactly like the printed page, where short lines simply stop short of the margin.
+ * (The widest line is `referenceLineWidth` = 42,501 font units for V4.) 1920 → 112 px, 1080 → 63 px,
+ * 3840 → 225 px. Integer, so box edges stay on whole pixels.
+ *
+ * `<MushafLine>` uses it with the composition width by default; pass your own measure when the line
+ * sits inside margins: `fontSizeForWidth(width - 2 * margin)`.
  */
-export const fontSizeForWidth = (width: number, def: MushafDefinition): number =>
-  Math.floor((width * def.metrics.unitsPerEm) / def.metrics.referenceLineWidth);
+export const fontSizeForWidth = (width: number, mushaf?: MushafId): number => {
+  const metrics = getMushafMetrics(mushaf);
+  return Math.floor((width * metrics.unitsPerEm) / metrics.referenceLineWidth);
+};
 
 /**
  * 2.2 em keeps the glyph extremes (+1.368 em / −0.729 em around the baseline, with the pinned
  * ascent/descent) inside the box, so stacked lines never overlap: 112 → 246 px, 15 lines ≈ 1.94 × W.
  */
-export const defaultLineHeight = (fontSize: number): number => Math.round(fontSize * 2.2);
+export const lineHeightForFontSize = (fontSize: number): number => Math.round(fontSize * 2.2);
+
+/** @deprecated Renamed to `lineHeightForFontSize`; kept so internal callers and tests keep working. */
+export const defaultLineHeight = lineHeightForFontSize;
 
 export const assertSize = (name: 'fontSize' | 'lineHeight', value: unknown): number => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {

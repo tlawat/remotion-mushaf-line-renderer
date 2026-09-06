@@ -215,6 +215,84 @@ describe('<MushafLine>', () => {
     await waitFor(() => expect(onError2).toHaveBeenCalled());
   });
 
+  it('is plain by default and switches font set with tajweed on the convenience path', async () => {
+    const plain = render(<MushafLine page={2} line={3} />);
+    await waitFor(() => expect(plain.container.querySelector('.mushaf-line')).not.toBeNull());
+    expect(plain.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4');
+    expect(rowOf(plain.container).style.fontFamily).toBe('"mushaf-qpc-v4-p2"');
+    // Nothing sets a colour: the glyphs inherit CSS `color`, which is what makes them black.
+    expect(plain.container.querySelector<HTMLElement>('.mushaf-line')!.style.color).toBe('');
+    expect(rowOf(plain.container).style.color).toBe('');
+    cleanup();
+
+    const coloured = render(<MushafLine page={2} line={3} tajweed />);
+    await waitFor(() => expect(coloured.container.querySelector('.mushaf-line')).not.toBeNull());
+    expect(coloured.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
+    expect(rowOf(coloured.container).style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
+  });
+
+  it('refuses tajweed next to resolved line data, which carries its own font set', () => {
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        {/* @ts-expect-error the prop types forbid this; the runtime says why */}
+        <MushafLine line={line} tajweed />
+      </Boundary>,
+    );
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/pass `tajweed` to getMushafLine/i);
+  });
+
+  it('styles and marks individual words through the per-word hooks', () => {
+    const {container} = render(
+      <MushafLine
+        line={justified}
+        activeWordId="2:1:2"
+        activeWordStyle={{color: 'crimson'}}
+        wordStyle={(word, ctx) => (ctx.active ? {opacity: 1} : {opacity: word.kind === 'end' ? 0.4 : 0.8})}
+        wordClassName={(word) => `ayah-${word.ayah}`}
+      />,
+    );
+    const words = [...container.querySelectorAll<HTMLElement>('.mushaf-word')];
+    expect(words.map((w) => w.dataset.location)).toEqual(['2:1:1', '2:1:2', '2:1:3', '2:1:4']);
+    const active = words[1]!;
+    expect(active.dataset.active).toBe('true');
+    expect(active.className).toContain('mushaf-word--active');
+    expect(active.className).toContain('ayah-1');
+    expect(active.style.color).toBe('crimson');
+    expect(active.style.opacity).toBe('1'); // wordStyle wins over activeWordStyle
+    expect(words[0]!.dataset.active).toBeUndefined();
+    expect(words[0]!.style.opacity).toBe('0.8');
+    expect(words[3]!.style.opacity).toBe('0.4'); // the ayah marker is an ordinary word here
+    // The pinned layout is never lost: hooks add to WORD_STYLE, they do not replace it.
+    expect(words[0]!.style.display).toBe('block');
+  });
+
+  it('matches the active word by wordId as well, and highlights nothing without one', () => {
+    const {container, rerender} = render(<MushafLine line={justified} activeWordId={7} />);
+    const active = container.querySelectorAll<HTMLElement>('[data-active="true"]');
+    expect(active).toHaveLength(1);
+    expect(active[0]!.dataset.wordId).toBe('7');
+    rerender(<MushafLine line={justified} activeWordId={null} />);
+    expect(container.querySelectorAll('[data-active]')).toHaveLength(0);
+  });
+
+  it('accepts a bare presentation and drives it with the default timing', () => {
+    // enterTiming(): 0.5 s = 15 frames at 30 fps, decelerating.
+    const {container, rerender} = render(<MushafLine line={line} enter={fade()} />);
+    const root = container.querySelector<HTMLElement>('.mushaf-line')!;
+    const opacityAt = (frame: number) => {
+      remotion.state.frame = frame;
+      rerender(<MushafLine line={line} enter={fade()} />);
+      return Number(root.querySelector<HTMLElement>('[data-absolute-fill]')!.style.opacity);
+    };
+    expect(opacityAt(0)).toBe(0);
+    expect(opacityAt(15)).toBe(1);
+    expect(opacityAt(30)).toBe(1);
+    // Eased, not linear: over half way by a third of the window.
+    expect(opacityAt(5)).toBeGreaterThan(0.5);
+  });
+
   it('wraps in a named Sequence when name is given', () => {
     const {container} = render(<MushafLine line={line} name="p1 l2" />);
     expect(container.querySelector('[data-sequence="p1 l2"] .mushaf-line')).not.toBeNull();

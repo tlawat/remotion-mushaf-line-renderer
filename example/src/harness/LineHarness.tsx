@@ -7,10 +7,11 @@ import {dissolve} from '@remotion/transitions/dissolve';
 import {fade} from '@remotion/transitions/fade';
 import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
-import {MushafLine, type MushafLineAnimation, type MushafLineData} from 'remotion-mushaf-line-renderer';
+import {MushafLine, fontSizeForWidth, lineHeightForFontSize, type MushafLineAnimation, type MushafLineData, type MushafWord} from 'remotion-mushaf-line-renderer';
 import {revealRtl} from 'remotion-mushaf-line-renderer/presentations/reveal-rtl';
+import {slideFade} from 'remotion-mushaf-line-renderer/presentations/slide-fade';
 
-export type EnterName = 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'dissolve';
+export type EnterName = 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'soft-reveal' | 'slide-fade' | 'dissolve';
 
 export type LineHarnessProps = {
   lines: MushafLineData[];
@@ -34,6 +35,10 @@ export type LineHarnessProps = {
   fontUrl: string | null;
   fontSize: number | null;
   lineHeight: number | null;
+  /** Word to mark as current (`word.id` or `word.wordId`), for the highlighting scenarios. */
+  activeWordId: string | number | null;
+  /** When set, every word gets this opacity unless it is the active one. */
+  dimOthersTo: number | null;
 };
 
 export const defaultLineHarnessProps: LineHarnessProps = {
@@ -51,6 +56,8 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   fontUrl: null,
   fontSize: null,
   lineHeight: null,
+  activeWordId: null,
+  dimOthersTo: null,
 };
 
 export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarnessProps> = ({props}) => {
@@ -68,15 +75,36 @@ const presentation = (name: Exclude<EnterName, 'plain'>, timing: TransitionTimin
       return {presentation: slide({direction: 'from-right'}), timing};
     case 'reveal':
       return {presentation: revealRtl(), timing};
+    case 'soft-reveal':
+      return {presentation: revealRtl({softness: 10}), timing};
+    case 'slide-fade':
+      return {presentation: slideFade(), timing};
     case 'dissolve':
       return {presentation: dissolve({}), timing};
   }
 };
 
-export const LineHarness: React.FC<LineHarnessProps> = ({lines, enter, enterFrames, exit, exitFrames, from, stagger, durationInFrames, premountFor, slot, fontUrl, fontSize, lineHeight}) => {
+export const LineHarness: React.FC<LineHarnessProps> = ({
+  lines,
+  enter,
+  enterFrames,
+  exit,
+  exitFrames,
+  from,
+  stagger,
+  durationInFrames,
+  premountFor,
+  slot,
+  fontUrl,
+  fontSize,
+  lineHeight,
+  activeWordId,
+  dimOthersTo,
+}) => {
   const {width} = useVideoConfig();
-  const resolvedFontSize = fontSize ?? Math.floor((width * 2500) / 42501);
-  const resolvedLineHeight = lineHeight ?? Math.round(2.2 * resolvedFontSize);
+  const resolvedFontSize = fontSize ?? fontSizeForWidth(width);
+  const resolvedLineHeight = lineHeight ?? lineHeightForFontSize(resolvedFontSize);
+  const wordStyle = dimOthersTo === null ? undefined : (_word: MushafWord, ctx: {active: boolean}) => ({opacity: ctx.active ? 1 : dimOthersTo});
   const enterAnimation = enter === 'plain' ? undefined : presentation(enter, linearTiming({durationInFrames: enterFrames}), 'enter');
   const exitAnimation = exit === 'plain' ? undefined : presentation(exit, linearTiming({durationInFrames: exitFrames}), 'exit');
   return (
@@ -92,7 +120,16 @@ export const LineHarness: React.FC<LineHarnessProps> = ({lines, enter, enterFram
             name={`p${line.page} l${line.line}`}
             style={{top: slot === 'same' ? 0 : i * resolvedLineHeight, height: resolvedLineHeight}}
           >
-            <MushafLine line={data} fontSize={resolvedFontSize} lineHeight={resolvedLineHeight} enter={enterAnimation} exit={exitAnimation} />
+            <MushafLine
+              line={data}
+              fontSize={resolvedFontSize}
+              lineHeight={resolvedLineHeight}
+              enter={enterAnimation}
+              exit={exitAnimation}
+              activeWordId={activeWordId}
+              activeWordStyle={{color: '#b30000'}}
+              wordStyle={wordStyle}
+            />
           </Sequence>
         );
       })}

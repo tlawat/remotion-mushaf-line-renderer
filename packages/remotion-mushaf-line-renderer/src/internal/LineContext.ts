@@ -1,9 +1,9 @@
 import * as React from 'react';
-import type {MushafLineData} from '../types';
+import type {MushafLineData, MushafLineCommonProps} from '../types';
 
 /**
- * Per-line context read by `<Word>`. Reserved seam for word highlighting: a later `highlight`
- * prop adds the set of active word ids here without touching the line markup or existing props.
+ * Per-line context read by `<Word>`: the resolved layout numbers plus the per-word hooks, so a word
+ * needs no props of its own beyond its data and the line markup stays one element per word.
  */
 export type LineContextValue = {
   readonly line: MushafLineData;
@@ -12,6 +12,10 @@ export type LineContextValue = {
   readonly ready: boolean;
   readonly frame: number;
   readonly fps: number;
+  readonly activeWordId: MushafLineCommonProps['activeWordId'];
+  readonly activeWordStyle: MushafLineCommonProps['activeWordStyle'];
+  readonly wordStyle: MushafLineCommonProps['wordStyle'];
+  readonly wordClassName: MushafLineCommonProps['wordClassName'];
 };
 
 export const LineContext = React.createContext<LineContextValue | null>(null);

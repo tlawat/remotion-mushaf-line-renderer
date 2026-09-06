@@ -138,6 +138,31 @@ export const indexPage = (layout: CompiledLayout, page: number): PageIndex => {
   return index;
 };
 
+/** Sort key of an ayah, also its identity in the ayah index (ayahs never exceed 286 per surah). */
+export const ayahKey = (surah: number, ayah: number): number => surah * 1000 + ayah;
+
+const ayahIndexCache = new WeakMap<CompiledLayout, Map<number, number>>();
+
+/**
+ * `ayahKey(surah, ayah)` → the first page that carries a word of that ayah, built in one pass over
+ * the compiled ayah runs (6,236 entries) and memoised per layout. Lets callers ask for a surah or an
+ * ayah range without knowing which page it starts on.
+ */
+export const indexAyahs = (layout: CompiledLayout): ReadonlyMap<number, number> => {
+  const cached = ayahIndexCache.get(layout);
+  if (cached) return cached;
+  const pageOf = new Map<number, number>();
+  for (let page = 1; page <= layout.pages.length; page++) {
+    const a = (layout.pages[page - 1] as CompiledPage).a;
+    for (let i = 0; i < a.length; i += 4) {
+      const key = ayahKey(a[i] as number, a[i + 1] as number);
+      if (!pageOf.has(key)) pageOf.set(key, page);
+    }
+  }
+  ayahIndexCache.set(layout, pageOf);
+  return pageOf;
+};
+
 /** Binary search for the ayah run containing word index `i` (index into `t`). */
 export const runAt = (index: PageIndex, i: number): PageRun => {
   const {runs} = index;
