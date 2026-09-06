@@ -68,7 +68,7 @@ export type MushafLineData = {
   readonly palette?: number;
   /**
    * CSS colours for the parts of that palette, `'currentColor'` included (see `MushafColors`).
-   * `mandala` records `{text: 'currentColor'}` here plus whatever you asked for.
+   * `mandala` records `{ink: 'currentColor'}` here plus whatever you asked for.
    */
   readonly paletteColors?: MushafColors;
   /** Present on surah_name lines (the header's surah) and basmallah lines (carried forward). */
@@ -174,9 +174,10 @@ export type MushafSelection = {
    */
   readonly tajweed?: boolean;
   /**
-   * Renders the text in the inherited CSS `color` with the ayah-end rosette in its own colours —
-   * the same colour font as `tajweed`, at CPAL palette 3. `true` takes the defaults; an object
-   * recolours any part (see `MushafColors`). `tajweed: true` wins when both are given.
+   * Writes the line in the inherited CSS `color` and keeps the ayah-end rosette in its own colours —
+   * the same colour font as `tajweed`, at CPAL palette 3. `true` takes the defaults;
+   * `{ink, accent, detail, background}` recolours it (see `MushafColors`). `tajweed: true` wins when
+   * both are given.
    */
   readonly mandala?: boolean | MushafColors;
 };
@@ -189,13 +190,19 @@ export type MushafSelection = {
  * reach these glyphs; use the plain set to colour words individually.
  *
  * Anything left out keeps the palette's own colour, which is what makes `mandala` a coloured rosette
- * on plain text.
+ * on plainly written text. Between them the four parts cover every entry the font paints.
  */
 export type MushafColors = {
-  /** The letters. `mandala` defaults this to `'currentColor'`. */
-  readonly text?: string;
-  /** The ayah rosette: its frame and curls, the number inside it, and the petals and jewel. */
+  /**
+   * Everything written: the letters, the rosette's frame and curls, and the ayah number inside it —
+   * the font paints them in one colour, and they move together. `mandala` defaults this to
+   * `'currentColor'`.
+   */
+  readonly ink?: string;
+  /** The petal flourishes above and below the rosette. */
   readonly accent?: string;
+  /** The small jewel at the top of the rosette. */
+  readonly detail?: string;
   /** The disc behind the ayah number. */
   readonly background?: string;
 };

@@ -4,12 +4,14 @@ import type {MushafColors} from './types';
 
 export type DatasetId = 'qpc-v4';
 
-/** CPAL entries by what they paint — the three colours of `MushafColors`. Every entry belongs to one. */
+/** CPAL entries by what they paint — the colours of `MushafColors`. Every entry belongs to one. */
 export type PaletteRoles = {
-  /** Every entry that colours letters. */
-  readonly text: readonly number[];
-  /** The ayah rosette: its frame and curls, the number inside it, and the petals and jewel. */
+  /** Everything drawn in the writing colour: the letters, the rosette's frame and the ayah number. */
+  readonly ink: readonly number[];
+  /** The petal flourishes above and below the rosette. */
   readonly accent: readonly number[];
+  /** The small jewel at the top of the rosette. */
+  readonly detail: readonly number[];
   /** The disc behind the ayah number. */
   readonly background: readonly number[];
 };
@@ -17,12 +19,16 @@ export type PaletteRoles = {
 /**
  * The V4 colour font's sixteen CPAL entries, read from its CPAL table and confirmed by overriding
  * one entry at a time in Chromium: 0-9, 14 and 15 colour letters (1, 2 and 15 are the greys of the
- * silent letters); the rosette is 13 (frame, curls and the number), 11 (petals), 10 (jewel) and 12
- * (the disc behind the number).
+ * silent letters), and 10-13 the ayah rosette — 13 its frame, curls and the number inside it, 11 the
+ * petals, 10 the jewel, 12 the disc.
+ *
+ * 13 sits with the letters because the font paints it in the letter colour: black in palettes 0 and
+ * 3, white in palette 4. Frame and text move together, which is what keeps a mandala line readable
+ * when the text colour changes.
  */
-const V4_PALETTE_ROLES: PaletteRoles = {text: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15], accent: [10, 11, 13], background: [12]};
+const V4_PALETTE_ROLES: PaletteRoles = {ink: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14, 15], accent: [11], detail: [10], background: [12]};
 
-const NO_PALETTE_ROLES: PaletteRoles = {text: [], accent: [], background: []};
+const NO_PALETTE_ROLES: PaletteRoles = {ink: [], accent: [], detail: [], background: []};
 
 export type MushafDefinition = {
   readonly id: string;
@@ -158,16 +164,17 @@ export type ResolvedPalette = {
  * The palette a line is painted from, or `undefined` for the font's own colours — the tajweed
  * palette, and nothing at all for the plain glyph set (it has no palettes).
  *
- * `mandala` resolves to palette 3 with the letters following the inherited CSS `color`, so a mandala
- * line is coloured like plain text and keeps its rosette. Any part named in `mandala` is layered on
- * top of that. `tajweed` wins when both are given: it is the more specific ask.
+ * `mandala` resolves to palette 3 with the ink — the letters, the rosette's frame and the ayah
+ * number — following the inherited CSS `color`, so a mandala line is written like plain text and
+ * keeps its coloured rosette. Any part named in `mandala` is layered on top of that. `tajweed` wins
+ * when both are given: it is the more specific ask.
  */
 export const paletteFor = ({tajweed, mandala}: {readonly tajweed?: unknown; readonly mandala?: unknown}): ResolvedPalette | undefined => {
   const wantsTajweed = assertTajweed(tajweed);
   const wantsMandala = assertMandala(mandala);
   if (wantsTajweed === true || wantsMandala === undefined || wantsMandala === false) return undefined;
   const colors = wantsMandala === true ? {} : wantsMandala;
-  return {palette: MANDALA_PALETTE, paletteColors: {text: CURRENT_COLOR, ...colors}};
+  return {palette: MANDALA_PALETTE, paletteColors: {ink: CURRENT_COLOR, ...colors}};
 };
 
 /** True when the id names the COLR/CPAL (coloured) font set. */

@@ -46,12 +46,12 @@ describe('mushaf registry', () => {
     // Mandala lives in the colour font, so it resolves to it — even next to `tajweed: false`.
     expect(resolveMushafId(undefined, undefined, true)).toBe('qpc-v4-tajweed');
     expect(resolveMushafId('qpc-v4', false, true)).toBe('qpc-v4-tajweed');
-    expect(resolveMushafId(undefined, undefined, {text: 'crimson'})).toBe('qpc-v4-tajweed');
-    // Its letters follow the inherited CSS colour; the rosette keeps the font's own.
-    expect(paletteFor({mandala: true})).toEqual({palette: MANDALA_PALETTE, paletteColors: {text: 'currentColor'}});
-    expect(paletteFor({tajweed: false, mandala: true})).toEqual({palette: MANDALA_PALETTE, paletteColors: {text: 'currentColor'}});
-    expect(paletteFor({mandala: {accent: '#c8a45c'}})).toEqual({palette: MANDALA_PALETTE, paletteColors: {text: 'currentColor', accent: '#c8a45c'}});
-    expect(paletteFor({mandala: {text: '#1b6f3f'}})).toEqual({palette: MANDALA_PALETTE, paletteColors: {text: '#1b6f3f'}});
+    expect(resolveMushafId(undefined, undefined, {ink: 'crimson'})).toBe('qpc-v4-tajweed');
+    // Its ink follows the inherited CSS colour; the rosette's ornaments keep the font's own.
+    expect(paletteFor({mandala: true})).toEqual({palette: MANDALA_PALETTE, paletteColors: {ink: 'currentColor'}});
+    expect(paletteFor({tajweed: false, mandala: true})).toEqual({palette: MANDALA_PALETTE, paletteColors: {ink: 'currentColor'}});
+    expect(paletteFor({mandala: {accent: '#c8a45c'}})).toEqual({palette: MANDALA_PALETTE, paletteColors: {ink: 'currentColor', accent: '#c8a45c'}});
+    expect(paletteFor({mandala: {ink: '#1b6f3f'}})).toEqual({palette: MANDALA_PALETTE, paletteColors: {ink: '#1b6f3f'}});
     // Tajweed is the more specific ask, so it wins and keeps the font's default palette.
     expect(resolveMushafId(undefined, true, true)).toBe('qpc-v4-tajweed');
     expect(paletteFor({tajweed: true, mandala: true})).toBeUndefined();
@@ -62,13 +62,14 @@ describe('mushaf registry', () => {
     expect(() => paletteFor({mandala: null})).toThrow(/mandala must be true, false or an object/);
     expect(() => resolveMushafId(undefined, 0)).toThrow(/tajweed must be true or false/);
     expect(() => paletteFor({mandala: {glow: 'red'}})).toThrow(/mandala.glow is not a colourable part/);
-    expect(() => paletteFor({mandala: {text: 'red; } body {display:none'}})).toThrow(/mandala.text must be a CSS colour/);
+    expect(() => paletteFor({mandala: {ink: 'red; } body {display:none'}})).toThrow(/mandala.ink must be a CSS colour/);
   });
 
   it('knows which CPAL entries paint which part of the colour font', () => {
     const colour = MUSHAFS['qpc-v4-tajweed'];
-    // Read from the font's CPAL table; the letters take every entry the rosette does not.
-    expect(colour.paletteRoles).toEqual({text: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15], accent: [10, 11, 13], background: [12]});
+    // Read from the font's CPAL table. 13 (the rosette's frame and the ayah number) is written in
+    // the letter colour by the font itself, so it belongs to the ink.
+    expect(colour.paletteRoles).toEqual({ink: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14, 15], accent: [11], detail: [10], background: [12]});
     const all = Object.values(colour.paletteRoles).flat();
     expect(new Set(all).size).toBe(16);
     expect(Object.values(MUSHAFS['qpc-v4'].paletteRoles).flat()).toEqual([]);
