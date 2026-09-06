@@ -82,7 +82,7 @@ A complete project with this composition, a `<Player>` page and the test harness
 | `line`                     | `MushafLineData`                                              | From `getMushafLine()` / `getMushafLines()`. Preferred.                                                                                                                     |
 | `page` + `line`            | `number`, `number`                                            | Convenience form: resolves the line at render time behind its own `delayRender()`. Add `mushaf` / `tajweed` / `mandala` to pick the colouring.                              |
 | `tajweed`                  | `boolean`                                                     | Convenience form only. `false` (default) renders plain black glyphs that follow CSS `color`; `true` uses QUL's tajweed colour font. See [Colour](#colour).                  |
-| `mandala`                  | `boolean \| MushafColors`                                     | Convenience form only. The ayah-end rosette in its colours with the text in the inherited CSS `color` — the colour font at palette 3. An object recolours any part. `tajweed` wins if both are set. See [Colour](#colour). |
+| `mandala`                  | `boolean \| MushafColors`                                     | Convenience form only. The ayah-end rosette in its colours with the text in the inherited CSS `color` — the colour font at palette 3. `{text, accent, background}` recolours it. `tajweed` wins if both are set. See [Colour](#colour). |
 | `enter`                    | `{presentation, timing?}` or a bare `TransitionPresentation`  | Entrance animation. Progress runs over the local frame of the enclosing `<Sequence>`; the presentation stays mounted for the whole sequence. `timing` defaults to `enterTiming()`. |
 | `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>` (`exitTiming()` by default). A line leaves because its Sequence ends. |
 | `activeWordId`             | `string \| number \| null`                                    | Marks one word as current (`word.id` like `"9:1:3"`, or `word.wordId`): it gets `data-active="true"`, `.mushaf-word--active` and `activeWordStyle`.                          |
@@ -122,7 +122,7 @@ type MushafLineData = {
   fontFamily: string;         // "mushaf-<mushaf>-p<page>"
   fontUrl?: string;           // optional font source pin, see Fonts
   palette?: number;           // CPAL palette of the colour font (3 = mandala), see Colour
-  paletteColors?: {text?: string; rosette?: string; outline?: string; petals?: string; jewel?: string; fill?: string};  // CSS colours over that palette
+  paletteColors?: {text?: string; accent?: string; background?: string};  // CSS colours over that palette
   surahNumber?: number;       // headers and basmallah lines
   words: Array<{id: string /* "surah:ayah:position" */; wordId: number; surah: number; ayah: number; position: number; kind: 'word' | 'end' | 'pause' | 'sajdah' | 'rub-el-hizb'; text: string}>;
 };
@@ -377,7 +377,7 @@ is the tajweed font painted from a different CPAL palette — and the whole look
   <MushafLine page={187} line={2} mandala={{text: 'rgb(27 111 63)'}} />
 
   {/* a gold rosette on a plain disc */}
-  <MushafLine page={187} line={2} mandala={{rosette: '#c8a45c', fill: 'transparent'}} />
+  <MushafLine page={187} line={2} mandala={{accent: '#c8a45c', background: 'transparent'}} />
 </AbsoluteFill>
 ```
 
@@ -385,28 +385,25 @@ COLR glyphs ignore CSS `color` — the colours live in the font — so `mandala`
 `color` at render time and writes it into the palette instead. That is per line, not per word: to
 colour words individually (`wordStyle`, `activeWordStyle`), use the plain set.
 
-The parts, and the CPAL entries of the V4 colour font behind them:
+Three colours paint everything the font can paint:
 
-| Part      | Paints                                                        | Default                       |
-| --------- | ------------------------------------------------------------- | ----------------------------- |
-| `text`    | Every letter (entries 0-9, 14, 15)                            | `'currentColor'`              |
-| `rosette` | Shorthand for `outline` + `petals` + `jewel`                  | —                             |
-| `outline` | The rosette's frame and curls, and the ayah number (entry 13) | the font's (black)            |
-| `petals`  | The flourishes above and below the rosette (entry 11)         | the font's (pink)             |
-| `jewel`   | The small jewel at the top of the rosette (entry 10)          | the font's (teal)             |
-| `fill`    | The disc behind the ayah number (entry 12)                    | the font's (pale green)       |
+| Part         | Paints                                                                             | Default                 |
+| ------------ | ---------------------------------------------------------------------------------- | ----------------------- |
+| `text`       | Every letter (CPAL entries 0-9, 14, 15)                                            | `'currentColor'`        |
+| `accent`     | The rosette: its frame and curls, the ayah number, the petals and the jewel (13, 11, 10) | the font's (black, pink, teal) |
+| `background` | The disc behind the ayah number (12)                                               | the font's (pale green) |
 
 Values are ordinary CSS colours — `'#1b6f3f'`, `'#1b6f3fcc'`, `'rgb(27 111 63)'`, `'hsl(150 60% 27%)'`,
-`'crimson'`, `'transparent'`, `'currentColor'` — and a named part wins over the `rosette` shorthand.
-Anything left out keeps the font's own colour, which is what makes a mandala line a coloured rosette
-on plain text. A value that is not a colour is a `BAD_COLOR` error, not a silently dropped rule.
+`'crimson'`, `'transparent'`, `'currentColor'`. Anything left out keeps the font's own colour, which is
+what makes a mandala line a coloured rosette on plain text. A value that is not a colour is a
+`BAD_COLOR` error, not a silently dropped rule.
 
 The choice is recorded on the resolved data, so a line carries its own look through `inputProps` and
 every render tab:
 
 ```ts
-const line = await getMushafLine({page: 187, line: 2, mandala: {rosette: '#c8a45c'}});
-// {mushaf: 'qpc-v4-tajweed', palette: 3, paletteColors: {text: 'currentColor', rosette: '#c8a45c'}, ...}
+const line = await getMushafLine({page: 187, line: 2, mandala: {accent: '#c8a45c'}});
+// {mushaf: 'qpc-v4-tajweed', palette: 3, paletteColors: {text: 'currentColor', accent: '#c8a45c'}, ...}
 ```
 
 `<MushafLine>` declares the `@font-palette-values` rule those colours need before it paints the line,
@@ -427,8 +424,9 @@ colour-set line — the plain set has no palettes and rejects one), and `palette
 <MushafLine line={{...line, palette: 5, paletteColors: {text: 'currentColor'}}} />
 ```
 
-For anything beyond that, declare your own palette and set `font-palette` on an ancestor — it is
-inherited, and the row only pins it when the data asks for a palette:
+For anything finer — one CPAL entry at a time, say the jewel (10) apart from the petals (11) — declare
+your own palette and set `font-palette` on an ancestor; it is inherited, and the row only pins it when
+the data asks for a palette:
 
 ```css
 @font-palette-values --mushaf-ink {

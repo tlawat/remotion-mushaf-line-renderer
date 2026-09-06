@@ -34,7 +34,7 @@ export type RecitationProps = {
   mushaf: MushafId;
   /** Colour font (tajweed) instead of plain black glyphs. */
   tajweed: boolean;
-  /** The ayah rosettes in colour with the text following CSS `color`; an object recolours parts. */
+  /** The ayah rosettes in colour with the text following CSS `color`; `{text, accent, background}` recolours it. */
   mandala: boolean | MushafColors;
   /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
   timingsFile: string | null;

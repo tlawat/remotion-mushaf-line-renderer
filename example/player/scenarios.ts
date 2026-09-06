@@ -46,8 +46,8 @@ export const scenarios: Record<string, LineHarnessProps> = {
   tajweed: {...base, lines: [syntheticLine(2, 3, {}, 'qpc-v4-tajweed')]},
   /** Mandala: the colour font at palette 3, letters following the page's CSS `color`. */
   mandala: {...base, lines: [syntheticLine(2, 3, {palette: 3, paletteColors: {text: 'currentColor'}}, 'qpc-v4-tajweed')], color: 'rgb(27, 111, 63)'},
-  /** Mandala with the rosette recoloured too, and an explicit letter colour. */
-  'mandala-gold': {...base, lines: [syntheticLine(2, 3, {palette: 3, paletteColors: {text: '#1b1b1b', rosette: '#c8a45c', fill: 'transparent'}}, 'qpc-v4-tajweed')]},
+  /** Mandala with the accent and the disc recoloured too, and an explicit letter colour. */
+  'mandala-gold': {...base, lines: [syntheticLine(2, 3, {palette: 3, paletteColors: {text: '#1b1b1b', accent: '#c8a45c', background: 'transparent'}}, 'qpc-v4-tajweed')]},
   /** One word marked as current, the rest dimmed — the karaoke-style follow. */
   highlight: {...base, lines: [justified()], activeWordId: '2:1:2', dimOthersTo: 0.35},
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},

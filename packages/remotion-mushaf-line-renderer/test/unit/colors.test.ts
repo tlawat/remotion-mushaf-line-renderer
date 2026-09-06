@@ -19,34 +19,30 @@ describe('CSS colours', () => {
   });
 
   it('validates the parts of a colour set', () => {
-    expect(assertMushafColors('mandala', {text: 'currentColor', rosette: '#c8a45c', fill: 'transparent'})).toEqual({text: 'currentColor', rosette: '#c8a45c', fill: 'transparent'});
+    expect(assertMushafColors('mandala', {text: 'currentColor', accent: '#c8a45c', background: 'transparent'})).toEqual({text: 'currentColor', accent: '#c8a45c', background: 'transparent'});
     expect(assertMushafColors('mandala', {})).toEqual({});
-    expect(() => assertMushafColors('mandala', {colour: 'red'})).toThrow(/mandala.colour is not a colourable part. Known parts: text, rosette, outline, petals, jewel, fill/);
+    expect(() => assertMushafColors('mandala', {colour: 'red'})).toThrow(/mandala.colour is not a colourable part. Known parts: text, accent, background/);
     expect(() => assertMushafColors('mandala', {text: 5})).toThrow(/mandala.text must be a CSS colour/);
     expect(() => assertMushafColors('mandala', ['red'])).toThrow(/must be an object of CSS colours/);
   });
 });
 
 describe('entryColors', () => {
-  it('expands the parts into the CPAL entries of the font, ascending', () => {
-    expect(entryColors(colour, {jewel: '#0aa'})).toEqual([[10, '#0aa']]);
+  it('expands the three parts into the CPAL entries of the font, ascending', () => {
     expect(entryColors(colour, {text: 'currentColor'})).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15].map((e) => [e, 'currentColor']));
-    // The rosette shorthand covers the strokes and the ornaments, never the disc behind the number.
-    expect(entryColors(colour, {rosette: '#c8a45c'})).toEqual([
+    // The rosette in one colour: its frame and the ayah number (13), the petals (11), the jewel (10).
+    expect(entryColors(colour, {accent: '#c8a45c'})).toEqual([
       [10, '#c8a45c'],
       [11, '#c8a45c'],
       [13, '#c8a45c'],
     ]);
+    expect(entryColors(colour, {background: 'transparent'})).toEqual([[12, 'transparent']]);
   });
 
-  it('lets a named part win over the shorthand, and knows nothing to paint on a monochrome set', () => {
-    expect(entryColors(colour, {rosette: '#c8a45c', outline: '#111', fill: '#fff'})).toEqual([
-      [10, '#c8a45c'],
-      [11, '#c8a45c'],
-      [12, '#fff'],
-      [13, '#111'],
-    ]);
-    expect(entryColors(plain, {text: 'red', rosette: 'red'})).toEqual([]);
+  it('covers every entry of the font between them, and has nothing to paint on a monochrome set', () => {
+    const all = entryColors(colour, {text: '#111', accent: '#c8a45c', background: '#fff'});
+    expect(all.map(([entry]) => entry)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(entryColors(plain, {text: 'red', accent: 'red'})).toEqual([]);
     expect(entryColors(colour, {})).toEqual([]);
   });
 });

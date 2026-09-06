@@ -9,8 +9,8 @@ import type {MushafColors} from './types';
  */
 export const CURRENT_COLOR = 'currentColor';
 
-/** The parts a palette can be recoloured by, in the order they are applied (shorthand first). */
-export const COLOR_PARTS = ['text', 'rosette', 'outline', 'petals', 'jewel', 'fill'] as const;
+/** The parts a palette can be recoloured by. Between them they cover every entry the font paints. */
+export const COLOR_PARTS = ['text', 'accent', 'background'] as const;
 
 export type ColorPart = (typeof COLOR_PARTS)[number];
 
@@ -48,22 +48,15 @@ export const assertMushafColors = (field: string, value: unknown): MushafColors 
 };
 
 /**
- * Expands the parts into the font's CPAL entries: `text` covers every letter entry, `rosette` is the
- * shorthand for the three ornament parts, and a named part wins over the shorthand. Ascending by
- * entry so the same colours always produce the same rule (and the same ident).
+ * Expands the parts into the font's CPAL entries — each part covers every entry that paints it.
+ * Ascending by entry so the same colours always produce the same rule (and so the same ident).
  */
 export const entryColors = (def: MushafDefinition, colors: MushafColors): ReadonlyArray<readonly [number, string]> => {
-  const roles = def.paletteRoles;
   const byEntry = new Map<number, string>();
-  const apply = (entries: readonly number[], colour: string | undefined) => {
-    if (colour === undefined) return;
-    for (const entry of entries) byEntry.set(entry, colour);
-  };
-  apply(roles.text, colors.text);
-  apply([...roles.outline, ...roles.petals, ...roles.jewel], colors.rosette);
-  apply(roles.outline, colors.outline);
-  apply(roles.petals, colors.petals);
-  apply(roles.jewel, colors.jewel);
-  apply(roles.fill, colors.fill);
+  for (const part of COLOR_PARTS) {
+    const colour = colors[part];
+    if (colour === undefined) continue;
+    for (const entry of def.paletteRoles[part]) byEntry.set(entry, colour);
+  }
   return [...byEntry.entries()].sort((a, b) => a[0] - b[0]);
 };
