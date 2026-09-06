@@ -71,6 +71,7 @@ type HarnessProps = {
   durationInFrames: number | null;
   premountFor: number;
   slot: 'stack' | 'same';
+  fit: 'line' | 'mushaf';
   fontFile: string | null;
   fontUrl: string | null;
   fontSize: number | null;
@@ -90,6 +91,7 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   durationInFrames: null,
   premountFor: 0,
   slot: 'stack',
+  fit: 'mushaf', // synthetic lines: keep the fixed type size so frames stay comparable
   fontFile: FIXTURE_FONT,
   fontUrl: null,
   fontSize: null,
@@ -286,7 +288,7 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     it('renders page 10 line 3 with the fixture font (saved next to this file for visual comparison)', async () => {
       const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
       expect(line.words.length).toBeGreaterThan(3);
-      const png = await still(serveUrl, harnessProps({lines: [line]}));
+      const png = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
       writeFileSync(path.join(here, 'p10-l3.png'), png);
       expect(png.length).toBeGreaterThan(1000);
     });

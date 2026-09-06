@@ -99,7 +99,23 @@ export type MushafLineCommonProps = {
    * visible unless `fade({shouldFadeOutExitingScene: true})`. A bare presentation uses `exitTiming()`.
    */
   readonly exit?: MushafLineAnimationProp;
-  /** px. Default: `floor(useVideoConfig().width × 2500 / 42501)` — one type size for every page (the widest line is 42,501 font units). */
+  /**
+   * How the line is sized to its box.
+   *
+   * - `'line'` (default): the line fills the measure at its own natural width, with the word gaps the
+   *   page font defines. Printed lines are not all equally wide, so this is what matches the page.
+   * - `'mushaf'`: one type size for the whole mushaf (`fontSizeForWidth()`, or your `fontSize`), and a
+   *   line that is narrower than the widest one stops short of the margin.
+   *
+   * Centred lines (the last line of a surah, pages 1–2) are never stretched: they keep the base size
+   * under either value, as printed.
+   */
+  readonly fit?: 'line' | 'mushaf';
+  /**
+   * px. The base size: `fontSizeForWidth(useVideoConfig().width)` by default. Under `fit="line"` it
+   * is the starting point the line is scaled from (so the box, not this number, decides the final
+   * size of a justified line); under `fit="mushaf"` it is used as it is.
+   */
   readonly fontSize?: number;
   /** px. Default: `round(2.2 × fontSize)` — the 15-line grid unit; keeps the +1.37 / −0.73 em glyph extremes inside the box. */
   readonly lineHeight?: number;
@@ -206,7 +222,7 @@ export type MushafMetrics = {
   readonly unitsPerEm: number;
   readonly ascent: number;
   readonly descent: number;
-  /** Advance sum of the widest line in the mushaf, in font units (42,501 for KFGQPC V4). */
+  /** Line width the base type size is derived from, in font units (42,501 for KFGQPC V4). */
   readonly referenceLineWidth: number;
 };
 

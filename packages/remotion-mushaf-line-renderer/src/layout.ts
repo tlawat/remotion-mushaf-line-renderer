@@ -4,10 +4,13 @@ import {getMushafMetrics} from './mushafs';
 import type {MushafId} from './types';
 
 /**
- * The type size at which every full line of the mushaf fits a box `width` pixels wide — one size for
- * the whole mushaf, exactly like the printed page, where short lines simply stop short of the margin.
- * (The widest line is `referenceLineWidth` = 42,501 font units for V4.) 1920 → 112 px, 1080 → 63 px,
- * 3840 → 225 px. Integer, so box edges stay on whole pixels.
+ * The type size at which *every* line of the mushaf fits a box `width` pixels wide: the widest line
+ * in the dataset is `referenceLineWidth` font units, so this size never overflows. 1920 → 108 px.
+ *
+ * It is the starting size, not the final one. Lines are not all the same width (full lines run from
+ * about 39,000 to 43,700 units), so `<MushafLine>` scales this base so the line fills its box exactly
+ * — see the `fit` prop. With `fit="mushaf"` this size is used as it is and shorter lines stop short
+ * of the margin, which is the one-size-for-the-whole-mushaf look.
  *
  * `<MushafLine>` uses it with the composition width by default; pass your own measure when the line
  * sits inside margins: `fontSizeForWidth(width - 2 * margin)`.
@@ -54,9 +57,12 @@ export type RowStyleInput = {
 };
 
 /**
- * The line row. Glyph advances already include the inter-word gaps, so words are laid out with no
- * spaces: centred lines are centred, all other lines fill the measure (`space-between` spreads only
- * the ≤5 % slack, which is how the printed page and QUL's `text-align-last: justify` behave).
+ * The line row. Glyph advances already include the inter-word gaps, so the words are laid out with no
+ * spaces **and no added justification**: the cursor starts at the right margin and each word follows
+ * at its own advance, exactly as the page font was designed. Distributing leftover width between the
+ * words (`space-between`) would inflate every gap by whatever the line falls short — the printed
+ * spacing is the font's, not the layout's. Centred lines are centred instead.
+ *
  * Everything that could change glyph widths is pinned so inherited CSS cannot leak in.
  */
 export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visible}: RowStyleInput): React.CSSProperties => ({
@@ -69,7 +75,7 @@ export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visib
   flexDirection: 'row',
   flexWrap: 'nowrap',
   alignItems: 'stretch',
-  justifyContent: centered ? 'center' : 'space-between',
+  justifyContent: centered ? 'center' : 'flex-start',
   direction: 'rtl',
   unicodeBidi: 'isolate',
   whiteSpace: 'nowrap',

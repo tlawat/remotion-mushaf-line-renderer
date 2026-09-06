@@ -29,6 +29,8 @@ export type LineHarnessProps = {
   premountFor: number;
   /** 'stack' lays the lines down the page; 'same' puts them all in one slot (replacing). */
   slot: 'stack' | 'same';
+  /** 'line' (the package default) fits the line to its box; 'mushaf' keeps one fixed type size. */
+  fit: 'line' | 'mushaf';
   /** Font from the public folder (render tests), pinned via staticFile() in calculateMetadata. */
   fontFile: string | null;
   /** Font URL pinned as-is (Player page, failure scenarios). Wins over fontFile. */
@@ -52,6 +54,7 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   durationInFrames: null,
   premountFor: 0,
   slot: 'stack',
+  fit: 'line',
   fontFile: null,
   fontUrl: null,
   fontSize: null,
@@ -95,6 +98,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   durationInFrames,
   premountFor,
   slot,
+  fit,
   fontUrl,
   fontSize,
   lineHeight,
@@ -124,6 +128,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
               line={data}
               fontSize={resolvedFontSize}
               lineHeight={resolvedLineHeight}
+              fit={fit}
               enter={enterAnimation}
               exit={exitAnimation}
               activeWordId={activeWordId}

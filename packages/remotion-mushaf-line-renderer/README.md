@@ -88,7 +88,8 @@ A complete project with this composition, a `<Player>` page and the test harness
 | `activeWordStyle`          | `CSSProperties`                                               | Applied to that word. Paint properties only (see `wordStyle`).                                                                                                             |
 | `wordStyle`                | `(word, {line, frame, fps, active}) => CSSProperties`         | Per-word style, called for every word on every frame — keep it pure. Paint only: `color`, `opacity`, `filter`, `background`, `textShadow`. Anything that changes glyph metrics would break the printed line breaks. |
 | `wordClassName`            | `(word, ctx) => string`                                       | Appended to `mushaf-word mushaf-word--<kind>`.                                                                                                                             |
-| `fontSize`                 | `number` (px)                                                 | Default `fontSizeForWidth(useVideoConfig().width)`, see [Sizing](#sizing).                                                                                                  |
+| `fit`                      | `'line'` \| `'mushaf'`                                        | `'line'` (default) scales the line so it fills its box at the font's own word gaps; `'mushaf'` keeps one type size for every line. See [Sizing](#sizing).                    |
+| `fontSize`                 | `number` (px)                                                 | The base size; default `fontSizeForWidth(useVideoConfig().width)`. Under `fit="line"` the box decides the final size, see [Sizing](#sizing).                                |
 | `lineHeight`               | `number` (px)                                                 | Default `lineHeightForFontSize(fontSize)`. The height of the root element.                                                                                                 |
 | `style`, `className`       |                                                               | Applied to the root element. Colour is inherited from here (plain fonts only).                                                                                              |
 | `name`                     | `string`                                                      | Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline.                                                                                |
@@ -203,20 +204,31 @@ composition's fps at render time, so one timing object suits 24, 30 and 60 fps.
 
 ## Sizing
 
-The fonts have `unitsPerEm = 2500`, and the widest line of the mushaf is 42,501 units wide, so a full
-line fits in a box of width `W` at `fontSize = W × 2500 / 42501` (about `W / 17`). That is the default,
-computed from `useVideoConfig().width`, and it is the same size for every line of the mushaf, so
-stacked lines look like a page. The default `lineHeight` of `2.2 em` keeps the glyph extremes
-(`+1.37 em` above and `−0.73 em` below the baseline) inside the box, so stacked lines never collide.
+The fonts have `unitsPerEm = 2500` and the mushaf's lines are close to 40,000 units wide, so a line
+fits a box of width `W` at roughly `W / 17`. That is the base size, computed from
+`useVideoConfig().width` (or `fontSizeForWidth(measure)` for a line inside margins), and
+`lineHeight` defaults to `2.2 em`, which keeps the glyph extremes (`+1.37 em` above and `−0.73 em`
+below the baseline) inside the box so stacked lines never collide.
 
-If the line does not span the whole composition width, pass `fontSize` yourself (apply the same rule to
-the inset measure, as the example does) or render it inside a `<Sequence width={measure}>`. A
-`fontSize` larger than the rule allows can overflow on the widest lines; the root has
-`overflow: visible`, so nothing is clipped, but check the result.
+The printed lines are not all the same width — full lines run from about 39,000 to 43,700 units — so
+the base size alone cannot make each one reach the margin. `fit` decides what happens with the
+difference:
 
-Justified lines (all but the centred ones) fill the box exactly as printed: the words are laid out with
-`justify-content: space-between`, which only distributes the small slack the printed page also
-distributes. Centred lines use `justify-content: center`.
+| `fit`      | What you get                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| `'line'` (default) | The line is scaled so it fills its box exactly, at the word gaps the page font defines. This is the printed page. |
+| `'mushaf'` | One type size for every line; a line narrower than the base simply stops short of the left margin.  |
+
+**The word gaps are never touched.** The glyph advances of these fonts already include the spacing
+between words, so the row places each word at its own advance from the right margin
+(`justify-content: flex-start`) and nothing is distributed between them. Stretching a line to the
+margin with `space-between` inflates every gap by whatever the line falls short — a few per cent of
+the measure is enough to look visibly loose next to the print. Centred lines (the last line of a
+surah, pages 1–2) are centred and never stretched under either `fit`.
+
+Fitting measures the row once, after the page font has loaded and before the first frame is painted,
+so it is deterministic: the same font at the same size gives the same measurement in every render
+tab. Where there is no layout to measure (a server render, a zero-width box), the base size stands.
 
 ## Entrances and exits
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: the word gaps were too wide.** A line was set at a size derived from a 42,501-unit
+  reference while real lines are around 40,000 units, and `justify-content: space-between` then
+  spread the leftover 4–8 % of the measure into the gaps between words — every gap came out roughly
+  1.5× the printed one. Words now sit at the font's own advances (`flex-start`), and the new `fit`
+  prop (default `'line'`) scales the line so it fills its box exactly. Measured against a photo of
+  the printed page, ink coverage goes from 88.5 % to 93.6 % where the print is 94.1 %, and the gaps
+  match it to within a tenth of a per cent. `fit="mushaf"` keeps one type size for every line, with
+  short lines stopping short of the margin.
+
 ## 0.2.0
 
 - **Plain black by default.** `mushaf` now defaults to `'qpc-v4'`, the monochrome glyph set that

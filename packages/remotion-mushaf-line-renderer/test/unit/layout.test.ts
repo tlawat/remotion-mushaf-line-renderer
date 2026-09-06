@@ -27,7 +27,7 @@ describe('layout helpers', () => {
   it('builds the root and row styles', () => {
     expect(buildRootStyle(246, {top: 10, color: 'red'})).toMatchObject({position: 'relative', height: 246, width: '100%', top: 10, color: 'red', overflow: 'visible'});
     const justified = buildRowStyle({fontFamily: 'mushaf-qpc-v4-p10', fontSize: 112, lineHeight: 246, centered: false, visible: false});
-    expect(justified).toMatchObject({justifyContent: 'space-between', direction: 'rtl', fontFamily: '"mushaf-qpc-v4-p10"', fontSize: '112px', lineHeight: '246px', visibility: 'hidden', letterSpacing: 0, fontSynthesis: 'none', whiteSpace: 'nowrap', unicodeBidi: 'isolate'});
+    expect(justified).toMatchObject({justifyContent: 'flex-start', direction: 'rtl', fontFamily: '"mushaf-qpc-v4-p10"', fontSize: '112px', lineHeight: '246px', visibility: 'hidden', letterSpacing: 0, fontSynthesis: 'none', whiteSpace: 'nowrap', unicodeBidi: 'isolate'});
     const centered = buildRowStyle({fontFamily: 'f', fontSize: 10, lineHeight: 22, centered: true, visible: true});
     expect(centered).toMatchObject({justifyContent: 'center', visibility: 'visible'});
   });

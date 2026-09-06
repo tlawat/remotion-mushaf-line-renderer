@@ -16,6 +16,7 @@ export type LineRendererProps = {
   readonly line: MushafLineData;
   readonly enter: MushafLineAnimationProp | undefined;
   readonly exit: MushafLineAnimationProp | undefined;
+  readonly fit: MushafLineCommonProps['fit'];
   readonly fontSize: number | undefined;
   readonly lineHeight: number | undefined;
   readonly style: React.CSSProperties | undefined;
@@ -44,7 +45,20 @@ const canvasPresentationError = () =>
  * document.fonts) and the entrance animation. Hooks are all above the early returns so the hook
  * order is stable; the parent keys this component by mushaf/page/line.
  */
-export const LineRenderer: React.FC<LineRendererProps> = ({line, enter: enterProp, exit: exitProp, fontSize, lineHeight, style, className, activeWordId, activeWordStyle, wordStyle, wordClassName}) => {
+export const LineRenderer: React.FC<LineRendererProps> = ({
+  line,
+  enter: enterProp,
+  exit: exitProp,
+  fit = 'line',
+  fontSize,
+  lineHeight,
+  style,
+  className,
+  activeWordId,
+  activeWordStyle,
+  wordStyle,
+  wordClassName,
+}) => {
   const enter = normaliseAnimation('enter', enterProp);
   const exit = normaliseAnimation('exit', exitProp);
   const def = getMushafDefinition(line.mushaf);
@@ -116,9 +130,38 @@ export const LineRenderer: React.FC<LineRendererProps> = ({line, enter: enterPro
     }
   }, [enterComponent, exitComponent, presentationError, rejectCanvasPresentation]);
 
-  const resolvedFontSize = fontSize ?? fontSizeForWidth(width, line.mushaf);
-  const resolvedLineHeight = lineHeight ?? lineHeightForFontSize(resolvedFontSize);
-  const ready = status === 'loaded';
+  const baseFontSize = fontSize ?? fontSizeForWidth(width, line.mushaf);
+  const resolvedLineHeight = lineHeight ?? lineHeightForFontSize(baseFontSize);
+  const fontLoaded = status === 'loaded';
+
+  // Fitting a justified line to its box. The lines of the mushaf are not all equally wide, so a
+  // single type size cannot make each one reach the margin; the page font's own advances must not be
+  // stretched either (that is what inflates the word gaps). So the row is laid out at the base size
+  // and then scaled by (box width / natural width), measured once per font+size from the word
+  // elements themselves. Centred lines are exempt: they are short as printed.
+  const fits = fit === 'line' && !line.centered;
+  const fitKey = `${line.fontFamily}/${baseFontSize}/${Math.round(width)}`;
+  const [fitted, setFitted] = useState<{key: string; scale: number} | null>(null);
+  const fitScale = fits ? (fitted?.key === fitKey ? fitted.scale : null) : 1;
+  useIsomorphicLayoutEffect(() => {
+    if (!fits || !fontLoaded || fitted?.key === fitKey) return;
+    const row = rowRef.current;
+    if (!row) return;
+    // Each word element is shrink-to-fit around its glyphs, so the sum of their widths is the line's
+    // advance width. (`scrollWidth` cannot be used: it never reports less than the box.)
+    let natural = 0;
+    for (const child of Array.from(row.children)) natural += child.getBoundingClientRect().width;
+    const box = row.getBoundingClientRect().width;
+    // Where there is no layout to measure (jsdom, a zero-width box), the base size stands: the line
+    // is still painted, just not fitted. The clamp is a guard against a pathological measurement,
+    // not a design tolerance — real lines land within a few per cent of the base size.
+    const scale = natural > 0 && box > 0 ? Math.min(2, Math.max(0.5, box / natural)) : 1;
+    setFitted({key: fitKey, scale});
+  }, [fits, fontLoaded, fitKey, fitted]);
+
+  const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
+  // Nothing is painted before the line is both in its page font and at its final size.
+  const ready = fontLoaded && fitScale !== null;
   const ctx = useMemo<LineContextValue>(
     () => ({line, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName}),
     [line, resolvedFontSize, resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName],

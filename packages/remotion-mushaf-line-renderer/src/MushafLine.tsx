@@ -20,8 +20,8 @@ import {assertLineData} from './validate-line-data';
  * - Nothing is painted until the page font is loaded (a fallback font would show wrong words).
  */
 export const MushafLine: React.FC<MushafLineProps> = (props) => {
-  const {name, style, className, enter, exit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName} = props;
-  const common = {style, className, enter, exit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
+  const {name, style, className, enter, exit, fit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName} = props;
+  const common = {style, className, enter, exit, fit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
   let body: React.ReactElement;
   if (typeof props.line === 'number') {
     const {mushaf, tajweed, page, line} = props as {mushaf?: MushafId; tajweed?: boolean; page: number; line: number};

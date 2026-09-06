@@ -20,7 +20,7 @@ export type MushafDefinition = {
     readonly unitsPerEm: number;
     readonly ascent: number;
     readonly descent: number;
-    /** Advance sum of the widest line in the mushaf, in font units. Drives the default font size. */
+    /** Line width the base type size is derived from, in font units. Real lines vary around it; `fit` settles the difference. */
     readonly referenceLineWidth: number;
   };
   readonly invariants: {
