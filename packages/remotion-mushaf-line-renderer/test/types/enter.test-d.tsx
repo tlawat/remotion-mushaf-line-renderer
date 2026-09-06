@@ -81,12 +81,17 @@ export const ok = (
       wordClassName={(word) => `w-${word.wordId}`}
     />
     <MushafLine line={data} activeWordId={42} />
+    {/* fit */}
+    <MushafLine line={data} fit="line" />
+    <MushafLine line={data} fit="mushaf" fontSize={112} />
     <MushafLine line={data} activeWordId={null} />
   </>
 );
 
 // @ts-expect-error resolved data carries its own font set
 export const tajweedWithData = <MushafLine line={data} tajweed />;
+// @ts-expect-error only 'line' and 'mushaf' fit the line
+export const badFit = <MushafLine line={data} fit="stretch" />;
 // @ts-expect-error wordStyle must return CSS properties
 export const badWordStyle = <MushafLine line={data} wordStyle={() => 'red'} />;
 

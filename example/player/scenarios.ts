@@ -11,9 +11,12 @@ const justifiedShort = () => syntheticLine(2, 4);
 const centered = () => syntheticLine(1, 2);
 const twoCodePoints = () => syntheticLine(3, 1);
 
+// Synthetic lines are not real mushaf lines, so fitting them to the box would say nothing: the
+// scenarios pin the fixed type size and the real-data test covers fitting.
 const base: LineHarnessProps = {
   ...defaultLineHarnessProps,
   lines: [justified(), centered(), twoCodePoints()],
+  fit: 'mushaf',
   fontUrl: FIXTURE_FONT_URL,
 };
 

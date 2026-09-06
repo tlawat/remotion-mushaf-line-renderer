@@ -82,13 +82,17 @@ test.describe('static line', () => {
       expect(overflow).toBeLessThanOrEqual(1);
     }
 
-    // Justified line: first and last word touch the edges; centred line: equal gaps.
+    // At a fixed type size (fit: 'mushaf') the line starts at the right margin and ends wherever its
+    // own advances end — nothing is stretched to reach the left margin. Centred line: equal gaps.
     const justifiedRoot = await box(page, ROOT, 0);
     const justified = await wordBoxes(page, 0);
     const rightmost = Math.max(...justified.map((w) => w.right));
     const leftmost = Math.min(...justified.map((w) => w.x));
     expect(Math.abs(rightmost - (justifiedRoot.x + justifiedRoot.width))).toBeLessThanOrEqual(1.5);
-    expect(Math.abs(leftmost - justifiedRoot.x)).toBeLessThanOrEqual(1.5);
+    expect(leftmost).toBeGreaterThanOrEqual(justifiedRoot.x - 1.5);
+    // Words sit at their own advances: neighbouring words touch, no distributed gap between them.
+    const gaps = justified.slice(1).map((w, k) => justified[k]!.x - w.right);
+    for (const gap of gaps) expect(Math.abs(gap)).toBeLessThanOrEqual(1.5);
     const centeredRoot = await box(page, ROOT, 1);
     const centered = await wordBoxes(page, 1);
     const gapLeft = Math.min(...centered.map((w) => w.x)) - centeredRoot.x;
@@ -474,7 +478,10 @@ test.describe('real data', () => {
 
     await open(page, 'static');
     await rowsVisible(page, 3);
-    await page.evaluate((data) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps({lines: [{...data, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'}]}), line);
+    await page.evaluate(
+      (data) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps({lines: [{...data, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'}], fit: 'line'}),
+      line,
+    );
     await rowsVisible(page, 1);
     await expect(page.locator(ROOT).first()).toHaveAttribute('data-page', '10');
     await expect(page.locator(ROOT).first().locator('.mushaf-word')).toHaveCount(line.words.length);
@@ -484,8 +491,11 @@ test.describe('real data', () => {
     const root = await box(page, ROOT, 0);
     const words = await wordBoxes(page, 0);
     for (let k = 1; k < words.length; k++) expect(words[k]!.x).toBeLessThan(words[k - 1]!.x);
+    // fit: 'line' — a real line fills its box exactly, and it does so at the font's own advances:
+    // every neighbouring pair of words touches, so no gap is inflated to make the line reach.
     expect(Math.abs(Math.max(...words.map((w) => w.right)) - (root.x + root.width))).toBeLessThanOrEqual(1.5);
     expect(Math.abs(Math.min(...words.map((w) => w.x)) - root.x)).toBeLessThanOrEqual(1.5);
+    for (let k = 1; k < words.length; k++) expect(Math.abs(words[k - 1]!.x - words[k]!.right)).toBeLessThanOrEqual(1.5);
     for (const w of words) expect(w.width).toBeGreaterThan(5);
   });
 });

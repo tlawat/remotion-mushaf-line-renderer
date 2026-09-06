@@ -74,7 +74,7 @@ describe('<MushafLine>', () => {
     expect(root.firstElementChild).toBe(rowOf(container)); // no presentation: the row is the root's only child
     const row = rowOf(container);
     expect(row.style.direction).toBe('rtl');
-    expect(row.style.justifyContent).toBe('space-between');
+    expect(row.style.justifyContent).toBe('flex-start'); // the font's own advances, never stretched
     expect(row.style.fontFamily).toBe('"mushaf-qpc-v4-p2"');
     expect(row.style.fontSize).toBe('112px');
     expect(row.style.lineHeight).toBe('246px');
