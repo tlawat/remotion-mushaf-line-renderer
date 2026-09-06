@@ -71,6 +71,33 @@ export const MUSHAFS = {
 
 export const MUSHAF_IDS = Object.keys(MUSHAFS) as ReadonlyArray<keyof typeof MUSHAFS>;
 
+/** What you get when neither `mushaf` nor `tajweed` is given: plain glyphs that follow CSS `color`. */
+export const DEFAULT_MUSHAF = 'qpc-v4' as const satisfies keyof typeof MUSHAFS;
+
+const TAJWEED_OF: Readonly<Record<keyof typeof MUSHAFS, keyof typeof MUSHAFS>> = {'qpc-v4': 'qpc-v4-tajweed', 'qpc-v4-tajweed': 'qpc-v4-tajweed'};
+const PLAIN_OF: Readonly<Record<keyof typeof MUSHAFS, keyof typeof MUSHAFS>> = {'qpc-v4': 'qpc-v4', 'qpc-v4-tajweed': 'qpc-v4'};
+
+/**
+ * The font set to render with. `mushaf` names the mushaf (layout + glyphs), `tajweed` its colouring;
+ * the registry keys them together because the two sets are two different files on QUL's CDN.
+ * Omitting both gives plain black glyphs. When both are given, `tajweed` decides (it is the newer,
+ * more specific API): `{mushaf: 'qpc-v4-tajweed', tajweed: false}` resolves to the plain set.
+ */
+export const resolveMushafId = (mushaf: unknown, tajweed: unknown): keyof typeof MUSHAFS => {
+  const id = getMushafDefinition(mushaf ?? DEFAULT_MUSHAF).id as keyof typeof MUSHAFS;
+  if (tajweed === undefined) return id;
+  if (typeof tajweed !== 'boolean') {
+    throw new MushafError('BAD_TAJWEED', `tajweed must be true or false when given, got ${describeValue(tajweed)}.`, {tajweed});
+  }
+  return tajweed ? TAJWEED_OF[id] : PLAIN_OF[id];
+};
+
+/** True when the id names the COLR/CPAL (coloured) font set. */
+export const isTajweedId = (id: keyof typeof MUSHAFS): boolean => MUSHAFS[id].colr;
+
+/** The mushaf's font metrics — what `fontSizeForWidth()` divides by. Defaults to the plain V4 set. */
+export const getMushafMetrics = (mushaf?: keyof typeof MUSHAFS): MushafDefinition['metrics'] => getMushafDefinition(mushaf ?? DEFAULT_MUSHAF).metrics;
+
 export const isMushafId = (id: unknown): id is keyof typeof MUSHAFS => typeof id === 'string' && Object.prototype.hasOwnProperty.call(MUSHAFS, id);
 
 export const getMushafDefinition = (id: unknown): MushafDefinition => {

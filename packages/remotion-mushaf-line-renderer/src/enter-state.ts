@@ -1,5 +1,6 @@
 import {MushafError, type MushafErrorCode} from './errors';
-import type {MushafLineAnimation} from './types';
+import {enterTiming, exitTiming} from './timings';
+import type {MushafLineAnimation, MushafLineAnimationProp} from './types';
 
 export type AnimationState = {
   readonly progress: number;
@@ -9,23 +10,56 @@ export type EnterState = AnimationState;
 
 type Prop = 'enter' | 'exit';
 
-const validate = (prop: Prop, value: MushafLineAnimation, fps: number): number => {
+/** Resolved form used internally: a timing is always present after `normaliseAnimation()`. */
+export type ResolvedAnimation = MushafLineAnimation & {readonly timing: NonNullable<MushafLineAnimation['timing']>};
+
+const DEFAULT_TIMING = {enter: enterTiming(), exit: exitTiming()} as const;
+
+/**
+ * Accepts what the props accept — `{presentation, timing?}` or a bare `TransitionPresentation` — and
+ * fills in the package's default timing (`enterTiming()` / `exitTiming()`), so the rest of the
+ * renderer only ever sees a complete `{presentation, timing}` pair.
+ */
+export const normaliseAnimation = (prop: Prop, value: MushafLineAnimationProp | undefined): ResolvedAnimation | undefined => {
+  if (value === undefined) return undefined;
+  const code: MushafErrorCode = prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT';
+  if (!value || typeof value !== 'object') {
+    throw new MushafError(code, `\`${prop}\` must be {presentation, timing} or a TransitionPresentation such as fade(), got ${typeof value}.`, {[prop]: value});
+  }
+  if ('presentation' in value) {
+    const timing = value.timing;
+    return {presentation: value.presentation, timing: timing === undefined ? DEFAULT_TIMING[prop] : timing};
+  }
+  if ('component' in value) {
+    return {presentation: value, timing: DEFAULT_TIMING[prop]};
+  }
+  throw new MushafError(
+    code,
+    `\`${prop}\` must be {presentation, timing} or a TransitionPresentation (an object with a \`component\`), e.g. fade() from "@remotion/transitions/fade" or slideFade() from this package.`,
+    {[prop]: value},
+  );
+};
+
+type Timing = NonNullable<MushafLineAnimation['timing']>;
+
+const validate = (prop: Prop, value: MushafLineAnimation, fps: number): {timing: Timing; durationInFrames: number} => {
   const code: MushafErrorCode = prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT';
   if (!value || typeof value !== 'object' || !value.presentation || typeof value.presentation !== 'object' || value.presentation.component == null) {
     throw new MushafError(code, `\`${prop}.presentation\` must be a TransitionPresentation, e.g. fade() from "@remotion/transitions/fade".`, {[prop]: value});
   }
-  if (!value.timing || typeof value.timing.getProgress !== 'function' || typeof value.timing.getDurationInFrames !== 'function') {
-    throw new MushafError(code, `\`${prop}.timing\` must be a TransitionTiming, e.g. linearTiming({durationInFrames: 15}) from "@remotion/transitions".`, {[prop]: value});
+  const timing = value.timing;
+  if (!timing || typeof timing.getProgress !== 'function' || typeof timing.getDurationInFrames !== 'function') {
+    throw new MushafError(code, `\`${prop}.timing\` must be a TransitionTiming, e.g. enterTiming() from this package or linearTiming({durationInFrames: 15}) from "@remotion/transitions".`, {[prop]: value});
   }
-  const durationInFrames = value.timing.getDurationInFrames({fps});
+  const durationInFrames = timing.getDurationInFrames({fps});
   if (typeof durationInFrames !== 'number' || !Number.isFinite(durationInFrames) || durationInFrames < 0) {
     throw new MushafError(code, `${prop}.timing.getDurationInFrames() returned ${String(durationInFrames)}; expected a finite number >= 0.`, {durationInFrames});
   }
-  return durationInFrames;
+  return {timing, durationInFrames};
 };
 
-const progressAt = (prop: Prop, value: MushafLineAnimation, localFrame: number, fps: number, durationInFrames: number): number => {
-  const progress = localFrame >= durationInFrames ? 1 : value.timing.getProgress({frame: localFrame, fps});
+const progressAt = (prop: Prop, timing: Timing, localFrame: number, fps: number, durationInFrames: number): number => {
+  const progress = localFrame >= durationInFrames ? 1 : timing.getProgress({frame: localFrame, fps});
   if (typeof progress !== 'number' || Number.isNaN(progress)) {
     throw new MushafError(prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT', `${prop}.timing.getProgress() returned ${String(progress)} at frame ${localFrame}; expected a number.`, {progress, frame: localFrame});
   }
@@ -43,9 +77,9 @@ const progressAt = (prop: Prop, value: MushafLineAnimation, localFrame: number, 
  * before the Sequence does; the stock timings clamp on their own.
  */
 export const getEnterState = ({enter, frame, fps}: {enter: MushafLineAnimation; frame: number; fps: number}): EnterState => {
-  const durationInFrames = validate('enter', enter, fps);
+  const {timing, durationInFrames} = validate('enter', enter, fps);
   const localFrame = Math.max(0, frame);
-  return {progress: progressAt('enter', enter, localFrame, fps, durationInFrames), durationInFrames};
+  return {progress: progressAt('enter', timing, localFrame, fps, durationInFrames), durationInFrames};
 };
 
 /**
@@ -55,11 +89,11 @@ export const getEnterState = ({enter, frame, fps}: {enter: MushafLineAnimation; 
  * window starts, `getProgress` inside it, and the line is gone with its Sequence right after.
  */
 export const getExitState = ({exit, frame, fps, durationInFrames}: {exit: MushafLineAnimation; frame: number; fps: number; durationInFrames: number}): AnimationState => {
-  const duration = validate('exit', exit, fps);
+  const {timing, durationInFrames: duration} = validate('exit', exit, fps);
   if (typeof durationInFrames !== 'number' || !Number.isFinite(durationInFrames)) {
     throw new MushafError('BAD_EXIT', `An exit animation needs a finite sequence length to count back from; useVideoConfig().durationInFrames is ${String(durationInFrames)}. Give the enclosing <Sequence> a durationInFrames.`, {durationInFrames});
   }
   const localFrame = frame - (durationInFrames - duration);
-  const progress = localFrame < 0 ? 0 : progressAt('exit', exit, localFrame, fps, duration);
+  const progress = localFrame < 0 ? 0 : progressAt('exit', timing, localFrame, fps, duration);
   return {progress, durationInFrames: duration};
 };

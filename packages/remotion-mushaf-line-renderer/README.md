@@ -20,7 +20,7 @@ import {fade} from '@remotion/transitions/fade';
 import {MushafLine} from 'remotion-mushaf-line-renderer';
 
 <Sequence from={30} premountFor={30}>
-  <MushafLine mushaf="qpc-v4-tajweed" page={10} line={3} enter={{presentation: fade(), timing: linearTiming({durationInFrames: 20})}} />
+  <MushafLine page={10} line={3} enter={{presentation: fade(), timing: linearTiming({durationInFrames: 20})}} />
 </Sequence>;
 ```
 
@@ -67,7 +67,7 @@ const ThreeLines: React.FC<Props> = ({lines}) => {
   );
 };
 
-export const Root = () => <Composition id="ThreeLines" component={ThreeLines} calculateMetadata={calculateMetadata} width={1920} height={1080} fps={30} durationInFrames={200} defaultProps={{lines: null}} />;
+export const Root = () => <Composition id="Passage" component={Passage} calculateMetadata={calculateMetadata} width={1920} height={1080} fps={30} durationInFrames={200} defaultProps={{lines: null}} />;
 ```
 
 A complete project with this composition, a `<Player>` page and the test harness lives in
@@ -79,12 +79,17 @@ A complete project with this composition, a `<Player>` page and the test harness
 
 | Prop                       | Type                                                          | Notes                                                                                                                                                                       |
 | -------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `line`                     | `MushafLineData`                                              | From `getMushafLine()`. Preferred.                                                                                                                                          |
-| `mushaf` + `page` + `line` | `MushafId`, `number`, `number`                                | Convenience form: resolves the line at render time behind its own `delayRender()`.                                                                                          |
-| `enter`                    | `{presentation: TransitionPresentation, timing: TransitionTiming}` | Entrance animation. Progress runs over the local frame of the enclosing `<Sequence>`; the presentation stays mounted for the whole sequence.                          |
-| `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>`. A line leaves because its Sequence ends. |
-| `fontSize`                 | `number` (px)                                                 | Default `floor(useVideoConfig().width × 2500 / 42501)`, see [Sizing](#sizing).                                                                                              |
-| `lineHeight`               | `number` (px)                                                 | Default `round(2.2 × fontSize)`. The height of the root element.                                                                                                            |
+| `line`                     | `MushafLineData`                                              | From `getMushafLine()` / `getMushafLines()`. Preferred.                                                                                                                     |
+| `page` + `line`            | `number`, `number`                                            | Convenience form: resolves the line at render time behind its own `delayRender()`. Add `mushaf` / `tajweed` to pick the font set.                                           |
+| `tajweed`                  | `boolean`                                                     | Convenience form only. `false` (default) renders plain black glyphs that follow CSS `color`; `true` uses QUL's tajweed colour font. See [Colour](#colour).                  |
+| `enter`                    | `{presentation, timing?}` or a bare `TransitionPresentation`  | Entrance animation. Progress runs over the local frame of the enclosing `<Sequence>`; the presentation stays mounted for the whole sequence. `timing` defaults to `enterTiming()`. |
+| `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>` (`exitTiming()` by default). A line leaves because its Sequence ends. |
+| `activeWordId`             | `string \| number \| null`                                    | Marks one word as current (`word.id` like `"9:1:3"`, or `word.wordId`): it gets `data-active="true"`, `.mushaf-word--active` and `activeWordStyle`.                          |
+| `activeWordStyle`          | `CSSProperties`                                               | Applied to that word. Paint properties only (see `wordStyle`).                                                                                                             |
+| `wordStyle`                | `(word, {line, frame, fps, active}) => CSSProperties`         | Per-word style, called for every word on every frame — keep it pure. Paint only: `color`, `opacity`, `filter`, `background`, `textShadow`. Anything that changes glyph metrics would break the printed line breaks. |
+| `wordClassName`            | `(word, ctx) => string`                                       | Appended to `mushaf-word mushaf-word--<kind>`.                                                                                                                             |
+| `fontSize`                 | `number` (px)                                                 | Default `fontSizeForWidth(useVideoConfig().width)`, see [Sizing](#sizing).                                                                                                  |
+| `lineHeight`               | `number` (px)                                                 | Default `lineHeightForFontSize(fontSize)`. The height of the root element.                                                                                                 |
 | `style`, `className`       |                                                               | Applied to the root element. Colour is inherited from here (plain fonts only).                                                                                              |
 | `name`                     | `string`                                                      | Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline.                                                                                |
 
@@ -96,10 +101,12 @@ Only `ayah` lines render in this version. `surah_name` and `basmallah` lines are
 `getMushafLine()` with `words: []` and throw `UNSUPPORTED_LINE_TYPE` when passed to the component;
 skip them or draw your own header.
 
-### `getMushafLine({mushaf, page, line}): Promise<MushafLineData>`
+### `getMushafLine({page, line, mushaf?, tajweed?}): Promise<MushafLineData>`
 
 Pure and Remotion-free: safe in `calculateMetadata()`, in a Node script that prepares `inputProps`,
-or in a `<Player>` host. Pages are `1..604`, lines `1..15` (`1..8` on pages 1 and 2).
+or in a `<Player>` host. Pages are `1..604`, lines `1..15` (`1..8` on pages 1 and 2). `mushaf`
+defaults to the plain `'qpc-v4'`; `tajweed: true` resolves the colour set instead (the returned
+`mushaf` is the resolved font set, so the data alone decides how the line is painted).
 
 ```ts
 type MushafLineData = {
@@ -122,7 +129,40 @@ ayah-number marker, a real word with a real width. Standalone marker glyphs (`pa
 precedes, so key elements by `wordId`. `text` is one to four private-use code points that only mean
 something together with `fontFamily`; never normalise it.
 
-### `loadPageFont({mushaf, page, url?}): {fontFamily, waitUntilDone}`
+### `getMushafLines(options): Promise<MushafLineData[]>`
+
+Several lines at once, in reading order — the two questions an app actually asks:
+
+```ts
+// Every line of a page, `surah_name` and `basmallah` lines included (they carry no words).
+await getMushafLines({page: 187});
+// Every line that carries a word of these ayahs, wherever they are printed.
+await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
+// Both forms take mushaf/tajweed, and `fontUrl` pins a mirror on every line it returns.
+await getMushafLines({surah: 2, tajweed: true, fontUrl: (page, mushaf) => staticFile(`fonts/${mushaf}/p${page}.woff2`)});
+```
+
+The ayah form finds the page itself (through an index over the compiled data), so nothing has to
+know that At-Tawbah starts on page 187. `fromAyah` defaults to 1 and `toAyah` to the last ayah of the
+surah. The first and last lines usually carry neighbouring ayahs too — that is how the mushaf is
+printed; `lineAyahs(line)` says which ayahs a line holds, and `<MushafLine wordStyle>` can dim the
+words outside your range instead of dropping them.
+
+### `getMushafLocation({surah, ayah?, mushaf?}): Promise<{page, line}>`
+
+Where a surah (or one of its ayahs) is printed. `AYAH_NOT_FOUND` names the last ayah of the surah
+when you ask for one past its end.
+
+### `lineAyahs(line): number[]`
+
+The ayahs a line carries, ascending. Synchronous, from `line.words`.
+
+### `fontSizeForWidth(width, mushaf?)` and `lineHeightForFontSize(fontSize)`
+
+The two numbers `<MushafLine>` computes by default, exported for when a line sits inside margins:
+`fontSizeForWidth(width - 2 * margin)`. See [Sizing](#sizing).
+
+### `loadPageFont({page, url?, mushaf?, tajweed?}): {fontFamily, waitUntilDone}`
 
 Google-fonts style loader. Idempotent; wraps `delayRender()` / `cancelRender()` internally; a no-op
 during server rendering. `<MushafLine>` calls it for you. Call it yourself to warm a font in a
@@ -136,11 +176,25 @@ Source rules are order-independent, so every Lambda chunk behaves the same: no `
 source is registered for that page (else the CDN); an explicit `url` replaces an implicit CDN
 registration; two different explicit urls throw `FONT_URL_CONFLICT`.
 
+### `slideFade(props?)` from `remotion-mushaf-line-renderer/presentations/slide-fade`
+
+A vertical slide combined with a fade — the package's own presentation, and the one to reach for when
+a line replaces another. `{direction: 'up' | 'down', distance, enterOpacityAt, exitOpacityAt,
+exitDistanceScale, enterStyle, exitStyle}`; the defaults are described under
+[Entrances and exits](#entrances-and-exits).
+
 ### `revealRtl(props?)` from `remotion-mushaf-line-renderer/presentations/reveal-rtl`
 
-Reveals the line in reading direction (right to left) with a `clip-path`. Same shape as `fade()` from
-`@remotion/transitions/fade`, so it also works inside a real `<TransitionSeries>`. Optional
-`enterStyle` / `exitStyle` are merged into the wrapper.
+Reveals the line in reading direction (right to left). `softness` (in % of the line, default `0`)
+fades the edge with a `mask-image` gradient instead of cutting it with a `clip-path`. Same shape as
+`fade()` from `@remotion/transitions/fade`, so it also works inside a real `<TransitionSeries>`.
+Optional `enterStyle` / `exitStyle` are merged into the wrapper.
+
+### `enterTiming(options?)`, `exitTiming(options?)`, `springyTiming(options?)`
+
+The default timings, and ordinary `TransitionTiming`s (they work in a `<TransitionSeries.Transition>`
+too). Options: `{seconds?, durationInFrames?, easing?}` — `seconds` is resolved against the
+composition's fps at render time, so one timing object suits 24, 30 and 60 fps.
 
 ### `MushafError`
 
@@ -177,6 +231,25 @@ distributes. Centred lines use `justify-content: center`.
 | `revealRtl()` (this package)                   | yes   |
 | `dissolve()`, `ripple()`, `crosswarp()`, `crossZoom()`, `swap()`, `bookFlip()`, `zoomBlur()`, `dreamyZoom()`, `filmBurn()`, `linearBlur()`, `zoomInOut()` | no: these capture the scene to a canvas and need an exiting scene. The line throws `CANVAS_PRESENTATION`. |
 
+`timing` is optional: `enter` defaults to `enterTiming()` and `exit` to `exitTiming()`, and a bare
+presentation is accepted as shorthand — `enter={slideFade()}` is `enter={{presentation: slideFade(),
+timing: enterTiming()}}`.
+
+**The defaults, and why.** `enterTiming()` is 0.5 s on `Easing.bezier(0.2, 0, 0, 1)`: it eases out of
+nothing, covers the distance in the middle and decelerates for a long time into place, so both ends
+are gentle and the entrance settles instead of stopping. `exitTiming()` is 0.32 s on
+`Easing.bezier(0.4, 0, 1, 1)`, accelerating away — something leaving has nothing to land on, and
+exits shorter than entrances is the usual asymmetry. A linear timing in both directions (what
+`linearTiming()` gives you) starts and stops abruptly, and abrupt is what reads as mechanical. `springyTiming({config:
+{damping: 200}})` is there when you want a physical settle instead of a curve.
+
+`slideFade()` shapes each property over a different part of that window: the line is fully opaque at
+75 % of an entrance (the rest is a pure settle) and fully gone at 70 % of an exit, and it travels
+28 % of a line box rather than half the screen — a shorter travel at the same duration is what stops
+the eye from tracking the motion instead of reading the words. Two lines of text should never
+cross-fade through each other, whatever the curves: schedule the outgoing line's exit to *finish*
+where the next line's entrance starts (see [Replacing lines](#replacing-lines)).
+
 Entrance progress is `timing.getProgress({frame: localFrame, fps})`, clamped to `1` after
 `timing.getDurationInFrames({fps})`. The exit runs over the last `getDurationInFrames` frames of the
 enclosing `<Sequence>` (its `durationInFrames`, which `useVideoConfig()` reports inside the Sequence)
@@ -196,26 +269,27 @@ To show one line after another in the same place, overlap the Sequences: each li
 the next line's entrance window.
 
 ```tsx
-const HOLD = 60; // frames a line is on screen before the next one starts replacing it
-const ENTER = 30;
-const timing = linearTiming({durationInFrames: ENTER});
+const HOLD = 60; // frames a line is on screen before the next one takes the slot
 
 {lines.map((line, i) => (
-  <Sequence key={line.line} from={i * HOLD} durationInFrames={HOLD + ENTER} premountFor={fps} style={{top, height: lineHeight}}>
-    <MushafLine
-      line={line}
-      enter={{presentation: slide({direction: 'from-right'}), timing}}
-      exit={{presentation: slide({direction: 'from-right'}), timing}}
-    />
+  <Sequence key={line.line} from={i * HOLD} durationInFrames={HOLD} premountFor={fps} style={{top, height: lineHeight}}>
+    <MushafLine line={line} enter={slideFade()} exit={slideFade()} />
   </Sequence>
 ))}
 ```
 
-Line *i* runs from `i × HOLD` for `HOLD + ENTER` frames; during its last `ENTER` frames it slides out
-to the left while line *i + 1* slides in from the right. The example's `ThreeLines` composition does
-this in its `replace` mode (fade, slide and revealRtl in turn). `<TransitionSeries>` from
-`@remotion/transitions` works too: put each `<MushafLine>` (without `enter`/`exit`) in a
-`<TransitionSeries.Sequence>` and let the series drive both sides.
+Every line owns one slot for `HOLD` frames: its entrance runs over the first `enterTiming()` frames,
+its exit over the last `exitTiming()` frames, and the next line's Sequence begins exactly where this
+one ends. That is a *fade through* — the slot is briefly empty rather than holding two half-visible
+lines — and for text it reads far better than a cross-fade, where both lines are legible at once and
+neither is readable.
+
+Overlapping the Sequences (`durationInFrames={HOLD + ENTER}`, next line at `i * HOLD`) gives the
+cross-fade instead, which suits `slide()` — the outgoing line is pushed out of the box rather than
+faded through. The example's `ThreeLines` composition does that in its `replace` mode (slide+fade,
+fade, slide and a soft revealRtl in turn); its `Recitation` composition does the fade-through.
+`<TransitionSeries>` from `@remotion/transitions` works too: put each `<MushafLine>` (without
+`enter`/`exit`) in a `<TransitionSeries.Sequence>` and let the series drive both sides.
 
 ## Fonts
 
@@ -249,15 +323,32 @@ page 10 line 3: waiting for font ...`).
   of a second or so; the font then loads while the line is still hidden and the entrance starts on
   time, both in the Player and in renders.
 
-## Mushaf ids
+## Colour
 
-| id                | Font set          | Colour                                                                                                                     |
-| ----------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `qpc-v4`          | `v4` (plain)      | Follows CSS `color` (set it on `style` or an ancestor).                                                                    |
-| `qpc-v4-tajweed`  | `v4-tajweed` (COLR/CPAL) | Tajweed colours baked into the font (palette 0). CSS `color` does not apply to these glyphs.                        |
+Lines are **plain black by default**: the plain glyph set is a monochrome outline font, so the words
+take the inherited CSS `color` and you paint them like any other text.
 
-Both ids share one layout dataset. The tajweed fonts carry six palettes; palette 3 is plain black
-with coloured ayah markers and palette 4 is plain white, so one font can also give a plain look:
+```tsx
+<AbsoluteFill style={{color: '#1b1b1b'}}>
+  <MushafLine line={line} />                        {/* plain, follows `color` */}
+  <MushafLine page={10} line={3} tajweed />         {/* QUL's tajweed colour font */}
+</AbsoluteFill>
+```
+
+`tajweed` is the switch on the convenience form, and an option on `getMushafLine()` /
+`getMushafLines()` / `loadPageFont()` when you resolve data yourself. Resolved data already carries
+its font set, so `<MushafLine line={data} tajweed>` is refused: pass `tajweed` where the data is made.
+
+| Font set                 | Colour                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `v4` (plain, default)    | Monochrome outlines. Follows CSS `color`, so it inherits from `style` or any ancestor.                    |
+| `v4-tajweed`             | COLR/CPAL colour font: the tajweed colours are in the font (palette 0) and CSS `color` does not apply.    |
+
+The two sets share one layout dataset, and the mushaf ids `'qpc-v4'` / `'qpc-v4-tajweed'` still name
+them (data made by earlier versions keeps working); `tajweed` decides when both are given.
+
+The tajweed font carries six palettes; palette 3 is black except for the ayah-marker ornaments and
+palette 4 is its white counterpart, so that one font can also give a near-plain look:
 
 ```css
 @font-palette-values --mushaf-plain {
@@ -276,10 +367,11 @@ with coloured ayah markers and palette 4 is plain white, so one font can also gi
 ## DOM contract
 
 ```html
-<div class="mushaf-line" data-mushaf="qpc-v4-tajweed" data-page="10" data-line="3" data-line-type="ayah" data-centered="false" style="position:relative;width:100%;height:<lineHeight>px">
+<div class="mushaf-line" data-mushaf="qpc-v4" data-page="10" data-line="3" data-line-type="ayah" data-centered="false" style="position:relative;width:100%;height:<lineHeight>px">
   <!-- presentation wrapper when `enter` is set (an AbsoluteFill for the stock presentations) -->
   <div class="mushaf-line__row" style="position:absolute;inset:0;display:flex;direction:rtl;...;visibility:hidden|visible">
     <span class="mushaf-word mushaf-word--word" data-word-id="1234" data-location="2:62:1" data-surah="2" data-ayah="62" data-position="1" data-kind="word">ﱁ</span>
+    <span class="mushaf-word mushaf-word--word mushaf-word--active" ... data-active="true">ﱂ</span>  <!-- when activeWordId names it -->
     ...
     <span class="mushaf-word mushaf-word--end" ...>ﱊ</span>
   </div>
@@ -306,11 +398,13 @@ Works in the Studio, `renderMedia()` / `renderStill()` / the CLI, Lambda and the
 | Code                     | Meaning and fix                                                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UNKNOWN_MUSHAF`         | `mushaf` is not `qpc-v4` or `qpc-v4-tajweed`.                                                                                                     |
+| `BAD_TAJWEED`            | `tajweed` must be `true` or `false`.                                                                                                              |
+| `AYAH_NOT_FOUND`         | `getMushafLines({surah, ...})` / `getMushafLocation()` was asked for a surah or ayah the mushaf does not have; the message names the last ayah.    |
 | `PAGE_OUT_OF_RANGE`, `LINE_OUT_OF_RANGE` | Pages are `1..604`; lines `1..15` (`1..8` on pages 1 and 2). The message names the page's line count.                             |
-| `BAD_LINE_PROP`          | Pass `line={MushafLineData}` or `mushaf` + `page` + `line={number}`.                                                                              |
+| `BAD_LINE_PROP`          | Pass `line={MushafLineData}` or `page` + `line={number}` — and `tajweed` only with the second form.                                               |
 | `BAD_LINE_DATA`          | `line` is not a `MushafLineData` from this package version (the message names the field).                                                        |
 | `UNSUPPORTED_LINE_TYPE`  | A `surah_name` or `basmallah` line; only `ayah` lines render in this version.                                                                     |
-| `BAD_ENTER`              | `enter.presentation` must be `{component, props}` and `enter.timing` a `TransitionTiming`.                                                        |
+| `BAD_ENTER`              | `enter` must be a presentation (`{component, props}`) or `{presentation, timing?}` with a `TransitionTiming`.                                     |
 | `BAD_EXIT`               | Same for `exit`; also raised when the enclosing Sequence has no finite length to count back from.                                                 |
 | `BAD_SIZE`               | `fontSize` / `lineHeight` must be positive finite numbers.                                                                                        |
 | `DATA_NOT_COMPILED`, `DATA_LOAD_FAILED` | The layout chunk is missing or broken; check the bundle / `publicPath`, or re-run the data script when building from source.       |
@@ -330,9 +424,9 @@ failed.
 
 ## Roadmap
 
-Additions planned without changing the v0.1 API: per-word highlighting (`highlight` / `renderWord`
-props over the existing word elements and `words[].id`), header (`surah_name`) and basmallah lines, a Studio-editable wrapper via
-`Interactive.withSchema`, further mushaf layouts from QUL.
+Additions planned without breaking the API: header (`surah_name`) and basmallah lines (they need
+QUL's `surah-name-v4` and `quran-common` fonts, whose CDN build is reached through GSUB ligatures), a
+Studio-editable wrapper via `Interactive.withSchema`, further mushaf layouts from QUL.
 
 ## Data and licences
 

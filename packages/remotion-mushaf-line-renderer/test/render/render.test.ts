@@ -58,11 +58,13 @@ const pickBrowser = (): {browserExecutable: string | null; chromeMode: ChromeMod
 
 const renderer = {...pickBrowser(), logLevel: 'error' as const, chromiumOptions: {}};
 
+type EnterName = 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'soft-reveal' | 'slide-fade' | 'dissolve';
+
 type HarnessProps = {
   lines: unknown[];
-  enter: 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'dissolve';
+  enter: EnterName;
   enterFrames: number;
-  exit: 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'dissolve';
+  exit: EnterName;
   exitFrames: number;
   from: number;
   stagger: number;
@@ -73,6 +75,8 @@ type HarnessProps = {
   fontUrl: string | null;
   fontSize: number | null;
   lineHeight: number | null;
+  activeWordId: string | number | null;
+  dimOthersTo: number | null;
 };
 
 const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
@@ -90,6 +94,8 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   fontUrl: null,
   fontSize: null,
   lineHeight: null,
+  activeWordId: null,
+  dimOthersTo: null,
   ...overrides,
 });
 
@@ -201,6 +207,38 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     expect(frames[12]!.equals(plain)).toBe(false);
     expect(frames[12]!.equals(blank)).toBe(false);
     for (let i = 14; i < frames.length; i++) expect(frames[i]!.equals(blank)).toBe(true);
+  });
+
+  it('renders the smooth defaults deterministically: monotonic, then perfectly still', async () => {
+    // slideFade over 10 frames, then 6 settled frames: the frames must change while it moves and be
+    // byte-identical once it has arrived (any drift would show up as a different PNG).
+    const inputProps = harnessProps({lines: [syntheticLine(2, 3)], enter: 'slide-fade', enterFrames: 10});
+    const composition = await selectComposition({serveUrl, id: 'LineHarness', inputProps, ...renderer});
+    const outputDir = path.join(workDir, 'smooth');
+    await renderFrames({
+      composition,
+      serveUrl,
+      inputProps,
+      imageFormat: 'png',
+      outputDir,
+      frameRange: [0, 15],
+      concurrency: 2,
+      onStart: () => undefined,
+      onFrameUpdate: () => undefined,
+      ...renderer,
+    });
+    const frames = readdirSync(outputDir)
+      .filter((f) => f.endsWith('.png'))
+      .sort((x, y) => Number(x.match(/\d+/)?.[0]) - Number(y.match(/\d+/)?.[0]))
+      .map((f) => readFileSync(path.join(outputDir, f)));
+    expect(frames).toHaveLength(16);
+    // Moving: every frame of the entrance differs from the one before it.
+    for (let i = 1; i <= 9; i++) expect(frames[i]!.equals(frames[i - 1]!)).toBe(false);
+    // Settled: frame 10 onwards is exactly the resting render, over and over.
+    const settled = await still(serveUrl, harnessProps({lines: [syntheticLine(2, 3)]}));
+    for (let i = 10; i < frames.length; i++) expect(frames[i]!.equals(settled)).toBe(true);
+    // The first frame is fully transparent, like any other entrance.
+    expect(frames[0]!.equals(await still(serveUrl, harnessProps({lines: []})))).toBe(true);
   });
 
   it('a missing font fails the render fast with FONT_HTTP', async () => {

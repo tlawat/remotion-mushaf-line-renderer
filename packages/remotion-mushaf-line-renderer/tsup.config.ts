@@ -7,7 +7,7 @@ import {defineConfig, type Options} from 'tsup';
  * instructions can name them):
  *
  *   dist/esm/index.mjs (+ index.d.mts)                    dist/cjs/index.js (+ index.d.ts)
- *   dist/esm/presentations/reveal-rtl.mjs (+ .d.mts)      dist/cjs/presentations/reveal-rtl.js (+ .d.ts)
+ *   dist/esm/presentations/<name>.mjs (+ .d.mts)          dist/cjs/presentations/<name>.js (+ .d.ts)
  *   dist/esm/data/qpc-v4.mjs                              dist/cjs/data/qpc-v4.js        (~1 MB, ASCII, lazy)
  *
  * The data module is its own entry. In src/data/load-layout.ts it is reached through one literal
@@ -20,9 +20,14 @@ import {defineConfig, type Options} from 'tsup';
 const entry = {
   index: 'src/index.ts',
   'presentations/reveal-rtl': 'src/presentations/reveal-rtl.tsx',
+  'presentations/slide-fade': 'src/presentations/slide-fade.tsx',
   'data/qpc-v4': 'src/data/qpc-v4.generated.ts',
 };
-const dtsEntry = {index: entry.index, 'presentations/reveal-rtl': entry['presentations/reveal-rtl']};
+const dtsEntry = {
+  index: entry.index,
+  'presentations/reveal-rtl': entry['presentations/reveal-rtl'],
+  'presentations/slide-fade': entry['presentations/slide-fade'],
+};
 
 const LOADER_FILE = /[\\/]src[\\/]data[\\/]load-layout\.ts$/;
 const SOURCE_IMPORT = "import('./qpc-v4.generated')";

@@ -351,6 +351,96 @@ test.describe('exits and replacing', () => {
   });
 });
 
+test.describe('the smooth defaults', () => {
+  const wrapper = (page: Page, i = 0) =>
+    page.locator(ROOT).nth(i).evaluate((root) => {
+      const outer = root.children[0] as HTMLElement | undefined;
+      const inner = outer?.children[0] as HTMLElement | undefined;
+      return {outerOpacity: outer?.style.opacity ?? null, outerTransform: outer?.style.transform ?? null, innerOpacity: inner?.style.opacity ?? null, innerTransform: inner?.style.transform ?? null};
+    });
+
+  test('slideFade fades before it settles, and travels a fraction of the line box', async ({page}) => {
+    await open(page, 'slide-fade');
+    await rowsVisible(page, 1);
+    const root = await box(page, ROOT, 0);
+    await seek(page, 0);
+    const start = await wrapper(page);
+    expect(Number(start.innerOpacity)).toBe(0);
+    // 28 % of the line box below its slot — a quarter of a line, not half the screen.
+    const startY = (await box(page, ROW, 0)).y;
+    await seek(page, 20); // settled
+    const settledY = (await box(page, ROW, 0)).y;
+    expect(startY - settledY).toBeGreaterThan(root.height * 0.2);
+    expect(startY - settledY).toBeLessThan(root.height * 0.35);
+    // Fully opaque before the movement ends: at 75 % of the window it is already 1 while still moving.
+    await seek(page, 15);
+    expect(Number((await wrapper(page)).innerOpacity)).toBe(1);
+    expect((await box(page, ROW, 0)).y).toBeGreaterThan(settledY);
+    // Every settled frame is identical (nothing keeps drifting).
+    await seek(page, 25);
+    expect((await box(page, ROW, 0)).y).toBeCloseTo(settledY, 1);
+  });
+
+  test('a fade-through replace never shows two half-visible lines at once', async ({page}) => {
+    await open(page, 'fade-through');
+    // Line 1 runs 0-39 (exit over 20-39), line 2 starts at 40.
+    for (const frame of [10, 20, 25, 30, 35, 39]) {
+      await seek(page, frame);
+      await expect(page.locator(ROOT)).toHaveCount(1);
+    }
+    await seek(page, 40);
+    await expect(page.locator(ROOT)).toHaveCount(1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-line', '2');
+    // Both lines occupy the same slot, so the switch is in place, not a jump.
+    await seek(page, 60);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-line', '2');
+    expect(Number((await wrapper(page)).innerOpacity)).toBe(1);
+  });
+
+  test('revealRtl can fade its edge instead of cutting it', async ({page}) => {
+    await open(page, 'soft-reveal');
+    await rowsVisible(page, 1);
+    await seek(page, 10);
+    const style = await page.locator(ROOT).first().evaluate((root) => {
+      const fill = root.children[0] as HTMLElement;
+      return {mask: fill.style.maskImage || fill.style.webkitMaskImage, clip: fill.style.clipPath};
+    });
+    expect(style.clip).toBe('');
+    expect(style.mask).toContain('linear-gradient');
+    expect(style.mask).toContain('transparent');
+  });
+});
+
+test.describe('colour and per-word hooks', () => {
+  test('the plain glyph set follows CSS color; the tajweed one carries its own', async ({page}) => {
+    await open(page, 'plain');
+    await rowsVisible(page, 1);
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-p2'])).toBe(true);
+    // Nothing in the package paints the line: the words inherit the page's colour.
+    const colours = await page.locator('.mushaf-word').evaluateAll((els) => els.map((el) => getComputedStyle(el).color));
+    expect(new Set(colours)).toEqual(new Set(['rgb(0, 0, 0)']));
+    await open(page, 'static');
+    await rowsVisible(page, 3);
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(false);
+  });
+
+  test('activeWordId and wordStyle reach exactly one word', async ({page}) => {
+    await open(page, 'highlight');
+    await rowsVisible(page, 1);
+    const active = page.locator('[data-active="true"]');
+    await expect(active).toHaveCount(1);
+    await expect(active).toHaveAttribute('data-location', '2:1:2');
+    await expect(active).toHaveClass(/mushaf-word--active/);
+    await expect(active).toHaveCSS('color', 'rgb(179, 0, 0)');
+    await expect(active).toHaveCSS('opacity', '1');
+    const others = page.locator('.mushaf-word:not([data-active])');
+    await expect(others).toHaveCount(3);
+    for (let i = 0; i < 3; i++) await expect(others.nth(i)).toHaveCSS('opacity', '0.35');
+    // The pinned row layout still governs the words.
+    await expect(page.locator('.mushaf-word').first()).toHaveCSS('display', 'block');
+  });
+});
+
 test.describe('font failures', () => {
   test('404 fails fast with FONT_HTTP', async ({page}) => {
     await open(page, 'font-404');

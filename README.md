@@ -39,9 +39,8 @@ It downloads both font sets of every page (woff2 and ttf; where the CDN has no w
 tajweed set, the woff it serves instead), refreshes `scripts/cdn-etags.json`, commits what
 `.gitignore` admits (every page's woff2, about 95 MB, plus the fixture pages' ttf) and pushes the
 current branch. `FONTS=187-207` limits the pages, `PUSH=0` commits without pushing, `COMPILE=1`
-recompiles the layout as well. Point the example at the mirror with `fontFile:
-'fonts/qpc-v4-tajweed/p10.woff2'` (`ThreeLines`) or `fontFilePattern:
-'fonts/qpc-v4-tajweed/p{page}.woff2'` (`Recitation`).
+recompiles the layout as well. Point the example at the mirror with `fontFile` (`ThreeLines`) or
+`fontFilePattern` (`Recitation`), both `'fonts/{mushaf}/p{page}.woff2'`.
 
 Licence rule: the fonts are King Fahd Complex fonts published by QUL and are **not redistributed** by
 this project. The fixture fonts of four pages, and the example's mirror if you pulled it, are
@@ -92,19 +91,19 @@ unless a line carries an explicit `fontUrl`.
 of a passage with their timeframes (and, optionally, per-word times) drives which printed line is on
 screen while the audio plays:
 
-- `calculateMetadata()` reads the JSON (`timingsFile` in the public folder, or `timings` inline),
-  resolves the printed lines that carry those ayahs with `getMushafLine()` from the surah's first
-  page onwards, pins the fonts when `fontFilePattern` is set, and schedules one `<Sequence>` per line:
-  the line is fully in when its first word is heard (`leadInSeconds` early) and leaves as the next
-  line arrives.
-- Every line is one `<MushafLine line enter exit>`; the vertical slide + fade is an ordinary
-  `@remotion/transitions` presentation (`verticalSlideFade()` in the same file), used for both sides.
+- `calculateMetadata()` reads the JSON (`timingsFile` in the public folder, or `timings` inline) and
+  asks the package for the lines carrying those ayahs — `getMushafLines({surah, fromAyah, toAyah,
+  fontUrl})`, which finds the page itself and pins the mirrored fonts — then schedules one
+  `<Sequence>` per line: the line is fully in place when its first word is heard (`leadInSeconds`
+  early) and its exit finishes exactly where the next line's entrance starts.
+- Every line is one `<MushafLine line enter exit>` with the package's `slideFade()` presentation and
+  its default timings (0.5 s decelerating in, 0.32 s accelerating out).
 - `cutAtSeconds: 60` stops after the last ayah that ends before the minute (`null` plays everything),
   so the video ends at an ayah end.
 
 ```bash
 cd example && pnpm exec remotion render Recitation out/recitation.mp4 \
-  --props='{"fontFilePattern":"fonts/qpc-v4-tajweed/p{page}.woff2"}'
+  --props='{"fontFilePattern":"fonts/{mushaf}/p{page}.woff2"}'
 ```
 
 The timings of the committed example (`example/public/audio/tawbah-timings.json`, At-Tawbah 9:1-11)

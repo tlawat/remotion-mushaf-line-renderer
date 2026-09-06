@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.0
+
+- **Plain black by default.** `mushaf` now defaults to `'qpc-v4'`, the monochrome glyph set that
+  follows CSS `color`, and colour is a flag: `tajweed: true` on `<MushafLine>` (convenience form),
+  `getMushafLine()`, `getMushafLines()` and `loadPageFont()` selects QUL's COLR/CPAL font. The
+  `'qpc-v4-tajweed'` id keeps working, and data produced by 0.1 renders unchanged.
+- **Several lines at once.** `getMushafLines({page})` returns a whole page; `getMushafLines({surah,
+  fromAyah, toAyah})` returns the lines that carry an ayah range and finds the page itself, so no
+  caller has to know where a surah starts. `getMushafLocation({surah, ayah})` answers that question
+  directly, `lineAyahs(line)` says which ayahs a line holds, and `fontUrl` pins a mirror on every
+  line returned.
+- **Per-word hooks.** `activeWordId` + `activeWordStyle` mark the current word (`data-active`,
+  `.mushaf-word--active`); `wordStyle(word, ctx)` and `wordClassName(word, ctx)` style words
+  individually — for a karaoke-style follow, or to dim the ayahs outside a range.
+- **Sizing helpers.** `fontSizeForWidth(width, mushaf?)` and `lineHeightForFontSize(fontSize)` are
+  exported (the numbers `<MushafLine>` computes by default), for lines that sit inside margins.
+- **Smoother animation.** `enterTiming()` (0.5 s, decelerating) and `exitTiming()` (0.32 s,
+  accelerating) are the new defaults, `springyTiming()` is there for a physical settle, and `timing`
+  is optional: `enter={slideFade()}` is enough. New `slideFade()` presentation (subpath
+  `remotion-mushaf-line-renderer/presentations/slide-fade`) fades before it settles and travels a
+  quarter of a line box; `revealRtl({softness})` can fade its edge instead of cutting it. Explicit
+  `{presentation, timing}` pairs behave exactly as before.
+- New error codes `BAD_TAJWEED` and `AYAH_NOT_FOUND`.
+
 ## 0.1.0
 
 First release.

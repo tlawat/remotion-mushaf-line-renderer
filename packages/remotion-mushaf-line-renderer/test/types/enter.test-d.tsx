@@ -9,8 +9,24 @@ import {iris} from '@remotion/transitions/iris';
 import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
 import {wipe} from '@remotion/transitions/wipe';
-import {MushafLine, type MushafId, type MushafLineAnimation, type MushafLineData} from '../../src';
+import {
+  MushafLine,
+  enterTiming,
+  exitTiming,
+  fontSizeForWidth,
+  getMushafLine,
+  getMushafLines,
+  getMushafLocation,
+  lineAyahs,
+  lineHeightForFontSize,
+  springyTiming,
+  type MushafId,
+  type MushafLineAnimation,
+  type MushafLineData,
+  type MushafWord,
+} from '../../src';
 import {revealRtl} from '../../src/presentations/reveal-rtl';
+import {slideFade} from '../../src/presentations/slide-fade';
 
 declare const data: MushafLineData;
 const timing = linearTiming({durationInFrames: 10});
@@ -30,8 +46,18 @@ export const animations: MushafLineAnimation[] = [
 
 // @ts-expect-error a string is not a presentation
 export const badPresentation: MushafLineAnimation = {presentation: 'fade', timing};
-// @ts-expect-error timing is required
-export const missingTiming: MushafLineAnimation = {presentation: fade()};
+// `timing` is optional now: it defaults to enterTiming() / exitTiming().
+export const defaultedTiming: MushafLineAnimation = {presentation: fade()};
+
+// The package's own timings are ordinary TransitionTimings.
+export const timings: MushafLineAnimation[] = [
+  {presentation: slideFade(), timing: enterTiming()},
+  {presentation: slideFade({direction: 'down', distance: 20}), timing: exitTiming({seconds: 0.4})},
+  {presentation: revealRtl({softness: 8}), timing: springyTiming({config: {damping: 200}})},
+  {presentation: fade(), timing: enterTiming({durationInFrames: 12, easing: (t) => t})},
+];
+// @ts-expect-error seconds must be a number
+export const badTiming = enterTiming({seconds: '1'});
 
 export const ok = (
   <>
@@ -39,8 +65,46 @@ export const ok = (
     <MushafLine line={data} enter={{presentation: fade(), timing}} fontSize={112} lineHeight={246} style={{top: 10}} className="x" name="p10 l3" />
     <MushafLine mushaf="qpc-v4" page={10} line={3} />
     <MushafLine mushaf="qpc-v4-tajweed" page={10} line={3} enter={{presentation: revealRtl(), timing}} />
+    {/* mushaf is optional (plain by default) and tajweed picks the colour font */}
+    <MushafLine page={10} line={3} />
+    <MushafLine page={10} line={3} tajweed />
+    <MushafLine page={10} line={3} mushaf="qpc-v4" tajweed={false} />
+    {/* a bare presentation uses the package's default timing */}
+    <MushafLine line={data} enter={slideFade()} exit={slideFade()} />
+    <MushafLine line={data} enter={fade()} />
+    {/* per-word hooks */}
+    <MushafLine
+      line={data}
+      activeWordId="9:1:3"
+      activeWordStyle={{color: 'crimson'}}
+      wordStyle={(word: MushafWord, ctx) => (ctx.active ? {opacity: 1} : {opacity: word.ayah === 1 ? 1 : 0.4})}
+      wordClassName={(word) => `w-${word.wordId}`}
+    />
+    <MushafLine line={data} activeWordId={42} />
+    <MushafLine line={data} activeWordId={null} />
   </>
 );
+
+// @ts-expect-error resolved data carries its own font set
+export const tajweedWithData = <MushafLine line={data} tajweed />;
+// @ts-expect-error wordStyle must return CSS properties
+export const badWordStyle = <MushafLine line={data} wordStyle={() => 'red'} />;
+
+// Data helpers: `mushaf` is optional everywhere, and the two shapes of getMushafLines are exclusive.
+export const helpers = [
+  getMushafLine({page: 187, line: 2}),
+  getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, tajweed: true}),
+  getMushafLines({page: 187}),
+  getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
+  getMushafLocation({surah: 9}).then(({page, line}) => page + line),
+];
+// @ts-expect-error a page and an ayah range are two different questions
+export const bothShapes = getMushafLines({page: 187, surah: 9});
+// @ts-expect-error one of them is required
+export const neitherShape = getMushafLines({tajweed: true});
+
+export const ayahs: number[] = lineAyahs(data);
+export const sizes: number[] = [fontSizeForWidth(1920), fontSizeForWidth(1680, 'qpc-v4-tajweed'), lineHeightForFontSize(112)];
 
 // `exit` takes the same shape as `enter`.
 export const okExit = (

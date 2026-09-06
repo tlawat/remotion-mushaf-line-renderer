@@ -1,7 +1,7 @@
 import {cancelRender, continueRender, delayRender, getRemotionEnvironment} from 'remotion';
 import {MushafError, describeValue} from './errors';
 import {fontKey, getFontEntry, notifyFontStore, setFontEntry, type FontEntry} from './font-store';
-import {assertPage, getMushafDefinition, type MushafDefinition} from './mushafs';
+import {assertPage, getMushafDefinition, resolveMushafId, type MushafDefinition} from './mushafs';
 import type {LoadPageFontOptions, LoadedPageFont} from './types';
 
 /**
@@ -19,18 +19,19 @@ import type {LoadPageFontOptions, LoadedPageFont} from './types';
  * and registered through `new FontFace(family, bytes, descriptors)` with the mushaf's metrics
  * pinned, so the line box is identical on every platform.
  */
-export const loadPageFont = ({mushaf, page, url}: LoadPageFontOptions): LoadedPageFont => {
-  const def = getMushafDefinition(mushaf);
+export const loadPageFont = ({mushaf, tajweed, page, url}: LoadPageFontOptions): LoadedPageFont => {
+  const id = resolveMushafId(mushaf, tajweed);
+  const def = getMushafDefinition(id);
   assertPage(def, page);
   if (url !== undefined && (typeof url !== 'string' || url === '')) {
-    throw new MushafError('BAD_FONT_URL', `loadPageFont(): url must be a non-empty string when given, got ${describeValue(url)}.`, {mushaf, page});
+    throw new MushafError('BAD_FONT_URL', `loadPageFont(): url must be a non-empty string when given, got ${describeValue(url)}.`, {mushaf: id, page});
   }
   const fontFamily = def.fontFamily(page);
   if (typeof FontFace === 'undefined' || typeof document === 'undefined') {
     // Server / Node: nothing to load (same behaviour as @remotion/google-fonts).
     return {fontFamily, waitUntilDone: () => Promise.resolve()};
   }
-  const key = fontKey(mushaf, page);
+  const key = fontKey(id, page);
   const existing = getFontEntry(key);
   if (existing) {
     const sameUrl = url === undefined || url === existing.url;
@@ -40,8 +41,8 @@ export const loadPageFont = ({mushaf, page, url}: LoadPageFontOptions): LoadedPa
     if (!sameUrl && existing.explicit && existing.status !== 'error') {
       throw new MushafError(
         'FONT_URL_CONFLICT',
-        `Font "${fontFamily}" (${mushaf} page ${page}) is already loaded from ${existing.url}; refusing to load it again from ${url}. Use one source per page: either loadPageFont({url}) once or MushafLineData.fontUrl, not both with different values.`,
-        {mushaf, page, registered: existing.url, requested: url},
+        `Font "${fontFamily}" (${id} page ${page}) is already loaded from ${existing.url}; refusing to load it again from ${url}. Use one source per page: either loadPageFont({url}) once or MushafLineData.fontUrl, not both with different values.`,
+        {mushaf: id, page, registered: existing.url, requested: url},
       );
     }
     // Explicit url replacing the implicit CDN source, or a retry after a failure.
