@@ -19,6 +19,7 @@ vi.mock('../../src/data/load-layout', async () => {
 const {MushafLine} = await import('../../src/MushafLine');
 const {getMushafLine} = await import('../../src/get-mushaf-line');
 const {resetFontStore, getFontStatus} = await import('../../src/font-store');
+const {resetPaletteStore} = await import('../../src/palette-store');
 const {revealRtl} = await import('../../src/presentations/reveal-rtl');
 const {fade} = await import('@remotion/transitions/fade');
 const {slide} = await import('@remotion/transitions/slide');
@@ -49,6 +50,10 @@ beforeEach(async () => {
   loadMock.mockReset();
   loadMock.mockResolvedValue(syntheticLayout);
   fakes = installFontFakes();
+  // jsdom has no CSS object, so palette rules would be skipped; these tests stand in for a browser
+  // that supports font-palette (jsdom then logs that it cannot parse the at-rule, which is fine).
+  vi.stubGlobal('CSS', {supports: () => true});
+  resetPaletteStore();
   line = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2});
   justified = await getMushafLine({mushaf: 'qpc-v4', page: 2, line: 3});
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -61,6 +66,15 @@ afterEach(() => {
 });
 
 const rowOf = (container: HTMLElement) => container.querySelector<HTMLElement>('.mushaf-line__row')!;
+
+/** The `@font-palette-values` rule the row's `font-palette` names, as it was written to the page. */
+const paletteRuleFor = (row: HTMLElement): string => {
+  const ident = row.style.getPropertyValue('font-palette');
+  const css = Array.from(document.querySelectorAll('style[data-mushaf-palettes]'))
+    .map((s) => s.textContent ?? '')
+    .join('');
+  return css.split('\n').find((rule) => rule.includes(`${ident}{`)) ?? `no rule for ${ident || '(none)'}`;
+};
 
 describe('<MushafLine>', () => {
   it('renders the DOM contract with computed defaults and one span per word', async () => {
@@ -259,14 +273,41 @@ describe('<MushafLine>', () => {
     expect(mandala.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
     const row = rowOf(mandala.container);
     expect(row.style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
-    expect(row.style.getPropertyValue('font-palette')).toBe('--mushaf-qpc-v4-tajweed-p2-palette-3');
+    // jsdom reports a computed colour, so `text: 'currentColor'` resolves and the ident is hashed.
+    expect(row.style.getPropertyValue('font-palette')).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
     cleanup();
 
-    // Resolved data carries the palette just the same, and nothing is set without one.
-    const fromData = render(<MushafLine line={{...justified, mushaf: 'qpc-v4-tajweed', fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3}} />);
+    // Resolved data carries palette and colours just the same, and nothing is set without them.
+    const colourLine = {...justified, mushaf: 'qpc-v4-tajweed' as const, fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3};
+    const fromData = render(<MushafLine line={colourLine} />);
     expect(rowOf(fromData.container).style.getPropertyValue('font-palette')).toBe('--mushaf-qpc-v4-tajweed-p2-palette-3');
     cleanup();
     expect(rowOf(render(<MushafLine line={justified} />).container).style.getPropertyValue('font-palette')).toBe('');
+  });
+
+  it('resolves the letter colour from the inherited CSS color, and follows an explicit one', async () => {
+    const colourLine = {...justified, mushaf: 'qpc-v4-tajweed' as const, fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3};
+    // The whole point of mandala: the words take the CSS colour that plain glyphs would take, and
+    // only the rosette keeps the font's own colours. COLR glyphs ignore `color`, so the colour is
+    // read from the row and written into the palette rule.
+    const inherited = render(
+      <div style={{color: 'rgb(27, 111, 63)'}}>
+        <MushafLine line={{...colourLine, paletteColors: {text: 'currentColor'}}} />
+      </div>,
+    );
+    const rule = paletteRuleFor(rowOf(inherited.container));
+    expect(rule).toContain('base-palette:3');
+    // Every letter entry, the greys included; the rosette's entries (10-13) are left alone.
+    expect(rule).toContain('override-colors:0 rgb(27, 111, 63)');
+    expect(rule).toContain('15 rgb(27, 111, 63)');
+    expect(rule).not.toMatch(/1[0-3] rgb/);
+    cleanup();
+
+    // An explicit colour needs no resolution, and a part is painted on top of the rosette's own.
+    const explicit = render(<MushafLine line={{...colourLine, paletteColors: {text: '#1b6f3f', outline: '#c8a45c'}}} />);
+    const explicitRule = paletteRuleFor(rowOf(explicit.container));
+    expect(explicitRule).toContain('0 #1b6f3f');
+    expect(explicitRule).toContain('13 #c8a45c');
   });
 
   it('styles and marks individual words through the per-word hooks', () => {

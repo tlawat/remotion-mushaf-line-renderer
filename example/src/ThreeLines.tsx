@@ -11,6 +11,7 @@ import {
   lineHeightForFontSize,
   type MushafId,
   type MushafLineAnimation,
+  type MushafColors,
   type MushafLineData,
 } from 'remotion-mushaf-line-renderer';
 import {revealRtl} from 'remotion-mushaf-line-renderer/presentations/reveal-rtl';
@@ -20,8 +21,8 @@ export type ThreeLinesProps = {
   mushaf: MushafId;
   /** Colour font (tajweed) instead of plain black glyphs. */
   tajweed: boolean;
-  /** Black text with the ayah rosettes in colour (the tajweed font at palette 3). */
-  mandala: boolean;
+  /** The ayah rosettes in colour with the text following CSS `color`; an object recolours parts. */
+  mandala: boolean | MushafColors;
   page: number;
   lineNumbers: number[];
   /** Resolved once by calculateMetadata (null in defaultProps), so every render tab receives the same JSON. */

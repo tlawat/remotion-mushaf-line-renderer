@@ -1,6 +1,31 @@
+import {CURRENT_COLOR, assertMushafColors} from './colors';
 import {MushafError, describeValue} from './errors';
+import type {MushafColors} from './types';
 
 export type DatasetId = 'qpc-v4';
+
+/** CPAL entries by what they paint. One entry belongs to exactly one part. */
+export type PaletteRoles = {
+  /** Every entry that colours letters. */
+  readonly text: readonly number[];
+  /** The ayah rosette's frame, its curls and the number inside it. */
+  readonly outline: readonly number[];
+  /** The petal flourishes above and below the rosette. */
+  readonly petals: readonly number[];
+  /** The small jewel at the top of the rosette. */
+  readonly jewel: readonly number[];
+  /** The disc behind the ayah number. */
+  readonly fill: readonly number[];
+};
+
+/**
+ * The V4 colour font's sixteen CPAL entries, read from its CPAL table and confirmed by overriding
+ * one entry at a time in Chromium: 0-9, 14 and 15 colour letters (1, 2 and 15 are the greys of the
+ * silent letters), and 10-13 the ayah-end rosette.
+ */
+const V4_PALETTE_ROLES: PaletteRoles = {text: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15], outline: [13], petals: [11], jewel: [10], fill: [12]};
+
+const NO_PALETTE_ROLES: PaletteRoles = {text: [], outline: [], petals: [], jewel: [], fill: []};
 
 export type MushafDefinition = {
   readonly id: string;
@@ -18,6 +43,8 @@ export type MushafDefinition = {
   readonly colr: boolean;
   /** CPAL base palettes the font carries, in index order. Empty for a monochrome set. */
   readonly palettes: readonly number[];
+  /** Which CPAL entries paint which part of the glyphs; all empty for a monochrome set. */
+  readonly paletteRoles: PaletteRoles;
   readonly metrics: {
     readonly unitsPerEm: number;
     readonly ascent: number;
@@ -64,6 +91,7 @@ const v4 = (id: string, dir: 'v4' | 'v4-tajweed', colr: boolean): MushafDefiniti
   // The V4 colour font ships six CPAL palettes (see docs/kfgqpc-v4-rendering-notes.md): 0-2 tajweed,
   // 3-5 black/white text with coloured ayah markers. The plain set has none.
   palettes: colr ? [0, 1, 2, 3, 4, 5] : [],
+  paletteRoles: colr ? V4_PALETTE_ROLES : NO_PALETTE_ROLES,
   metrics: {unitsPerEm: 2500, ascent: 3940, descent: -2520, referenceLineWidth: 42501},
   invariants: {lines: 9046, ayahLines: 8820, surahNameLines: 114, basmallahLines: 112, centeredAyahLines: 30, words: 83668},
 });
@@ -89,9 +117,18 @@ const PLAIN_OF: Readonly<Record<keyof typeof MUSHAFS, keyof typeof MUSHAFS>> = {
  */
 export const MANDALA_PALETTE = 3;
 
-const assertFlag = (name: 'tajweed' | 'mandala', value: unknown): boolean | undefined => {
+const assertTajweed = (value: unknown): boolean | undefined => {
   if (value === undefined || typeof value === 'boolean') return value;
-  throw new MushafError(name === 'tajweed' ? 'BAD_TAJWEED' : 'BAD_MANDALA', `${name} must be true or false when given, got ${describeValue(value)}.`, {[name]: value});
+  throw new MushafError('BAD_TAJWEED', `tajweed must be true or false when given, got ${describeValue(value)}.`, {tajweed: value});
+};
+
+/** `mandala` is a switch that also carries colours: `true`, `false`, or the parts to recolour. */
+const assertMandala = (value: unknown): boolean | MushafColors | undefined => {
+  if (value === undefined || typeof value === 'boolean') return value;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new MushafError('BAD_MANDALA', `mandala must be true, false or an object of CSS colours when given, got ${describeValue(value)}.`, {mandala: value});
+  }
+  return assertMushafColors('mandala', value);
 };
 
 /**
@@ -107,24 +144,33 @@ const assertFlag = (name: 'tajweed' | 'mandala', value: unknown): boolean | unde
  */
 export const resolveMushafId = (mushaf: unknown, tajweed: unknown, mandala?: unknown): keyof typeof MUSHAFS => {
   const id = getMushafDefinition(mushaf ?? DEFAULT_MUSHAF).id as keyof typeof MUSHAFS;
-  const wantsTajweed = assertFlag('tajweed', tajweed);
-  const wantsMandala = assertFlag('mandala', mandala);
-  const colr = wantsTajweed === true || wantsMandala === true;
+  const wantsTajweed = assertTajweed(tajweed);
+  const wantsMandala = assertMandala(mandala);
+  const colr = wantsTajweed === true || (wantsMandala !== undefined && wantsMandala !== false);
   if (!colr && wantsTajweed === undefined) return id;
   return colr ? TAJWEED_OF[id] : PLAIN_OF[id];
 };
 
+/** What a colouring choice paints with: a CPAL base palette, and the colours put over it. */
+export type ResolvedPalette = {
+  readonly palette: number;
+  readonly paletteColors: MushafColors;
+};
+
 /**
- * The CPAL base palette to paint a line with, or `undefined` for the font's own default (palette 0,
- * the full tajweed colours). Only the colour font has palettes; asking for `mandala` on the plain
- * set resolves to the colour font first (see `resolveMushafId()`), so the two always agree.
+ * The palette a line is painted from, or `undefined` for the font's own colours — the tajweed
+ * palette, and nothing at all for the plain glyph set (it has no palettes).
  *
- * `tajweed` wins when both are given: it is the more specific ask.
+ * `mandala` resolves to palette 3 with the letters following the inherited CSS `color`, so a mandala
+ * line is coloured like plain text and keeps its rosette. Any part named in `mandala` is layered on
+ * top of that. `tajweed` wins when both are given: it is the more specific ask.
  */
-export const paletteFor = ({tajweed, mandala}: {readonly tajweed?: unknown; readonly mandala?: unknown}): number | undefined => {
-  const wantsTajweed = assertFlag('tajweed', tajweed);
-  const wantsMandala = assertFlag('mandala', mandala);
-  return wantsMandala === true && wantsTajweed !== true ? MANDALA_PALETTE : undefined;
+export const paletteFor = ({tajweed, mandala}: {readonly tajweed?: unknown; readonly mandala?: unknown}): ResolvedPalette | undefined => {
+  const wantsTajweed = assertTajweed(tajweed);
+  const wantsMandala = assertMandala(mandala);
+  if (wantsTajweed === true || wantsMandala === undefined || wantsMandala === false) return undefined;
+  const colors = wantsMandala === true ? {} : wantsMandala;
+  return {palette: MANDALA_PALETTE, paletteColors: {text: CURRENT_COLOR, ...colors}};
 };
 
 /** True when the id names the COLR/CPAL (coloured) font set. */

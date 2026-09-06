@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
-import {paletteIdent, registerPalettes, resetPaletteStore} from '../../src/palette-store';
+import {paletteIdent, registerPalette, resetPaletteStore} from '../../src/palette-store';
 
 const sheets = () => Array.from(document.querySelectorAll('style[data-mushaf-palettes]'));
 const css = () => sheets().map((s) => s.textContent ?? '').join('');
@@ -21,28 +21,36 @@ afterEach(() => {
 });
 
 describe('palette store', () => {
-  it('names an ident per family and palette', () => {
+  it('names an ident per family, palette and set of colours', () => {
     expect(paletteIdent('mushaf-qpc-v4-tajweed-p187', 3)).toBe('--mushaf-qpc-v4-tajweed-p187-palette-3');
     expect(paletteIdent('mushaf-qpc-v4-tajweed-p1', 0)).toBe('--mushaf-qpc-v4-tajweed-p1-palette-0');
+    // Overridden colours are part of the identity, so two looks never share one rule...
+    const green = paletteIdent('mushaf-qpc-v4-tajweed-p187', 3, [[0, 'green']]);
+    const red = paletteIdent('mushaf-qpc-v4-tajweed-p187', 3, [[0, 'red']]);
+    expect(green).toMatch(/^--mushaf-qpc-v4-tajweed-p187-palette-3-[0-9a-f]{8}$/);
+    expect(green).not.toBe(red);
+    expect(green).not.toBe(paletteIdent('mushaf-qpc-v4-tajweed-p187', 3));
+    // ... and the same look always reuses one.
+    expect(paletteIdent('mushaf-qpc-v4-tajweed-p187', 3, [[0, 'green']])).toBe(green);
   });
 
-  it('injects one @font-palette-values rule per palette, once, in one style element', () => {
-    registerPalettes('mushaf-qpc-v4-tajweed-p187', [0, 3]);
-    registerPalettes('mushaf-qpc-v4-tajweed-p187', [0, 3]);
-    registerPalettes('mushaf-qpc-v4-tajweed-p188', [3]);
+  it('injects one @font-palette-values rule per ident, once, in one style element', () => {
+    const plain = registerPalette('mushaf-qpc-v4-tajweed-p187', 3);
+    registerPalette('mushaf-qpc-v4-tajweed-p187', 3);
+    const coloured = registerPalette('mushaf-qpc-v4-tajweed-p187', 3, [
+      [0, 'rgb(27, 111, 63)'],
+      [13, '#c8a45c'],
+    ]);
     expect(sheets()).toHaveLength(1);
     expect(css()).toBe(
-      '@font-palette-values --mushaf-qpc-v4-tajweed-p187-palette-0{font-family:"mushaf-qpc-v4-tajweed-p187";base-palette:0}\n' +
-        '@font-palette-values --mushaf-qpc-v4-tajweed-p187-palette-3{font-family:"mushaf-qpc-v4-tajweed-p187";base-palette:3}\n' +
-        '@font-palette-values --mushaf-qpc-v4-tajweed-p188-palette-3{font-family:"mushaf-qpc-v4-tajweed-p188";base-palette:3}\n',
+      `@font-palette-values ${plain}{font-family:"mushaf-qpc-v4-tajweed-p187";base-palette:3;}\n` +
+        `@font-palette-values ${coloured}{font-family:"mushaf-qpc-v4-tajweed-p187";base-palette:3;override-colors:0 rgb(27, 111, 63),13 #c8a45c;}\n`,
     );
   });
 
-  it('does nothing for a monochrome family or where font-palette is unsupported', () => {
-    registerPalettes('mushaf-qpc-v4-p187', []);
-    expect(sheets()).toHaveLength(0);
+  it('still names the ident where font-palette is unsupported, and injects nothing', () => {
     withFontPaletteSupport(false);
-    registerPalettes('mushaf-qpc-v4-tajweed-p187', [3]);
+    expect(registerPalette('mushaf-qpc-v4-tajweed-p187', 3)).toBe('--mushaf-qpc-v4-tajweed-p187-palette-3');
     expect(sheets()).toHaveLength(0);
   });
 });

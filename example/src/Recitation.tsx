@@ -13,6 +13,7 @@ import {
   getMushafLines,
   lineHeightForFontSize,
   type MushafId,
+  type MushafColors,
   type MushafLineData,
 } from 'remotion-mushaf-line-renderer';
 import {slideFade} from 'remotion-mushaf-line-renderer/presentations/slide-fade';
@@ -33,8 +34,8 @@ export type RecitationProps = {
   mushaf: MushafId;
   /** Colour font (tajweed) instead of plain black glyphs. */
   tajweed: boolean;
-  /** Black text with the ayah rosettes in colour (the tajweed font at palette 3). */
-  mandala: boolean;
+  /** The ayah rosettes in colour with the text following CSS `color`; an object recolours parts. */
+  mandala: boolean | MushafColors;
   /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
   timingsFile: string | null;
   timings: RecitationTimings | null;

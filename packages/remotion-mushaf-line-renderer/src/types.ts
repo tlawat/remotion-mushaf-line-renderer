@@ -62,10 +62,15 @@ export type MushafLineData = {
   readonly fontUrl?: string;
   /**
    * CPAL base palette to paint the colour font with; absent means the font's own default (palette 0,
-   * the full tajweed colours). Set to 3 by `mandala: true` — black letters, coloured ayah rosettes.
+   * the full tajweed colours). Set to 3 by `mandala` — black letters, coloured ayah rosettes.
    * Meaningless for the plain glyph set, which has no palettes.
    */
   readonly palette?: number;
+  /**
+   * CSS colours for the parts of that palette, `'currentColor'` included (see `MushafColors`).
+   * `mandala` records `{text: 'currentColor'}` here plus whatever you asked for.
+   */
+  readonly paletteColors?: MushafColors;
   /** Present on surah_name lines (the header's surah) and basmallah lines (carried forward). */
   readonly surahNumber?: number;
   /** Ordered by wordId. Empty for surah_name / basmallah lines. */
@@ -169,11 +174,36 @@ export type MushafSelection = {
    */
   readonly tajweed?: boolean;
   /**
-   * `true` renders the text black with the ayah-end rosette in its colours — the same colour font
-   * as `tajweed` at CPAL palette 3, so CSS `color` does not reach the glyphs either. `tajweed: true`
-   * wins when both are given.
+   * Renders the text in the inherited CSS `color` with the ayah-end rosette in its own colours —
+   * the same colour font as `tajweed`, at CPAL palette 3. `true` takes the defaults; an object
+   * recolours any part (see `MushafColors`). `tajweed: true` wins when both are given.
    */
-  readonly mandala?: boolean;
+  readonly mandala?: boolean | MushafColors;
+};
+
+/**
+ * CSS colours for the parts of a colour-font palette. Every value is an ordinary CSS colour
+ * (`'#1b6f3f'`, `'rgb(27 111 63)'`, `'crimson'`, `'transparent'`), plus `'currentColor'` — the
+ * inherited CSS `color`, which the package resolves at render time because COLR glyphs ignore
+ * `color` themselves. It is resolved per line, so `wordStyle`/`activeWordStyle` colours still do not
+ * reach these glyphs; use the plain set to colour words individually.
+ *
+ * Anything left out keeps the palette's own colour, which is what makes `mandala` a coloured rosette
+ * on plain text.
+ */
+export type MushafColors = {
+  /** The letters. `mandala` defaults this to `'currentColor'`. */
+  readonly text?: string;
+  /** Shorthand for `outline` + `petals` + `jewel` — the whole rosette except the disc behind the number. */
+  readonly rosette?: string;
+  /** The rosette's frame and curls, and the ayah number inside it. */
+  readonly outline?: string;
+  /** The petal flourishes above and below the rosette. */
+  readonly petals?: string;
+  /** The small jewel at the top of the rosette. */
+  readonly jewel?: string;
+  /** The disc behind the ayah number. */
+  readonly fill?: string;
 };
 
 export type GetMushafLineOptions = MushafSelection & {

@@ -78,6 +78,7 @@ type HarnessProps = {
   lineHeight: number | null;
   activeWordId: string | number | null;
   dimOthersTo: number | null;
+  color: string;
 };
 
 const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
@@ -98,6 +99,7 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   lineHeight: null,
   activeWordId: null,
   dimOthersTo: null,
+  color: '#000000',
   ...overrides,
 });
 
@@ -293,14 +295,22 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       expect(png.length).toBeGreaterThan(1000);
     });
 
-    it('renders the mandala palette: same glyphs, different colours than full tajweed', async () => {
+    it('renders the mandala palette and its colours, the letters following CSS color', async () => {
       const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
       const tajweed = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
-      // The palette rides on the data, so the renderer needs nothing else to paint the mandala look.
-      const mandala = await still(serveUrl, harnessProps({lines: [{...line, palette: 3}], fit: 'line'}));
+      // The palette and its colours ride on the data, so the renderer needs nothing else; the
+      // letters take the page's colour through the palette, exactly as plain glyphs would.
+      const mandala = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {text: 'currentColor'}}], fit: 'line', color: 'rgb(27, 111, 63)'}));
       writeFileSync(path.join(here, 'p10-l3-mandala.png'), mandala);
       expect(mandala.equals(tajweed)).toBe(false);
       expect(mandala.length).toBeGreaterThan(1000);
+      // Same line, same palette, another page colour: a different picture, so `color` really reaches
+      // the glyphs of a colour font.
+      const black = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {text: 'currentColor'}}], fit: 'line', color: '#000000'}));
+      expect(black.equals(mandala)).toBe(false);
+      // ... and so does a recoloured rosette.
+      const gold = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {text: 'currentColor', rosette: '#c8a45c'}}], fit: 'line', color: '#000000'}));
+      expect(gold.equals(black)).toBe(false);
     });
   });
 });
