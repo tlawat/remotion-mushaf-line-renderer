@@ -147,7 +147,7 @@ await getMushafLines({page: 187});
 await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
 // Both forms take mushaf/tajweed, and `fontUrl` pins a mirror on every line it returns.
 await getMushafLines({surah: 2, tajweed: true, fontUrl: (page, mushaf) => staticFile(`fonts/${mushaf}/p${page}.woff2`)});
-// `slice: true` records the range on every line, so <MushafLine> shows only those ayahs.
+// `slice: true` records the range on the lines it cuts, so <MushafLine> shows only those ayahs.
 await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true});
 ```
 
@@ -277,9 +277,10 @@ The range is `{ayah}` or `{fromAyah, toAyah?}`, never a list: a line's ayahs are
 list would only mean its outer range, and hiding an ayah *between* two kept ones would put words
 side by side that the mushaf never printed together.
 
-`getMushafLines({surah, fromAyah, toAyah, slice: true})` records the range on every returned line as
-`line.slice`, so a resolved passage carries its own slicing through `inputProps`; the `slice` prop
-wins over it, and `slice={null}` cancels it.
+`getMushafLines({surah, fromAyah, toAyah, slice: true})` records the range as `line.slice` on the
+lines it cuts — the first and/or last of the passage, when they carry words of other ayahs — so a
+resolved passage carries its own slicing through `inputProps`; the lines in between carry no slice.
+The `slice` prop wins over it, and `slice={null}` cancels it.
 
 ## Entrances and exits
 
