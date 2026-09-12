@@ -53,11 +53,11 @@ export const useFontGate = (line: MushafLineData, fontSet: FontSetDefinition): F
   useEffect(() => {
     loadPageFont({
       mushaf: line.mushaf,
-      look: line.look,
+      theme: line.theme,
       page: line.page,
       ...(line.fontUrl === undefined ? {} : {url: line.fontUrl}),
     });
-  }, [line.mushaf, line.look, line.page, line.fontUrl]);
+  }, [line.mushaf, line.theme, line.page, line.fontUrl]);
 
   return {loaded: status === 'loaded', error: status === 'error' ? (getFontEntry(key)?.error ?? null) : null};
 };

@@ -22,9 +22,9 @@ describe('getMushafLine', () => {
   it('returns page 1 line 2 as 1:1:1..1:1:3 ending with the ayah marker, centered', async () => {
     const line = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2});
     expect(line).toEqual({
-      version: 2,
+      version: 3,
       mushaf: 'qpc-v4',
-      look: 'plain',
+      theme: 'plain',
       fontSet: 'qpc-v4',
       page: 1,
       line: 2,
@@ -41,7 +41,7 @@ describe('getMushafLine', () => {
   });
 
   it('reconstructs positions across a page break, two-code-point words and marker kinds', async () => {
-    const line = await getMushafLine({look: 'tajweed', page: 3, line: 1});
+    const line = await getMushafLine({theme: 'light', page: 3, line: 1});
     expect(line.fontFamily).toBe('mushaf-qpc-v4-tajweed-p3');
     expect(line.centered).toBe(false);
     // The rub-el-hizb marker shares the location of the word it precedes (so `id` is not unique; `wordId` is).
@@ -52,53 +52,59 @@ describe('getMushafLine', () => {
     expect(Array.from(line.words[3]?.text ?? '')).toHaveLength(2);
   });
 
-  it('records the look in the data: the font set, and the colours for mandala', async () => {
+  it('records the theme in the data: a preset by name, and the font set it needs', async () => {
     const plain = await getMushafLine({page: 1, line: 2});
-    expect(plain).toMatchObject({mushaf: 'qpc-v4', look: 'plain', fontSet: 'qpc-v4'});
-    expect(Object.keys(plain)).not.toContain('colors');
+    expect(plain).toMatchObject({mushaf: 'qpc-v4', theme: 'plain', fontSet: 'qpc-v4'});
 
-    const tajweed = await getMushafLine({page: 1, line: 2, look: 'tajweed'});
-    expect(tajweed).toMatchObject({
+    const light = await getMushafLine({page: 1, line: 2, theme: 'light'});
+    expect(light).toMatchObject({
       mushaf: 'qpc-v4',
-      look: 'tajweed',
+      theme: 'light',
       fontSet: 'qpc-v4-tajweed',
       fontFamily: 'mushaf-qpc-v4-tajweed-p1',
     });
-    // No colours: the colour font paints its own default (palette 0, the tajweed colours).
-    expect(Object.keys(tajweed)).not.toContain('colors');
 
-    // Mandala is the same colour font at palette 3, with the letters following CSS `color`.
-    const mandala = await getMushafLine({page: 1, line: 2, look: 'mandala'});
-    expect(mandala).toMatchObject({
-      look: 'mandala',
+    // A preset stays a name: the data stays small and the preset's colours are the package's.
+    const normal = await getMushafLine({page: 1, line: 2, theme: 'normal'});
+    expect(normal).toMatchObject({theme: 'normal', fontSet: 'qpc-v4-tajweed', fontFamily: 'mushaf-qpc-v4-tajweed-p1'});
+    expect(assertLineData(normal)).toBe(normal);
+    expect(await getMushafLine({page: 1, line: 2, theme: 'p4'})).toMatchObject({
+      theme: 'p4',
       fontSet: 'qpc-v4-tajweed',
-      fontFamily: 'mushaf-qpc-v4-tajweed-p1',
-      colors: {ink: 'currentColor'},
     });
-    expect(assertLineData(mandala)).toBe(mandala);
   });
 
-  it('records the mandala colours asked for, and stays plain JSON', async () => {
+  it('records a custom theme resolved down to entries, and stays plain JSON', async () => {
     const gold = await getMushafLine({
       page: 1,
       line: 2,
-      look: 'mandala',
-      colors: {accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'},
+      theme: {base: 'normal', colors: {accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'}},
     });
-    expect(gold.colors).toEqual({ink: 'currentColor', accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'});
+    expect(gold.theme).toMatchObject({
+      base: 3,
+      colors: {0: 'currentColor', 13: 'currentColor', 10: '#1b6f3f', 11: '#c8a45c', 12: 'transparent'},
+    });
     expect(JSON.parse(JSON.stringify(gold))).toEqual(gold);
-    // An explicit ink colour replaces the default, rather than being layered on it.
-    const green = await getMushafLine({page: 1, line: 2, look: 'mandala', colors: {ink: 'rgb(27 111 63)'}});
-    expect(green.colors).toEqual({ink: 'rgb(27 111 63)'});
-    await expect(
-      getMushafLine({page: 1, line: 2, look: 'mandala', colors: {ink: 'not a colour'}}),
-    ).rejects.toMatchObject({code: 'BAD_COLOR'});
-    // Colours belong to the mandala look alone.
-    await expect(getMushafLine({page: 1, line: 2, colors: {ink: 'red'}})).rejects.toMatchObject({code: 'BAD_COLOR'});
-    await expect(getMushafLine({page: 1, line: 2, look: 'tajweed', colors: {accent: 'red'}})).rejects.toMatchObject({
-      code: 'BAD_COLOR',
+    expect(assertLineData(gold)).toBe(gold);
+    // An explicit ink colour replaces the preset's, rather than being layered on it.
+    const green = await getMushafLine({page: 1, line: 2, theme: {base: 'normal', colors: {ink: 'rgb(27 111 63)'}}});
+    expect((green.theme as {colors: Record<string, string>}).colors).toMatchObject({
+      0: 'rgb(27 111 63)',
+      14: 'rgb(27 111 63)',
+      1: 'currentColor',
     });
-    await expect(getMushafLine({page: 1, line: 2, look: 'neon' as never})).rejects.toMatchObject({code: 'BAD_LOOK'});
+    // A bare base records only the base; a preset's marker rides along.
+    expect((await getMushafLine({page: 1, line: 2, theme: {base: 4}})).theme).toEqual({base: 4});
+    expect((await getMushafLine({page: 1, line: 2, theme: 'black'})).theme).toBe('black');
+    expect((await getMushafLine({page: 1, line: 2, theme: {base: 'black'}})).theme).toMatchObject({
+      base: 5,
+      marker: {13: '#000000'},
+    });
+    await expect(
+      getMushafLine({page: 1, line: 2, theme: {base: 3, colors: {ink: 'not a colour'}}}),
+    ).rejects.toMatchObject({code: 'BAD_COLOR'});
+    await expect(getMushafLine({page: 1, line: 2, theme: 'neon' as never})).rejects.toMatchObject({code: 'BAD_THEME'});
+    await expect(getMushafLine({page: 1, line: 2, theme: {base: 6}})).rejects.toMatchObject({code: 'BAD_THEME'});
   });
 
   it('types header and basmallah lines with no words and the surah number', async () => {
@@ -157,8 +163,8 @@ describe('getMushafLine', () => {
     await getMushafLine({page: 1, line: 2});
     expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', undefined);
     const data = {words: '/data/qpc-v4/words.json.zip', layout: 'https://mirror.example/layout.db.zip'};
-    // The colour font shares the dataset, so the same source serves every look.
-    const line = await getMushafLine({page: 1, line: 2, look: 'tajweed', data});
+    // The colour font shares the dataset, so the same source serves every theme.
+    const line = await getMushafLine({page: 1, line: 2, theme: 'light', data});
     expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
     // The source is where the data came from, not part of the line: the JSON stays the same.
     expect(Object.keys(line)).not.toContain('data');
@@ -169,13 +175,14 @@ describe('assertLineData', () => {
   it('rejects tampered or foreign data field by field', async () => {
     const good = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2});
     const bad = (patch: Record<string, unknown>) => () => assertLineData({...good, ...patch});
-    expect(bad({version: 1})).toThrow(
-      /version is 1 but this version of remotion-mushaf-line-renderer understands version 2/,
+    expect(bad({version: 2})).toThrow(
+      /version is 2 but this version of remotion-mushaf-line-renderer understands version 3/,
     );
     expect(bad({mushaf: 'other'})).toThrow(MushafError);
     expect(bad({mushaf: 'qpc-v4-tajweed'})).toThrow(/Unknown mushaf "qpc-v4-tajweed"/);
-    expect(bad({look: 'neon'})).toThrow(/look must be one of/);
-    expect(bad({fontSet: 'qpc-v4-tajweed'})).toThrow(/fontSet is invalid: expected "qpc-v4" for the plain look/);
+    expect(bad({theme: 'neon'})).toThrow(/theme must be 'plain', a preset/);
+    expect(bad({theme: undefined})).toThrow(/theme is invalid: expected 'plain', a preset name or a theme object/);
+    expect(bad({fontSet: 'qpc-v4-tajweed'})).toThrow(/fontSet is invalid: expected "qpc-v4" for this theme/);
     expect(bad({page: 700})).toThrow(/page must be an integer/);
     expect(bad({fontFamily: 'Arial'})).toThrow(/fontFamily is invalid: expected "mushaf-qpc-v4-p1"/);
     expect(bad({type: 'header'})).toThrow(/type is invalid/);
@@ -184,24 +191,26 @@ describe('assertLineData', () => {
     );
     expect(bad({words: [good.words[1], good.words[0]]})).toThrow(/ordered by wordId/);
     expect(bad({fontUrl: ''})).toThrow(/fontUrl/);
-    // A palette only means something for the colour font, and only the ones it actually carries.
-    expect(bad({palette: 3})).toThrow(/the plain look uses the monochrome font, which has no palettes/);
-    expect(bad({colors: {ink: 'red'}})).toThrow(/only the mandala look takes colours \(this line is plain\)/);
-    const colour = await getMushafLine({page: 1, line: 2, look: 'mandala'});
-    expect(() => assertLineData({...colour, palette: 9})).toThrow(
-      /palette is invalid: expected one of 0, 1, 2, 3, 4, 5/,
+    // A theme is checked like a selection: base palettes the font has, entries it has, real colours.
+    const colour = await getMushafLine({page: 1, line: 2, theme: 'normal'});
+    expect(() => assertLineData({...colour, theme: {base: 9}})).toThrow(
+      /theme.base must be a CPAL palette of the font \(0, 1, 2, 3, 4, 5\)/,
     );
-    expect(() => assertLineData({...colour, palette: '3'})).toThrow(/palette is invalid/);
-    expect(assertLineData({...colour, palette: 0})).toBeTruthy();
-    const tajweed = await getMushafLine({page: 1, line: 2, look: 'tajweed'});
-    expect(assertLineData({...tajweed, palette: 1})).toBeTruthy();
-    expect(() => assertLineData({...tajweed, colors: {accent: 'red'}})).toThrow(/this line is tajweed/);
+    expect(() => assertLineData({...colour, theme: {base: '3'}})).toThrow(/theme.base must be/);
+    expect(() => assertLineData({...colour, theme: {base: 3, colors: {16: 'red'}}})).toThrow(
+      /theme.colors.16 is neither a part/,
+    );
+    expect(assertLineData({...colour, theme: {base: 0}})).toBeTruthy();
+    expect(assertLineData({...colour, theme: {base: 'light', colors: {rules: 'currentColor'}}})).toBeTruthy();
     // The colours are written into a stylesheet, so they are checked here too.
-    expect(() => assertLineData({...colour, colors: {ink: 'red; } body {display:none}'}})).toThrow(
-      /colors.ink must be a CSS colour/,
+    expect(() => assertLineData({...colour, theme: {base: 3, colors: {ink: 'red; } body {display:none}'}}})).toThrow(
+      /theme.colors.ink must be a CSS colour/,
     );
-    expect(() => assertLineData({...colour, colors: {glow: 'red'}})).toThrow(/is not a colourable part/);
-    expect(assertLineData({...colour, colors: {accent: '#c8a45c'}})).toBeTruthy();
+    expect(() => assertLineData({...colour, theme: {base: 3, colors: {glow: 'red'}}})).toThrow(/is neither a part/);
+    // The font set must be the theme's.
+    expect(() => assertLineData({...colour, theme: 'plain'})).toThrow(
+      /fontSet is invalid: expected "qpc-v4" for this theme/,
+    );
     // A recorded slice is checked like the prop.
     expect(bad({slice: {ayah: 0}})).toThrow(/MushafLineData.slice.ayah must be a positive integer/);
     expect(bad({slice: {fromAyah: 3, toAyah: 1}})).toThrow(/toAyah \(1\) is before fromAyah \(3\)/);

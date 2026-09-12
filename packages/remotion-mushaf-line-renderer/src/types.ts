@@ -9,19 +9,69 @@ import type {MUSHAFS} from './mushaf/registry';
  */
 export type MushafId = keyof typeof MUSHAFS;
 
+/** The colour presets, the ten themes QUL offers on its preview page minus `p6` (the font has no palette 6). */
+export type MushafThemeName = 'light' | 'dark' | 'sepia' | 'black' | 'normal' | 'p1' | 'p2' | 'p3' | 'p4' | 'p5';
+
 /**
- * How a line is coloured.
+ * The parts of a colour-font line that can be recoloured, each a group of CPAL entries:
  *
- * - `'plain'` (default): monochrome glyphs that follow the CSS `color` they inherit.
- * - `'tajweed'`: QUL's colour font at its own palette, the tajweed colours baked in.
- * - `'mandala'`: the colour font at its "no tajweed" palette: the writing follows CSS `color`, the
- *   ayah-end rosette keeps its colours. Recolour any part of it with `colors`.
+ * - `ink`: the letters (entries 0 and 14).
+ * - `silent`: the greyed letters that are written but not pronounced (1, 2, 15).
+ * - `rules`: the seven tajweed rule colours (3–9: prolongations, ghunnah, qalqalah, ...).
+ * - `frame`: the ayah-end rosette's frame, curls and the ayah number inside it (13).
+ * - `accent`: the petal flourishes above and below the rosette (11).
+ * - `detail`: the small jewel at the top of the rosette (10).
+ * - `background`: the disc behind the ayah number (12).
  */
-export type MushafLook = 'plain' | 'tajweed' | 'mandala';
+export type MushafColorPart = 'ink' | 'silent' | 'rules' | 'frame' | 'accent' | 'detail' | 'background';
+
+/**
+ * Colours by part name or by CPAL entry index (`'0'`–`'15'`). Every value is an ordinary CSS colour
+ * (`'#1b6f3f'`, `'rgb(27 111 63)'`, `'crimson'`, `'transparent'`), plus `'currentColor'`: the
+ * inherited CSS `color`, which the package resolves at render time because COLR glyphs ignore
+ * `color` themselves. A numeric key wins over a part that contains that entry.
+ */
+export type MushafThemeColors = {readonly [key in MushafColorPart | `${number}`]?: string};
+
+/**
+ * A colour scheme for the colour font: exactly what QUL writes into an `@font-palette-values` rule.
+ *
+ * ```ts
+ * {base: 'normal', colors: {accent: '#c8a45c', background: 'transparent'}}  // gold petals on a plain disc
+ * {base: 'light', colors: {rules: 'currentColor'}}                          // tajweed switched off
+ * {base: 4}                                                                  // the font's own white-text palette
+ * ```
+ */
+export type MushafTheme = {
+  /** A CPAL base palette of the font (0–5), or a preset to start from (its colours come first). */
+  readonly base: number | MushafThemeName;
+  /** Colours over that base. */
+  readonly colors?: MushafThemeColors;
+  /**
+   * Colours that apply to the ayah-number marker glyph only, over `colors`. QUL's `black` theme
+   * uses this to paint the number black on an otherwise all-white line.
+   */
+  readonly marker?: MushafThemeColors;
+};
+
+/**
+ * How a line is coloured: `'plain'` (the default) is the monochrome font, whose glyphs follow the
+ * CSS `color` they inherit; anything else selects the colour font with a preset or a custom theme.
+ *
+ * | Preset   | QUL's button | What you get                                                                    |
+ * | -------- | ------------ | ------------------------------------------------------------------------------- |
+ * | `light`  | Light        | the tajweed colours on a light background                                       |
+ * | `dark`   | Dark         | the tajweed colours for a dark background                                       |
+ * | `sepia`  | Sepia        | the tajweed colours in sepia tones                                              |
+ * | `black`  | Black        | everything white, the ayah number black: for a dark background, no tajweed      |
+ * | `normal` | (default)    | the writing in the inherited CSS `color`, the ayah rosette in its own colours   |
+ * | `p1`–`p5`| P1–P5        | the font's own CPAL palettes 1–5, untouched                                     |
+ */
+export type MushafThemeSelection = 'plain' | MushafThemeName | MushafTheme;
 
 /**
  * The two font file sets QUL publishes for the V4 mushaf: `'qpc-v4'` (monochrome outlines) and
- * `'qpc-v4-tajweed'` (COLR/CPAL colour font). Derived from the look; mirrors and CDN paths are
+ * `'qpc-v4-tajweed'` (COLR/CPAL colour font). Derived from the theme; mirrors and CDN paths are
  * organised by font set (`fonts/<fontSet>/p<page>.woff2`).
  */
 export type MushafFontSet = 'qpc-v4' | 'qpc-v4-tajweed';
@@ -55,47 +105,25 @@ export type MushafWord = {
   readonly text: string;
 };
 
-/**
- * CSS colours for the parts of the mandala look. Every value is an ordinary CSS colour
- * (`'#1b6f3f'`, `'rgb(27 111 63)'`, `'crimson'`, `'transparent'`), plus `'currentColor'` — the
- * inherited CSS `color`, which the package resolves at render time because COLR glyphs ignore
- * `color` themselves. It is resolved per line, so `wordStyle` / `activeWordStyle` colours do not
- * reach these glyphs; use the plain look to colour words individually.
- *
- * Anything left out keeps the font's own colour, which is what makes a mandala line a coloured
- * rosette on plainly written text. Between them the four parts cover every entry the font paints.
- */
-export type MushafColors = {
-  /**
-   * Everything written: the letters, the rosette's frame and curls, and the ayah number inside it —
-   * the font paints them in one colour, and they move together. Defaults to `'currentColor'`.
-   */
-  readonly ink?: string;
-  /** The petal flourishes above and below the rosette. */
-  readonly accent?: string;
-  /** The small jewel at the top of the rosette. */
-  readonly detail?: string;
-  /** The disc behind the ayah number. */
-  readonly background?: string;
-};
-
 /** Chooses the mushaf and how it is coloured. Everything is optional: the default is the plain V4. */
 export type MushafSelection = {
   /** Default `'qpc-v4'`. */
   readonly mushaf?: MushafId | undefined;
-  /** Default `'plain'`. */
-  readonly look?: MushafLook | undefined;
-  /** Recolours the mandala look; only valid with `look: 'mandala'`. */
-  readonly colors?: MushafColors | undefined;
+  /** Default `'plain'`. See `MushafThemeSelection`. */
+  readonly theme?: MushafThemeSelection | undefined;
 };
 
 export type MushafLineData = {
   /** Data-shape version. `<MushafLine>` throws BAD_LINE_DATA on a mismatch. */
-  readonly version: 2;
+  readonly version: 3;
   readonly mushaf: MushafId;
-  /** How the line is coloured; decided where the data was resolved. */
-  readonly look: MushafLook;
-  /** The font files the look needs; what `fontUrl(page, fontSet)` receives when pinning a mirror. */
+  /**
+   * How the line is coloured, decided where the data was resolved: `'plain'`, a preset name, or a
+   * custom theme recorded with a numeric `base` and its colours by entry, so the data is
+   * self-contained.
+   */
+  readonly theme: MushafThemeSelection;
+  /** The font files the theme needs; what `fontUrl(page, fontSet)` receives when pinning a mirror. */
   readonly fontSet: MushafFontSet;
   /** 1..604 */
   readonly page: number;
@@ -112,13 +140,6 @@ export type MushafLineData = {
    * so every render tab receives it as plain JSON. Passed to `loadPageFont({url})` as an explicit source.
    */
   readonly fontUrl?: string;
-  /** The mandala colours, `ink: 'currentColor'` included. Present on mandala lines only. */
-  readonly colors?: MushafColors;
-  /**
-   * Advanced: the CPAL base palette to paint a colour-font line with, instead of the look's own
-   * (0 for tajweed, 3 for mandala). The V4 colour font carries palettes 0–5. Not valid on plain lines.
-   */
-  readonly palette?: number;
   /**
    * Which ayahs of the line to show (see `MushafSlice`). Recorded by `getMushafLines({slice: true})`;
    * the words are never trimmed, so the printed line is still all there for the layout.
@@ -259,15 +280,14 @@ export type MushafLineCommonProps = {
 };
 
 export type MushafLineProps = MushafLineCommonProps &
-  // Resolved data decides its own mushaf and look, and is already loaded (pass `look` / `data` to
+  // Resolved data decides its own mushaf and theme, and is already loaded (pass `theme` / `data` to
   // getMushafLine() instead).
   (
     | {
         readonly line: MushafLineData;
         readonly page?: never;
         readonly mushaf?: never;
-        readonly look?: never;
-        readonly colors?: never;
+        readonly theme?: never;
         readonly data?: never;
       }
     // Convenience form: resolved at render time behind delayRender().
@@ -327,8 +347,8 @@ export type GetMushafLinesOptions = MushafSelection &
 
 export type LoadPageFontOptions = {
   readonly mushaf?: MushafId | undefined;
-  /** Decides the font set: `'plain'` loads the monochrome font, `'tajweed'` and `'mandala'` the colour font. */
-  readonly look?: MushafLook | undefined;
+  /** Decides the font set: `'plain'` loads the monochrome font, any theme the colour font. */
+  readonly theme?: MushafThemeSelection | undefined;
   readonly page: number;
   /** Explicit font source: a mirror URL or `staticFile('fonts/<fontSet>/p<N>.woff2')`. */
   readonly url?: string | undefined;

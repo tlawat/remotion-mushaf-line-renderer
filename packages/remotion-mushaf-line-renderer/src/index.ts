@@ -17,7 +17,9 @@ export type {MushafErrorCode} from './errors';
 export {isMushafError, MushafError} from './errors';
 // Fonts
 export {loadPageFont} from './fonts/load-page-font';
-export {getMushafMetrics, MUSHAF_IDS, MUSHAF_LOOKS} from './mushaf/registry';
+export {getMushafMetrics, MUSHAF_IDS} from './mushaf/registry';
+// Themes
+export {MUSHAF_THEME_NAMES, MUSHAF_THEMES} from './mushaf/themes';
 // Line data
 export {getMushafLine} from './resolve/get-mushaf-line';
 export {getMushafLines, getMushafLocation, lineAyahs} from './resolve/get-mushaf-lines';
@@ -30,7 +32,7 @@ export type {
   LoadedPageFont,
   LoadMushafDataOptions,
   LoadPageFontOptions,
-  MushafColors,
+  MushafColorPart,
   MushafDataSource,
   MushafFontSet,
   MushafFontUrl,
@@ -42,10 +44,13 @@ export type {
   MushafLineProps,
   MushafLineType,
   MushafLocation,
-  MushafLook,
   MushafMetrics,
   MushafSelection,
   MushafSlice,
+  MushafTheme,
+  MushafThemeColors,
+  MushafThemeName,
+  MushafThemeSelection,
   MushafWord,
   MushafWordKind,
   WordContext,

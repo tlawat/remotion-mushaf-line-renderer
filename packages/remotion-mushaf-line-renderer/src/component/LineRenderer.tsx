@@ -3,7 +3,7 @@ import {useMemo, useRef} from 'react';
 import {useCurrentFrame, useVideoConfig} from 'remotion';
 import {getEnterState, getExitState, normaliseAnimation} from '../animation/animation-state';
 import {MushafError} from '../errors';
-import {fontSetForLook, getMushafDefinition} from '../mushaf/registry';
+import {resolveSelection} from '../mushaf/registry';
 import {resolveSlice} from '../resolve/slice';
 import type {MushafLineCommonProps, MushafLineData} from '../types';
 import {useCanvasGuard} from './hooks/use-canvas-guard';
@@ -24,9 +24,9 @@ export type LineRendererProps = {
 
 /**
  * Renders a resolved line. The hooks own the four things that must be true before the first paint
- * (font loaded, line fitted to its box, palette rule in the document, no canvas presentation);
+ * (font loaded, line fitted to its box, palette rules in the document, no canvas presentation);
  * this component assembles the row, the presentations and the root. Hooks are all above the early
- * throws so the hook order is stable; the parent keys this component by mushaf/page/line.
+ * throws so the hook order is stable; the parent keys this component by mushaf/font set/page/line.
  */
 export const LineRenderer: React.FC<LineRendererProps> = ({
   line,
@@ -45,7 +45,11 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
 }) => {
   const enter = normaliseAnimation('enter', enterProp);
   const exit = normaliseAnimation('exit', exitProp);
-  const fontSet = fontSetForLook(getMushafDefinition(line.mushaf), line.look);
+  // The data was validated by <MushafLine>; this only rebuilds the resolved theme, once per line.
+  const {fontSet, theme} = useMemo(
+    () => resolveSelection({mushaf: line.mushaf, theme: line.theme}),
+    [line.mushaf, line.theme],
+  );
   const {width, fps, durationInFrames} = useVideoConfig(); // honours <Sequence width>; durationInFrames is the Sequence's
   const frame = useCurrentFrame(); // local to the enclosing <Sequence from>; 0 while premounted
   const rootRef = useRef<HTMLDivElement>(null);
@@ -62,7 +66,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
     fitKey: `${line.fontFamily}/${baseFontSize}/${Math.round(width)}`,
     rowRef,
   });
-  const paletteIdent = usePaletteRule(line, fontSet, rowRef);
+  const palettes = usePaletteRule(line.fontFamily, theme, rowRef);
 
   const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
 
@@ -75,7 +79,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   const resolvedSlice = fitScale === null ? null : requested;
 
   // Nothing is painted before the line is in its page font, at its final size and in its palette.
-  const ready = font.loaded && fitScale !== null && paletteIdent !== null;
+  const ready = font.loaded && fitScale !== null && palettes !== null;
   const ctx = useMemo<LineContextValue>(
     () => ({
       line,
@@ -84,6 +88,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       ready,
       frame,
       fps,
+      markerPalette: palettes?.marker,
       activeWordId,
       activeWordStyle,
       wordStyle,
@@ -97,6 +102,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       ready,
       frame,
       fps,
+      palettes,
       activeWordId,
       activeWordStyle,
       wordStyle,
@@ -131,7 +137,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
         centered: line.centered,
         visible: ready,
         sliced: resolvedSlice !== null,
-        ...(paletteIdent ? {fontPalette: paletteIdent} : {}),
+        ...(palettes ? {fontPalette: palettes.row} : {}),
       })}
     >
       {line.words.map((word) => (
@@ -177,7 +183,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
         ref={rootRef}
         className={className ? `mushaf-line ${className}` : 'mushaf-line'}
         data-mushaf={line.mushaf}
-        data-look={line.look}
+        data-theme={typeof line.theme === 'string' ? line.theme : 'custom'}
         data-page={line.page}
         data-line={line.line}
         data-line-type={line.type}

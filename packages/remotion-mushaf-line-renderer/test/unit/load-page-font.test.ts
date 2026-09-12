@@ -137,7 +137,7 @@ describe('loadPageFont', () => {
   });
 
   it('registers the font with pinned metrics, weight 400 and font-display block', async () => {
-    await loadPageFont({look: 'tajweed', page: 3}).waitUntilDone();
+    await loadPageFont({theme: 'light', page: 3}).waitUntilDone();
     expect(faces[0]?.family).toBe('mushaf-qpc-v4-tajweed-p3');
     expect(faces[0]?.source).toBe(WOFF2);
     expect(faces[0]?.descriptors).toEqual({

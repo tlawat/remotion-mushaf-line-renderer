@@ -11,8 +11,8 @@ import type {GetMushafLineOptions, MushafLineData, MushafWord, MushafWordKind} f
  * `inputProps`, or in a `<Player>` host. The only asynchronous step is loading the mushaf data
  * (QUL's exports, from Tarteel's CDN or the `data` source given), cached after the first call.
  *
- * The returned `look`, `fontSet` and `colors` are the resolved appearance, so the data alone
- * decides how the line is painted.
+ * The returned `theme` and `fontSet` are the resolved appearance, so the data alone decides how the
+ * line is painted.
  */
 export const getMushafLine = async ({
   page,
@@ -30,7 +30,7 @@ export const getMushafLine = async ({
 /** Synchronous core of `getMushafLine()` for an already loaded layout (also used by test fixtures). */
 export const lineFromLayout = (
   layout: CompiledLayout,
-  {def, look, fontSet, colors}: ResolvedSelection,
+  {def, fontSet, theme}: ResolvedSelection,
   page: number,
   line: number,
 ): MushafLineData => {
@@ -68,16 +68,15 @@ export const lineFromLayout = (
 
   // Optional keys are omitted rather than set to undefined so JSON round-trips are byte-identical.
   return {
-    version: 2,
+    version: 3,
     mushaf: def.id,
-    look,
+    theme: theme === null ? 'plain' : theme.data,
     fontSet: fontSet.id,
     page,
     line,
     type: entry.type,
     centered: entry.centered,
     fontFamily: fontSet.fontFamily(page),
-    ...(colors === undefined ? {} : {colors}),
     ...(entry.surahNumber === undefined ? {} : {surahNumber: entry.surahNumber}),
     words,
   };

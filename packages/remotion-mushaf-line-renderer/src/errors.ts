@@ -1,6 +1,6 @@
 export type MushafErrorCode =
   | 'UNKNOWN_MUSHAF'
-  | 'BAD_LOOK'
+  | 'BAD_THEME'
   | 'BAD_COLOR'
   | 'BAD_SLICE'
   | 'PAGE_OUT_OF_RANGE'

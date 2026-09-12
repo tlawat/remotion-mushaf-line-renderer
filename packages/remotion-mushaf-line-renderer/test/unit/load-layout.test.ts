@@ -379,8 +379,8 @@ describe('loadLayout', () => {
     resetLayoutCache();
     await loadMushafData();
     expect(fetchMock).toHaveBeenCalledTimes(6);
-    await getMushafLine({page: 2, line: 3, look: 'tajweed'});
-    expect(fetchMock).toHaveBeenCalledTimes(6); // the warm-up served the line, for any look
+    await getMushafLine({page: 2, line: 3, theme: 'light'});
+    expect(fetchMock).toHaveBeenCalledTimes(6); // the warm-up served the line, for any theme
 
     resetLayoutCache();
     fetchMock.mockClear();
