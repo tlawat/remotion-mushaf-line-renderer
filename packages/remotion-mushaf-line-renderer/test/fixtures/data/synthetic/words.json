@@ -1,0 +1,186 @@
+{
+ "1:1:1": {
+  "id": 1,
+  "surah": 1,
+  "ayah": 1,
+  "word": 1,
+  "location": "1:1:1",
+  "text": "ﱁ"
+ },
+ "1:1:2": {
+  "id": 2,
+  "surah": 1,
+  "ayah": 1,
+  "word": 2,
+  "location": "1:1:2",
+  "text": "ﱂ"
+ },
+ "1:1:3": {
+  "id": 3,
+  "surah": 1,
+  "ayah": 1,
+  "word": 3,
+  "location": "1:1:3",
+  "text": "ﱃ"
+ },
+ "1:2:1": {
+  "id": 4,
+  "surah": 1,
+  "ayah": 2,
+  "word": 1,
+  "location": "1:2:1",
+  "text": "ﱄ"
+ },
+ "1:2:2": {
+  "id": 5,
+  "surah": 1,
+  "ayah": 2,
+  "word": 2,
+  "location": "1:2:2",
+  "text": "ﱅ"
+ },
+ "2:1:1": {
+  "id": 6,
+  "surah": 2,
+  "ayah": 1,
+  "word": 1,
+  "location": "2:1:1",
+  "text": "ﱁ"
+ },
+ "2:1:2": {
+  "id": 7,
+  "surah": 2,
+  "ayah": 1,
+  "word": 2,
+  "location": "2:1:2",
+  "text": "ﱂ"
+ },
+ "2:1:3": {
+  "id": 8,
+  "surah": 2,
+  "ayah": 1,
+  "word": 3,
+  "location": "2:1:3",
+  "text": "ﱃ"
+ },
+ "2:1:4": {
+  "id": 9,
+  "surah": 2,
+  "ayah": 1,
+  "word": 4,
+  "location": "2:1:4",
+  "text": "ﱄ"
+ },
+ "2:2:1": {
+  "id": 10,
+  "surah": 2,
+  "ayah": 2,
+  "word": 1,
+  "location": "2:2:1",
+  "text": "ﱅ"
+ },
+ "2:2:2": {
+  "id": 11,
+  "surah": 2,
+  "ayah": 2,
+  "word": 2,
+  "location": "2:2:2",
+  "text": "ﱆ"
+ },
+ "2:2:3": {
+  "id": 12,
+  "surah": 2,
+  "ayah": 2,
+  "word": 3,
+  "location": "2:2:3",
+  "text": "ﱇ"
+ },
+ "2:2:4": {
+  "id": 13,
+  "surah": 2,
+  "ayah": 2,
+  "word": 4,
+  "location": "2:2:4",
+  "text": "ﱁ"
+ },
+ "2:2:5": {
+  "id": 14,
+  "surah": 2,
+  "ayah": 2,
+  "word": 5,
+  "location": "2:2:5",
+  "text": "ﱂ"
+ },
+ "2:3:1": {
+  "id": 15,
+  "surah": 2,
+  "ayah": 3,
+  "word": 1,
+  "location": "2:3:1",
+  "text": "ﱄﱅ"
+ },
+ "2:3:2": {
+  "id": 16,
+  "surah": 2,
+  "ayah": 3,
+  "word": 2,
+  "location": "2:3:2",
+  "text": "ﱆ"
+ },
+ "2:3:3": {
+  "id": 17,
+  "surah": 2,
+  "ayah": 3,
+  "word": 3,
+  "location": "2:3:3",
+  "text": "ﱇ"
+ },
+ "2:4:1": {
+  "id": 18,
+  "surah": 2,
+  "ayah": 4,
+  "word": 1,
+  "location": "2:4:1",
+  "text": "ﱈ"
+ },
+ "2:4:2": {
+  "id": 19,
+  "surah": 2,
+  "ayah": 4,
+  "word": 2,
+  "location": "2:4:2",
+  "text": "ﱉ"
+ },
+ "3:1:1": {
+  "id": 20,
+  "surah": 3,
+  "ayah": 1,
+  "word": 1,
+  "location": "3:1:1",
+  "text": "ﱊ"
+ },
+ "3:1:2": {
+  "id": 21,
+  "surah": 3,
+  "ayah": 1,
+  "word": 2,
+  "location": "3:1:2",
+  "text": "ﱋ"
+ },
+ "3:1:3": {
+  "id": 22,
+  "surah": 3,
+  "ayah": 1,
+  "word": 3,
+  "location": "3:1:3",
+  "text": "ﱌ"
+ },
+ "3:1:4": {
+  "id": 23,
+  "surah": 3,
+  "ayah": 1,
+  "word": 4,
+  "location": "3:1:4",
+  "text": "ﱍ"
+ }
+}
