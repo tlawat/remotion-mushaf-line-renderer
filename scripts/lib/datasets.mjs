@@ -17,8 +17,9 @@ export const QPC_V4 = {
   linesOnPage: (page) => (page <= 2 ? 8 : 15),
   /**
    * Every line of these pages is centred as printed (the framed opening pages; QUL's preview shows
-   * them so), whatever the layout export's is_centered says: the export flags one line of page 2
-   * as justified. Applied by the export readers, the package's and the dev tools' alike.
+   * them so), whatever the layout export's is_centered says: the export flags page 2 line 5 (2:3:6)
+   * as justified. Applied by the export readers, the package's and the dev tools' alike; with it
+   * the exports compile to the very layout the preview pages compile to.
    */
   centeredPages: [1, 2],
   previewUrl: (page) => `https://qul.tarteel.ai/mushaf_layouts/19?page_number=${page}`,
