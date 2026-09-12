@@ -1,16 +1,20 @@
 // Browser suite against the example's <Player> harness (example/player). Synthetic lines are
 // rendered with the page-10 tajweed fixture font (test/fixtures/fonts, example/public/fonts).
-import {expect, test, type Page} from '@playwright/test';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
+import {expect, type Page, test} from '@playwright/test';
 
 type Box = {x: number; y: number; width: number; height: number};
 
 /** The example's mirror of QUL's two exports (`bun run qul data`), served by Vite with the rest of public/. */
-const MIRROR = {words: 'http://localhost:4173/data/qpc-v4/words.json.zip', layout: 'http://localhost:4173/data/qpc-v4/layout.db.zip'};
+const MIRROR = {
+  words: 'http://localhost:4173/data/qpc-v4/words.json.zip',
+  layout: 'http://localhost:4173/data/qpc-v4/layout.db.zip',
+};
 // Resolved from the config's rootDir (this folder): Playwright's loader has no import.meta.url to offer.
-const hasMirror = () => existsSync(path.resolve(test.info().config.rootDir, '../../../../example/public/data/qpc-v4/layout.db.zip'));
-const NO_MIRROR = 'QUL\'s exports are not mirrored under example/public/data (bun run qul data)';
+const hasMirror = () =>
+  existsSync(path.resolve(test.info().config.rootDir, '../../../../example/public/data/qpc-v4/layout.db.zip'));
+const NO_MIRROR = "QUL's exports are not mirrored under example/public/data (bun run qul data)";
 
 const ROW = '.mushaf-line__row';
 const ROOT = '.mushaf-line';
@@ -21,8 +25,14 @@ const open = async (page: Page, scenario: string, extra = '') => {
 };
 
 const seek = async (page: Page, frame: number) => {
-  await page.evaluate((f) => (window as unknown as {__harness: {seekTo: (n: number) => void}}).__harness.seekTo(f), frame);
-  await page.waitForFunction((f) => (window as unknown as {__harness: {getCurrentFrame: () => number}}).__harness.getCurrentFrame() === f, frame);
+  await page.evaluate(
+    (f) => (window as unknown as {__harness: {seekTo: (n: number) => void}}).__harness.seekTo(f),
+    frame,
+  );
+  await page.waitForFunction(
+    (f) => (window as unknown as {__harness: {getCurrentFrame: () => number}}).__harness.getCurrentFrame() === f,
+    frame,
+  );
   // Let React commit the new frame.
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 };
@@ -41,12 +51,22 @@ const box = async (page: Page, selector: string, nth = 0): Promise<Box> => {
 };
 
 const wordBoxes = (page: Page, lineIndex: number) =>
-  page.locator(ROOT).nth(lineIndex).locator('.mushaf-word').evaluateAll((els) =>
-    els.map((el) => {
-      const r = el.getBoundingClientRect();
-      return {x: r.x, width: r.width, right: r.right, position: Number(el.getAttribute('data-position')), kind: el.getAttribute('data-kind')};
-    }),
-  );
+  page
+    .locator(ROOT)
+    .nth(lineIndex)
+    .locator('.mushaf-word')
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          x: r.x,
+          width: r.width,
+          right: r.right,
+          position: Number(el.getAttribute('data-position')),
+          kind: el.getAttribute('data-kind'),
+        };
+      }),
+    );
 
 /** The `@font-palette-values` rule an ident names, as the browser parsed it. */
 const paletteRule = async (page: Page, ident: string): Promise<string> => {
@@ -100,7 +120,10 @@ test.describe('static line', () => {
       // Reading direction: DOM order (wordId order) runs right to left.
       for (let k = 1; k < words.length; k++) expect(words[k]!.x).toBeLessThan(words[k - 1]!.x);
       // No horizontal overflow of the row inside the root.
-      const overflow = await page.locator(ROW).nth(i).evaluate((el) => el.scrollWidth - el.clientWidth);
+      const overflow = await page
+        .locator(ROW)
+        .nth(i)
+        .evaluate((el) => el.scrollWidth - el.clientWidth);
       expect(overflow).toBeLessThanOrEqual(1);
     }
 
@@ -128,10 +151,14 @@ test.describe('static line', () => {
     await rowsVisible(page, 3);
     const words = await wordBoxes(page, 2);
     // 2:3:1 is both the rub-el-hizb marker and the first (two-code-point) word; pick the word.
-    const two = await page.locator(ROOT).nth(2).locator('.mushaf-word[data-kind="word"][data-position="1"][data-ayah="3"]').evaluate((el) => ({
-      text: el.textContent ?? '',
-      width: el.getBoundingClientRect().width,
-    }));
+    const two = await page
+      .locator(ROOT)
+      .nth(2)
+      .locator('.mushaf-word[data-kind="word"][data-position="1"][data-ayah="3"]')
+      .evaluate((el) => ({
+        text: el.textContent ?? '',
+        width: el.getBoundingClientRect().width,
+      }));
     expect([...two.text].length).toBe(2);
     expect(two.width).toBeGreaterThan(5);
     expect(words.length).toBe(4);
@@ -168,7 +195,9 @@ test.describe('static line', () => {
         for (const m of muts) {
           for (const n of m.addedNodes) {
             if (!(n instanceof HTMLElement)) continue;
-            const rows = n.matches('.mushaf-line__row') ? [n] : Array.from(n.querySelectorAll<HTMLElement>('.mushaf-line__row'));
+            const rows = n.matches('.mushaf-line__row')
+              ? [n]
+              : Array.from(n.querySelectorAll<HTMLElement>('.mushaf-line__row'));
             for (const r of rows) log.push(r.style.visibility);
           }
         }
@@ -190,10 +219,20 @@ test.describe('static line', () => {
     await rowsVisible(page, 3);
     const hostile = await wordBoxes(page, 0);
     expect(hostile.map((w) => Math.round(w.width))).toEqual(clean.map((w) => Math.round(w.width)));
-    const style = await page.locator(ROW).first().evaluate((el) => {
-      const s = getComputedStyle(el);
-      return {letterSpacing: s.letterSpacing, wordSpacing: s.wordSpacing, fontWeight: s.fontWeight, fontStyle: s.fontStyle, textTransform: s.textTransform, fontFamily: s.fontFamily};
-    });
+    const style = await page
+      .locator(ROW)
+      .first()
+      .evaluate((el) => {
+        const s = getComputedStyle(el);
+        return {
+          letterSpacing: s.letterSpacing,
+          wordSpacing: s.wordSpacing,
+          fontWeight: s.fontWeight,
+          fontStyle: s.fontStyle,
+          textTransform: s.textTransform,
+          fontFamily: s.fontFamily,
+        };
+      });
     expect(['0px', 'normal']).toContain(style.letterSpacing);
     expect(['0px', 'normal']).toContain(style.wordSpacing);
     expect(style.fontWeight).toBe('400');
@@ -284,21 +323,27 @@ test.describe('entrances', () => {
     await expect(page.locator(ROOT)).toHaveCount(3);
     await expect(page.locator(ROW).first()).toHaveCSS('visibility', 'visible');
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-p1', 'mushaf-qpc-v4-p2', 'mushaf-qpc-v4-p3'])).toBe(true);
-    const hiddenByRemotion = await page.locator(ROOT).first().evaluate((el) => {
-      for (let node = el.parentElement; node; node = node.parentElement) {
-        if (getComputedStyle(node).opacity === '0') return true;
-      }
-      return false;
-    });
+    const hiddenByRemotion = await page
+      .locator(ROOT)
+      .first()
+      .evaluate((el) => {
+        for (let node = el.parentElement; node; node = node.parentElement) {
+          if (getComputedStyle(node).opacity === '0') return true;
+        }
+        return false;
+      });
     expect(hiddenByRemotion).toBe(true);
     await seek(page, 60); // sequence start: the fade begins at opacity 0
     await expect(presented(page)).toHaveCSS('opacity', '0');
-    const stillHidden = await page.locator(ROOT).first().evaluate((el) => {
-      for (let node = el.parentElement; node; node = node.parentElement) {
-        if (getComputedStyle(node).opacity === '0') return true;
-      }
-      return false;
-    });
+    const stillHidden = await page
+      .locator(ROOT)
+      .first()
+      .evaluate((el) => {
+        for (let node = el.parentElement; node; node = node.parentElement) {
+          if (getComputedStyle(node).opacity === '0') return true;
+        }
+        return false;
+      });
     expect(stillHidden).toBe(false);
     await seek(page, 80);
     await expect(presented(page)).toHaveCSS('opacity', '1');
@@ -322,11 +367,18 @@ test.describe('entrances', () => {
 
 test.describe('exits and replacing', () => {
   const wrappers = (page: Page, i = 0) =>
-    page.locator(ROOT).nth(i).evaluate((root) => {
-      const outer = root.children[0] as HTMLElement | undefined;
-      const inner = outer?.children[0] as HTMLElement | undefined;
-      return {outer: outer?.style.opacity ?? null, inner: inner?.style.opacity ?? null, innerIsRow: inner?.classList.contains('mushaf-line__row') ?? false};
-    });
+    page
+      .locator(ROOT)
+      .nth(i)
+      .evaluate((root) => {
+        const outer = root.children[0] as HTMLElement | undefined;
+        const inner = outer?.children[0] as HTMLElement | undefined;
+        return {
+          outer: outer?.style.opacity ?? null,
+          inner: inner?.style.opacity ?? null,
+          innerIsRow: inner?.classList.contains('mushaf-line__row') ?? false,
+        };
+      });
 
   test('exit fade runs over the last frames of the sequence and the line leaves with it', async ({page}) => {
     await open(page, 'exit-fade');
@@ -379,11 +431,19 @@ test.describe('exits and replacing', () => {
 
 test.describe('the smooth defaults', () => {
   const wrapper = (page: Page, i = 0) =>
-    page.locator(ROOT).nth(i).evaluate((root) => {
-      const outer = root.children[0] as HTMLElement | undefined;
-      const inner = outer?.children[0] as HTMLElement | undefined;
-      return {outerOpacity: outer?.style.opacity ?? null, outerTransform: outer?.style.transform ?? null, innerOpacity: inner?.style.opacity ?? null, innerTransform: inner?.style.transform ?? null};
-    });
+    page
+      .locator(ROOT)
+      .nth(i)
+      .evaluate((root) => {
+        const outer = root.children[0] as HTMLElement | undefined;
+        const inner = outer?.children[0] as HTMLElement | undefined;
+        return {
+          outerOpacity: outer?.style.opacity ?? null,
+          outerTransform: outer?.style.transform ?? null,
+          innerOpacity: inner?.style.opacity ?? null,
+          innerTransform: inner?.style.transform ?? null,
+        };
+      });
 
   test('slideFade fades before it settles, and travels a fraction of the line box', async ({page}) => {
     await open(page, 'slide-fade');
@@ -427,10 +487,13 @@ test.describe('the smooth defaults', () => {
     await open(page, 'soft-reveal');
     await rowsVisible(page, 1);
     await seek(page, 10);
-    const style = await page.locator(ROOT).first().evaluate((root) => {
-      const fill = root.children[0] as HTMLElement;
-      return {mask: fill.style.maskImage || fill.style.webkitMaskImage, clip: fill.style.clipPath};
-    });
+    const style = await page
+      .locator(ROOT)
+      .first()
+      .evaluate((root) => {
+        const fill = root.children[0] as HTMLElement;
+        return {mask: fill.style.maskImage || fill.style.webkitMaskImage, clip: fill.style.clipPath};
+      });
     expect(style.clip).toBe('');
     expect(style.mask).toContain('linear-gradient');
     expect(style.mask).toContain('transparent');
@@ -443,7 +506,9 @@ test.describe('colour and per-word hooks', () => {
     await rowsVisible(page, 1);
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-p2'])).toBe(true);
     // Nothing in the package paints the line: the words inherit the page's colour.
-    const colours = await page.locator('.mushaf-word').evaluateAll((els) => els.map((el) => getComputedStyle(el).color));
+    const colours = await page
+      .locator('.mushaf-word')
+      .evaluateAll((els) => els.map((el) => getComputedStyle(el).color));
     expect(new Set(colours)).toEqual(new Set(['rgb(0, 0, 0)']));
     await open(page, 'static');
     await rowsVisible(page, 3);
@@ -531,13 +596,13 @@ test.describe('font failures', () => {
 });
 
 test.describe('real data', () => {
-  // Runs once QUL's exports are mirrored (bun run qul data or the QUL assets workflow).
+  // Runs once QUL's exports are mirrored (`bun run qul data` or the QUL assets workflow).
   test('page 10 line 3 renders every word right to left, justified, with the ayah marker', async ({page}) => {
     test.skip(!hasMirror(), NO_MIRROR);
     // Through the built package (plain ESM), which is what the harness consumes too: Node fetches
     // the mirror from the Vite server and builds the layout the same way a browser would.
-    const pkg = (await import('../../dist/esm/index.mjs')) as typeof import('../../src/index');
-    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3, data: MIRROR});
+    const pkg = (await import('../../dist/esm/index.mjs')) as unknown as typeof import('../../src/index');
+    const line = await pkg.getMushafLine({look: 'tajweed', page: 10, line: 3, data: MIRROR});
     expect(line.words.length).toBeGreaterThan(5);
     expect(line.words[0]!.id).toBe('2:62:18'); // ... عِندَ | رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا
     expect(line.words.some((w) => w.kind === 'end' && w.ayah === 62)).toBe(true);
@@ -546,13 +611,20 @@ test.describe('real data', () => {
     await open(page, 'static');
     await rowsVisible(page, 3);
     await page.evaluate(
-      (data) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps({lines: [{...data, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'}], fit: 'line'}),
+      (data) =>
+        (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps({
+          lines: [{...data, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'}],
+          fit: 'line',
+        }),
       line,
     );
     await rowsVisible(page, 1);
     await expect(page.locator(ROOT).first()).toHaveAttribute('data-page', '10');
     await expect(page.locator(ROOT).first().locator('.mushaf-word')).toHaveCount(line.words.length);
-    await expect(page.locator(ROOT).first().locator('.mushaf-word').first()).toHaveAttribute('data-location', '2:62:18');
+    await expect(page.locator(ROOT).first().locator('.mushaf-word').first()).toHaveAttribute(
+      'data-location',
+      '2:62:18',
+    );
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p10'])).toBe(true);
 
     const root = await box(page, ROOT, 0);
@@ -568,7 +640,7 @@ test.describe('real data', () => {
 });
 
 test.describe('data', () => {
-  test('the convenience form fetches, unzips and reads QUL\'s exports in the browser, once per tab', async ({page}) => {
+  test("the convenience form fetches, unzips and reads QUL's exports in the browser, once per tab", async ({page}) => {
     test.skip(!hasMirror(), NO_MIRROR);
     const downloads: string[] = [];
     page.on('request', (request) => {
@@ -591,7 +663,10 @@ test.describe('data', () => {
     await page.evaluate(() => (window as unknown as {__harness: {remount: () => void}}).__harness.remount());
     await page.waitForFunction(() => document.querySelector('[data-mount="1"]') !== null);
     await rowsVisible(page, 1);
-    await expect(page.locator(ROOT).first().locator('.mushaf-word').first()).toHaveAttribute('data-location', '2:62:18');
+    await expect(page.locator(ROOT).first().locator('.mushaf-word').first()).toHaveAttribute(
+      'data-location',
+      '2:62:18',
+    );
     expect(downloads.filter((u) => u.endsWith('words.json.zip'))).toHaveLength(1);
   });
 
@@ -614,9 +689,13 @@ test.describe('data', () => {
 
 test.describe('slicing', () => {
   const slicedAttr = (page: Page) => page.locator(ROOT).first().getAttribute('data-sliced');
-  const rowFontSize = (page: Page) => page.locator(ROW).first().evaluate((row) => getComputedStyle(row).fontSize);
+  const rowFontSize = (page: Page) =>
+    page
+      .locator(ROW)
+      .first()
+      .evaluate((row) => getComputedStyle(row).fontSize);
 
-  test('shows only the ayah, centred, at the printed advances and the whole line\'s size', async ({page}) => {
+  test("shows only the ayah, centred, at the printed advances and the whole line's size", async ({page}) => {
     await open(page, 'two-ayahs');
     await rowsVisible(page, 1);
     const whole = await wordBoxes(page, 0);
@@ -654,7 +733,9 @@ test.describe('slicing', () => {
     expect(await slicedAttr(page)).toBeNull();
     await expect(page.locator(ROW)).toHaveCSS('justify-content', 'flex-start');
     const same = await wordBoxes(page, 0);
-    expect(same.map((w) => [Math.round(w.x), Math.round(w.width)])).toEqual(whole.map((w) => [Math.round(w.x), Math.round(w.width)]));
+    expect(same.map((w) => [Math.round(w.x), Math.round(w.width)])).toEqual(
+      whole.map((w) => [Math.round(w.x), Math.round(w.width)]),
+    );
     await open(page, 'slice-empty');
     await rowsVisible(page, 1);
     expect(await slicedAttr(page)).toBe('empty');
@@ -676,17 +757,24 @@ test.describe('slicing', () => {
     await open(page, 'slice-reveal');
     await rowsVisible(page, 1);
     await seek(page, 10);
-    await expect(page.locator(ROOT).first().locator('> *').first()).toHaveCSS('clip-path', 'inset(-100% 0px -100% 50%)');
+    await expect(page.locator(ROOT).first().locator('> *').first()).toHaveCSS(
+      'clip-path',
+      'inset(-100% 0px -100% 50%)',
+    );
     expect(await slicedAttr(page)).toBe('19-20');
   });
 
   test('with fit="line" a slice keeps the size the whole line was fitted to, frame after frame', async ({page}) => {
     test.skip(!hasMirror(), NO_MIRROR);
-    const pkg = (await import('../../dist/esm/index.mjs')) as typeof import('../../src/index');
-    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3, data: MIRROR});
+    const pkg = (await import('../../dist/esm/index.mjs')) as unknown as typeof import('../../src/index');
+    const line = await pkg.getMushafLine({look: 'tajweed', page: 10, line: 3, data: MIRROR});
     // ... رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا — 2:62 ends, 2:63 begins.
     const data = {...line, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'};
-    const setProps = (overrides: unknown) => page.evaluate((p) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps(p), overrides);
+    const setProps = (overrides: unknown) =>
+      page.evaluate(
+        (p) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps(p),
+        overrides,
+      );
     await open(page, 'static');
     await rowsVisible(page, 3);
     await setProps({lines: [data], fit: 'line'});
@@ -726,7 +814,7 @@ test.describe('slicing', () => {
 test.describe('network', () => {
   const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p1.woff2?v=3.1';
 
-  test('@network loads page 1 of qpc-v4-tajweed from QUL\'s CDN', async ({page}) => {
+  test("@network loads page 1 of the colour font from QUL's CDN", async ({page}) => {
     let reachable = false;
     try {
       const res = await fetch(CDN, {method: 'HEAD', signal: AbortSignal.timeout(5000)});

@@ -1,9 +1,9 @@
-import * as React from 'react';
+import type * as React from 'react';
 import {useContext} from 'react';
-import {HIDDEN_WORD_STYLE, WORD_STYLE} from '../layout';
-import {isInSlice} from '../slice';
+import {isInSlice} from '../resolve/slice';
 import type {MushafWord, WordContext} from '../types';
 import {LineContext} from './LineContext';
+import {HIDDEN_WORD_STYLE, WORD_STYLE} from './styles';
 
 /**
  * One DOM element per word. The text always comes from data and is rendered as-is (1–4 code points
@@ -23,7 +23,15 @@ export const Word: React.FC<{readonly word: MushafWord}> = ({word}) => {
   const context: WordContext = {line: ctx.line, frame: ctx.frame, fps: ctx.fps, active, inSlice: !hidden};
   const extra = ctx.wordStyle?.(word, context);
   const extraClass = ctx.wordClassName?.(word, context);
-  const style = extra || (active && ctx.activeWordStyle) || hidden ? {...WORD_STYLE, ...(active ? ctx.activeWordStyle : undefined), ...extra, ...(hidden ? HIDDEN_WORD_STYLE : undefined)} : WORD_STYLE;
+  const style =
+    extra || (active && ctx.activeWordStyle) || hidden
+      ? {
+          ...WORD_STYLE,
+          ...(active ? ctx.activeWordStyle : undefined),
+          ...extra,
+          ...(hidden ? HIDDEN_WORD_STYLE : undefined),
+        }
+      : WORD_STYLE;
   return (
     <span
       className={`mushaf-word mushaf-word--${word.kind}${active ? ' mushaf-word--active' : ''}${hidden ? ' mushaf-word--hidden' : ''}${extraClass ? ` ${extraClass}` : ''}`}

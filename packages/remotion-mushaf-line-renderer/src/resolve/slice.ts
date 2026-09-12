@@ -1,5 +1,5 @@
-import {MushafError, describeValue} from './errors';
-import type {MushafLineData, MushafSlice, MushafWord} from './types';
+import {describeValue, MushafError} from '../errors';
+import type {MushafLineData, MushafSlice, MushafWord} from '../types';
 
 /** The words a slice keeps, as an inclusive `wordId` band. */
 export type SliceBand = {readonly first: number; readonly last: number};
@@ -11,17 +11,24 @@ export type SliceBand = {readonly first: number; readonly last: number};
  */
 export type ResolvedSlice = SliceBand | 'empty' | null;
 
-const isAyahNumber = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1;
+const isAyahNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1;
 
 /** Validates a `MushafSlice` (the `slice` prop, `getMushafLines({slice})` output, hand-written data). */
 export const assertSlice = (source: string, value: unknown): MushafSlice => {
   const fail = (problem: string): never => {
-    throw new MushafError('BAD_SLICE', `${source}${problem.startsWith('.') ? '' : ' '}${problem}. Pass {ayah} for one ayah, or {fromAyah, toAyah?} for a range.`, {source, slice: value});
+    throw new MushafError(
+      'BAD_SLICE',
+      `${source}${problem.startsWith('.') ? '' : ' '}${problem}. Pass {ayah} for one ayah, or {fromAyah, toAyah?} for a range.`,
+      {source, slice: value},
+    );
   };
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return fail(`must be an object, got ${describeValue(value)}`);
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return fail(`must be an object, got ${describeValue(value)}`);
   const {ayah, fromAyah, toAyah, ...rest} = value as Record<string, unknown>;
   const unknown = Object.keys(rest);
-  if (unknown.length > 0) return fail(`has the unknown key${unknown.length > 1 ? 's' : ''} ${unknown.map((k) => `"${k}"`).join(', ')}`);
+  if (unknown.length > 0)
+    return fail(`has the unknown key${unknown.length > 1 ? 's' : ''} ${unknown.map((k) => `"${k}"`).join(', ')}`);
   if (ayah !== undefined) {
     if (fromAyah !== undefined || toAyah !== undefined) return fail('takes either ayah or fromAyah/toAyah, not both');
     if (!isAyahNumber(ayah)) return fail(`.ayah must be a positive integer, got ${describeValue(ayah)}`);
@@ -30,7 +37,8 @@ export const assertSlice = (source: string, value: unknown): MushafSlice => {
   if (fromAyah === undefined) return fail('needs ayah or fromAyah');
   if (!isAyahNumber(fromAyah)) return fail(`.fromAyah must be a positive integer, got ${describeValue(fromAyah)}`);
   if (toAyah !== undefined) {
-    if (!isAyahNumber(toAyah)) return fail(`.toAyah must be a positive integer when given, got ${describeValue(toAyah)}`);
+    if (!isAyahNumber(toAyah))
+      return fail(`.toAyah must be a positive integer when given, got ${describeValue(toAyah)}`);
     if (toAyah < fromAyah) return fail(`.toAyah (${toAyah}) is before fromAyah (${fromAyah})`);
   }
   return value as MushafSlice;
@@ -62,14 +70,18 @@ export const resolveSlice = (line: MushafLineData, selector: MushafSlice | null 
   return {first, last};
 };
 
-export const isInSlice = (slice: ResolvedSlice, wordId: number): boolean => slice === null || (slice !== 'empty' && wordId >= slice.first && wordId <= slice.last);
+export const isInSlice = (slice: ResolvedSlice, wordId: number): boolean =>
+  slice === null || (slice !== 'empty' && wordId >= slice.first && wordId <= slice.last);
 
 /**
  * The words of a line that a slice keeps — the line's own `slice` by default, `null` for the whole
  * line. Handy for skipping lines a range does not reach, or for joining word timings to what is on
  * screen.
  */
-export const sliceWords = (line: MushafLineData, slice: MushafSlice | null | undefined = line.slice): readonly MushafWord[] => {
+export const sliceWords = (
+  line: MushafLineData,
+  slice: MushafSlice | null | undefined = line.slice,
+): readonly MushafWord[] => {
   const resolved = resolveSlice(line, slice == null ? null : assertSlice('sliceWords(): slice', slice));
   return resolved === null ? line.words : line.words.filter((word) => isInSlice(resolved, word.wordId));
 };

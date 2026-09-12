@@ -1,8 +1,8 @@
-import {describe, expect, it} from 'vitest';
-import {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from '../../src/timings';
-import {revealRtl, revealRtlStyle} from '../../src/presentations/reveal-rtl';
-import {slideFade, slideFadeStyle} from '../../src/presentations/slide-fade';
 import type * as React from 'react';
+import {describe, expect, it} from 'vitest';
+import {revealRtl, revealRtlStyle} from '../../src/animation/presentations/reveal-rtl';
+import {slideFade, slideFadeStyle} from '../../src/animation/presentations/slide-fade';
+import {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from '../../src/animation/timings';
 
 const fps = 30;
 const sample = (timing: {getProgress: (o: {frame: number; fps: number}) => number}, frames: number) =>
@@ -69,7 +69,8 @@ describe('enterTiming / exitTiming', () => {
     expect(spring.getProgress({frame: 0, fps})).toBeCloseTo(0, 6);
     expect(spring.getProgress({frame: duration, fps})).toBeCloseTo(1, 2);
     // damping 200 does not overshoot.
-    for (let frame = 0; frame <= duration; frame++) expect(spring.getProgress({frame, fps})).toBeLessThanOrEqual(1.0001);
+    for (let frame = 0; frame <= duration; frame++)
+      expect(spring.getProgress({frame, fps})).toBeLessThanOrEqual(1.0001);
     expect(springyTiming({seconds: 0.5}).getDurationInFrames({fps})).toBe(15);
   });
 });

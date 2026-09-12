@@ -1,7 +1,7 @@
 import type * as React from 'react';
-import {MushafError, describeValue} from './errors';
-import {getMushafMetrics} from './mushafs';
-import type {MushafId} from './types';
+import {describeValue, MushafError} from '../errors';
+import {getMushafMetrics} from '../mushaf/registry';
+import type {MushafId} from '../types';
 
 /**
  * The type size at which *every* line of the mushaf fits a box `width` pixels wide: the widest line
@@ -26,12 +26,13 @@ export const fontSizeForWidth = (width: number, mushaf?: MushafId): number => {
  */
 export const lineHeightForFontSize = (fontSize: number): number => Math.round(fontSize * 2.2);
 
-/** @deprecated Renamed to `lineHeightForFontSize`; kept so internal callers and tests keep working. */
-export const defaultLineHeight = lineHeightForFontSize;
-
 export const assertSize = (name: 'fontSize' | 'lineHeight', value: unknown): number => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new MushafError('BAD_SIZE', `${name} must be a positive finite number of pixels, got ${describeValue(value)}.`, {[name]: value});
+    throw new MushafError(
+      'BAD_SIZE',
+      `${name} must be a positive finite number of pixels, got ${describeValue(value)}.`,
+      {[name]: value},
+    );
   }
   return value;
 };
@@ -70,7 +71,15 @@ export type RowStyleInput = {
  *
  * Everything that could change glyph widths is pinned so inherited CSS cannot leak in.
  */
-export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visible, fontPalette, sliced = false}: RowStyleInput): React.CSSProperties => ({
+export const buildRowStyle = ({
+  fontFamily,
+  fontSize,
+  lineHeight,
+  centered,
+  visible,
+  fontPalette,
+  sliced = false,
+}: RowStyleInput): React.CSSProperties => ({
   position: 'absolute',
   top: 0,
   right: 0,

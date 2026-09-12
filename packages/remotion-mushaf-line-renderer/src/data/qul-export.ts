@@ -57,7 +57,8 @@ export class DataShapeError extends Error {
 
 const num = (value: unknown): number | null => {
   if (value === null || value === undefined || value === '') return null;
-  const n = typeof value === 'number' ? value : typeof value === 'string' || typeof value === 'boolean' ? Number(value) : NaN;
+  const n =
+    typeof value === 'number' ? value : typeof value === 'string' || typeof value === 'boolean' ? Number(value) : NaN;
   return Number.isFinite(n) ? n : null;
 };
 
@@ -66,7 +67,8 @@ const pick = (row: Record<string, unknown>, ...names: readonly string[]): unknow
   return undefined;
 };
 
-const truthy = (value: unknown): boolean => value === true || value === 1 || value === '1' || (typeof value === 'string' && value.toLowerCase() === 'true');
+const truthy = (value: unknown): boolean =>
+  value === true || value === 1 || value === '1' || (typeof value === 'string' && value.toLowerCase() === 'true');
 
 const preview = (value: unknown): string => {
   try {
@@ -78,11 +80,22 @@ const preview = (value: unknown): string => {
 
 /** Words by QUL id, kinds derived: `end` for the last position of each ayah (or an explicit marker flag). */
 export const parseWordsExport = (json: unknown): Map<number, ParsedWord> => {
-  const rows: unknown[] = Array.isArray(json) ? json : json !== null && typeof json === 'object' ? Object.values(json as Record<string, unknown>) : [];
-  if (rows.length === 0) throw new DataShapeError(`the words export is ${Array.isArray(json) ? 'an empty array' : json !== null && typeof json === 'object' ? 'an empty object' : `not an object (${preview(json)})`}`);
-  const words = new Map<number, {wordId: number; surah: number; ayah: number; position: number; text: string; explicitEnd: boolean | undefined}>();
+  const rows: unknown[] = Array.isArray(json)
+    ? json
+    : json !== null && typeof json === 'object'
+      ? Object.values(json as Record<string, unknown>)
+      : [];
+  if (rows.length === 0)
+    throw new DataShapeError(
+      `the words export is ${Array.isArray(json) ? 'an empty array' : json !== null && typeof json === 'object' ? 'an empty object' : `not an object (${preview(json)})`}`,
+    );
+  const words = new Map<
+    number,
+    {wordId: number; surah: number; ayah: number; position: number; text: string; explicitEnd: boolean | undefined}
+  >();
   rows.forEach((row, index) => {
-    if (row === null || typeof row !== 'object') throw new DataShapeError(`words export: entry ${index} is not an object (${preview(row)})`);
+    if (row === null || typeof row !== 'object')
+      throw new DataShapeError(`words export: entry ${index} is not an object (${preview(row)})`);
     const r = row as Record<string, unknown>;
     const id = num(pick(r, 'id', 'word_index', 'word_number_all', 'word_id'));
     let surah = num(pick(r, 'surah', 'surah_number', 'chapter_id'));
@@ -97,11 +110,20 @@ export const parseWordsExport = (json: unknown): Map<number, ParsedWord> => {
     }
     const text = String(pick(r, 'text', 'code_v4', 'code_v2', 'qpc_v4') ?? '').replace(/\s+/gu, '');
     if (id === null || surah === null || ayah === null || position === null || text === '') {
-      throw new DataShapeError(`words export: could not interpret entry ${index} (${preview(row)}); expected id, surah, ayah, word/position (or location) and text`);
+      throw new DataShapeError(
+        `words export: could not interpret entry ${index} (${preview(row)}); expected id, surah, ayah, word/position (or location) and text`,
+      );
     }
     if (words.has(id)) throw new DataShapeError(`words export: word id ${id} appears twice`);
     const marker = pick(r, 'is_ayah_marker');
-    words.set(id, {wordId: id, surah, ayah, position, text, explicitEnd: marker === undefined ? undefined : truthy(marker)});
+    words.set(id, {
+      wordId: id,
+      surah,
+      ayah,
+      position,
+      text,
+      explicitEnd: marker === undefined ? undefined : truthy(marker),
+    });
   });
   const lastPosition = new Map<string, number>();
   for (const w of words.values()) {
@@ -111,7 +133,14 @@ export const parseWordsExport = (json: unknown): Map<number, ParsedWord> => {
   const out = new Map<number, ParsedWord>();
   for (const w of words.values()) {
     const isEnd = w.explicitEnd ?? w.position === lastPosition.get(`${w.surah}:${w.ayah}`);
-    out.set(w.wordId, {wordId: w.wordId, surah: w.surah, ayah: w.ayah, position: w.position, kind: isEnd ? 'end' : 'word', text: w.text});
+    out.set(w.wordId, {
+      wordId: w.wordId,
+      surah: w.surah,
+      ayah: w.ayah,
+      position: w.position,
+      kind: isEnd ? 'end' : 'word',
+      text: w.text,
+    });
   }
   return out;
 };
@@ -123,16 +152,28 @@ export const parseLayoutRows = (rows: readonly Readonly<Record<string, SqliteVal
   if (rows.length === 0) throw new DataShapeError('the layout export has no rows');
   const columns = Object.keys(rows[0] as object);
   for (const column of REQUIRED_COLUMNS) {
-    if (!columns.includes(column)) throw new DataShapeError(`the layout export has no "${column}" column (columns: ${columns.join(', ') || 'none'})`);
+    if (!columns.includes(column))
+      throw new DataShapeError(
+        `the layout export has no "${column}" column (columns: ${columns.join(', ') || 'none'})`,
+      );
   }
   return rows.map((row, index) => {
     const r = row as Record<string, unknown>;
     const page = num(r.page_number);
     const line = num(r.line_number);
     const type = r.line_type;
-    if (page === null || line === null || typeof type !== 'string' || type === '') throw new DataShapeError(`layout export: row ${index} has no page, line or type (${preview(row)})`);
+    if (page === null || line === null || typeof type !== 'string' || type === '')
+      throw new DataShapeError(`layout export: row ${index} has no page, line or type (${preview(row)})`);
     const centered = num(r.is_centered) === 1 || truthy(r.is_centered) || type !== 'ayah';
-    return {page, line, type, centered, first: num(r.first_word_id), last: num(r.last_word_id), surah: num(r.surah_number)};
+    return {
+      page,
+      line,
+      type,
+      centered,
+      first: num(r.first_word_id),
+      last: num(r.last_word_id),
+      surah: num(r.surah_number),
+    };
   });
 };
 
@@ -146,7 +187,11 @@ export type JoinDef = {
  * Lines with their words, page by page — `readLayoutSqlite` of the dev tools, exactly. `def`
  * checks the page count when given, and names the pages that are centred as printed.
  */
-export const joinExport = (rows: readonly LayoutRow[], words: ReadonlyMap<number, ParsedWord>, def: JoinDef | null): ParsedPage[] => {
+export const joinExport = (
+  rows: readonly LayoutRow[],
+  words: ReadonlyMap<number, ParsedWord>,
+  def: JoinDef | null,
+): ParsedPage[] => {
   const pages = new Map<number, {page: number; lines: ParsedLine[]}>();
   const centeredPages = def?.centeredPages ?? [];
   for (const r of rows) {
@@ -156,20 +201,33 @@ export const joinExport = (rows: readonly LayoutRow[], words: ReadonlyMap<number
       pages.set(r.page, entry);
     }
     if (r.type === 'surah_name') {
-      if (r.surah === null) throw new DataShapeError(`layout export: page ${r.page} line ${r.line} is a surah_name line without a surah number`);
+      if (r.surah === null)
+        throw new DataShapeError(
+          `layout export: page ${r.page} line ${r.line} is a surah_name line without a surah number`,
+        );
       entry.lines.push({line: r.line, type: 'surah_name', centered: true, surah: r.surah, words: []});
     } else if (r.type === 'basmallah') {
       entry.lines.push({line: r.line, type: 'basmallah', centered: true, words: []});
     } else if (r.type === 'ayah') {
-      if (r.first === null || r.last === null) throw new DataShapeError(`layout export: page ${r.page} line ${r.line} has no word range`);
-      if (r.last < r.first) throw new DataShapeError(`layout export: page ${r.page} line ${r.line} runs from word ${r.first} to ${r.last}`);
+      if (r.first === null || r.last === null)
+        throw new DataShapeError(`layout export: page ${r.page} line ${r.line} has no word range`);
+      if (r.last < r.first)
+        throw new DataShapeError(`layout export: page ${r.page} line ${r.line} runs from word ${r.first} to ${r.last}`);
       const lineWords: ParsedWord[] = [];
       for (let id = r.first; id <= r.last; id++) {
         const w = words.get(id);
-        if (!w) throw new DataShapeError(`layout export: page ${r.page} line ${r.line} references word ${id}, missing from the words export`);
+        if (!w)
+          throw new DataShapeError(
+            `layout export: page ${r.page} line ${r.line} references word ${id}, missing from the words export`,
+          );
         lineWords.push(w);
       }
-      entry.lines.push({line: r.line, type: 'ayah', centered: r.centered || centeredPages.includes(r.page), words: lineWords});
+      entry.lines.push({
+        line: r.line,
+        type: 'ayah',
+        centered: r.centered || centeredPages.includes(r.page),
+        words: lineWords,
+      });
     } else {
       throw new DataShapeError(`layout export: unknown line_type "${r.type}" on page ${r.page}`);
     }
@@ -178,9 +236,13 @@ export const joinExport = (rows: readonly LayoutRow[], words: ReadonlyMap<number
   for (const p of out) {
     p.lines.sort((a, b) => a.line - b.line);
     p.lines.forEach((l, i) => {
-      if (l.line !== i + 1) throw new DataShapeError(`layout export: page ${p.page} line numbers are not 1..n (${p.lines.map((x) => x.line).join(', ')})`);
+      if (l.line !== i + 1)
+        throw new DataShapeError(
+          `layout export: page ${p.page} line numbers are not 1..n (${p.lines.map((x) => x.line).join(', ')})`,
+        );
     });
   }
-  if (def && out.length !== def.pages) throw new DataShapeError(`layout export: ${out.length} pages, expected ${def.pages}`);
+  if (def && out.length !== def.pages)
+    throw new DataShapeError(`layout export: ${out.length} pages, expected ${def.pages}`);
   return out;
 };

@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
-import {paletteIdent, registerPalette, resetPaletteStore} from '../../src/palette-store';
+import {paletteIdent, registerPalette, resetPaletteStore} from '../../src/fonts/palette-store';
 
 const sheets = () => Array.from(document.querySelectorAll('style[data-mushaf-palettes]'));
-const css = () => sheets().map((s) => s.textContent ?? '').join('');
+const css = () =>
+  sheets()
+    .map((s) => s.textContent ?? '')
+    .join('');
 
 // jsdom has no CSS object, which is exactly how the injection is kept out of environments whose
 // parser would only complain about the at-rule; these tests stand in for a browser that has it.

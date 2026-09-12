@@ -1,8 +1,8 @@
-import * as React from 'react';
+import type * as React from 'react';
 import {Composition} from 'remotion';
-import {LineHarness, calculateLineHarnessMetadata, defaultLineHarnessProps} from './harness/LineHarness';
-import {Recitation, calculateRecitationMetadata, defaultRecitationProps} from './Recitation';
-import {ThreeLines, calculateThreeLinesMetadata} from './ThreeLines';
+import {calculateLineHarnessMetadata, defaultLineHarnessProps, LineHarness} from './harness/LineHarness';
+import {calculateRecitationMetadata, defaultRecitationProps, Recitation} from './Recitation';
+import {calculateThreeLinesMetadata, defaultThreeLinesProps, ThreeLines} from './ThreeLines';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -17,21 +17,7 @@ export const RemotionRoot: React.FC = () => {
         height={1080}
         fps={30}
         durationInFrames={180}
-        defaultProps={{
-          mushaf: 'qpc-v4',
-          // Plain black glyphs by default; `tajweed` switches to QUL's colour font, `mandala` to the
-          // same font at palette 3 (CSS-coloured text, coloured ayah rosettes).
-          tajweed: false,
-          mandala: false,
-          page: 10,
-          lineNumbers: [3, 4, 5],
-          lines: null,
-          // Set to 'fonts/{mushaf}/p{page}.woff2' (mirrored by `bun run qul mirror`)
-          // to serve the fonts from the public folder instead of QUL's CDN.
-          fontFile: null,
-          dataFiles: null,
-          mode: 'replace',
-        }}
+        defaultProps={defaultThreeLinesProps}
       />
       {/* A recited passage: the printed lines follow the audio from a timings JSON (see tools/align-recitation.py). */}
       <Composition

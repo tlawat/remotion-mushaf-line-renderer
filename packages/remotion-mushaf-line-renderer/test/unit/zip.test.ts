@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {ZipError, crc32, inflateRaw, isZip, listZipEntries, pickZipEntry, readZipEntry} from '../../src/data/zip';
+import {crc32, inflateRaw, isZip, listZipEntries, pickZipEntry, readZipEntry, ZipError} from '../../src/data/zip';
 import {makeZip} from '../fixtures/make-zip';
 
 const text = (s: string) => new TextEncoder().encode(s);
@@ -11,15 +11,23 @@ afterEach(() => {
 
 describe('zip reader', () => {
   it('lists the central directory and reads stored, deflated and data-descriptor entries', async () => {
-    const zip = makeZip([
-      {name: 'qpc-v4.json', data: '{"1:1:1":{"id":1}}', method: 8},
-      {name: 'notes.txt', data: 'stored as is', method: 0},
-      {name: 'streamed.bin', data: big(70_000), method: 8, dataDescriptor: true},
-      {name: 'folder/', data: '', method: 0},
-    ], {comment: 'made by the test'});
+    const zip = makeZip(
+      [
+        {name: 'qpc-v4.json', data: '{"1:1:1":{"id":1}}', method: 8},
+        {name: 'notes.txt', data: 'stored as is', method: 0},
+        {name: 'streamed.bin', data: big(70_000), method: 8, dataDescriptor: true},
+        {name: 'folder/', data: '', method: 0},
+      ],
+      {comment: 'made by the test'},
+    );
     expect(isZip(zip)).toBe(true);
     const entries = listZipEntries(zip);
-    expect(entries.map((e) => [e.name, e.method, e.isDirectory])).toEqual([['qpc-v4.json', 8, false], ['notes.txt', 0, false], ['streamed.bin', 8, false], ['folder/', 0, true]]);
+    expect(entries.map((e) => [e.name, e.method, e.isDirectory])).toEqual([
+      ['qpc-v4.json', 8, false],
+      ['notes.txt', 0, false],
+      ['streamed.bin', 8, false],
+      ['folder/', 0, true],
+    ]);
     expect(entries[2]!.uncompressedSize).toBe(70_000);
     expect(new TextDecoder().decode(await readZipEntry(zip, entries[0]!))).toBe('{"1:1:1":{"id":1}}');
     expect(new TextDecoder().decode(await readZipEntry(zip, entries[1]!))).toBe('stored as is');
@@ -27,17 +35,21 @@ describe('zip reader', () => {
   });
 
   it('picks the export by extension, else the only file, skipping folders, dotfiles and __MACOSX', () => {
-    const entries = listZipEntries(makeZip([
-      {name: '__MACOSX/._qpc-v4.json', data: 'resource fork'},
-      {name: 'export/', data: ''},
-      {name: 'export/.DS_Store', data: 'junk'},
-      {name: 'export/qpc-v4.json', data: '{}'},
-      {name: 'export/README.txt', data: 'hi'},
-    ]));
+    const entries = listZipEntries(
+      makeZip([
+        {name: '__MACOSX/._qpc-v4.json', data: 'resource fork'},
+        {name: 'export/', data: ''},
+        {name: 'export/.DS_Store', data: 'junk'},
+        {name: 'export/qpc-v4.json', data: '{}'},
+        {name: 'export/README.txt', data: 'hi'},
+      ]),
+    );
     expect(pickZipEntry(entries, ['.json']).name).toBe('export/qpc-v4.json');
     expect(pickZipEntry(entries, ['.txt', '.json']).name).toBe('export/README.txt'); // the first extension wins
     // Two real files and neither has the wanted extension: no guessing.
-    expect(() => pickZipEntry(entries, ['.db', '.sqlite'])).toThrow(/2 files and none is named \*\.db \/ \*\.sqlite: export\/qpc-v4\.json, export\/README\.txt/);
+    expect(() => pickZipEntry(entries, ['.db', '.sqlite'])).toThrow(
+      /2 files and none is named \*\.db \/ \*\.sqlite: export\/qpc-v4\.json, export\/README\.txt/,
+    );
     expect(pickZipEntry(listZipEntries(makeZip([{name: 'only.bin', data: 'x'}])), ['.db']).name).toBe('only.bin');
   });
 
@@ -46,8 +58,13 @@ describe('zip reader', () => {
     expect(() => listZipEntries(text('<!DOCTYPE html>'))).toThrow(ZipError);
     expect(() => listZipEntries(text('<!DOCTYPE html>'))).toThrow(/too short|no end-of-central-directory/);
     expect(() => listZipEntries(big(100))).toThrow(/no end-of-central-directory/);
-    const zip = makeZip([{name: 'a.json', data: '{"a":1}'}, {name: 'b.json', data: '{"b":2}'}]);
-    expect(() => pickZipEntry(listZipEntries(zip), ['.db'])).toThrow(/2 files and none is named \*\.db: a\.json, b\.json/);
+    const zip = makeZip([
+      {name: 'a.json', data: '{"a":1}'},
+      {name: 'b.json', data: '{"b":2}'},
+    ]);
+    expect(() => pickZipEntry(listZipEntries(zip), ['.db'])).toThrow(
+      /2 files and none is named \*\.db: a\.json, b\.json/,
+    );
     expect(() => pickZipEntry(listZipEntries(makeZip([{name: 'dir/', data: ''}])), ['.json'])).toThrow(/holds no file/);
     // Truncated download: the directory is intact (it is at the end) but the data is not.
     const cut = new Uint8Array(zip.length);
@@ -57,7 +74,9 @@ describe('zip reader', () => {
     // A flipped byte in the compressed data: the CRC catches it.
     const flipped = makeZip([{name: 'a.json', data: JSON.stringify({x: 'y'.repeat(300)})}]);
     flipped[45] = (flipped[45] as number) ^ 0xff;
-    await expect(readZipEntry(flipped, listZipEntries(flipped)[0]!)).rejects.toThrow(/CRC-32|corrupt|bytes after inflating/);
+    await expect(readZipEntry(flipped, listZipEntries(flipped)[0]!)).rejects.toThrow(
+      /CRC-32|corrupt|bytes after inflating/,
+    );
     // Unsupported features are named.
     const method12 = makeZip([{name: 'a.json', data: '{}', method: 0}]);
     method12[8] = 12; // local header method
@@ -76,9 +95,16 @@ describe('zip reader', () => {
     const zip = makeZip([{name: 'a.bin', data: big(5000)}]);
     expect(await readZipEntry(zip, listZipEntries(zip)[0]!)).toEqual(big(5000));
     vi.stubGlobal('DecompressionStream', undefined);
-    await expect(inflateRaw(new Uint8Array([1, 2, 3]))).rejects.toMatchObject({name: 'ZipError', reason: 'inflate-unsupported', message: expect.stringMatching(/Node needs 20\.12|unzipped files/)});
+    await expect(inflateRaw(new Uint8Array([1, 2, 3]))).rejects.toMatchObject({
+      name: 'ZipError',
+      reason: 'inflate-unsupported',
+      message: expect.stringMatching(/Node needs 20\.12|unzipped files/),
+    });
     vi.unstubAllGlobals();
-    await expect(inflateRaw(text('this is not a deflate stream at all'))).rejects.toMatchObject({name: 'ZipError', reason: 'inflate-failed'});
+    await expect(inflateRaw(text('this is not a deflate stream at all'))).rejects.toMatchObject({
+      name: 'ZipError',
+      reason: 'inflate-failed',
+    });
   });
 
   it('computes CRC-32 the standard way', () => {

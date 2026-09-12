@@ -20,7 +20,8 @@ export class SqliteError extends Error {
 
 const MAGIC = [0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33, 0x00]; // "SQLite format 3\0"
 
-export const isSqlite = (bytes: Uint8Array): boolean => bytes.length >= MAGIC.length && MAGIC.every((b, i) => bytes[i] === b);
+export const isSqlite = (bytes: Uint8Array): boolean =>
+  bytes.length >= MAGIC.length && MAGIC.every((b, i) => bytes[i] === b);
 
 type Db = {
   readonly bytes: Uint8Array;
@@ -39,16 +40,22 @@ const openDb = (bytes: Uint8Array): Db => {
   const dv = view(bytes);
   let pageSize = dv.getUint16(16);
   if (pageSize === 1) pageSize = 65536;
-  if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0) throw new SqliteError('bad-page-size', `page size ${pageSize} is not a power of two between 512 and 65536`);
+  if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0)
+    throw new SqliteError('bad-page-size', `page size ${pageSize} is not a power of two between 512 and 65536`);
   const encoding = dv.getUint32(56);
   // 0 only occurs in a database that never had a schema; 2 and 3 are UTF-16.
-  if (encoding !== 1 && encoding !== 0) throw new SqliteError('encoding', `text encoding ${encoding} (UTF-16) is not supported; only UTF-8 databases are read`);
+  if (encoding !== 1 && encoding !== 0)
+    throw new SqliteError(
+      'encoding',
+      `text encoding ${encoding} (UTF-16) is not supported; only UTF-8 databases are read`,
+    );
   const usable = pageSize - (bytes[20] as number);
   return {bytes, pageSize, usable, pageCount: Math.floor(bytes.length / pageSize)};
 };
 
 const page = (db: Db, n: number): Uint8Array => {
-  if (n < 1 || n > db.pageCount) throw new SqliteError('bad-page', `page ${n} is outside the file (${db.pageCount} pages)`);
+  if (n < 1 || n > db.pageCount)
+    throw new SqliteError('bad-page', `page ${n} is outside the file (${db.pageCount} pages)`);
   return db.bytes.subarray((n - 1) * db.pageSize, n * db.pageSize);
 };
 
@@ -133,7 +140,11 @@ const readRecord = (payload: Uint8Array): SqliteValue[] => {
 };
 
 /** The rowid and full payload of a table-leaf cell, following the overflow chain when the record spills. */
-const readCell = (db: Db, pageBytes: Uint8Array, cellOffset: number): {readonly rowid: number; readonly payload: Uint8Array} => {
+const readCell = (
+  db: Db,
+  pageBytes: Uint8Array,
+  cellOffset: number,
+): {readonly rowid: number; readonly payload: Uint8Array} => {
   const [size, sizeLength] = readVarint(pageBytes, cellOffset);
   const [rowid, rowidLength] = readVarint(pageBytes, cellOffset + sizeLength);
   const start = cellOffset + sizeLength + rowidLength;
@@ -197,7 +208,13 @@ const readSchema = (db: Db): SchemaEntry[] => {
   const entries: SchemaEntry[] = [];
   walkTable(db, 1, (_rowid, payload) => {
     const [type, name, , rootPage, sql] = readRecord(payload);
-    if (typeof type === 'string' && typeof name === 'string') entries.push({type, name, rootPage: typeof rootPage === 'number' ? rootPage : 0, sql: typeof sql === 'string' ? sql : ''});
+    if (typeof type === 'string' && typeof name === 'string')
+      entries.push({
+        type,
+        name,
+        rootPage: typeof rootPage === 'number' ? rootPage : 0,
+        sql: typeof sql === 'string' ? sql : '',
+      });
   });
   return entries;
 };
@@ -211,7 +228,8 @@ export type TableShape = {
 
 const unquote = (token: string): string => {
   const first = token[0];
-  if ((first === '"' || first === "'" || first === '`') && token.endsWith(first) && token.length >= 2) return token.slice(1, -1).replaceAll(first + first, first);
+  if ((first === '"' || first === "'" || first === '`') && token.endsWith(first) && token.length >= 2)
+    return token.slice(1, -1).replaceAll(first + first, first);
   if (first === '[' && token.endsWith(']')) return token.slice(1, -1);
   return token;
 };
@@ -307,7 +325,8 @@ export const readSqliteTable = (bytes: Uint8Array, table: string): SqliteRow[] |
   if (!entry) return null;
   if (entry.type !== 'table') throw new SqliteError('not-a-table', `"${entry.name}" is a ${entry.type}, not a table`);
   const shape = parseCreateTable(entry.sql);
-  if (shape.withoutRowid) throw new SqliteError('without-rowid', `"${entry.name}" is a WITHOUT ROWID table, which is not supported`);
+  if (shape.withoutRowid)
+    throw new SqliteError('without-rowid', `"${entry.name}" is a WITHOUT ROWID table, which is not supported`);
   if (entry.rootPage < 1) throw new SqliteError('bad-schema', `"${entry.name}" has no root page`);
   const rows: SqliteRow[] = [];
   walkTable(db, entry.rootPage, (rowid, payload) => {

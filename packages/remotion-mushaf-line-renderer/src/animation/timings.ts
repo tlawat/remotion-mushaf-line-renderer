@@ -1,7 +1,7 @@
-import {Easing, interpolate, measureSpring, spring} from 'remotion';
 // Type-only: @remotion/transitions stays a peer with no runtime coupling.
 import type {TransitionTiming} from '@remotion/transitions';
 import type {SpringConfig} from 'remotion';
+import {Easing, interpolate, measureSpring, spring} from 'remotion';
 
 export type MushafTimingOptions = {
   /** Duration in seconds, turned into frames at render time. Ignored when `durationInFrames` is set. */
@@ -40,14 +40,20 @@ const DEFAULT_EXIT_SECONDS = 0.32;
 const framesOf = (options: MushafTimingOptions, fps: number, fallbackSeconds: number): number =>
   Math.max(1, Math.round(options.durationInFrames ?? (options.seconds ?? fallbackSeconds) * fps));
 
-const easedTiming = (defaultEasing: (input: number) => number, defaultSeconds: number) => (options: MushafTimingOptions = {}): TransitionTiming => {
-  const easing = options.easing ?? defaultEasing;
-  return {
-    getDurationInFrames: ({fps}) => framesOf(options, fps, defaultSeconds),
-    getProgress: ({frame, fps}) =>
-      interpolate(frame, [0, framesOf(options, fps, defaultSeconds)], [0, 1], {easing, extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}),
+const easedTiming =
+  (defaultEasing: (input: number) => number, defaultSeconds: number) =>
+  (options: MushafTimingOptions = {}): TransitionTiming => {
+    const easing = options.easing ?? defaultEasing;
+    return {
+      getDurationInFrames: ({fps}) => framesOf(options, fps, defaultSeconds),
+      getProgress: ({frame, fps}) =>
+        interpolate(frame, [0, framesOf(options, fps, defaultSeconds)], [0, 1], {
+          easing,
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        }),
+    };
   };
-};
 
 /**
  * Default timing of `<MushafLine enter>`: 0.5 s on `ENTER_EASING`.
@@ -64,17 +70,35 @@ export const exitTiming = easedTiming(EXIT_EASING, DEFAULT_EXIT_SECONDS);
  * A spring instead of a curve, for motion that settles physically. `damping: 200` (the default) does
  * not overshoot; lower it for a bounce. Duration is measured from the spring unless you pin it.
  */
-export const springyTiming = ({config, durationInFrames, seconds, durationRestThreshold}: MushafSpringTimingOptions = {}): TransitionTiming => {
+export const springyTiming = ({
+  config,
+  durationInFrames,
+  seconds,
+  durationRestThreshold,
+}: MushafSpringTimingOptions = {}): TransitionTiming => {
   const merged: Partial<SpringConfig> = {damping: 200, ...config};
-  const frames = (fps: number): number | undefined => durationInFrames ?? (seconds === undefined ? undefined : Math.max(1, Math.round(seconds * fps)));
+  const frames = (fps: number): number | undefined =>
+    durationInFrames ?? (seconds === undefined ? undefined : Math.max(1, Math.round(seconds * fps)));
   // Optional keys are spread in rather than set to undefined: the package is built with
   // exactOptionalPropertyTypes, and so are Remotion's own signatures.
   const rest = durationRestThreshold === undefined ? {} : {durationRestThreshold};
   return {
-    getDurationInFrames: ({fps}) => frames(fps) ?? measureSpring({config: merged, fps, ...(durationRestThreshold === undefined ? {} : {threshold: durationRestThreshold})}),
+    getDurationInFrames: ({fps}) =>
+      frames(fps) ??
+      measureSpring({
+        config: merged,
+        fps,
+        ...(durationRestThreshold === undefined ? {} : {threshold: durationRestThreshold}),
+      }),
     getProgress: ({frame, fps}) => {
       const duration = frames(fps);
-      return spring({fps, frame, config: merged, ...(duration === undefined ? {} : {durationInFrames: duration}), ...rest});
+      return spring({
+        fps,
+        frame,
+        config: merged,
+        ...(duration === undefined ? {} : {durationInFrames: duration}),
+        ...rest,
+      });
     },
   };
 };
