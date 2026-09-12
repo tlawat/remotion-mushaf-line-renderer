@@ -1,6 +1,7 @@
 import {assertMushafColors} from './colors';
 import {MushafError, describeValue} from './errors';
 import {assertLine, assertPage, getMushafDefinition} from './mushafs';
+import {assertSlice} from './slice';
 import type {MushafLineData, MushafLineType, MushafWordKind} from './types';
 
 const LINE_TYPES: readonly MushafLineType[] = ['ayah', 'surah_name', 'basmallah'];
@@ -43,6 +44,7 @@ export const assertLineData = (value: unknown): MushafLineData => {
     // Loud here rather than a dropped CSS rule later: the colours are written into a stylesheet.
     assertMushafColors('MushafLineData.paletteColors', data.paletteColors);
   }
+  if (data.slice !== undefined) assertSlice('MushafLineData.slice', data.slice);
   if (data.surahNumber !== undefined && (typeof data.surahNumber !== 'number' || !Number.isInteger(data.surahNumber) || data.surahNumber < 1 || data.surahNumber > 114)) {
     fail('surahNumber', 'expected an integer from 1 to 114 when present', data.surahNumber);
   }

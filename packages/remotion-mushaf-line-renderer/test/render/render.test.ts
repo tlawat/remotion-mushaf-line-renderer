@@ -79,6 +79,8 @@ type HarnessProps = {
   activeWordId: string | number | null;
   dimOthersTo: number | null;
   color: string;
+  slice: {ayah?: number; fromAyah?: number; toAyah?: number} | null;
+  sliceOnData: boolean;
 };
 
 const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
@@ -100,6 +102,8 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   activeWordId: null,
   dimOthersTo: null,
   color: '#000000',
+  slice: null,
+  sliceOnData: false,
   ...overrides,
 });
 
@@ -245,6 +249,18 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     expect(frames[0]!.equals(await still(serveUrl, harnessProps({lines: []})))).toBe(true);
   });
 
+  it('a slice is the same picture as its words set as a centred line, and never changes their size', async () => {
+    // Synthetic page 3 line 2 carries 2:3 and 2:4. At fit: 'mushaf' both sides are at the base size,
+    // so "collapse and centre" has an exact witness: the kept words, alone, as a centred line.
+    const line = syntheticLine(3, 2);
+    const sliced = await still(serveUrl, harnessProps({lines: [line], slice: {ayah: 4}}));
+    const band = {...line, centered: true, words: line.words.filter((w) => w.ayah === 4)};
+    expect(sliced.equals(await still(serveUrl, harnessProps({lines: [band]})))).toBe(true);
+    expect(sliced.equals(await still(serveUrl, harnessProps({lines: [line]})))).toBe(false);
+    // Carried by the data, the slice paints the same.
+    expect(sliced.equals(await still(serveUrl, harnessProps({lines: [{...line, slice: {ayah: 4}}]})))).toBe(true);
+  });
+
   it('a missing font fails the render fast with FONT_HTTP', async () => {
     const started = Date.now();
     await expect(still(serveUrl, harnessProps({fontFile: 'fonts/qpc-v4-tajweed/missing.woff2'}))).rejects.toThrow(/FONT_HTTP|404/);
@@ -293,6 +309,18 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       const png = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
       writeFileSync(path.join(here, 'p10-l3.png'), png);
       expect(png.length).toBeGreaterThan(1000);
+    });
+
+    it('slices a fitted line without changing its size, deterministically', async () => {
+      // 2:62 ends and 2:63 begins on page 10 line 3.
+      const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
+      const whole = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
+      const sliced = await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {ayah: 63}}));
+      writeFileSync(path.join(here, 'p10-l3-slice.png'), sliced);
+      expect(sliced.equals(whole)).toBe(false);
+      expect((await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {ayah: 63}}))).equals(sliced)).toBe(true);
+      // A slice that keeps every word is the printed line, to the byte.
+      expect((await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {fromAyah: 62}}))).equals(whole)).toBe(true);
     });
 
     it('renders the mandala palette and its colours, the letters following CSS color', async () => {

@@ -9,6 +9,7 @@ import {loadPageFont} from '../load-page-font';
 import {getMushafDefinition} from '../mushafs';
 import {CURRENT_COLOR, entryColors} from '../colors';
 import {registerPalette} from '../palette-store';
+import {resolveSlice} from '../slice';
 import type {MushafLineAnimationProp, MushafLineCommonProps, MushafLineData} from '../types';
 import {LineContext, type LineContextValue} from './LineContext';
 import {Presented, type OnElementImage} from './Presented';
@@ -19,6 +20,7 @@ export type LineRendererProps = {
   readonly enter: MushafLineAnimationProp | undefined;
   readonly exit: MushafLineAnimationProp | undefined;
   readonly fit: MushafLineCommonProps['fit'];
+  readonly slice: MushafLineCommonProps['slice'];
   readonly fontSize: number | undefined;
   readonly lineHeight: number | undefined;
   readonly style: React.CSSProperties | undefined;
@@ -52,6 +54,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   enter: enterProp,
   exit: exitProp,
   fit = 'line',
+  slice,
   fontSize,
   lineHeight,
   style,
@@ -181,11 +184,20 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   }, [paletteKey, registered, def, line.fontFamily, line.palette, line.paletteColors]);
 
   const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
+
+  // The slice: which words are painted. It is applied exactly on the commits where the fit is already
+  // known — which are exactly the commits the fit effect does not measure on — so `natural` above is
+  // always the whole line's advance width, a slice never changes the type size, and `fitKey` needs
+  // no slice term: a slice can change on every frame without a re-measure. The hidden words take no
+  // space and the row centres the ones that remain (see buildRowStyle).
+  const requested = useMemo(() => resolveSlice(line, slice === undefined ? line.slice : slice), [line, slice]);
+  const resolvedSlice = fitScale === null ? null : requested;
+
   // Nothing is painted before the line is in its page font, at its final size and in its palette.
   const ready = fontLoaded && fitScale !== null && paletteIdent !== null;
   const ctx = useMemo<LineContextValue>(
-    () => ({line, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName}),
-    [line, resolvedFontSize, resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName],
+    () => ({line, fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName, slice: resolvedSlice}),
+    [line, resolvedFontSize, resolvedLineHeight, ready, frame, fps, activeWordId, activeWordStyle, wordStyle, wordClassName, resolvedSlice],
   );
 
   // ---- hooks done; validation and throws below ----
@@ -215,6 +227,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
         lineHeight: resolvedLineHeight,
         centered: line.centered,
         visible: ready,
+        sliced: resolvedSlice !== null,
         ...(paletteIdent ? {fontPalette: paletteIdent} : {}),
       })}
     >
@@ -251,6 +264,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
         data-line={line.line}
         data-line-type={line.type}
         data-centered={line.centered ? 'true' : 'false'}
+        data-sliced={resolvedSlice === null ? undefined : resolvedSlice === 'empty' ? 'empty' : `${resolvedSlice.first}-${resolvedSlice.last}`}
         style={buildRootStyle(resolvedLineHeight, style)}
       >
         {presented}

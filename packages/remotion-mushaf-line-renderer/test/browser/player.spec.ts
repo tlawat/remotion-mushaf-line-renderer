@@ -560,6 +560,119 @@ test.describe('real data', () => {
   });
 });
 
+test.describe('slicing', () => {
+  const slicedAttr = (page: Page) => page.locator(ROOT).first().getAttribute('data-sliced');
+  const rowFontSize = (page: Page) => page.locator(ROW).first().evaluate((row) => getComputedStyle(row).fontSize);
+
+  test('shows only the ayah, centred, at the printed advances and the whole line\'s size', async ({page}) => {
+    await open(page, 'two-ayahs');
+    await rowsVisible(page, 1);
+    const whole = await wordBoxes(page, 0);
+    await open(page, 'slice-ayah');
+    await rowsVisible(page, 1);
+    expect(await slicedAttr(page)).toBe('19-20');
+    await expect(page.locator(ROW)).toHaveCSS('justify-content', 'center');
+    const root = await box(page, ROOT, 0);
+    const words = await wordBoxes(page, 0);
+    // Every span is still there; the hidden ones take no space, the shown ones are exactly 2:4's.
+    expect(words).toHaveLength(4);
+    expect(words.slice(0, 2).every((w) => w.width === 0)).toBe(true);
+    await expect(page.locator('.mushaf-word').first()).toHaveAttribute('data-hidden', 'true');
+    await expect(page.locator('.mushaf-word').first()).toHaveCSS('display', 'none');
+    await expect(page.locator('.mushaf-word').nth(2)).not.toHaveAttribute('data-hidden', /.*/);
+    const shown = words.slice(2);
+    for (const w of shown) expect(w.width).toBeGreaterThan(5);
+    // Centred in the measure, with the same tolerance as a centred line.
+    const gapLeft = Math.min(...shown.map((w) => w.x)) - root.x;
+    const gapRight = root.x + root.width - Math.max(...shown.map((w) => w.right));
+    expect(gapLeft).toBeGreaterThan(20);
+    expect(Math.abs(gapLeft - gapRight)).toBeLessThanOrEqual(2);
+    // At the printed advances: the two words still touch, and each is exactly as wide as in the whole
+    // line — nothing was rescaled or re-spaced.
+    expect(Math.abs(shown[0]!.x - shown[1]!.right)).toBeLessThanOrEqual(1.5);
+    expect(shown.map((w) => Math.round(w.width))).toEqual(whole.slice(2).map((w) => Math.round(w.width)));
+  });
+
+  test('a slice that keeps every word is the printed line; one that keeps none is a blank slot', async ({page}) => {
+    await open(page, 'two-ayahs');
+    await rowsVisible(page, 1);
+    const whole = await wordBoxes(page, 0);
+    await open(page, 'slice-all');
+    await rowsVisible(page, 1);
+    expect(await slicedAttr(page)).toBeNull();
+    await expect(page.locator(ROW)).toHaveCSS('justify-content', 'flex-start');
+    const same = await wordBoxes(page, 0);
+    expect(same.map((w) => [Math.round(w.x), Math.round(w.width)])).toEqual(whole.map((w) => [Math.round(w.x), Math.round(w.width)]));
+    await open(page, 'slice-empty');
+    await rowsVisible(page, 1);
+    expect(await slicedAttr(page)).toBe('empty');
+    await expect(page.locator('.mushaf-word')).toHaveCount(4);
+    expect((await wordBoxes(page, 0)).every((w) => w.width === 0)).toBe(true);
+    const root = await box(page, ROOT, 0);
+    expect(root.height).toBeGreaterThan(100);
+  });
+
+  test('a slice the line data carries applies on its own', async ({page}) => {
+    await open(page, 'slice-data');
+    await rowsVisible(page, 1);
+    expect(await slicedAttr(page)).toBe('19-20');
+    const words = await wordBoxes(page, 0);
+    expect(words.map((w) => w.width > 0)).toEqual([false, false, true, true]);
+  });
+
+  test('revealRtl still sweeps the whole measure over a centred slice', async ({page}) => {
+    await open(page, 'slice-reveal');
+    await rowsVisible(page, 1);
+    await seek(page, 10);
+    await expect(page.locator(ROOT).first().locator('> *').first()).toHaveCSS('clip-path', 'inset(-100% 0px -100% 50%)');
+    expect(await slicedAttr(page)).toBe('19-20');
+  });
+
+  test('with fit="line" a slice keeps the size the whole line was fitted to, frame after frame', async ({page}) => {
+    const pkg = (await import('../../dist/esm/index.mjs')) as typeof import('../../src/index');
+    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3}).catch((e: {code?: string}) => {
+      test.skip(e.code === 'DATA_NOT_COMPILED', 'the layout data is not compiled');
+      throw e;
+    });
+    // ... رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا — 2:62 ends, 2:63 begins.
+    const data = {...line, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'};
+    const setProps = (overrides: unknown) => page.evaluate((p) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps(p), overrides);
+    await open(page, 'static');
+    await rowsVisible(page, 3);
+    await setProps({lines: [data], fit: 'line'});
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-page', '10');
+    const fitted = await rowFontSize(page);
+    const whole = await wordBoxes(page, 0);
+    const root = await box(page, ROOT, 0);
+
+    const centredBand = async (ayah: number) => {
+      const words = await wordBoxes(page, 0);
+      const shown = words.filter((w) => w.width > 0);
+      expect(shown.length).toBe(line.words.filter((w) => w.ayah === ayah).length);
+      expect(shown.length).toBeLessThan(words.length);
+      // Same size as the whole line: every shown word is as wide as it was un-sliced.
+      const byPosition = new Map(whole.map((w) => [`${w.kind}:${w.position}`, Math.round(w.width)]));
+      for (const w of shown) expect(Math.round(w.width)).toBe(byPosition.get(`${w.kind}:${w.position}`));
+      const gapLeft = Math.min(...shown.map((w) => w.x)) - root.x;
+      const gapRight = root.x + root.width - Math.max(...shown.map((w) => w.right));
+      expect(Math.abs(gapLeft - gapRight)).toBeLessThanOrEqual(2);
+    };
+
+    await setProps({lines: [data], fit: 'line', slice: {ayah: 63}});
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-sliced', /^\d+-\d+$/);
+    await rowsVisible(page, 1);
+    expect(await rowFontSize(page)).toBe(fitted);
+    await centredBand(63);
+    // Another slice on the same mounted line: no re-measure, same size, new band.
+    await setProps({lines: [data], fit: 'line', slice: {ayah: 62}});
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-sliced', /^\d+-\d+$/);
+    await rowsVisible(page, 1);
+    expect(await rowFontSize(page)).toBe(fitted);
+    await centredBand(62);
+  });
+});
+
 test.describe('network', () => {
   const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p1.woff2?v=3.1';
 

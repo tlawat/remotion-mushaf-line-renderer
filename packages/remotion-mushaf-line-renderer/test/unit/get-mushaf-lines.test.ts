@@ -50,9 +50,24 @@ describe('getMushafLines({page})', () => {
     expect((await getMushafLines({page: 1})).every((l) => l.palette === undefined && l.paletteColors === undefined)).toBe(true);
   });
 
+  it('records the range on every line with slice: true, and leaves the words whole', async () => {
+    const plain = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3});
+    const sliced = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, slice: true});
+    expect(sliced.map((l) => l.slice)).toEqual([{fromAyah: 2, toAyah: 3}, {fromAyah: 2, toAyah: 3}, {fromAyah: 2, toAyah: 3}]);
+    expect(sliced.map((l) => l.words)).toEqual(plain.map((l) => l.words));
+    expect(JSON.parse(JSON.stringify(sliced))).toEqual(sliced);
+    // The defaults are recorded as the concrete numbers they resolved to.
+    const whole = await getMushafLines({surah: 2, slice: true});
+    expect(whole[0]!.slice).toEqual({fromAyah: 1, toAyah: 4});
+    expect(plain.every((l) => l.slice === undefined)).toBe(true);
+    await expect(getMushafLines({surah: 2, slice: 'yes' as never})).rejects.toMatchObject({code: 'BAD_SLICE'});
+  });
+
   it('rejects a page outside the mushaf, and one the data does not reach', async () => {
     await expect(getMushafLines({page: 605})).rejects.toMatchObject({code: 'PAGE_OUT_OF_RANGE'});
     await expect(getMushafLines({page: 4})).rejects.toMatchObject({code: 'DATA_LOAD_FAILED'});
+    // A page has no ayah range to slice to.
+    await expect(getMushafLines({page: 1, slice: true} as never)).rejects.toMatchObject({code: 'BAD_SLICE'});
   });
 });
 

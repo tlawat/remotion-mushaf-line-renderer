@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type {ResolvedSlice} from '../slice';
 import type {MushafLineData, MushafLineCommonProps} from '../types';
 
 /**
@@ -16,6 +17,8 @@ export type LineContextValue = {
   readonly activeWordStyle: MushafLineCommonProps['activeWordStyle'];
   readonly wordStyle: MushafLineCommonProps['wordStyle'];
   readonly wordClassName: MushafLineCommonProps['wordClassName'];
+  /** The slice in effect: which words are painted. `null` paints them all. */
+  readonly slice: ResolvedSlice;
 };
 
 export const LineContext = React.createContext<LineContextValue | null>(null);

@@ -7,7 +7,7 @@ import {dissolve} from '@remotion/transitions/dissolve';
 import {fade} from '@remotion/transitions/fade';
 import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
-import {MushafLine, fontSizeForWidth, lineHeightForFontSize, type MushafLineAnimation, type MushafLineData, type MushafWord} from 'remotion-mushaf-line-renderer';
+import {MushafLine, fontSizeForWidth, lineHeightForFontSize, type MushafLineAnimation, type MushafLineData, type MushafSlice, type MushafWord} from 'remotion-mushaf-line-renderer';
 import {revealRtl} from 'remotion-mushaf-line-renderer/presentations/reveal-rtl';
 import {slideFade} from 'remotion-mushaf-line-renderer/presentations/slide-fade';
 
@@ -43,6 +43,10 @@ export type LineHarnessProps = {
   dimOthersTo: number | null;
   /** CSS `color` of the page. Plain glyphs follow it; so do mandala letters, through the palette. */
   color: string;
+  /** Show only these ayahs of every line (the `slice` prop), or null for whole lines. */
+  slice: MushafSlice | null;
+  /** Put `slice` on the line data instead of the prop, to exercise that surface. */
+  sliceOnData: boolean;
 };
 
 export const defaultLineHarnessProps: LineHarnessProps = {
@@ -64,6 +68,8 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   activeWordId: null,
   dimOthersTo: null,
   color: '#000000',
+  slice: null,
+  sliceOnData: false,
 };
 
 export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarnessProps> = ({props}) => {
@@ -108,6 +114,8 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   activeWordId,
   dimOthersTo,
   color,
+  slice,
+  sliceOnData,
 }) => {
   const {width} = useVideoConfig();
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width);
@@ -118,7 +126,8 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   return (
     <AbsoluteFill style={{backgroundColor: '#ffffff', color}}>
       {lines.map((line, i) => {
-        const data = fontUrl ? {...line, fontUrl} : line;
+        const pinned = fontUrl ? {...line, fontUrl} : line;
+        const data = sliceOnData && slice ? {...pinned, slice} : pinned;
         return (
           <Sequence
             key={`${line.mushaf}/${line.page}/${line.line}`}
@@ -133,6 +142,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
               fontSize={resolvedFontSize}
               lineHeight={resolvedLineHeight}
               fit={fit}
+              slice={sliceOnData || slice === null ? undefined : slice}
               enter={enterAnimation}
               exit={exitAnimation}
               activeWordId={activeWordId}

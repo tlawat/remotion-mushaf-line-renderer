@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Line slicing.** `slice={{ayah}}` / `slice={{fromAyah, toAyah?}}` on `<MushafLine>` shows only
+  those ayahs of a line, collapsed and centred in the measure — each slice reads as a line of its
+  own. The fit is measured from the whole line before the slice is applied, so a slice never changes
+  the type size (two slices of one line render at one size) and can change on every frame for free;
+  the kept words sit at their printed advances, and every word span stays in the DOM (hidden ones
+  carry `data-hidden` / `.mushaf-word--hidden`). A slice that keeps every word changes nothing; one
+  that keeps none paints nothing. `getMushafLines({surah, fromAyah, toAyah, slice: true})` records
+  the range on every returned line as `line.slice`, so a passage carries its own slicing through
+  `inputProps` (the prop wins, `slice={null}` cancels); `sliceWords(line, slice?)` lists the kept
+  words; `wordStyle`'s context gains `inSlice`. New error code `BAD_SLICE`.
+
 - **Mandala colouring, in CSS colours.** `mandala` — on `<MushafLine>` (convenience form),
   `getMushafLine()`, `getMushafLines()` and `loadPageFont()` — keeps the ayah-end rosette in its
   colours and writes the line in the inherited CSS `color`, the way most printed mushafs read

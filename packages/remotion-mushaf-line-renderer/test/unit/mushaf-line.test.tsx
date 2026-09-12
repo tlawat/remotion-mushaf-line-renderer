@@ -495,3 +495,117 @@ describe('<MushafLine>', () => {
     expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_ENTER'});
   });
 });
+
+describe('<MushafLine slice>', () => {
+  const spans = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>('.mushaf-word'));
+  const rootOf = (c: HTMLElement) => c.querySelector<HTMLElement>('.mushaf-line')!;
+  const visible = (c: HTMLElement) => waitFor(() => expect(rowOf(c).style.visibility).toBe('visible'));
+  // Synthetic page 3 line 2: 2:3:2 (17), 2:3:3 rosette (18), 2:4:1 (19), 2:4:2 rosette (20).
+  const twoAyahs = () => getMushafLine({mushaf: 'qpc-v4', page: 3, line: 2});
+
+  it('hides the words outside the slice and centres the rest, every span still in the DOM', async () => {
+    const {container} = render(<MushafLine line={await twoAyahs()} slice={{ayah: 4}} />);
+    await visible(container);
+    const all = spans(container);
+    expect(all.map((s) => s.dataset.wordId)).toEqual(['17', '18', '19', '20']);
+    expect(all.map((s) => s.style.display)).toEqual(['none', 'none', 'block', 'block']);
+    expect(all.map((s) => s.dataset.hidden)).toEqual(['true', 'true', undefined, undefined]);
+    expect(all[0]!.className).toBe('mushaf-word mushaf-word--word mushaf-word--hidden');
+    expect(all[2]!.className).toBe('mushaf-word mushaf-word--word');
+    expect(rowOf(container).style.justifyContent).toBe('center');
+    expect(rootOf(container).dataset.sliced).toBe('19-20');
+  });
+
+  it('is a no-op when the slice keeps every word, and hides everything when it keeps none', async () => {
+    const line = await twoAyahs();
+    const whole = render(<MushafLine line={line} slice={{fromAyah: 3}} />);
+    await visible(whole.container);
+    expect(spans(whole.container).every((s) => s.style.display === 'block' && s.dataset.hidden === undefined)).toBe(true);
+    expect(rowOf(whole.container).style.justifyContent).toBe('flex-start');
+    expect(rootOf(whole.container).dataset.sliced).toBeUndefined();
+    cleanup();
+    const empty = render(<MushafLine line={line} slice={{ayah: 9}} />);
+    await visible(empty.container);
+    expect(spans(empty.container).every((s) => s.style.display === 'none' && s.dataset.hidden === 'true')).toBe(true);
+    expect(rootOf(empty.container).dataset.sliced).toBe('empty');
+    // The line keeps its slot in a stack.
+    expect(rootOf(empty.container).style.height).toBe('246px');
+  });
+
+  it("applies the data's own slice, lets the prop win, and lets null cancel it", async () => {
+    const data = {...(await twoAyahs()), slice: {ayah: 3} as const};
+    const fromData = render(<MushafLine line={data} />);
+    await visible(fromData.container);
+    expect(rootOf(fromData.container).dataset.sliced).toBe('17-18');
+    cleanup();
+    const prop = render(<MushafLine line={data} slice={{ayah: 4}} />);
+    await visible(prop.container);
+    expect(rootOf(prop.container).dataset.sliced).toBe('19-20');
+    cleanup();
+    const cancelled = render(<MushafLine line={data} slice={null} />);
+    await visible(cancelled.container);
+    expect(rootOf(cancelled.container).dataset.sliced).toBeUndefined();
+    expect(spans(cancelled.container).every((s) => s.dataset.hidden === undefined)).toBe(true);
+  });
+
+  it('refuses a malformed slice loudly', async () => {
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        <MushafLine line={justified} slice={{ayah: 0}} />
+      </Boundary>,
+    );
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_SLICE'});
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/<MushafLine slice>\.ayah must be a positive integer, got 0/);
+  });
+
+  it('keeps hidden words hidden whatever wordStyle says, tells it which side they are on, and keeps data-active', async () => {
+    const seen: Array<[number, boolean]> = [];
+    const {container} = render(
+      <MushafLine
+        line={await twoAyahs()}
+        slice={{ayah: 4}}
+        activeWordId={17}
+        wordStyle={(word, ctx) => {
+          seen.push([word.wordId, ctx.inSlice]);
+          return {display: 'block', opacity: ctx.inSlice ? 1 : 0.3};
+        }}
+      />,
+    );
+    await visible(container);
+    const all = spans(container);
+    expect(all.map((s) => s.style.display)).toEqual(['none', 'none', 'block', 'block']);
+    expect(all[2]!.style.opacity).toBe('1');
+    expect(seen.slice(-4)).toEqual([
+      [17, false],
+      [18, false],
+      [19, true],
+      [20, true],
+    ]);
+    // The current word is still the current word, painted or not.
+    expect(all[0]!.dataset.active).toBe('true');
+    expect(all[0]!.dataset.hidden).toBe('true');
+  });
+
+  it('measures the fit on the whole line, so a slice never changes the type size', async () => {
+    const line = await twoAyahs();
+    // jsdom has no layout; stand in for one: four 50 px words in a 300 px box, so the fit is 1.5.
+    // Every measurement records how many words were hidden at that moment.
+    const hiddenAtMeasure: number[] = [];
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      hiddenAtMeasure.push(document.querySelectorAll('[data-hidden]').length);
+      const width = this.classList.contains('mushaf-line__row') ? 300 : 50;
+      return {x: 0, y: 0, width, height: 0, top: 0, left: 0, right: width, bottom: 0, toJSON: () => ({})} as DOMRect;
+    });
+    const sliced = render(<MushafLine line={line} slice={{ayah: 4}} />);
+    await visible(sliced.container);
+    expect(rowOf(sliced.container).style.fontSize).toBe('168px');
+    expect(rootOf(sliced.container).dataset.sliced).toBe('19-20');
+    expect(hiddenAtMeasure.length).toBeGreaterThan(0);
+    expect(hiddenAtMeasure.every((n) => n === 0)).toBe(true);
+    cleanup();
+    const whole = render(<MushafLine line={line} />);
+    await visible(whole.container);
+    expect(rowOf(whole.container).style.fontSize).toBe('168px');
+  });
+});

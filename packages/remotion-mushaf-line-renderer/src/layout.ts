@@ -56,6 +56,8 @@ export type RowStyleInput = {
   readonly visible: boolean;
   /** `font-palette` ident for a colour font, from `paletteIdent()`. Omitted leaves the font's default palette. */
   readonly fontPalette?: string;
+  /** A slice is in effect: the words that remain are centred (the hidden ones take no space). */
+  readonly sliced?: boolean;
 };
 
 /**
@@ -63,11 +65,12 @@ export type RowStyleInput = {
  * spaces **and no added justification**: the cursor starts at the right margin and each word follows
  * at its own advance, exactly as the page font was designed. Distributing leftover width between the
  * words (`space-between`) would inflate every gap by whatever the line falls short — the printed
- * spacing is the font's, not the layout's. Centred lines are centred instead.
+ * spacing is the font's, not the layout's. Centred lines are centred instead — and so is a sliced
+ * line, whose remaining words form one run at their own advances.
  *
  * Everything that could change glyph widths is pinned so inherited CSS cannot leak in.
  */
-export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visible, fontPalette}: RowStyleInput): React.CSSProperties => ({
+export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visible, fontPalette, sliced = false}: RowStyleInput): React.CSSProperties => ({
   position: 'absolute',
   top: 0,
   right: 0,
@@ -77,7 +80,7 @@ export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visib
   flexDirection: 'row',
   flexWrap: 'nowrap',
   alignItems: 'stretch',
-  justifyContent: centered ? 'center' : 'flex-start',
+  justifyContent: centered || sliced ? 'center' : 'flex-start',
   direction: 'rtl',
   unicodeBidi: 'isolate',
   whiteSpace: 'nowrap',
@@ -105,6 +108,9 @@ export const buildRowStyle = ({fontFamily, fontSize, lineHeight, centered, visib
   // Fallback fonts render wrong Arabic words, not blanks: never paint before the page font is in document.fonts.
   visibility: visible ? 'visible' : 'hidden',
 });
+
+/** A word a slice hides. `display: none` so the words that remain close up into one centred run. */
+export const HIDDEN_WORD_STYLE: React.CSSProperties = {display: 'none'};
 
 export const WORD_STYLE: React.CSSProperties = {
   display: 'block',
