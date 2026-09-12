@@ -13,7 +13,10 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {SYNTH, SYNTH_PAGES} from './synthetic.mjs';
 
-const out = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../packages/remotion-mushaf-line-renderer/test/fixtures/data/synthetic');
+const out = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../packages/remotion-mushaf-line-renderer/test/fixtures/data/synthetic',
+);
 fs.mkdirSync(out, {recursive: true});
 
 const words = {};
@@ -21,7 +24,14 @@ for (const page of SYNTH_PAGES) {
   for (const line of page.lines) {
     for (const w of line.words) {
       if (w.kind !== 'word' && w.kind !== 'end') continue;
-      words[`${w.surah}:${w.ayah}:${w.position}`] = {id: w.wordId, surah: w.surah, ayah: w.ayah, word: w.position, location: `${w.surah}:${w.ayah}:${w.position}`, text: w.text};
+      words[`${w.surah}:${w.ayah}:${w.position}`] = {
+        id: w.wordId,
+        surah: w.surah,
+        ayah: w.ayah,
+        word: w.position,
+        location: `${w.surah}:${w.ayah}:${w.position}`,
+        text: w.text,
+      };
     }
   }
 }
@@ -33,9 +43,13 @@ fs.rmSync(dbFile, {force: true});
 const db = new DatabaseSync(dbFile);
 db.exec('PRAGMA page_size = 512');
 db.exec('CREATE TABLE info (name TEXT, number_of_pages INTEGER, lines_per_page INTEGER, font_name TEXT)');
-db.exec('CREATE TABLE pages (id INTEGER PRIMARY KEY, page_number INTEGER, line_number INTEGER, line_type TEXT, is_centered INTEGER, first_word_id INTEGER, last_word_id INTEGER, surah_number INTEGER)');
+db.exec(
+  'CREATE TABLE pages (id INTEGER PRIMARY KEY, page_number INTEGER, line_number INTEGER, line_type TEXT, is_centered INTEGER, first_word_id INTEGER, last_word_id INTEGER, surah_number INTEGER)',
+);
 db.prepare('INSERT INTO info VALUES (?, ?, ?, ?)').run('synthetic', SYNTH.pages, SYNTH.linesPerPage, 'synthetic');
-const insert = db.prepare('INSERT INTO pages (page_number, line_number, line_type, is_centered, first_word_id, last_word_id, surah_number) VALUES (?, ?, ?, ?, ?, ?, ?)');
+const insert = db.prepare(
+  'INSERT INTO pages (page_number, line_number, line_type, is_centered, first_word_id, last_word_id, surah_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
+);
 let wroteNull = false;
 for (const page of SYNTH_PAGES) {
   for (const line of page.lines) {
@@ -51,4 +65,6 @@ for (const page of SYNTH_PAGES) {
   }
 }
 db.close();
-console.log(`wrote ${path.relative(process.cwd(), out)}/words.json (${Object.keys(words).length} words) and layout.db (${fs.statSync(dbFile).size} bytes)`);
+console.log(
+  `wrote ${path.relative(process.cwd(), out)}/words.json (${Object.keys(words).length} words) and layout.db (${fs.statSync(dbFile).size} bytes)`,
+);

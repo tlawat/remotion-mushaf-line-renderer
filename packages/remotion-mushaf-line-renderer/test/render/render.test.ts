@@ -19,7 +19,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(here, '../../../../example');
 const FIXTURE_FONT = 'fonts/qpc-v4-tajweed/p10.ttf';
 const hasFixtureFont = existsSync(path.join(exampleDir, 'public', FIXTURE_FONT));
-/** The example's mirror of QUL's two exports (`node scripts/fetch-qul.mjs --data`), served like any public file. */
+/** The example's mirror of QUL's two exports (`bun run qul data`), served like any public file. */
 const MIRROR = {words: 'data/qpc-v4/words.json.zip', layout: 'data/qpc-v4/layout.db.zip'};
 const hasMirror = existsSync(path.join(exampleDir, 'public', MIRROR.words)) && existsSync(path.join(exampleDir, 'public', MIRROR.layout));
 

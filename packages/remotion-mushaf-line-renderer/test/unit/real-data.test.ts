@@ -1,4 +1,4 @@
-// The mirrored QUL exports (example/public/data/qpc-v4, written by `node scripts/fetch-qul.mjs
+// The mirrored QUL exports (example/public/data/qpc-v4, written by `node bun run qul
 // --data`) through the package's runtime loader: the layout must satisfy every invariant of the
 // printed page and agree with the dev tools' independent route (node:zlib + node:sqlite + the
 // scripts compiler). Skipped when the mirror is absent.
