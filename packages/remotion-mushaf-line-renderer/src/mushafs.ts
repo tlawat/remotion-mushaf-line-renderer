@@ -18,8 +18,9 @@ export type DatasetDescriptor = {
   /**
    * Pages whose every line is printed centred, whatever the layout export says of them. The two
    * opening pages of the V4 print sit in an ornamental frame with every line centred (QUL's own
-   * preview shows them so); QUL's layout export flags one line of page 2 as justified, which
-   * `fit="line"` would stretch across the measure.
+   * preview shows them so); QUL's layout export flags page 2 line 5 (2:3:6, eight words) as
+   * justified, which `fit="line"` would stretch across the measure. With this rule the layout
+   * built from the exports equals the one compiled from QUL's preview pages, page for page.
    */
   readonly centeredPages: readonly number[];
   /**
