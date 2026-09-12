@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-12T19:29:55.485Z",
+ "generatedAt": "2026-09-12T19:36:41.088Z",
  "base": "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2",
  "entries": {
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p1.ttf?v=3.1": {
@@ -7309,7 +7309,7 @@
    "contentType": "application/zip",
    "cacheControl": "public, max-age=31556952",
    "cors": "*",
-   "downloadedAt": "2026-09-12T19:29:30.589Z"
+   "downloadedAt": "2026-09-12T19:36:39.773Z"
   },
   "layout": {
    "url": "https://s3.us-east-1.wasabisys.com/static-cdn.tarteel.ai/qul-exports/mushaf-layout/1748288079-a96tc-qpc-v4-tajweed-15-lines.db.zip",
@@ -7323,7 +7323,7 @@
    "contentType": "application/zip",
    "cacheControl": "public, max-age=31556952",
    "cors": "*",
-   "downloadedAt": "2026-09-12T19:29:31.025Z"
+   "downloadedAt": "2026-09-12T19:36:40.287Z"
   }
  }
 }
