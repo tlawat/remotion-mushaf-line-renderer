@@ -1,5 +1,5 @@
-// The mirrored QUL exports (example/public/data/qpc-v4, written by `node bun run qul
-// --data`) through the package's runtime loader: the layout must satisfy every invariant of the
+// The mirrored QUL exports (example/public/data/qpc-v4, written by `bun run qul data`)
+// through the package's runtime loader: the layout must satisfy every invariant of the
 // printed page and agree with the dev tools' independent route (node:zlib + node:sqlite + the
 // scripts compiler). Skipped when the mirror is absent.
 import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
@@ -15,14 +15,21 @@ import {readLayoutSqlite, readWords} from '../../../../scripts/lib/qul-export.mj
 // @ts-expect-error — plain JS modules from scripts/
 import {unzipExport} from '../../../../scripts/lib/zip.mjs';
 import {loadLayout, resetLayoutCache} from '../../src/data/load-layout';
-import {lineFromLayout} from '../../src/get-mushaf-line';
-import {getMushafLines, lineAyahs} from '../../src/get-mushaf-lines';
+import {resolveSelection} from '../../src/mushaf/registry';
+import {lineFromLayout} from '../../src/resolve/get-mushaf-line';
+import {getMushafLines, lineAyahs} from '../../src/resolve/get-mushaf-lines';
 
 const mirror = path.resolve(__dirname, '../../../../example/public/data/qpc-v4');
 const files = {words: path.join(mirror, 'words.json.zip'), layout: path.join(mirror, 'layout.db.zip')};
 const hasMirror = existsSync(files.words) && existsSync(files.layout);
-const hasNodeSqlite = await import('node:sqlite').then(() => true, () => false);
-const source = {words: 'https://mirror.test/data/qpc-v4/words.json.zip', layout: 'https://mirror.test/data/qpc-v4/layout.db.zip'};
+const hasNodeSqlite = await import('node:sqlite').then(
+  () => true,
+  () => false,
+);
+const source = {
+  words: 'https://mirror.test/data/qpc-v4/words.json.zip',
+  layout: 'https://mirror.test/data/qpc-v4/layout.db.zip',
+};
 
 const bytesOf = (file: string): Uint8Array<ArrayBuffer> => new Uint8Array(readFileSync(file));
 
@@ -58,11 +65,11 @@ describe.skipIf(!hasMirror)('the mirrored QUL exports', () => {
     });
     expect(report.twoCodePointWords).toBeGreaterThan(4000);
     // Known lines of the print.
-    const fatihah = lineFromLayout(layout, 'qpc-v4', 1, 2);
+    const fatihah = lineFromLayout(layout, resolveSelection({}), 1, 2);
     expect(fatihah.words.map((w) => w.id)).toEqual(['1:1:1', '1:1:2', '1:1:3', '1:1:4', '1:1:5']);
     expect(fatihah.words.at(-1)?.kind).toBe('end');
     expect(fatihah.centered).toBe(true);
-    const p10l3 = lineFromLayout(layout, 'qpc-v4-tajweed', 10, 3);
+    const p10l3 = lineFromLayout(layout, resolveSelection({look: 'tajweed'}), 10, 3);
     expect(p10l3.words[0]?.id).toBe('2:62:18');
     expect(p10l3.words.at(-1)?.id).toBe('2:63:2');
     expect(p10l3.words.length).toBeGreaterThan(5);

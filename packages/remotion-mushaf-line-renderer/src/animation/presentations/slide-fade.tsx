@@ -1,14 +1,11 @@
-import * as React from "react";
-import { useMemo } from "react";
-import { AbsoluteFill } from "remotion";
-import type {
-  TransitionPresentation,
-  TransitionPresentationComponentProps,
-} from "@remotion/transitions";
+import type {TransitionPresentation, TransitionPresentationComponentProps} from '@remotion/transitions';
+import type * as React from 'react';
+import {useMemo} from 'react';
+import {AbsoluteFill} from 'remotion';
 
 export type SlideFadeProps = {
   /** `'up'` (default): the line rises into place and keeps rising as it leaves. `'down'` mirrors it. */
-  readonly direction?: "up" | "down";
+  readonly direction?: 'up' | 'down';
   /** How far the line travels, in % of the line box (its own height). Default 28. */
   readonly distance?: number;
   /**
@@ -29,8 +26,7 @@ export type SlideFadeProps = {
   readonly exitStyle?: React.CSSProperties;
 };
 
-const clamp01 = (value: number): number =>
-  value < 0 ? 0 : value > 1 ? 1 : value;
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
 /**
  * The whole animation, as a pure function of progress — exported so it can be unit-tested frame by
@@ -38,11 +34,11 @@ const clamp01 = (value: number): number =>
  */
 export const slideFadeStyle = (
   progress: number,
-  direction: "entering" | "exiting",
+  direction: 'entering' | 'exiting',
   props: SlideFadeProps = {},
 ): React.CSSProperties => {
   const {
-    direction: axis = "up",
+    direction: axis = 'up',
     distance = 28,
     enterOpacityAt = 0.75,
     exitOpacityAt = 0.7,
@@ -51,15 +47,13 @@ export const slideFadeStyle = (
   // `progress` is already shaped by the timing's easing; each property only re-maps it over a
   // shorter part of the window, so opacity and movement never ease twice.
   const p = clamp01(progress);
-  const sign = axis === "up" ? 1 : -1;
-  const entering = direction === "entering";
+  const sign = axis === 'up' ? 1 : -1;
+  const entering = direction === 'entering';
   const opacity = entering
     ? clamp01(p / Math.max(1e-6, enterOpacityAt))
     : 1 - clamp01(p / Math.max(1e-6, exitOpacityAt));
   // Entering: starts `distance` below (above) its slot and arrives at 0. Exiting: continues past it.
-  const offset = entering
-    ? (1 - p) * distance * sign
-    : -p * distance * exitDistanceScale * sign;
+  const offset = entering ? (1 - p) * distance * sign : -p * distance * exitDistanceScale * sign;
   return {
     opacity,
     // Left sub-pixel on purpose: rounding to whole pixels makes slow motion step visibly, and a
@@ -69,17 +63,14 @@ export const slideFadeStyle = (
   };
 };
 
-const SlideFadePresentation: React.FC<
-  TransitionPresentationComponentProps<SlideFadeProps>
-> = ({
+const SlideFadePresentation: React.FC<TransitionPresentationComponentProps<SlideFadeProps>> = ({
   children,
   presentationDirection,
   presentationProgress,
   passedProps,
 }) => {
   const style = useMemo(
-    () =>
-      slideFadeStyle(presentationProgress, presentationDirection, passedProps),
+    () => slideFadeStyle(presentationProgress, presentationDirection, passedProps),
     [presentationDirection, presentationProgress, passedProps],
   );
   return <AbsoluteFill style={style}>{children}</AbsoluteFill>;
@@ -96,9 +87,7 @@ const SlideFadePresentation: React.FC<
  * Same shape as `fade()` from `@remotion/transitions/fade`, so it also works in a real
  * `<TransitionSeries>`.
  */
-export const slideFade = (
-  props?: SlideFadeProps,
-): TransitionPresentation<SlideFadeProps> => ({
+export const slideFade = (props?: SlideFadeProps): TransitionPresentation<SlideFadeProps> => ({
   component: SlideFadePresentation,
   props: props ?? {},
 });

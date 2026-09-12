@@ -1,6 +1,6 @@
-import {loadLayout} from './data/load-layout';
-import {DEFAULT_MUSHAF, getMushafDefinition} from './mushafs';
-import type {LoadMushafDataOptions} from './types';
+import {resolveSelection} from '../mushaf/registry';
+import type {LoadMushafDataOptions} from '../types';
+import {loadLayout} from './load-layout';
 
 /**
  * Loads the mushaf data ahead of time — QUL's two exports from Tarteel's CDN, or the `data` source
@@ -9,6 +9,6 @@ import type {LoadMushafDataOptions} from './types';
  * `calculateMetadata`) call it when the page loads. Pure and Remotion-free, like the resolvers.
  */
 export const loadMushafData = async ({mushaf, data}: LoadMushafDataOptions = {}): Promise<void> => {
-  const def = getMushafDefinition(mushaf ?? DEFAULT_MUSHAF);
+  const {def} = resolveSelection({mushaf});
   await loadLayout(def.dataset, data);
 };

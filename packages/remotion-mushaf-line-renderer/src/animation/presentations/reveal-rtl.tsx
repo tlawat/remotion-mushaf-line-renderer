@@ -1,7 +1,7 @@
-import * as React from 'react';
+import type {TransitionPresentation, TransitionPresentationComponentProps} from '@remotion/transitions';
+import type * as React from 'react';
 import {useMemo} from 'react';
 import {AbsoluteFill} from 'remotion';
-import type {TransitionPresentation, TransitionPresentationComponentProps} from '@remotion/transitions';
 
 export type RevealRtlProps = {
   /**
@@ -28,7 +28,11 @@ const softMask = (edge: number, softness: number, entering: boolean): string => 
 };
 
 /** The reveal as a pure function of progress — exported so it can be unit-tested frame by frame. */
-export const revealRtlStyle = (progress: number, direction: 'entering' | 'exiting', props: RevealRtlProps = {}): React.CSSProperties => {
+export const revealRtlStyle = (
+  progress: number,
+  direction: 'entering' | 'exiting',
+  props: RevealRtlProps = {},
+): React.CSSProperties => {
   const p = Math.min(1, Math.max(0, progress));
   const entering = direction === 'entering';
   const softness = props.softness ?? 0;
@@ -45,8 +49,16 @@ export const revealRtlStyle = (progress: number, direction: 'entering' | 'exitin
   };
 };
 
-const RevealRtlPresentation: React.FC<TransitionPresentationComponentProps<RevealRtlProps>> = ({children, presentationDirection, presentationProgress, passedProps}) => {
-  const style = useMemo(() => revealRtlStyle(presentationProgress, presentationDirection, passedProps), [presentationDirection, presentationProgress, passedProps]);
+const RevealRtlPresentation: React.FC<TransitionPresentationComponentProps<RevealRtlProps>> = ({
+  children,
+  presentationDirection,
+  presentationProgress,
+  passedProps,
+}) => {
+  const style = useMemo(
+    () => revealRtlStyle(presentationProgress, presentationDirection, passedProps),
+    [presentationDirection, presentationProgress, passedProps],
+  );
   return <AbsoluteFill style={style}>{children}</AbsoluteFill>;
 };
 

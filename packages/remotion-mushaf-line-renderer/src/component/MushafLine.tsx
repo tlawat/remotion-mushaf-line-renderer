@@ -1,0 +1,88 @@
+import type * as React from 'react';
+import {Sequence} from 'remotion';
+import {describeValue, MushafError} from '../errors';
+import {assertSlice} from '../resolve/slice';
+import {assertLineData} from '../resolve/validate-line-data';
+import type {MushafDataOptions, MushafLineProps, MushafSelection} from '../types';
+import {LineRenderer} from './LineRenderer';
+import {ResolveLine} from './ResolveLine';
+
+/** Options that only mean something while a line is being resolved, so they are refused next to resolved data. */
+const RESOLVE_ONLY: Readonly<Record<'look' | 'colors' | 'mushaf' | 'data', string>> = {
+  look: 'Resolved line data already carries its mushaf and look, so `look` cannot be set alongside `line={MushafLineData}`. Pass `look` to getMushafLine() / getMushafLines() where the data is resolved.',
+  colors:
+    'Resolved line data already carries its mushaf and look, so `colors` cannot be set alongside `line={MushafLineData}`. Pass `colors` to getMushafLine() / getMushafLines() where the data is resolved.',
+  mushaf:
+    'Resolved line data already carries its mushaf and look, so `mushaf` cannot be set alongside `line={MushafLineData}`. Pass `mushaf` to getMushafLine() / getMushafLines() where the data is resolved.',
+  data: 'Resolved line data is already loaded, so `data` cannot be set alongside `line={MushafLineData}`. Pass `data` to getMushafLine() / getMushafLines() where the data is resolved.',
+};
+
+/**
+ * Renders one line of the mushaf, pixel-faithful to the printed page.
+ *
+ * - Timing comes from the enclosing `<Sequence from>`: the entrance runs over the local frame.
+ * - Pass `line` (from `getMushafLine()`, ideally resolved in `calculateMetadata()`), or
+ *   `page` + `line` (+ optional `mushaf` / `look` / `colors` / `data`) to resolve at render time
+ *   behind `delayRender()`.
+ * - The root is a normal-flow block of height `lineHeight` (default 2.2 × fontSize); stack fifteen
+ *   of them for a page, or position one with `style` / the enclosing `<Sequence style>`.
+ * - Nothing is painted until the page font is loaded (a fallback font would show wrong words).
+ */
+export const MushafLine: React.FC<MushafLineProps> = (props) => {
+  const {
+    name,
+    style,
+    className,
+    enter,
+    exit,
+    fit,
+    slice,
+    fontSize,
+    lineHeight,
+    activeWordId,
+    activeWordStyle,
+    wordStyle,
+    wordClassName,
+  } = props;
+  if (slice !== undefined && slice !== null) assertSlice('<MushafLine slice>', slice);
+  const common = {
+    style,
+    className,
+    enter,
+    exit,
+    fit,
+    slice,
+    fontSize,
+    lineHeight,
+    activeWordId,
+    activeWordStyle,
+    wordStyle,
+    wordClassName,
+  };
+  let body: React.ReactElement;
+  if (typeof props.line === 'number') {
+    const {mushaf, look, colors, page, line, data} = props as MushafSelection &
+      MushafDataOptions & {page: number; line: number};
+    body = <ResolveLine mushaf={mushaf} look={look} colors={colors} page={page} line={line} data={data} {...common} />;
+  } else if (props.line !== null && typeof props.line === 'object') {
+    for (const key of ['look', 'colors', 'mushaf', 'data'] as const) {
+      const value = (props as Record<string, unknown>)[key];
+      if (value !== undefined) throw new MushafError('BAD_LINE_PROP', RESOLVE_ONLY[key], {[key]: value});
+    }
+    const line = assertLineData(props.line);
+    body = <LineRenderer key={`${line.mushaf}/${line.look}/${line.page}/${line.line}`} line={line} {...common} />;
+  } else {
+    throw new MushafError(
+      'BAD_LINE_PROP',
+      `<MushafLine> expects either line={MushafLineData} (from getMushafLine()) or page + line={number}; got line of type ${describeValue(props.line)}.`,
+    );
+  }
+  // layout="none" adds no wrapper element (so `style` stays on our root) and never premounts.
+  return name === undefined ? (
+    body
+  ) : (
+    <Sequence layout="none" name={name}>
+      {body}
+    </Sequence>
+  );
+};

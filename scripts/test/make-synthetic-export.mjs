@@ -35,7 +35,7 @@ for (const page of SYNTH_PAGES) {
     }
   }
 }
-fs.writeFileSync(path.join(out, 'words.json'), JSON.stringify(words, null, 1) + '\n');
+fs.writeFileSync(path.join(out, 'words.json'), `${JSON.stringify(words, null, 1)}\n`);
 
 const {DatabaseSync} = await import('node:sqlite');
 const dbFile = path.join(out, 'layout.db');

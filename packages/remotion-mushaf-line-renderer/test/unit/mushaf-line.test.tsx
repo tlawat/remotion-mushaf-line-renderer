@@ -2,13 +2,16 @@
 import {act, cleanup, render, waitFor} from '@testing-library/react';
 import React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {createRemotionMock, installFontFakes} from './helpers/remotion-mock';
 import {syntheticLayout} from '../fixtures/synthetic-layout';
+import {createRemotionMock, installFontFakes} from './helpers/remotion-mock';
 
 const remotion = createRemotionMock();
 // Partial mock: the hooks/handles/components the component touches are replaced, everything else
 // (`Internals`, `interpolate`, `spring`, ...) is the real thing so `@remotion/transitions` loads.
-vi.mock('remotion', async (importOriginal) => ({...(await importOriginal<typeof import('remotion')>()), ...remotion.module}));
+vi.mock('remotion', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('remotion')>()),
+  ...remotion.module,
+}));
 
 const loadMock = vi.fn();
 vi.mock('../../src/data/load-layout', async () => {
@@ -16,18 +19,21 @@ vi.mock('../../src/data/load-layout', async () => {
   return {...actual, loadLayout: (id: string, data?: unknown) => loadMock(id, data)};
 });
 
-const {MushafLine} = await import('../../src/MushafLine');
-const {getMushafLine} = await import('../../src/get-mushaf-line');
-const {resetFontStore, getFontStatus} = await import('../../src/font-store');
-const {resetPaletteStore} = await import('../../src/palette-store');
-const {revealRtl} = await import('../../src/presentations/reveal-rtl');
+const {MushafLine} = await import('../../src/component/MushafLine');
+const {getMushafLine} = await import('../../src/resolve/get-mushaf-line');
+const {resetFontStore, getFontStatus} = await import('../../src/fonts/font-store');
+const {resetPaletteStore} = await import('../../src/fonts/palette-store');
+const {revealRtl} = await import('../../src/animation/presentations/reveal-rtl');
 const {fade} = await import('@remotion/transitions/fade');
 const {slide} = await import('@remotion/transitions/slide');
 const {none} = await import('@remotion/transitions/none');
 const {linearTiming} = await import('@remotion/transitions');
 type MushafLineData = import('../../src/types').MushafLineData;
 
-class Boundary extends React.Component<{onError: (e: Error) => void; children: React.ReactNode}, {error: Error | null}> {
+class Boundary extends React.Component<
+  {onError: (e: Error) => void; children: React.ReactNode},
+  {error: Error | null}
+> {
   override state = {error: null as Error | null};
   static getDerivedStateFromError(error: Error) {
     return {error};
@@ -81,7 +87,14 @@ describe('<MushafLine>', () => {
     const {container} = render(<MushafLine line={justified} className="hero" style={{top: 12}} />);
     const root = container.querySelector<HTMLElement>('.mushaf-line')!;
     expect(root.className).toBe('mushaf-line hero');
-    expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', page: '2', line: '3', lineType: 'ayah', centered: 'false'});
+    expect(root.dataset).toMatchObject({
+      mushaf: 'qpc-v4',
+      look: 'plain',
+      page: '2',
+      line: '3',
+      lineType: 'ayah',
+      centered: 'false',
+    });
     expect(root.style.position).toBe('relative');
     expect(root.style.height).toBe('246px');
     expect(root.style.top).toBe('12px');
@@ -180,7 +193,10 @@ describe('<MushafLine>', () => {
         <MushafLine line={header} />
       </Boundary>,
     );
-    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'UNSUPPORTED_LINE_TYPE', message: expect.stringContaining('is a "surah_name" line')});
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({
+      code: 'UNSUPPORTED_LINE_TYPE',
+      message: expect.stringContaining('is a "surah_name" line'),
+    });
     const onError2 = vi.fn();
     render(
       <Boundary onError={onError2}>
@@ -229,20 +245,35 @@ describe('<MushafLine>', () => {
     await waitFor(() => expect(onError2).toHaveBeenCalled());
   });
 
-  it('is plain by default and switches font set with tajweed on the convenience path', async () => {
+  it('is plain by default and switches font set with the tajweed look on the convenience path', async () => {
     const plain = render(<MushafLine page={2} line={3} />);
     await waitFor(() => expect(plain.container.querySelector('.mushaf-line')).not.toBeNull());
-    expect(plain.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4');
+    expect(plain.container.querySelector<HTMLElement>('.mushaf-line')!.dataset).toMatchObject({
+      mushaf: 'qpc-v4',
+      look: 'plain',
+    });
     expect(rowOf(plain.container).style.fontFamily).toBe('"mushaf-qpc-v4-p2"');
     // Nothing sets a colour: the glyphs inherit CSS `color`, which is what makes them black.
     expect(plain.container.querySelector<HTMLElement>('.mushaf-line')!.style.color).toBe('');
     expect(rowOf(plain.container).style.color).toBe('');
     cleanup();
 
-    const coloured = render(<MushafLine page={2} line={3} tajweed />);
+    const coloured = render(<MushafLine page={2} line={3} look="tajweed" />);
     await waitFor(() => expect(coloured.container.querySelector('.mushaf-line')).not.toBeNull());
-    expect(coloured.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
+    expect(coloured.container.querySelector<HTMLElement>('.mushaf-line')!.dataset).toMatchObject({
+      mushaf: 'qpc-v4',
+      look: 'tajweed',
+    });
     expect(rowOf(coloured.container).style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
+    cleanup();
+
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        <MushafLine page={2} line={3} look={'neon' as never} />
+      </Boundary>,
+    );
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LOOK'});
   });
 
   it('forwards the data source on the convenience path and re-resolves when it changes', async () => {
@@ -276,54 +307,70 @@ describe('<MushafLine>', () => {
     expect(onError.mock.calls[0]?.[0].message).toMatch(/already loaded.*pass `data` to getMushafLine/i);
   });
 
-  it('refuses tajweed and mandala next to resolved line data, which carries its own font set', () => {
+  it('refuses look and colors next to resolved line data, which carries its own', () => {
     const onError = vi.fn();
     render(
       <Boundary onError={onError}>
         {/* @ts-expect-error the prop types forbid this; the runtime says why */}
-        <MushafLine line={line} tajweed />
+        <MushafLine line={line} look="tajweed" />
       </Boundary>,
     );
     expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
-    expect(onError.mock.calls[0]?.[0].message).toMatch(/pass `tajweed` to getMushafLine/i);
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/pass `look` to getMushafLine/i);
 
-    const onMandalaError = vi.fn();
+    const onColorsError = vi.fn();
     render(
-      <Boundary onError={onMandalaError}>
-        {/* @ts-expect-error same rule for the mandala flag */}
-        <MushafLine line={line} mandala />
+      <Boundary onError={onColorsError}>
+        {/* @ts-expect-error same rule for the colours */}
+        <MushafLine line={line} colors={{ink: 'red'}} />
       </Boundary>,
     );
-    expect(onMandalaError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
-    expect(onMandalaError.mock.calls[0]?.[0].message).toMatch(/pass `mandala` to getMushafLine/i);
+    expect(onColorsError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
+    expect(onColorsError.mock.calls[0]?.[0].message).toMatch(/pass `colors` to getMushafLine/i);
   });
 
   it('selects the mandala palette on the row, and leaves font-palette alone without it', async () => {
-    const mandala = render(<MushafLine page={2} line={3} mandala />);
+    const mandala = render(<MushafLine page={2} line={3} look="mandala" />);
     await waitFor(() => expect(mandala.container.querySelector('.mushaf-line')).not.toBeNull());
-    expect(mandala.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
+    expect(mandala.container.querySelector<HTMLElement>('.mushaf-line')!.dataset).toMatchObject({
+      mushaf: 'qpc-v4',
+      look: 'mandala',
+    });
     const row = rowOf(mandala.container);
     expect(row.style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
     // jsdom reports a computed colour, so `ink: 'currentColor'` resolves and the ident is hashed.
     expect(row.style.getPropertyValue('font-palette')).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
     cleanup();
 
-    // Resolved data carries palette and colours just the same, and nothing is set without them.
-    const colourLine = {...justified, mushaf: 'qpc-v4-tajweed' as const, fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3};
+    // Resolved data carries the look (and an explicit palette) just the same, and nothing is set without them.
+    const colourLine = {
+      ...justified,
+      look: 'tajweed' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+      palette: 3,
+    };
     const fromData = render(<MushafLine line={colourLine} />);
-    expect(rowOf(fromData.container).style.getPropertyValue('font-palette')).toBe('--mushaf-qpc-v4-tajweed-p2-palette-3');
+    expect(rowOf(fromData.container).style.getPropertyValue('font-palette')).toBe(
+      '--mushaf-qpc-v4-tajweed-p2-palette-3',
+    );
     cleanup();
     expect(rowOf(render(<MushafLine line={justified} />).container).style.getPropertyValue('font-palette')).toBe('');
   });
 
   it('resolves the ink from the inherited CSS color, and follows an explicit one', async () => {
-    const colourLine = {...justified, mushaf: 'qpc-v4-tajweed' as const, fontFamily: 'mushaf-qpc-v4-tajweed-p2', palette: 3};
+    const mandalaLine = {
+      ...justified,
+      look: 'mandala' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+    };
     // The whole point of mandala: everything written takes the CSS colour that plain glyphs would
     // take, and only the rosette's ornaments keep the font's own colours. COLR glyphs ignore
     // `color`, so the colour is read from the row and written into the palette rule.
     const inherited = render(
       <div style={{color: 'rgb(27, 111, 63)'}}>
-        <MushafLine line={{...colourLine, paletteColors: {ink: 'currentColor'}}} />
+        <MushafLine line={{...mandalaLine, colors: {ink: 'currentColor'}}} />
       </div>,
     );
     const rule = paletteRuleFor(rowOf(inherited.container));
@@ -337,7 +384,11 @@ describe('<MushafLine>', () => {
     cleanup();
 
     // An explicit colour needs no resolution, and each part paints only its own entries.
-    const explicit = render(<MushafLine line={{...colourLine, paletteColors: {ink: '#1b6f3f', accent: '#c8a45c', detail: '#0aa', background: 'transparent'}}} />);
+    const explicit = render(
+      <MushafLine
+        line={{...mandalaLine, colors: {ink: '#1b6f3f', accent: '#c8a45c', detail: '#0aa', background: 'transparent'}}}
+      />,
+    );
     const explicitRule = paletteRuleFor(rowOf(explicit.container));
     expect(explicitRule).toContain('0 #1b6f3f');
     expect(explicitRule).toContain('10 #0aa');
@@ -412,7 +463,11 @@ describe('<MushafLine>', () => {
     expect(fill.parentElement).toBe(root); // presentation inside the root, row inside the presentation
     expect(fill.querySelector('.mushaf-line__row')).not.toBeNull();
     expect(fill.style.opacity).toBe('0');
-    for (const [frame, opacity] of [[10, '0.5'], [20, '1'], [40, '1']] as const) {
+    for (const [frame, opacity] of [
+      [10, '0.5'],
+      [20, '1'],
+      [40, '1'],
+    ] as const) {
       remotion.state.frame = frame;
       rerender(<MushafLine line={line} enter={enter} />);
       expect(root.querySelector<HTMLElement>('[data-absolute-fill]')!.style.opacity).toBe(opacity);
@@ -434,7 +489,12 @@ describe('<MushafLine>', () => {
     expect(inner.querySelector('.mushaf-line__row')).not.toBeNull();
     expect(inner.style.opacity).toBe('1'); // entrance finished
     expect(outer.style.opacity).toBe('1'); // exit not started
-    for (const [frame, opacity] of [[99, 1], [100, 1], [110, 0.5], [119, 0.05]] as const) {
+    for (const [frame, opacity] of [
+      [99, 1],
+      [100, 1],
+      [110, 0.5],
+      [119, 0.05],
+    ] as const) {
       remotion.state.frame = frame;
       rerender(<MushafLine line={line} enter={enter} exit={exit} />);
       expect(Number(root.querySelector<HTMLElement>('[data-absolute-fill]')!.style.opacity)).toBeCloseTo(opacity, 5);
@@ -468,16 +528,24 @@ describe('<MushafLine>', () => {
       unmount();
     }
     const {container} = render(<MushafLine line={line} enter={{presentation: revealRtl(), timing}} />);
-    expect(container.querySelector<HTMLElement>('[data-absolute-fill]')!.style.clipPath).toBe('inset(-100% 0 -100% 50.0000%)');
+    expect(container.querySelector<HTMLElement>('[data-absolute-fill]')!.style.clipPath).toBe(
+      'inset(-100% 0 -100% 50.0000%)',
+    );
   });
 
   it('rejects canvas presentations from the next render and cancels renders', async () => {
     let capture: ((img: unknown, draw: unknown) => void) | null = null;
-    const CanvasLike: React.FC<{onElementImage: (img: unknown, draw: unknown) => void; children: React.ReactNode}> = ({onElementImage, children}) => {
+    const CanvasLike: React.FC<{onElementImage: (img: unknown, draw: unknown) => void; children: React.ReactNode}> = ({
+      onElementImage,
+      children,
+    }) => {
       capture = onElementImage;
       return <div>{children}</div>;
     };
-    const enter = {presentation: {component: CanvasLike as never, props: {}}, timing: linearTiming({durationInFrames: 10})};
+    const enter = {
+      presentation: {component: CanvasLike as never, props: {}},
+      timing: linearTiming({durationInFrames: 10}),
+    };
     remotion.state.env = {...remotion.state.env, isRendering: true};
     const onError = vi.fn();
     render(
@@ -502,7 +570,10 @@ describe('<MushafLine>', () => {
         <canvas>{children}</canvas>
       </div>
     );
-    const enter = {presentation: {component: CanvasWrapper as never, props: {}}, timing: linearTiming({durationInFrames: 10})};
+    const enter = {
+      presentation: {component: CanvasWrapper as never, props: {}},
+      timing: linearTiming({durationInFrames: 10}),
+    };
     remotion.state.env = {...remotion.state.env, isRendering: true};
     const onError = vi.fn();
     render(
@@ -551,7 +622,9 @@ describe('<MushafLine slice>', () => {
     const line = await twoAyahs();
     const whole = render(<MushafLine line={line} slice={{fromAyah: 3}} />);
     await visible(whole.container);
-    expect(spans(whole.container).every((s) => s.style.display === 'block' && s.dataset.hidden === undefined)).toBe(true);
+    expect(spans(whole.container).every((s) => s.style.display === 'block' && s.dataset.hidden === undefined)).toBe(
+      true,
+    );
     expect(rowOf(whole.container).style.justifyContent).toBe('flex-start');
     expect(rootOf(whole.container).dataset.sliced).toBeUndefined();
     cleanup();

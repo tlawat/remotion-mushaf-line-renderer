@@ -4,17 +4,12 @@ import {defineConfig, type Options} from 'tsup';
  * Output layout (deterministic file names, no hashes, so Lambda `publicPath` bundles and README
  * instructions can name them):
  *
- *   dist/esm/index.mjs (+ index.d.mts)                    dist/cjs/index.js (+ index.d.ts)
- *   dist/esm/presentations/<name>.mjs (+ .d.mts)          dist/cjs/presentations/<name>.js (+ .d.ts)
+ *   dist/esm/index.mjs (+ index.d.mts)      dist/cjs/index.js (+ index.d.ts)
  *
  * The package ships no mushaf data: the layout is built at runtime from QUL's exports (see
  * src/data/load-layout.ts), so the main chunk is all there is.
  */
-const entry = {
-  index: 'src/index.ts',
-  'presentations/reveal-rtl': 'src/presentations/reveal-rtl.tsx',
-  'presentations/slide-fade': 'src/presentations/slide-fade.tsx',
-};
+const entry = {index: 'src/index.ts'};
 
 const shared: Options = {
   entry,

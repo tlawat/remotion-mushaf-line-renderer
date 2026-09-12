@@ -1,6 +1,5 @@
 // Compile-only assertions (tsc --noEmit -p tsconfig.test-types.json): stock @remotion/transitions
 // presentations pass to `enter` unchanged, and the props surface is exactly the documented one.
-import React from 'react';
 import {linearTiming, pushCut, springTiming} from '@remotion/transitions';
 import {clockWipe} from '@remotion/transitions/clock-wipe';
 import {fade} from '@remotion/transitions/fade';
@@ -10,7 +9,6 @@ import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
 import {wipe} from '@remotion/transitions/wipe';
 import {
-  MushafLine,
   enterTiming,
   exitTiming,
   fontSizeForWidth,
@@ -19,23 +17,30 @@ import {
   getMushafLocation,
   lineAyahs,
   lineHeightForFontSize,
-  sliceWords,
-  springyTiming,
+  loadPageFont,
   type MushafDataSource,
+  type MushafFontSet,
   type MushafId,
+  MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
+  type MushafLook,
   type MushafWord,
+  revealRtl,
+  sliceWords,
+  slideFade,
+  springyTiming,
 } from '../../src';
-import {revealRtl} from '../../src/presentations/reveal-rtl';
-import {slideFade} from '../../src/presentations/slide-fade';
 
 declare const data: MushafLineData;
 const timing = linearTiming({durationInFrames: 10});
 
 export const animations: MushafLineAnimation[] = [
   {presentation: fade(), timing},
-  {presentation: slide({direction: 'from-right'}), timing: springTiming({config: {damping: 200}, durationInFrames: 25})},
+  {
+    presentation: slide({direction: 'from-right'}),
+    timing: springTiming({config: {damping: 200}, durationInFrames: 25}),
+  },
   {presentation: wipe(), timing},
   {presentation: flip(), timing},
   {presentation: clockWipe({width: 1920, height: 246}), timing},
@@ -48,7 +53,7 @@ export const animations: MushafLineAnimation[] = [
 
 // @ts-expect-error a string is not a presentation
 export const badPresentation: MushafLineAnimation = {presentation: 'fade', timing};
-// `timing` is optional now: it defaults to enterTiming() / exitTiming().
+// `timing` is optional: it defaults to enterTiming() / exitTiming().
 export const defaultedTiming: MushafLineAnimation = {presentation: fade()};
 
 // The package's own timings are ordinary TransitionTimings.
@@ -64,18 +69,27 @@ export const badTiming = enterTiming({seconds: '1'});
 export const ok = (
   <>
     <MushafLine line={data} />
-    <MushafLine line={data} enter={{presentation: fade(), timing}} fontSize={112} lineHeight={246} style={{top: 10}} className="x" name="p10 l3" />
-    <MushafLine mushaf="qpc-v4" page={10} line={3} />
-    <MushafLine mushaf="qpc-v4-tajweed" page={10} line={3} enter={{presentation: revealRtl(), timing}} />
-    {/* mushaf is optional (plain by default) and tajweed picks the colour font */}
+    <MushafLine
+      line={data}
+      enter={{presentation: fade(), timing}}
+      fontSize={112}
+      lineHeight={246}
+      style={{top: 10}}
+      className="x"
+      name="p10 l3"
+    />
+    {/* convenience form: everything about the selection is optional (plain V4 by default) */}
     <MushafLine page={10} line={3} />
-    <MushafLine page={10} line={3} tajweed />
-    <MushafLine page={10} line={3} mushaf="qpc-v4" tajweed={false} />
-    {/* mandala: the colour font at palette 3 (CSS-coloured text, coloured ayah rosettes) */}
-    <MushafLine page={10} line={3} mandala />
-    <MushafLine page={10} line={3} mandala={false} tajweed />
-    <MushafLine page={10} line={3} mandala={{ink: 'crimson'}} />
-    <MushafLine page={10} line={3} mandala={{accent: '#c8a45c', detail: '#0aa', background: 'transparent'}} />
+    <MushafLine mushaf="qpc-v4" page={10} line={3} />
+    <MushafLine page={10} line={3} look="tajweed" enter={{presentation: revealRtl(), timing}} />
+    <MushafLine page={10} line={3} look="mandala" />
+    <MushafLine page={10} line={3} look="mandala" colors={{ink: 'crimson'}} />
+    <MushafLine
+      page={10}
+      line={3}
+      look="mandala"
+      colors={{accent: '#c8a45c', detail: '#0aa', background: 'transparent'}}
+    />
     {/* a bare presentation uses the package's default timing */}
     <MushafLine line={data} enter={slideFade()} exit={slideFade()} />
     <MushafLine line={data} enter={fade()} />
@@ -99,8 +113,12 @@ export const ok = (
     <MushafLine line={data} fit="mushaf" fontSize={112} />
     <MushafLine line={data} activeWordId={null} />
     {/* data source: either export, both, or none (QUL's CDN) — on the convenience form only */}
-    <MushafLine page={10} line={3} data={{words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'}} />
-    <MushafLine page={10} line={3} tajweed data={{layout: 'https://mirror.example/layout.db.zip'}} />
+    <MushafLine
+      page={10}
+      line={3}
+      data={{words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'}}
+    />
+    <MushafLine page={10} line={3} look="tajweed" data={{layout: 'https://mirror.example/layout.db.zip'}} />
     <MushafLine page={10} line={3} data={{}} />
   </>
 );
@@ -112,13 +130,6 @@ export const badDataUrl = <MushafLine page={10} line={3} data={{words: 42}} />;
 // @ts-expect-error only the two exports have a source
 export const badDataKey = <MushafLine page={10} line={3} data={{fonts: '/x'}} />;
 export const source: MushafDataSource = {words: '/data/qpc-v4/words.json.zip'};
-
-// @ts-expect-error resolved data carries its own font set
-export const tajweedWithData = <MushafLine line={data} tajweed />;
-// @ts-expect-error ... and its own palette
-export const mandalaWithData = <MushafLine line={data} mandala />;
-// @ts-expect-error only the parts the font paints can be coloured
-export const badPart = <MushafLine page={10} line={3} mandala={{glow: 'red'}} />;
 // @ts-expect-error a slice is one ayah or a range, not both
 export const bothSliceShapes = <MushafLine line={data} slice={{ayah: 5, fromAyah: 2}} />;
 // @ts-expect-error a range starts somewhere
@@ -127,45 +138,70 @@ export const openStart = <MushafLine line={data} slice={{toAyah: 7}} />;
 export const ayahList = <MushafLine line={data} slice={{ayahs: [5, 6]}} />;
 export const sliced: readonly MushafWord[] = sliceWords(data, {ayah: 5});
 export const ownSlice: readonly MushafWord[] = sliceWords(data);
+
+// @ts-expect-error resolved data carries its own look
+export const lookWithData = <MushafLine line={data} look="tajweed" />;
+// @ts-expect-error ... and its own colours
+export const colorsWithData = <MushafLine line={data} colors={{ink: 'red'}} />;
+// @ts-expect-error only the parts the font paints can be coloured
+export const badPart = <MushafLine page={10} line={3} look="mandala" colors={{glow: 'red'}} />;
+// @ts-expect-error not a look
+export const badLook = <MushafLine page={10} line={3} look="neon" />;
 // @ts-expect-error only 'line' and 'mushaf' fit the line
 export const badFit = <MushafLine line={data} fit="stretch" />;
 // @ts-expect-error wordStyle must return CSS properties
 export const badWordStyle = <MushafLine line={data} wordStyle={() => 'red'} />;
 
-// Data helpers: `mushaf` is optional everywhere, and the two shapes of getMushafLines are exclusive.
+// Data helpers: the selection is optional everywhere, and the two shapes of getMushafLines are exclusive.
 export const helpers = [
   getMushafLine({page: 187, line: 2}),
-  getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, tajweed: true}),
-  getMushafLine({page: 187, line: 2, mandala: true}),
-  getMushafLine({page: 187, line: 2, mandala: {ink: 'currentColor', accent: '#0aa'}}),
-  getMushafLines({surah: 9, mandala: true}),
-  getMushafLines({surah: 9, mandala: {accent: 'crimson'}}),
-  getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true}),
+  getMushafLine({mushaf: 'qpc-v4', page: 187, line: 2, look: 'tajweed'}),
+  getMushafLine({page: 187, line: 2, look: 'mandala'}),
+  getMushafLine({page: 187, line: 2, look: 'mandala', colors: {ink: 'currentColor', accent: '#0aa'}}),
+  getMushafLines({surah: 9, look: 'mandala'}),
+  getMushafLines({surah: 9, look: 'mandala', colors: {accent: 'crimson'}}),
   getMushafLines({page: 187}),
-  getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
+  getMushafLines({
+    surah: 9,
+    fromAyah: 1,
+    toAyah: 11,
+    look: 'tajweed',
+    fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
+  }),
+  getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),
   // The data source goes with every helper.
-  getMushafLine({page: 187, line: 2, data: {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'}}),
+  getMushafLine({
+    page: 187,
+    line: 2,
+    data: {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'},
+  }),
   getMushafLines({page: 187, data: {layout: 'https://mirror.example/layout.db.zip'}}),
   getMushafLines({surah: 9, slice: true, data: {}}),
   getMushafLocation({surah: 9, data: {words: '/w'}}).then(({page}) => page),
+  loadPageFont({page: 10}).waitUntilDone(),
+  loadPageFont({look: 'tajweed', page: 10, url: '/fonts/qpc-v4-tajweed/p10.woff2'}).fontFamily,
 ];
 // @ts-expect-error a page and an ayah range are two different questions
 export const bothShapes = getMushafLines({page: 187, surah: 9});
 // @ts-expect-error one of them is required
-export const neitherShape = getMushafLines({tajweed: true});
+export const neitherShape = getMushafLines({look: 'tajweed'});
 // @ts-expect-error a page has no ayah range to slice to
 export const pageSlice = getMushafLines({page: 187, slice: true});
 
 export const ayahs: number[] = lineAyahs(data);
-export const sizes: number[] = [fontSizeForWidth(1920), fontSizeForWidth(1680, 'qpc-v4-tajweed'), lineHeightForFontSize(112)];
+export const sizes: number[] = [fontSizeForWidth(1920), fontSizeForWidth(1680, 'qpc-v4'), lineHeightForFontSize(112)];
 
 // `exit` takes the same shape as `enter`.
 export const okExit = (
   <>
     <MushafLine line={data} exit={{presentation: fade({shouldFadeOutExitingScene: true}), timing}} />
-    <MushafLine line={data} enter={{presentation: fade(), timing}} exit={{presentation: slide({direction: 'from-right'}), timing}} />
-    <MushafLine mushaf="qpc-v4-tajweed" page={10} line={3} exit={{presentation: revealRtl(), timing}} />
+    <MushafLine
+      line={data}
+      enter={{presentation: fade(), timing}}
+      exit={{presentation: slide({direction: 'from-right'}), timing}}
+    />
+    <MushafLine page={10} line={3} look="tajweed" exit={{presentation: revealRtl(), timing}} />
   </>
 );
 // @ts-expect-error a string is not a presentation
@@ -180,9 +216,11 @@ export const badMushaf = <MushafLine mushaf="qpc-v9" page={10} line={3} />;
 // @ts-expect-error no start-time prop: timing comes from <Sequence from>
 export const noFrom = <MushafLine line={data} from={30} />;
 
-export const ids: MushafId[] = ['qpc-v4', 'qpc-v4-tajweed'];
-// @ts-expect-error not a registered mushaf
-export const badId: MushafId = 'qpc-v2';
+export const ids: MushafId[] = ['qpc-v4'];
+// @ts-expect-error a font set is not a mushaf id
+export const badId: MushafId = 'qpc-v4-tajweed';
+export const looks: MushafLook[] = ['plain', 'tajweed', 'mandala'];
+export const fontSets: MushafFontSet[] = ['qpc-v4', 'qpc-v4-tajweed'];
 
 // Data is plain JSON.
 type Json = string | number | boolean | null | readonly Json[] | {readonly [k: string]: Json};

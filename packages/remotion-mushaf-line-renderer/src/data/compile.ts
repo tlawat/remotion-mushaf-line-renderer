@@ -24,7 +24,9 @@ export class LayoutProblemsError extends Error {
   readonly problems: readonly string[];
   constructor(problems: readonly string[]) {
     const shown = problems.slice(0, MAX_PROBLEMS);
-    super(`${problems.length} problem(s) in the layout data:\n - ${shown.join('\n - ')}${problems.length > shown.length ? `\n - … ${problems.length - shown.length} more` : ''}`);
+    super(
+      `${problems.length} problem(s) in the layout data:\n - ${shown.join('\n - ')}${problems.length > shown.length ? `\n - … ${problems.length - shown.length} more` : ''}`,
+    );
     this.name = 'LayoutProblemsError';
     this.problems = problems;
   }
@@ -35,11 +37,21 @@ const MAX_CODE_POINTS = 4;
 const CODE_POINT_MIN = 0xfc41;
 const CODE_POINT_MAX = 0xfcfc;
 const REGULAR: ReadonlySet<MushafWordKind> = new Set(['word', 'end']);
-const KIND_CHAR: Readonly<Record<MushafWordKind, string>> = {word: 'w', end: 'e', pause: 'p', sajdah: 's', 'rub-el-hizb': 'h'};
+const KIND_CHAR: Readonly<Record<MushafWordKind, string>> = {
+  word: 'w',
+  end: 'e',
+  pause: 'p',
+  sajdah: 's',
+  'rub-el-hizb': 'h',
+};
 
 type Run = {surah: number; ayah: number; firstPosition: number; count: number; marker: boolean};
 
-export const compileLayout = (parsedPages: readonly ParsedPage[], def: CompileDef, meta: {readonly source: string; readonly generatedAt: string}): CompiledLayout => {
+export const compileLayout = (
+  parsedPages: readonly ParsedPage[],
+  def: CompileDef,
+  meta: {readonly source: string; readonly generatedAt: string},
+): CompiledLayout => {
   const byPage = new Map(parsedPages.map((p) => [p.page, p]));
   const pages: CompiledPage[] = [];
   const problems: string[] = [];
@@ -79,10 +91,17 @@ export const compileLayout = (parsedPages: readonly ParsedPage[], def: CompileDe
           // Reading order: within an ayah positions increase by one; a new ayah comes after the
           // previous one and starts at position 1.
           if (last && w.surah === last.surah && w.ayah === last.ayah) {
-            if (w.position !== last.position + 1) problem(`page ${page} line ${line.line}: word ${location} follows ${last.surah}:${last.ayah}:${last.position}`);
+            if (w.position !== last.position + 1)
+              problem(
+                `page ${page} line ${line.line}: word ${location} follows ${last.surah}:${last.ayah}:${last.position}`,
+              );
           } else {
-            if (last && (w.surah < last.surah || (w.surah === last.surah && w.ayah < last.ayah))) problem(`page ${page} line ${line.line}: word ${location} comes after ${last.surah}:${last.ayah}:${last.position}`);
-            if (w.position !== 1) problem(`page ${page} line ${line.line}: ayah ${w.surah}:${w.ayah} starts at position ${w.position}`);
+            if (last && (w.surah < last.surah || (w.surah === last.surah && w.ayah < last.ayah)))
+              problem(
+                `page ${page} line ${line.line}: word ${location} comes after ${last.surah}:${last.ayah}:${last.position}`,
+              );
+            if (w.position !== 1)
+              problem(`page ${page} line ${line.line}: ayah ${w.surah}:${w.ayah} starts at position ${w.position}`);
           }
           last = {surah: w.surah, ayah: w.ayah, position: w.position};
         }
@@ -90,7 +109,14 @@ export const compileLayout = (parsedPages: readonly ParsedPage[], def: CompileDe
         k.push(KIND_CHAR[w.kind] ?? '?');
         // Ayah runs: consecutive regular words of one ayah with consecutive positions share a run;
         // a marker always gets a run of its own (its position follows no sequence).
-        if (regular && run && !run.marker && run.surah === w.surah && run.ayah === w.ayah && w.position === run.firstPosition + run.count) {
+        if (
+          regular &&
+          run &&
+          !run.marker &&
+          run.surah === w.surah &&
+          run.ayah === w.ayah &&
+          w.position === run.firstPosition + run.count
+        ) {
           run.count++;
         } else {
           if (run) a.push(run.surah, run.ayah, run.firstPosition, run.count);
@@ -103,7 +129,15 @@ export const compileLayout = (parsedPages: readonly ParsedPage[], def: CompileDe
     wordCount += t.length;
   }
   if (problems.length) throw new LayoutProblemsError(problems);
-  return {format: 1, dataset: def.id, layoutId: def.layoutId, pages, wordCount, source: meta.source, generatedAt: meta.generatedAt};
+  return {
+    format: 1,
+    dataset: def.id,
+    layoutId: def.layoutId,
+    pages,
+    wordCount,
+    source: meta.source,
+    generatedAt: meta.generatedAt,
+  };
 };
 
 /**
@@ -157,7 +191,8 @@ export const checkLayout = (layout: CompiledLayout, def: CompileDef): string[] =
       }
     }
     if (lines !== def.linesOnPage(p)) problem(`${where}: ${lines} lines, expected ${def.linesOnPage(p)}`);
-    if (lineWords !== page.t.length) problem(`${where}: lines account for ${lineWords} words but the page has ${page.t.length}`);
+    if (lineWords !== page.t.length)
+      problem(`${where}: lines account for ${lineWords} words but the page has ${page.t.length}`);
     // Runs: they cover the page's words, in reading order, one ayah at a time.
     let runWords = 0;
     for (let i = 0; i < page.a.length; i += 4) {
@@ -165,18 +200,24 @@ export const checkLayout = (layout: CompiledLayout, def: CompileDef): string[] =
       const ayah = page.a[i + 1] ?? 0;
       const firstPosition = page.a[i + 2] ?? 0;
       const count = page.a[i + 3] ?? 0;
-      if (count < 1 || surah < 1 || ayah < 1 || firstPosition < 1) problem(`${where}: malformed ayah run [${surah}, ${ayah}, ${firstPosition}, ${count}]`);
+      if (count < 1 || surah < 1 || ayah < 1 || firstPosition < 1)
+        problem(`${where}: malformed ayah run [${surah}, ${ayah}, ${firstPosition}, ${count}]`);
       for (let j = 0; j < count; j++) {
         const index = runWords + j;
         const kind = page.k[index];
         const text = page.t[index] ?? '';
         const codePoints = Array.from(text).map((c) => c.codePointAt(0) ?? 0);
-        if (codePoints.length < 1 || codePoints.length > MAX_CODE_POINTS) problem(`${where}: word ${page.w + index} has ${codePoints.length} code points`);
+        if (codePoints.length < 1 || codePoints.length > MAX_CODE_POINTS)
+          problem(`${where}: word ${page.w + index} has ${codePoints.length} code points`);
         for (const cp of codePoints) {
-          if (cp < CODE_POINT_MIN || cp > CODE_POINT_MAX) problem(`${where}: word ${page.w + index} has code point U+${cp.toString(16).toUpperCase()} outside U+FC41–U+FCFC`);
+          if (cp < CODE_POINT_MIN || cp > CODE_POINT_MAX)
+            problem(
+              `${where}: word ${page.w + index} has code point U+${cp.toString(16).toUpperCase()} outside U+FC41–U+FCFC`,
+            );
         }
         if (kind !== 'w' && kind !== 'e') {
-          if (kind !== 'p' && kind !== 's' && kind !== 'h') problem(`${where}: word ${page.w + index} has unknown kind char "${String(kind)}"`);
+          if (kind !== 'p' && kind !== 's' && kind !== 'h')
+            problem(`${where}: word ${page.w + index} has unknown kind char "${String(kind)}"`);
           continue;
         }
         totalWords++;
@@ -184,7 +225,8 @@ export const checkLayout = (layout: CompiledLayout, def: CompileDef): string[] =
         const key = `${surah}:${ayah}`;
         let state = ayahs.get(key);
         if (!state) {
-          if (previous && (surah < previous.surah || (surah === previous.surah && ayah < previous.ayah))) problem(`${where}: ayah ${key} comes after ${previous.surah}:${previous.ayah}`);
+          if (previous && (surah < previous.surah || (surah === previous.surah && ayah < previous.ayah)))
+            problem(`${where}: ayah ${key} comes after ${previous.surah}:${previous.ayah}`);
           state = {lastPosition: 0, ends: 0, endPosition: 0};
           ayahs.set(key, state);
         } else if (currentAyah !== key) {
@@ -192,7 +234,8 @@ export const checkLayout = (layout: CompiledLayout, def: CompileDef): string[] =
         }
         currentAyah = key;
         previous = {surah, ayah};
-        if (position !== state.lastPosition + 1) problem(`${where}: word ${key}:${position} expected at position ${state.lastPosition + 1}`);
+        if (position !== state.lastPosition + 1)
+          problem(`${where}: word ${key}:${position} expected at position ${state.lastPosition + 1}`);
         state.lastPosition = position;
         if (kind === 'e') {
           state.ends++;
@@ -201,13 +244,19 @@ export const checkLayout = (layout: CompiledLayout, def: CompileDef): string[] =
       }
       runWords += count;
     }
-    if (runWords !== page.t.length) problem(`${where}: ayah runs account for ${runWords} words but the page has ${page.t.length}`);
+    if (runWords !== page.t.length)
+      problem(`${where}: ayah runs account for ${runWords} words but the page has ${page.t.length}`);
   }
   for (const [key, state] of ayahs) {
     if (state.ends !== 1) {
       if (!problem(`ayah ${key}: ${state.ends} ayah markers`)) break;
     } else if (state.endPosition !== state.lastPosition) {
-      if (!problem(`ayah ${key}: the ayah marker at position ${state.endPosition} is not the last word (${state.lastPosition})`)) break;
+      if (
+        !problem(
+          `ayah ${key}: the ayah marker at position ${state.endPosition} is not the last word (${state.lastPosition})`,
+        )
+      )
+        break;
     }
   }
   const glyphs = layout.pages.reduce((n, page) => n + page.t.length, 0);

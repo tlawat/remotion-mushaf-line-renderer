@@ -34,7 +34,8 @@ const MAX_COMMENT = 0xffff;
 
 const view = (bytes: Uint8Array): DataView => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-export const isZip = (bytes: Uint8Array): boolean => bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+export const isZip = (bytes: Uint8Array): boolean =>
+  bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
 
 /** The entries the central directory lists, in directory order. */
 export const listZipEntries = (bytes: Uint8Array): ZipEntry[] => {
@@ -52,15 +53,22 @@ export const listZipEntries = (bytes: Uint8Array): ZipEntry[] => {
   const entriesTotal = dv.getUint16(eocd + 10, true);
   const cdSize = dv.getUint32(eocd + 12, true);
   const cdOffset = dv.getUint32(eocd + 16, true);
-  if (entriesTotal === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff || (eocd >= 20 && dv.getUint32(eocd - 20, true) === ZIP64_LOCATOR_SIG)) {
+  if (
+    entriesTotal === 0xffff ||
+    cdSize === 0xffffffff ||
+    cdOffset === 0xffffffff ||
+    (eocd >= 20 && dv.getUint32(eocd - 20, true) === ZIP64_LOCATOR_SIG)
+  ) {
     throw new ZipError('zip64', 'ZIP64 archives are not supported');
   }
-  if (cdOffset + cdSize > eocd) throw new ZipError('truncated', 'the central directory extends past the end of the file');
+  if (cdOffset + cdSize > eocd)
+    throw new ZipError('truncated', 'the central directory extends past the end of the file');
 
   const entries: ZipEntry[] = [];
   let p = cdOffset;
   for (let n = 0; n < entriesTotal; n++) {
-    if (p + 46 > bytes.length || dv.getUint32(p, true) !== CENTRAL_SIG) throw new ZipError('bad-central-directory', `central directory entry ${n} is malformed`);
+    if (p + 46 > bytes.length || dv.getUint32(p, true) !== CENTRAL_SIG)
+      throw new ZipError('bad-central-directory', `central directory entry ${n} is malformed`);
     const flags = dv.getUint16(p + 8, true);
     const method = dv.getUint16(p + 10, true);
     const crc32 = dv.getUint32(p + 16, true);
@@ -72,9 +80,22 @@ export const listZipEntries = (bytes: Uint8Array): ZipEntry[] => {
     const localHeaderOffset = dv.getUint32(p + 42, true);
     const name = new TextDecoder('utf-8').decode(bytes.subarray(p + 46, p + 46 + nameLength));
     if (flags & 0x1) throw new ZipError('encrypted', `"${name}" is encrypted`);
-    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || localHeaderOffset === 0xffffffff) throw new ZipError('zip64', `"${name}" needs ZIP64, which is not supported`);
-    if (method !== 0 && method !== 8) throw new ZipError('method', `"${name}" uses compression method ${method}; only stored (0) and deflated (8) are supported`);
-    entries.push({name, method, compressedSize, uncompressedSize, crc32, localHeaderOffset, isDirectory: name.endsWith('/')});
+    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || localHeaderOffset === 0xffffffff)
+      throw new ZipError('zip64', `"${name}" needs ZIP64, which is not supported`);
+    if (method !== 0 && method !== 8)
+      throw new ZipError(
+        'method',
+        `"${name}" uses compression method ${method}; only stored (0) and deflated (8) are supported`,
+      );
+    entries.push({
+      name,
+      method,
+      compressedSize,
+      uncompressedSize,
+      crc32,
+      localHeaderOffset,
+      isDirectory: name.endsWith('/'),
+    });
     p += 46 + nameLength + extraLength + commentLength;
   }
   return entries;
@@ -85,29 +106,47 @@ export const listZipEntries = (bytes: Uint8Array): ZipEntry[] => {
  * else the only file. Directories, macOS resource forks and dotfiles never count.
  */
 export const pickZipEntry = (entries: readonly ZipEntry[], preferredExtensions: readonly string[]): ZipEntry => {
-  const files = entries.filter((e) => !e.isDirectory && !e.name.startsWith('__MACOSX/') && !(e.name.split('/').pop() ?? '').startsWith('.'));
+  const files = entries.filter(
+    (e) => !e.isDirectory && !e.name.startsWith('__MACOSX/') && !(e.name.split('/').pop() ?? '').startsWith('.'),
+  );
   if (files.length === 0) throw new ZipError('empty', 'the zip holds no file');
   for (const extension of preferredExtensions) {
     const hit = files.find((e) => e.name.toLowerCase().endsWith(extension));
     if (hit) return hit;
   }
   if (files.length === 1) return files[0] as ZipEntry;
-  throw new ZipError('ambiguous', `the zip holds ${files.length} files and none is named *${preferredExtensions.join(' / *')}: ${files.map((e) => e.name).join(', ')}`);
+  throw new ZipError(
+    'ambiguous',
+    `the zip holds ${files.length} files and none is named *${preferredExtensions.join(' / *')}: ${files.map((e) => e.name).join(', ')}`,
+  );
 };
 
 /** The entry's bytes, inflated when deflated, checked against the recorded size and CRC-32. */
 export const readZipEntry = async (bytes: Uint8Array, entry: ZipEntry): Promise<Uint8Array> => {
   const dv = view(bytes);
   const h = entry.localHeaderOffset;
-  if (h + 30 > bytes.length || dv.getUint32(h, true) !== LOCAL_SIG) throw new ZipError('bad-local-header', `"${entry.name}": no local header at offset ${h}`);
+  if (h + 30 > bytes.length || dv.getUint32(h, true) !== LOCAL_SIG)
+    throw new ZipError('bad-local-header', `"${entry.name}": no local header at offset ${h}`);
   const start = h + 30 + dv.getUint16(h + 26, true) + dv.getUint16(h + 28, true);
   const end = start + entry.compressedSize;
-  if (end > bytes.length) throw new ZipError('truncated', `"${entry.name}": ${entry.compressedSize} bytes expected at offset ${start}, the file ends at ${bytes.length}`);
+  if (end > bytes.length)
+    throw new ZipError(
+      'truncated',
+      `"${entry.name}": ${entry.compressedSize} bytes expected at offset ${start}, the file ends at ${bytes.length}`,
+    );
   const raw = bytes.subarray(start, end);
   const out = entry.method === 0 ? raw : await inflateRaw(raw);
-  if (out.length !== entry.uncompressedSize) throw new ZipError('size-mismatch', `"${entry.name}": ${out.length} bytes after inflating, the directory says ${entry.uncompressedSize}`);
+  if (out.length !== entry.uncompressedSize)
+    throw new ZipError(
+      'size-mismatch',
+      `"${entry.name}": ${out.length} bytes after inflating, the directory says ${entry.uncompressedSize}`,
+    );
   const crc = crc32(out);
-  if (crc !== entry.crc32) throw new ZipError('crc-mismatch', `"${entry.name}": CRC-32 ${crc.toString(16)} does not match the recorded ${entry.crc32.toString(16)}; the download is corrupt`);
+  if (crc !== entry.crc32)
+    throw new ZipError(
+      'crc-mismatch',
+      `"${entry.name}": CRC-32 ${crc.toString(16)} does not match the recorded ${entry.crc32.toString(16)}; the download is corrupt`,
+    );
   return out;
 };
 
@@ -118,14 +157,20 @@ export const inflateRaw = async (bytes: Uint8Array): Promise<Uint8Array> => {
     if (typeof DecompressionStream === 'undefined') throw new Error('DecompressionStream is undefined');
     stream = new DecompressionStream('deflate-raw');
   } catch (e) {
-    throw new ZipError('inflate-unsupported', `this runtime cannot inflate a zip (${e instanceof Error ? e.message : String(e)}; Node needs 20.12 or newer). Point \`data\` at the unzipped files instead.`);
+    throw new ZipError(
+      'inflate-unsupported',
+      `this runtime cannot inflate a zip (${e instanceof Error ? e.message : String(e)}; Node needs 20.12 or newer). Point \`data\` at the unzipped files instead.`,
+    );
   }
   const copy = bytes.slice();
   const body = new Blob([copy.buffer as ArrayBuffer]).stream().pipeThrough(stream);
   try {
     return new Uint8Array(await new Response(body).arrayBuffer());
   } catch (e) {
-    throw new ZipError('inflate-failed', `the deflate stream is corrupt: ${e instanceof Error ? e.message : String(e)}`);
+    throw new ZipError(
+      'inflate-failed',
+      `the deflate stream is corrupt: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 };
 

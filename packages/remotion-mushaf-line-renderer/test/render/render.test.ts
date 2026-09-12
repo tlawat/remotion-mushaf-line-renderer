@@ -2,16 +2,17 @@
 // with @remotion/renderer in the preinstalled Chromium (or MUSHAF_BROWSER_EXECUTABLE). Covers
 // determinism across independent renders, settled frames after the entrance, the failure paths, and
 // a Lambda-style bundle served under a non-root publicPath.
-import {bundle} from '@remotion/bundler';
-import {renderFrames, renderStill, selectComposition} from '@remotion/renderer';
-import {chromium} from '@playwright/test';
+
+import {existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import {createServer, type Server} from 'node:http';
-import {existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {chromium} from '@playwright/test';
+import {bundle} from '@remotion/bundler';
+import {renderFrames, renderStill, selectComposition} from '@remotion/renderer';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {getMushafLine} from '../../src/get-mushaf-line';
+import {getMushafLine} from '../../src/resolve/get-mushaf-line';
 import type {MushafLineData} from '../../src/types';
 import {syntheticLine} from '../fixtures/synthetic-lines';
 
@@ -21,7 +22,9 @@ const FIXTURE_FONT = 'fonts/qpc-v4-tajweed/p10.ttf';
 const hasFixtureFont = existsSync(path.join(exampleDir, 'public', FIXTURE_FONT));
 /** The example's mirror of QUL's two exports (`bun run qul data`), served like any public file. */
 const MIRROR = {words: 'data/qpc-v4/words.json.zip', layout: 'data/qpc-v4/layout.db.zip'};
-const hasMirror = existsSync(path.join(exampleDir, 'public', MIRROR.words)) && existsSync(path.join(exampleDir, 'public', MIRROR.layout));
+const hasMirror =
+  existsSync(path.join(exampleDir, 'public', MIRROR.words)) &&
+  existsSync(path.join(exampleDir, 'public', MIRROR.layout));
 
 type ChromeMode = 'headless-shell' | 'chrome-for-testing';
 
@@ -30,7 +33,10 @@ const findHeadlessShell = (chromiumPath: string): string | null => {
   const parts = chromiumPath.split(path.sep);
   const i = parts.findIndex((p) => /^chromium-\d+$/.test(p));
   if (i < 0) return null;
-  const root = parts.slice(0, i + 1).join(path.sep).replace(/chromium-(\d+)$/, 'chromium_headless_shell-$1');
+  const root = parts
+    .slice(0, i + 1)
+    .join(path.sep)
+    .replace(/chromium-(\d+)$/, 'chromium_headless_shell-$1');
   const search = (dir: string, depth: number): string | null => {
     if (depth > 3 || !existsSync(dir)) return null;
     for (const entry of readdirSync(dir, {withFileTypes: true})) {
@@ -51,12 +57,17 @@ const findHeadlessShell = (chromiumPath: string): string | null => {
 // download its own Chrome Headless Shell.
 const pickBrowser = (): {browserExecutable: string | null; chromeMode: ChromeMode} => {
   if (process.env.MUSHAF_BROWSER_EXECUTABLE) {
-    return {browserExecutable: process.env.MUSHAF_BROWSER_EXECUTABLE, chromeMode: (process.env.MUSHAF_CHROME_MODE as ChromeMode | undefined) ?? 'headless-shell'};
+    return {
+      browserExecutable: process.env.MUSHAF_BROWSER_EXECUTABLE,
+      chromeMode: (process.env.MUSHAF_CHROME_MODE as ChromeMode | undefined) ?? 'headless-shell',
+    };
   }
   const full = chromium.executablePath();
   if (!existsSync(full)) return {browserExecutable: null, chromeMode: 'headless-shell'};
   const shell = findHeadlessShell(full);
-  return shell ? {browserExecutable: shell, chromeMode: 'headless-shell'} : {browserExecutable: full, chromeMode: 'chrome-for-testing'};
+  return shell
+    ? {browserExecutable: shell, chromeMode: 'headless-shell'}
+    : {browserExecutable: full, chromeMode: 'chrome-for-testing'};
 };
 
 const renderer = {...pickBrowser(), logLevel: 'error' as const, chromiumOptions: {}};
@@ -84,7 +95,7 @@ type HarnessProps = {
   color: string;
   slice: {ayah?: number; fromAyah?: number; toAyah?: number} | null;
   sliceOnData: boolean;
-  resolve: {mushaf: 'qpc-v4' | 'qpc-v4-tajweed'; page: number; line: number} | null;
+  resolve: {look: 'plain' | 'tajweed' | 'mandala'; page: number; line: number} | null;
   data: {words?: string; layout?: string} | null;
   dataFiles: {words: string; layout: string} | null;
 };
@@ -119,9 +130,29 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
 let workDir: string;
 let serveUrl: string;
 
-const still = async (url: string, inputProps: HarnessProps, frame = 0, timeoutInMilliseconds = 30_000): Promise<Buffer> => {
-  const composition = await selectComposition({serveUrl: url, id: 'LineHarness', inputProps, timeoutInMilliseconds, ...renderer});
-  const {buffer} = await renderStill({composition, serveUrl: url, inputProps, frame, imageFormat: 'png', output: null, timeoutInMilliseconds, ...renderer});
+const still = async (
+  url: string,
+  inputProps: HarnessProps,
+  frame = 0,
+  timeoutInMilliseconds = 30_000,
+): Promise<Buffer> => {
+  const composition = await selectComposition({
+    serveUrl: url,
+    id: 'LineHarness',
+    inputProps,
+    timeoutInMilliseconds,
+    ...renderer,
+  });
+  const {buffer} = await renderStill({
+    composition,
+    serveUrl: url,
+    inputProps,
+    frame,
+    imageFormat: 'png',
+    output: null,
+    timeoutInMilliseconds,
+    ...renderer,
+  });
   if (!buffer) throw new Error('renderStill returned no buffer');
   return buffer;
 };
@@ -168,7 +199,7 @@ const serveUnder = (dir: string, prefix: string): Promise<{server: Server; origi
 
 /** The example's public folder served at the root, so Node can fetch the mirror by absolute URL. */
 let publicServer: {server: Server; origin: string} | null = null;
-/** Page 10 line 3 of the tajweed set, resolved once through the runtime loader from the mirror. */
+/** Page 10 line 3 in the colour font, resolved once through the runtime loader from the mirror. */
 let realLine: MushafLineData | null = null;
 
 describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer', () => {
@@ -181,7 +212,12 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     });
     if (hasMirror) {
       publicServer = await serveUnder(path.join(exampleDir, 'public'), '/');
-      realLine = await getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3, data: {words: `${publicServer.origin}/${MIRROR.words}`, layout: `${publicServer.origin}/${MIRROR.layout}`}});
+      realLine = await getMushafLine({
+        look: 'tajweed',
+        page: 10,
+        line: 3,
+        data: {words: `${publicServer.origin}/${MIRROR.words}`, layout: `${publicServer.origin}/${MIRROR.layout}`},
+      });
     }
   });
 
@@ -203,7 +239,13 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
 
   it('renders the fade entrance frame by frame, settles, then leaves through the exit', async () => {
     // Sequence of 14 frames: entrance over 0-9, settled at 10, exit over 10-13, gone from 14 on.
-    const inputProps = harnessProps({enter: 'fade', enterFrames: 10, exit: 'fade', exitFrames: 4, durationInFrames: 14});
+    const inputProps = harnessProps({
+      enter: 'fade',
+      enterFrames: 10,
+      exit: 'fade',
+      exitFrames: 4,
+      durationInFrames: 14,
+    });
     const composition = await selectComposition({serveUrl, id: 'LineHarness', inputProps, ...renderer});
     const outputDir = path.join(workDir, 'frames');
     await renderFrames({
@@ -284,13 +326,17 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
 
   it('a missing font fails the render fast with FONT_HTTP', async () => {
     const started = Date.now();
-    await expect(still(serveUrl, harnessProps({fontFile: 'fonts/qpc-v4-tajweed/missing.woff2'}))).rejects.toThrow(/FONT_HTTP|404/);
+    await expect(still(serveUrl, harnessProps({fontFile: 'fonts/qpc-v4-tajweed/missing.woff2'}))).rejects.toThrow(
+      /FONT_HTTP|404/,
+    );
     expect(Date.now() - started).toBeLessThan(25_000);
   });
 
   it('an HTML response for the font fails with FONT_INVALID', async () => {
     // The bundle's own index.html, served at the site root.
-    await expect(still(serveUrl, harnessProps({fontFile: null, fontUrl: '/index.html'}))).rejects.toThrow(/FONT_INVALID|not a font/);
+    await expect(still(serveUrl, harnessProps({fontFile: null, fontUrl: '/index.html'}))).rejects.toThrow(
+      /FONT_INVALID|not a font/,
+    );
   });
 
   it('a stalled font server times out with the labelled delayRender()', async () => {
@@ -299,7 +345,9 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     const address = stalled.address();
     const port = typeof address === 'object' && address ? address.port : 0;
     try {
-      await expect(still(serveUrl, harnessProps({fontFile: null, fontUrl: `http://127.0.0.1:${port}/p1.woff2`}), 0, 9_000)).rejects.toThrow(/waiting for font|FONT_TIMEOUT|timed out|timeout/i);
+      await expect(
+        still(serveUrl, harnessProps({fontFile: null, fontUrl: `http://127.0.0.1:${port}/p1.woff2`}), 0, 9_000),
+      ).rejects.toThrow(/waiting for font|FONT_TIMEOUT|timed out|timeout/i);
     } finally {
       stalled.close();
     }
@@ -324,6 +372,16 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
   });
 
   describe.skipIf(!hasMirror)('with the mirrored KFGQPC V4 exports', () => {
+    const p10l3 = () => ({look: 'tajweed', page: 10, line: 3}) as const;
+    /** The same line under another look, without a second load (the layout is cached per source). */
+    const relook = (look: 'plain' | 'mandala') =>
+      getMushafLine({
+        look,
+        page: 10,
+        line: 3,
+        data: {words: `${publicServer!.origin}/${MIRROR.words}`, layout: `${publicServer!.origin}/${MIRROR.layout}`},
+      });
+
     it('renders page 10 line 3 with the fixture font (saved next to this file for visual comparison)', async () => {
       const line = realLine!;
       expect(line.words.length).toBeGreaterThan(3);
@@ -335,16 +393,24 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     it('resolves the convenience form in the render tab from a staticFile() mirror, also under a Lambda publicPath', async () => {
       // The tab fetches the two zips from the bundle's own public folder, unzips and reads them,
       // and paints the very same picture as the line resolved ahead of time.
-      const resolve = {mushaf: 'qpc-v4-tajweed' as const, page: 10, line: 3};
+      const resolve = p10l3();
       const reference = await still(serveUrl, harnessProps({lines: [realLine!], fit: 'line'}));
       const resolved = await still(serveUrl, harnessProps({lines: [], resolve, dataFiles: MIRROR, fit: 'line'}));
       expect(resolved.equals(reference)).toBe(true);
       // staticFile() carries the publicPath, so a Lambda site finds its mirror too.
       const outDir = path.join(workDir, 'site-data');
-      await bundle({entryPoint: path.join(exampleDir, 'src/index.ts'), publicDir: path.join(exampleDir, 'public'), outDir, publicPath: '/sites/abc/'});
+      await bundle({
+        entryPoint: path.join(exampleDir, 'src/index.ts'),
+        publicDir: path.join(exampleDir, 'public'),
+        outDir,
+        publicPath: '/sites/abc/',
+      });
       const {server, origin} = await serveUnder(outDir, '/sites/abc/');
       try {
-        const fromSite = await still(`${origin}/sites/abc/`, harnessProps({lines: [], resolve, dataFiles: MIRROR, fit: 'line'}));
+        const fromSite = await still(
+          `${origin}/sites/abc/`,
+          harnessProps({lines: [], resolve, dataFiles: MIRROR, fit: 'line'}),
+        );
         expect(fromSite.equals(reference)).toBe(true);
       } finally {
         server.close();
@@ -352,12 +418,19 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     });
 
     it('a missing export fails the render fast with DATA_HTTP, and an HTML page with DATA_INVALID', async () => {
-      const resolve = {mushaf: 'qpc-v4-tajweed' as const, page: 10, line: 3};
+      const resolve = p10l3();
       const started = Date.now();
-      await expect(still(serveUrl, harnessProps({lines: [], resolve, dataFiles: {words: 'data/qpc-v4/missing.json.zip', layout: MIRROR.layout}}))).rejects.toThrow(/DATA_HTTP|404/);
+      await expect(
+        still(
+          serveUrl,
+          harnessProps({lines: [], resolve, dataFiles: {words: 'data/qpc-v4/missing.json.zip', layout: MIRROR.layout}}),
+        ),
+      ).rejects.toThrow(/DATA_HTTP|404/);
       expect(Date.now() - started).toBeLessThan(25_000);
       // The bundle's own index.html, served at the site root, in place of the words export.
-      await expect(still(serveUrl, harnessProps({lines: [], resolve, dataFiles: MIRROR, data: {words: '/index.html'}}))).rejects.toThrow(/DATA_INVALID|not JSON/);
+      await expect(
+        still(serveUrl, harnessProps({lines: [], resolve, dataFiles: MIRROR, data: {words: '/index.html'}})),
+      ).rejects.toThrow(/DATA_INVALID|not JSON/);
     });
 
     it('slices a fitted line without changing its size, deterministically', async () => {
@@ -367,26 +440,41 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       const sliced = await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {ayah: 63}}));
       writeFileSync(path.join(here, 'p10-l3-slice.png'), sliced);
       expect(sliced.equals(whole)).toBe(false);
-      expect((await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {ayah: 63}}))).equals(sliced)).toBe(true);
+      expect(
+        (await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {ayah: 63}}))).equals(sliced),
+      ).toBe(true);
       // A slice that keeps every word is the printed line, to the byte.
-      expect((await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {fromAyah: 62}}))).equals(whole)).toBe(true);
+      expect(
+        (await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {fromAyah: 62}}))).equals(whole),
+      ).toBe(true);
     });
 
     it('renders the mandala palette and its colours, the letters following CSS color', async () => {
       const line = realLine!;
       const tajweed = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
-      // The palette and its colours ride on the data, so the renderer needs nothing else; the
+      // The look and its colours ride on the data, so the renderer needs nothing else; the
       // letters take the page's colour through the palette, exactly as plain glyphs would.
-      const mandala = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {ink: 'currentColor'}}], fit: 'line', color: 'rgb(27, 111, 63)'}));
+      const mandalaLine = await relook('mandala');
+      const mandala = await still(
+        serveUrl,
+        harnessProps({lines: [mandalaLine], fit: 'line', color: 'rgb(27, 111, 63)'}),
+      );
       writeFileSync(path.join(here, 'p10-l3-mandala.png'), mandala);
       expect(mandala.equals(tajweed)).toBe(false);
       expect(mandala.length).toBeGreaterThan(1000);
       // Same line, same palette, another page colour: a different picture, so `color` really reaches
       // the glyphs of a colour font.
-      const black = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {ink: 'currentColor'}}], fit: 'line', color: '#000000'}));
+      const black = await still(serveUrl, harnessProps({lines: [mandalaLine], fit: 'line', color: '#000000'}));
       expect(black.equals(mandala)).toBe(false);
       // ... and so does a recoloured rosette.
-      const gold = await still(serveUrl, harnessProps({lines: [{...line, palette: 3, paletteColors: {ink: 'currentColor', accent: '#c8a45c'}}], fit: 'line', color: '#000000'}));
+      const gold = await still(
+        serveUrl,
+        harnessProps({
+          lines: [{...mandalaLine, colors: {ink: 'currentColor', accent: '#c8a45c'}}],
+          fit: 'line',
+          color: '#000000',
+        }),
+      );
       expect(gold.equals(black)).toBe(false);
     });
   });

@@ -21,14 +21,17 @@ const hash = (text: string): string => {
   return h.toString(16).padStart(8, '0');
 };
 
-const overrideText = (entries: readonly PaletteEntry[]): string => entries.map(([entry, color]) => `${entry} ${color}`).join(',');
+const overrideText = (entries: readonly PaletteEntry[]): string =>
+  entries.map(([entry, color]) => `${entry} ${color}`).join(',');
 
 /**
  * The `font-palette` ident for a family, a base palette and its overrides. Pure: the renderer can
  * name the ident while rendering and register the rule for it afterwards.
  */
 export const paletteIdent = (fontFamily: string, base: number, entries: readonly PaletteEntry[] = []): string =>
-  entries.length === 0 ? `--${fontFamily}-palette-${base}` : `--${fontFamily}-palette-${base}-${hash(overrideText(entries))}`;
+  entries.length === 0
+    ? `--${fontFamily}-palette-${base}`
+    : `--${fontFamily}-palette-${base}-${hash(overrideText(entries))}`;
 
 type Store = {
   readonly style: HTMLStyleElement;
@@ -58,7 +61,8 @@ const getStore = (): Store => {
  * complain about it (jsdom has no `CSS` object at all), where a colour font renders its default
  * palette anyway.
  */
-const supportsFontPalette = (): boolean => typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('font-palette', '--mushaf-probe');
+const supportsFontPalette = (): boolean =>
+  typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('font-palette', '--mushaf-probe');
 
 /**
  * Declares one `font-palette` ident and returns it. Idempotent; the rule is injected only where
@@ -74,7 +78,11 @@ export const registerPalette = (fontFamily: string, base: number, entries: reado
   const overrides = entries.length === 0 ? '' : `override-colors:${overrideText(entries)};`;
   // Appending text rather than insertRule(): one reparse of a tiny sheet, and it survives a browser
   // that rejects the at-rule (the sheet stays valid, the ident simply never resolves).
-  store.style.appendChild(document.createTextNode(`@font-palette-values ${ident}{font-family:"${fontFamily}";base-palette:${base};${overrides}}\n`));
+  store.style.appendChild(
+    document.createTextNode(
+      `@font-palette-values ${ident}{font-family:"${fontFamily}";base-palette:${base};${overrides}}\n`,
+    ),
+  );
   return ident;
 };
 

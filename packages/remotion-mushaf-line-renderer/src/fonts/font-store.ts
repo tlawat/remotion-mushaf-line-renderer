@@ -1,4 +1,4 @@
-import type {MushafError} from './errors';
+import type {MushafError} from '../errors';
 
 export type FontStatus = 'idle' | 'loading' | 'loaded' | 'error';
 

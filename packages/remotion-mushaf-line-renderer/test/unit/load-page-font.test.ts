@@ -1,8 +1,20 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
-type Env = {isRendering: boolean; isStudio: boolean; isPlayer: boolean; isClientSideRendering: boolean; isReadOnlyStudio: boolean};
-const env: Env = {isRendering: false, isStudio: true, isPlayer: false, isClientSideRendering: false, isReadOnlyStudio: false};
+type Env = {
+  isRendering: boolean;
+  isStudio: boolean;
+  isPlayer: boolean;
+  isClientSideRendering: boolean;
+  isReadOnlyStudio: boolean;
+};
+const env: Env = {
+  isRendering: false,
+  isStudio: true,
+  isPlayer: false,
+  isClientSideRendering: false,
+  isReadOnlyStudio: false,
+};
 let nextHandle = 1;
 const remotionMock = {
   delayRender: vi.fn((_label?: string, _options?: unknown) => nextHandle++),
@@ -14,15 +26,21 @@ const remotionMock = {
 };
 vi.mock('remotion', () => remotionMock);
 
-const {loadPageFont, getFontLoadBudget, assertFontMagic} = await import('../../src/load-page-font');
-const {getFontEntry, getFontStatus, resetFontStore, subscribeFontStore} = await import('../../src/font-store');
+const {loadPageFont, getFontLoadBudget, assertFontMagic} = await import('../../src/fonts/load-page-font');
+const {getFontEntry, getFontStatus, resetFontStore, subscribeFontStore} = await import('../../src/fonts/font-store');
 const {MushafError} = await import('../../src/errors');
 
 const WOFF2 = new Uint8Array([0x77, 0x4f, 0x46, 0x32, 1, 2, 3, 4, 5, 6, 7, 8]).buffer;
 const TTF = new Uint8Array([0, 1, 0, 0, 0, 12, 0, 128]).buffer;
 const HTML = new TextEncoder().encode('<!DOCTYPE html><html>error</html>').buffer;
 
-type FakeFace = {family: string; source: unknown; descriptors: Record<string, string>; status: string; load: () => Promise<FakeFace>};
+type FakeFace = {
+  family: string;
+  source: unknown;
+  descriptors: Record<string, string>;
+  status: string;
+  load: () => Promise<FakeFace>;
+};
 let faces: FakeFace[] = [];
 let loadBehaviour: (face: FakeFace) => Promise<void> = async () => undefined;
 class FontFaceMock {
@@ -51,7 +69,11 @@ class FontFaceMock {
 const fontSet = new Set<unknown>();
 const fetchMock = vi.fn();
 
-const response = (status: number, body: ArrayBuffer) => ({ok: status >= 200 && status < 300, status, arrayBuffer: async () => body});
+const response = (status: number, body: ArrayBuffer) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  arrayBuffer: async () => body,
+});
 const okResponse = () => response(200, WOFF2);
 
 const flush = async (n = 5) => {
@@ -100,7 +122,9 @@ describe('loadPageFont', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({mode: 'cors', credentials: 'omit'});
     expect(faces).toHaveLength(1);
     expect(remotionMock.delayRender).toHaveBeenCalledTimes(1);
-    expect(remotionMock.delayRender.mock.calls[0]?.[0]).toBe('Loading mushaf font mushaf-qpc-v4-p10 from https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2');
+    expect(remotionMock.delayRender.mock.calls[0]?.[0]).toBe(
+      'Loading mushaf font mushaf-qpc-v4-p10 from https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2',
+    );
     expect(remotionMock.delayRender.mock.calls[0]?.[1]).toEqual({retries: 1});
     expect(remotionMock.continueRender).toHaveBeenCalledTimes(1);
     expect(remotionMock.continueRender).toHaveBeenCalledWith(1);
@@ -113,10 +137,17 @@ describe('loadPageFont', () => {
   });
 
   it('registers the font with pinned metrics, weight 400 and font-display block', async () => {
-    await loadPageFont({mushaf: 'qpc-v4-tajweed', page: 3}).waitUntilDone();
+    await loadPageFont({look: 'tajweed', page: 3}).waitUntilDone();
     expect(faces[0]?.family).toBe('mushaf-qpc-v4-tajweed-p3');
     expect(faces[0]?.source).toBe(WOFF2);
-    expect(faces[0]?.descriptors).toEqual({display: 'block', style: 'normal', weight: '400', ascentOverride: '157.6%', descentOverride: '100.8%', lineGapOverride: '0%'});
+    expect(faces[0]?.descriptors).toEqual({
+      display: 'block',
+      style: 'normal',
+      weight: '400',
+      ascentOverride: '157.6%',
+      descentOverride: '100.8%',
+      lineGapOverride: '0%',
+    });
   });
 
   it('adopts a registered override when url is omitted and when the same url is passed', async () => {
@@ -127,7 +158,11 @@ describe('loadPageFont', () => {
     await Promise.all([implicit.waitUntilDone(), same.waitUntilDone()]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/fonts/qpc-v4/p10.woff2?v=3.1');
-    expect(getFontEntry('qpc-v4/10')).toMatchObject({explicit: true, url: '/fonts/qpc-v4/p10.woff2?v=3.1', status: 'loaded'});
+    expect(getFontEntry('qpc-v4/10')).toMatchObject({
+      explicit: true,
+      url: '/fonts/qpc-v4/p10.woff2?v=3.1',
+      status: 'loaded',
+    });
   });
 
   it('accepts extension-less and query-string urls (no format inference)', async () => {
@@ -138,10 +173,13 @@ describe('loadPageFont', () => {
 
   it('lets an explicit url replace the implicit CDN source, aborting the pending fetch', async () => {
     let resolveFirst!: (r: unknown) => void;
-    fetchMock.mockImplementationOnce((_url: string, init: {signal: AbortSignal}) => new Promise((resolve, reject) => {
-      resolveFirst = resolve;
-      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-    }));
+    fetchMock.mockImplementationOnce(
+      (_url: string, init: {signal: AbortSignal}) =>
+        new Promise((resolve, reject) => {
+          resolveFirst = resolve;
+          init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+    );
     const events: string[] = [];
     subscribeFontStore(() => events.push(getFontStatus('qpc-v4/10')));
     const implicit = loadPageFont({mushaf: 'qpc-v4', page: 10});
@@ -179,7 +217,9 @@ describe('loadPageFont', () => {
       loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/b/p10.woff2'});
     } catch (e) {
       expect(e).toMatchObject({code: 'FONT_URL_CONFLICT'});
-      expect((e as Error).message).toContain('already loaded from /a/p10.woff2; refusing to load it again from /b/p10.woff2');
+      expect((e as Error).message).toContain(
+        'already loaded from /a/p10.woff2; refusing to load it again from /b/p10.woff2',
+      );
     }
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -187,7 +227,10 @@ describe('loadPageFont', () => {
   it('fails immediately on 404 with cancelRender and a rejecting waitUntilDone', async () => {
     fetchMock.mockResolvedValue(response(404, new ArrayBuffer(0)));
     const font = loadPageFont({mushaf: 'qpc-v4', page: 10});
-    await expect(font.waitUntilDone()).rejects.toMatchObject({code: 'FONT_HTTP', message: expect.stringContaining('HTTP 404 for mushaf font qpc-v4 page 10')});
+    await expect(font.waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_HTTP',
+      message: expect.stringContaining('HTTP 404 for mushaf font qpc-v4 page 10'),
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(remotionMock.cancelRender).toHaveBeenCalledTimes(1);
     expect(remotionMock.continueRender).not.toHaveBeenCalled();
@@ -203,7 +246,10 @@ describe('loadPageFont', () => {
     vi.useFakeTimers();
     fetchMock.mockResolvedValue(response(503, new ArrayBuffer(0)));
     const font = loadPageFont({mushaf: 'qpc-v4', page: 10});
-    const settled = font.waitUntilDone().then(() => 'ok', (e: InstanceType<typeof MushafError>) => e);
+    const settled = font.waitUntilDone().then(
+      () => 'ok',
+      (e: InstanceType<typeof MushafError>) => e,
+    );
     await vi.advanceTimersByTimeAsync(5_000);
     const result = await settled;
     expect(result).toMatchObject({code: 'FONT_HTTP', message: expect.stringContaining('attempt 3/3')});
@@ -221,10 +267,18 @@ describe('loadPageFont', () => {
 
   it('classifies per-attempt timeouts, non-font bodies and parse failures', async () => {
     vi.useFakeTimers();
-    fetchMock.mockImplementation((_url: string, init: {signal: AbortSignal}) => new Promise((_resolve, reject) => {
-      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-    }));
-    const slow = loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone().then(() => 'ok', (e: InstanceType<typeof MushafError>) => e);
+    fetchMock.mockImplementation(
+      (_url: string, init: {signal: AbortSignal}) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+    );
+    const slow = loadPageFont({mushaf: 'qpc-v4', page: 10})
+      .waitUntilDone()
+      .then(
+        () => 'ok',
+        (e: InstanceType<typeof MushafError>) => e,
+      );
     await vi.advanceTimersByTimeAsync(3 * 15_000 + 3 * 500 + 100);
     expect(await slow).toMatchObject({code: 'FONT_TIMEOUT'});
     vi.useRealTimers();
@@ -232,14 +286,19 @@ describe('loadPageFont', () => {
     resetFontStore();
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(response(200, HTML));
-    await expect(loadPageFont({mushaf: 'qpc-v4', page: 12}).waitUntilDone()).rejects.toMatchObject({code: 'FONT_INVALID', message: expect.stringContaining('starts with "<!DOCTYPE html><"')});
+    await expect(loadPageFont({mushaf: 'qpc-v4', page: 12}).waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_INVALID',
+      message: expect.stringContaining('starts with "<!DOCTYPE html><"'),
+    });
 
     resetFontStore();
     fetchMock.mockResolvedValue(okResponse());
     loadBehaviour = async () => {
       throw new DOMException('A network error occurred', 'NetworkError');
     };
-    await expect(loadPageFont({mushaf: 'qpc-v4', page: 13}).waitUntilDone()).rejects.toMatchObject({code: 'FONT_PARSE'});
+    await expect(loadPageFont({mushaf: 'qpc-v4', page: 13}).waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_PARSE',
+    });
   });
 
   it('does not produce an unhandled rejection when nobody awaits a failing load', async () => {
@@ -274,7 +333,7 @@ describe('loadPageFont', () => {
   it('shares the store across module instances through globalThis', async () => {
     await loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone();
     vi.resetModules();
-    const fresh = await import('../../src/font-store');
+    const fresh = await import('../../src/fonts/font-store');
     expect(fresh.getFontStatus('qpc-v4/10')).toBe('loaded');
   });
 });
@@ -297,7 +356,12 @@ describe('getFontLoadBudget', () => {
     (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout = 40_000;
     vi.useFakeTimers();
     fetchMock.mockResolvedValue(response(503, new ArrayBuffer(0)));
-    const failed = loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone().then(() => 'ok', (e: InstanceType<typeof MushafError>) => e);
+    const failed = loadPageFont({mushaf: 'qpc-v4', page: 10})
+      .waitUntilDone()
+      .then(
+        () => 'ok',
+        (e: InstanceType<typeof MushafError>) => e,
+      );
     await vi.advanceTimersByTimeAsync(1_000);
     expect(await failed).toMatchObject({code: 'FONT_HTTP', message: expect.stringContaining('attempt 2/2')});
     delete (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout;
@@ -306,9 +370,12 @@ describe('getFontLoadBudget', () => {
 
 describe('assertFontMagic', () => {
   it('accepts woff2/woff/ttf/otf and rejects anything else with a preview', () => {
-    for (const tag of ['wOF2', 'wOFF', 'OTTO', 'true']) expect(() => assertFontMagic(new TextEncoder().encode(tag + 'xxxx').buffer, 'u', 'm', 1)).not.toThrow();
+    for (const tag of ['wOF2', 'wOFF', 'OTTO', 'true'])
+      expect(() => assertFontMagic(new TextEncoder().encode(`${tag}xxxx`).buffer, 'u', 'm', 1)).not.toThrow();
     expect(() => assertFontMagic(TTF, 'u', 'm', 1)).not.toThrow();
-    expect(() => assertFontMagic(HTML, 'https://x/p1.woff2', 'qpc-v4', 1)).toThrow(/not a font file \(33 bytes, starts with "<!DOCTYPE html><"\)/);
+    expect(() => assertFontMagic(HTML, 'https://x/p1.woff2', 'qpc-v4', 1)).toThrow(
+      /not a font file \(33 bytes, starts with "<!DOCTYPE html><"\)/,
+    );
     expect(() => assertFontMagic(new ArrayBuffer(2), 'u', 'm', 1)).toThrow(/2 bytes/);
   });
 });

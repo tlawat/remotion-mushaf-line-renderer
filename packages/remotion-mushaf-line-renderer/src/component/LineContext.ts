@@ -1,6 +1,6 @@
 import * as React from 'react';
-import type {ResolvedSlice} from '../slice';
-import type {MushafLineData, MushafLineCommonProps} from '../types';
+import type {ResolvedSlice} from '../resolve/slice';
+import type {MushafLineCommonProps, MushafLineData} from '../types';
 
 /**
  * Per-line context read by `<Word>`: the resolved layout numbers plus the per-word hooks, so a word

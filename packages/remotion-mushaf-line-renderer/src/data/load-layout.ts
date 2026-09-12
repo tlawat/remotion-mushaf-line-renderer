@@ -12,22 +12,33 @@
  * Remotion-free: the budget is sized from `window.remotion_puppeteerTimeout` alone.
  */
 
-import {MushafError, describeValue} from '../errors';
-import {getLoadBudget, isFinalStatus, looksLikeRendering, readPuppeteerTimeout, sleep, type LoadBudget} from '../fetch-budget';
-import {getDataset, type DatasetDescriptor, type DatasetId} from '../mushafs';
+import {describeValue, MushafError} from '../errors';
+import {
+  getLoadBudget,
+  isFinalStatus,
+  type LoadBudget,
+  looksLikeRendering,
+  readPuppeteerTimeout,
+  sleep,
+} from '../fetch-budget';
+import {type DatasetDescriptor, type DatasetId, getDataset} from '../mushaf/registry';
 import type {MushafDataSource} from '../types';
-import {LayoutProblemsError, checkLayout, compileLayout, type CompileDef} from './compile';
+import {type CompileDef, checkLayout, compileLayout, LayoutProblemsError} from './compile';
 import type {CompiledLayout} from './format';
 import {DataShapeError, joinExport, parseLayoutRows, parseWordsExport} from './qul-export';
-import {SqliteError, isSqlite, readSqliteTable, type SqliteRow} from './sqlite';
-import {ZipError, isZip, listZipEntries, pickZipEntry, readZipEntry} from './zip';
+import {isSqlite, readSqliteTable, SqliteError, type SqliteRow} from './sqlite';
+import {isZip, listZipEntries, pickZipEntry, readZipEntry, ZipError} from './zip';
 
 export type DataUrls = {readonly words: string; readonly layout: string};
 type Part = keyof DataUrls;
 
 const PARTS: readonly Part[] = ['words', 'layout'];
-const ZIP_PREFERENCE: Readonly<Record<Part, readonly string[]>> = {words: ['.json'], layout: ['.db', '.sqlite', '.sqlite3', '.json']};
-const HINT = 'Mirror QUL\'s two exports into public/ and pass them as `data` through staticFile() for renders that must not depend on the CDN.';
+const ZIP_PREFERENCE: Readonly<Record<Part, readonly string[]>> = {
+  words: ['.json'],
+  layout: ['.db', '.sqlite', '.sqlite3', '.json'],
+};
+const HINT =
+  "Mirror QUL's two exports into public/ and pass them as `data` through staticFile() for renders that must not depend on the CDN.";
 
 const STORE_KEY = Symbol.for('remotion-mushaf-line-renderer/layout-store@1');
 
@@ -46,22 +57,38 @@ const isAbsoluteUrl = (value: string): boolean => /^(https?|data|blob|file):/i.t
 /** The two URLs to fetch: the source given, else the dataset's pinned exports on QUL's CDN. */
 export const resolveDataUrls = (dataset: DatasetDescriptor, data: MushafDataSource | undefined): DataUrls => {
   if (data !== undefined && (data === null || typeof data !== 'object' || Array.isArray(data))) {
-    throw new MushafError('BAD_DATA_URL', `data must be an object {words?, layout?} of URLs when given, got ${describeValue(data)}.`, {data});
+    throw new MushafError(
+      'BAD_DATA_URL',
+      `data must be an object {words?, layout?} of URLs when given, got ${describeValue(data)}.`,
+      {data},
+    );
   }
   const resolve = (part: Part): string => {
     const value = data?.[part];
     if (value === undefined) return dataset.urls[part];
     if (typeof value !== 'string' || value === '') {
-      throw new MushafError('BAD_DATA_URL', `data.${part} must be an absolute URL, a staticFile() path or a root-relative path, got ${describeValue(value)}.`, {part, value});
+      throw new MushafError(
+        'BAD_DATA_URL',
+        `data.${part} must be an absolute URL, a staticFile() path or a root-relative path, got ${describeValue(value)}.`,
+        {part, value},
+      );
     }
     if (isAbsoluteUrl(value)) return value;
     if (value.startsWith('/')) {
       if (typeof location === 'undefined') {
-        throw new MushafError('BAD_DATA_URL', `data.${part} is the root-relative path ${JSON.stringify(value)}, which only a browser can resolve; from Node pass an absolute URL (serve public/ and use its origin).`, {part, value});
+        throw new MushafError(
+          'BAD_DATA_URL',
+          `data.${part} is the root-relative path ${JSON.stringify(value)}, which only a browser can resolve; from Node pass an absolute URL (serve public/ and use its origin).`,
+          {part, value},
+        );
       }
       return value;
     }
-    throw new MushafError('BAD_DATA_URL', `data.${part} must be an absolute URL, a staticFile() path or a root-relative path, got ${JSON.stringify(value)}; a path relative to the bundle is ambiguous.`, {part, value});
+    throw new MushafError(
+      'BAD_DATA_URL',
+      `data.${part} must be an absolute URL, a staticFile() path or a root-relative path, got ${JSON.stringify(value)}; a path relative to the bundle is ambiguous.`,
+      {part, value},
+    );
   };
   return {words: resolve('words'), layout: resolve('layout')};
 };
@@ -93,12 +120,22 @@ export const resetLayoutCache = (): void => {
 
 const build = async (dataset: DatasetDescriptor, urls: DataUrls): Promise<CompiledLayout> => {
   const budget = getLoadBudget(looksLikeRendering(), readPuppeteerTimeout());
-  const def: CompileDef = {id: dataset.id, layoutId: dataset.layoutId, pages: dataset.pages, linesOnPage: dataset.linesOnPage};
+  const def: CompileDef = {
+    id: dataset.id,
+    layoutId: dataset.layoutId,
+    pages: dataset.pages,
+    linesOnPage: dataset.linesOnPage,
+  };
   try {
-    const [wordsBytes, layoutBytes] = await Promise.all(PARTS.map((part) => fetchDataBytes(urls[part], part, budget, dataset)));
+    const [wordsBytes, layoutBytes] = await Promise.all(
+      PARTS.map((part) => fetchDataBytes(urls[part], part, budget, dataset)),
+    );
     const words = parseWordsExport(await decodeJson(wordsBytes as Uint8Array, urls.words, 'words'));
     const rows = parseLayoutRows(await decodeLayoutRows(layoutBytes as Uint8Array, urls.layout, dataset));
-    const layout = compileLayout(joinExport(rows, words, dataset), def, {source: `qul-export:${basename(urls.layout)}`, generatedAt: new Date().toISOString()});
+    const layout = compileLayout(joinExport(rows, words, dataset), def, {
+      source: `qul-export:${basename(urls.layout)}`,
+      generatedAt: new Date().toISOString(),
+    });
     const problems = checkLayout(layout, def);
     if (problems.length) throw new LayoutProblemsError(problems);
     return layout;
@@ -107,23 +144,49 @@ const build = async (dataset: DatasetDescriptor, urls: DataUrls): Promise<Compil
   }
 };
 
-const basename = (url: string): string => url.replace(/[?#].*$/, '').split('/').pop() || url;
+const basename = (url: string): string =>
+  url
+    .replace(/[?#].*$/, '')
+    .split('/')
+    .pop() || url;
 
 const toMushafError = (e: unknown, dataset: DatasetDescriptor, urls: DataUrls): MushafError => {
   if (e instanceof MushafError) return e;
-  if (e instanceof ZipError || e instanceof SqliteError || e instanceof DataShapeError || e instanceof LayoutProblemsError) {
-    return new MushafError('DATA_INVALID', `The mushaf data for "${dataset.id}" could not be read: ${e.message}\nSources: words ${urls.words}, layout ${urls.layout}. ${HINT}`, {dataset: dataset.id, urls, cause: e});
+  if (
+    e instanceof ZipError ||
+    e instanceof SqliteError ||
+    e instanceof DataShapeError ||
+    e instanceof LayoutProblemsError
+  ) {
+    return new MushafError(
+      'DATA_INVALID',
+      `The mushaf data for "${dataset.id}" could not be read: ${e.message}\nSources: words ${urls.words}, layout ${urls.layout}. ${HINT}`,
+      {dataset: dataset.id, urls, cause: e},
+    );
   }
-  return new MushafError('DATA_LOAD_FAILED', `Could not load the mushaf data for "${dataset.id}" (words ${urls.words}, layout ${urls.layout}): ${e instanceof Error ? e.message : String(e)}`, {dataset: dataset.id, urls, cause: e});
+  return new MushafError(
+    'DATA_LOAD_FAILED',
+    `Could not load the mushaf data for "${dataset.id}" (words ${urls.words}, layout ${urls.layout}): ${e instanceof Error ? e.message : String(e)}`,
+    {dataset: dataset.id, urls, cause: e},
+  );
 };
 
-const previewOf = (bytes: Uint8Array): string => new TextDecoder('utf-8', {fatal: false}).decode(bytes.slice(0, 16)).replace(/[^\x20-\x7e]/g, '.');
+const previewOf = (bytes: Uint8Array): string =>
+  new TextDecoder('utf-8', {fatal: false}).decode(bytes.slice(0, 16)).replace(/[^\x20-\x7e]/g, '.');
 
 const notData = (name: string, bytes: Uint8Array, expected: string): MushafError =>
-  new MushafError('DATA_INVALID', `The response for ${name} is not ${expected} (${bytes.length} bytes, starts with "${previewOf(bytes)}"). Check the url. ${HINT}`, {url: name, bytes: bytes.length});
+  new MushafError(
+    'DATA_INVALID',
+    `The response for ${name} is not ${expected} (${bytes.length} bytes, starts with "${previewOf(bytes)}"). Check the url. ${HINT}`,
+    {url: name, bytes: bytes.length},
+  );
 
 /** The bytes of the export inside a zip, or the bytes as they are. */
-const unwrap = async (bytes: Uint8Array, url: string, part: Part): Promise<{readonly bytes: Uint8Array; readonly name: string}> => {
+const unwrap = async (
+  bytes: Uint8Array,
+  url: string,
+  part: Part,
+): Promise<{readonly bytes: Uint8Array; readonly name: string}> => {
   if (!isZip(bytes)) return {bytes, name: url};
   const entry = pickZipEntry(listZipEntries(bytes), ZIP_PREFERENCE[part]);
   const inner = await readZipEntry(bytes, entry);
@@ -148,7 +211,11 @@ const decodeJson = async (raw: Uint8Array, url: string, part: Part): Promise<unk
   try {
     return JSON.parse(text) as unknown;
   } catch (e) {
-    throw new MushafError('DATA_INVALID', `The response for ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`, {url: name});
+    throw new MushafError(
+      'DATA_INVALID',
+      `The response for ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+      {url: name},
+    );
   }
 };
 
@@ -157,11 +224,20 @@ const decodeLayoutRows = async (raw: Uint8Array, url: string, dataset: DatasetDe
   const {bytes, name} = await unwrap(raw, url, 'layout');
   if (isSqlite(bytes)) {
     const rows = readSqliteTable(bytes, 'pages');
-    if (rows === null) throw new MushafError('DATA_INVALID', `The layout export at ${name} has no "pages" table. Is it QUL's mushaf-layout export? ${HINT}`, {url: name});
+    if (rows === null)
+      throw new MushafError(
+        'DATA_INVALID',
+        `The layout export at ${name} has no "pages" table. Is it QUL's mushaf-layout export? ${HINT}`,
+        {url: name},
+      );
     const info = readSqliteTable(bytes, 'info')?.[0];
     const pages = info?.number_of_pages;
     if (typeof pages === 'number' && pages !== dataset.pages) {
-      throw new MushafError('DATA_INVALID', `The layout export at ${name} describes a mushaf of ${pages} pages (${String(info?.name ?? 'unnamed')}); "${dataset.id}" has ${dataset.pages}. Check the url: it should be QUL's layout ${dataset.layoutId}.`, {url: name, pages});
+      throw new MushafError(
+        'DATA_INVALID',
+        `The layout export at ${name} describes a mushaf of ${pages} pages (${String(info?.name ?? 'unnamed')}); "${dataset.id}" has ${dataset.pages}. Check the url: it should be QUL's layout ${dataset.layoutId}.`,
+        {url: name, pages},
+      );
     }
     return rows;
   }
@@ -171,13 +247,23 @@ const decodeLayoutRows = async (raw: Uint8Array, url: string, dataset: DatasetDe
   try {
     rows = JSON.parse(text);
   } catch (e) {
-    throw new MushafError('DATA_INVALID', `The response for ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`, {url: name});
+    throw new MushafError(
+      'DATA_INVALID',
+      `The response for ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+      {url: name},
+    );
   }
-  if (!Array.isArray(rows) || rows.some((r) => r === null || typeof r !== 'object')) throw notData(name, bytes, 'a JSON array of "pages" rows');
+  if (!Array.isArray(rows) || rows.some((r) => r === null || typeof r !== 'object'))
+    throw notData(name, bytes, 'a JSON array of "pages" rows');
   return rows as SqliteRow[];
 };
 
-const fetchDataBytes = async (url: string, part: Part, budget: LoadBudget, dataset: DatasetDescriptor): Promise<Uint8Array> => {
+const fetchDataBytes = async (
+  url: string,
+  part: Part,
+  budget: LoadBudget,
+  dataset: DatasetDescriptor,
+): Promise<Uint8Array> => {
   const what = `the mushaf ${part} export of "${dataset.id}"`;
   let last: MushafError | null = null;
   for (let attempt = 1; attempt <= budget.attempts; attempt++) {
@@ -202,7 +288,11 @@ const fetchDataBytes = async (url: string, part: Part, budget: LoadBudget, datas
         if (e.code === 'DATA_HTTP' && e.details?.final) throw e;
         last = e;
       } else if (ctrl.signal.aborted) {
-        last = new MushafError('DATA_TIMEOUT', `Fetching ${what} from ${url} timed out after ${budget.perAttemptMs} ms (attempt ${attempt}/${budget.attempts}). ${HINT} Or raise --timeout.`, {url, part, attempt});
+        last = new MushafError(
+          'DATA_TIMEOUT',
+          `Fetching ${what} from ${url} timed out after ${budget.perAttemptMs} ms (attempt ${attempt}/${budget.attempts}). ${HINT} Or raise --timeout.`,
+          {url, part, attempt},
+        );
       } else {
         last = new MushafError(
           'DATA_NETWORK',

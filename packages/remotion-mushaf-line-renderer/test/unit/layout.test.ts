@@ -1,13 +1,17 @@
 import {describe, expect, it} from 'vitest';
-import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from '../../src/layout';
+import {
+  assertSize,
+  buildRootStyle,
+  buildRowStyle,
+  fontSizeForWidth,
+  lineHeightForFontSize,
+} from '../../src/component/styles';
 
 describe('layout helpers', () => {
   it('derives the font size from the widest line (W/17 rule)', () => {
     expect(fontSizeForWidth(1920)).toBe(112);
     expect(fontSizeForWidth(1080)).toBe(63);
     expect(fontSizeForWidth(3840)).toBe(225);
-    // Both font sets share the metrics, and the default is the plain one.
-    expect(fontSizeForWidth(1920, 'qpc-v4-tajweed')).toBe(112);
     // The widest line (42,501 units) fits the box at that size.
     for (const w of [1080, 1920, 3840]) expect((fontSizeForWidth(w) * 42501) / 2500).toBeLessThanOrEqual(w);
   });
@@ -25,16 +29,48 @@ describe('layout helpers', () => {
   });
 
   it('builds the root and row styles', () => {
-    expect(buildRootStyle(246, {top: 10, color: 'red'})).toMatchObject({position: 'relative', height: 246, width: '100%', top: 10, color: 'red', overflow: 'visible'});
-    const justified = buildRowStyle({fontFamily: 'mushaf-qpc-v4-p10', fontSize: 112, lineHeight: 246, centered: false, visible: false});
-    expect(justified).toMatchObject({justifyContent: 'flex-start', direction: 'rtl', fontFamily: '"mushaf-qpc-v4-p10"', fontSize: '112px', lineHeight: '246px', visibility: 'hidden', letterSpacing: 0, fontSynthesis: 'none', whiteSpace: 'nowrap', unicodeBidi: 'isolate'});
+    expect(buildRootStyle(246, {top: 10, color: 'red'})).toMatchObject({
+      position: 'relative',
+      height: 246,
+      width: '100%',
+      top: 10,
+      color: 'red',
+      overflow: 'visible',
+    });
+    const justified = buildRowStyle({
+      fontFamily: 'mushaf-qpc-v4-p10',
+      fontSize: 112,
+      lineHeight: 246,
+      centered: false,
+      visible: false,
+    });
+    expect(justified).toMatchObject({
+      justifyContent: 'flex-start',
+      direction: 'rtl',
+      fontFamily: '"mushaf-qpc-v4-p10"',
+      fontSize: '112px',
+      lineHeight: '246px',
+      visibility: 'hidden',
+      letterSpacing: 0,
+      fontSynthesis: 'none',
+      whiteSpace: 'nowrap',
+      unicodeBidi: 'isolate',
+    });
     const centered = buildRowStyle({fontFamily: 'f', fontSize: 10, lineHeight: 22, centered: true, visible: true});
     expect(centered).toMatchObject({justifyContent: 'center', visibility: 'visible'});
   });
 
   it('sets font-palette only when one was asked for, so it can otherwise be inherited', () => {
-    const base = {fontFamily: 'mushaf-qpc-v4-tajweed-p10', fontSize: 112, lineHeight: 246, centered: false, visible: true} as const;
+    const base = {
+      fontFamily: 'mushaf-qpc-v4-tajweed-p10',
+      fontSize: 112,
+      lineHeight: 246,
+      centered: false,
+      visible: true,
+    } as const;
     expect(buildRowStyle(base)).not.toHaveProperty('fontPalette');
-    expect(buildRowStyle({...base, fontPalette: '--mushaf-qpc-v4-tajweed-p10-palette-3'})).toMatchObject({fontPalette: '--mushaf-qpc-v4-tajweed-p10-palette-3'});
+    expect(buildRowStyle({...base, fontPalette: '--mushaf-qpc-v4-tajweed-p10-palette-3'})).toMatchObject({
+      fontPalette: '--mushaf-qpc-v4-tajweed-p10-palette-3',
+    });
   });
 });
