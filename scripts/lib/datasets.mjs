@@ -15,6 +15,12 @@ export const QPC_V4 = {
   linesPerPage: 15,
   /** Pages 1 and 2 (Al-Fatihah and the opening of Al-Baqarah) carry 8 lines, all centred. */
   linesOnPage: (page) => (page <= 2 ? 8 : 15),
+  /**
+   * Every line of these pages is centred as printed (the framed opening pages; QUL's preview shows
+   * them so), whatever the layout export's is_centered says: the export flags one line of page 2
+   * as justified. Applied by the export readers, the package's and the dev tools' alike.
+   */
+  centeredPages: [1, 2],
   previewUrl: (page) => `https://qul.tarteel.ai/mushaf_layouts/19?page_number=${page}`,
   /**
    * The two exports the package fetches at runtime (src/mushafs.ts pins the same URLs; a unit test

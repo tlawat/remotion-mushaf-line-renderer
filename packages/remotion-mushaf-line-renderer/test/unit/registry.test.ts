@@ -16,6 +16,8 @@ describe('mushaf registry', () => {
       expect(dataset).toBe(DATASETS['qpc-v4']);
       expect(dataset).toMatchObject({id: QPC_V4.dataset, layoutId: QPC_V4.layoutId, pages: QPC_V4.pages});
       expect(dataset.urls).toEqual(QPC_V4.exports);
+      expect(dataset.centeredPages).toEqual(QPC_V4.centeredPages);
+      expect(dataset.centeredPages).toEqual([1, 2]);
       for (const url of Object.values(dataset.urls)) expect(url).toMatch(/^https:\/\/s3\.us-east-1\.wasabisys\.com\/static-cdn\.tarteel\.ai\/qul-exports\/[a-z-]+\/\d+-[a-z0-9]+-[a-z0-9-]+\.(json|db)\.zip$/);
       expect(def.invariants).toEqual({
         lines: QPC_V4.invariants.lines,

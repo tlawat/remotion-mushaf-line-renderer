@@ -117,17 +117,23 @@ export const readWords = async (file) => {
   return words;
 };
 
-export const readLayoutSqlite = async (file, words, def) => {
+/**
+ * @param def  the dataset descriptor: its `centeredPages` are centred whatever the export says;
+ *             its page count is checked unless `expectPageCount` is false (a subset run). Null
+ *             applies neither.
+ */
+export const readLayoutSqlite = async (file, words, def, {expectPageCount = true} = {}) => {
   const db = await openDb(file);
   const rows = db.prepare('SELECT page_number, line_number, line_type, is_centered, first_word_id, last_word_id, surah_number FROM pages ORDER BY page_number, line_number').all();
   db.close();
   const pages = new Map();
+  const centeredPages = def?.centeredPages ?? [];
   for (const r of rows) {
     const page = num(r.page_number);
     if (!pages.has(page)) pages.set(page, {page, lines: []});
     const lines = pages.get(page).lines;
     const type = String(r.line_type);
-    const centered = num(r.is_centered) === 1 || String(r.is_centered).toLowerCase() === 'true' || type !== 'ayah';
+    const centered = num(r.is_centered) === 1 || String(r.is_centered).toLowerCase() === 'true' || type !== 'ayah' || centeredPages.includes(page);
     if (type === 'surah_name') {
       lines.push({line: num(r.line_number), type, centered: true, surah: num(r.surah_number), words: []});
     } else if (type === 'basmallah') {
@@ -154,6 +160,6 @@ export const readLayoutSqlite = async (file, words, def) => {
       if (l.line !== i + 1) throw new Error(`pages.db: page ${p.page} line numbers are not 1..n`);
     });
   }
-  if (def && out.length !== def.pages) throw new Error(`pages.db: ${out.length} pages, expected ${def.pages}`);
+  if (def && expectPageCount && out.length !== def.pages) throw new Error(`pages.db: ${out.length} pages, expected ${def.pages}`);
   return out;
 };

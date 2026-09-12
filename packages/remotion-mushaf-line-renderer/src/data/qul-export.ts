@@ -138,11 +138,17 @@ export const parseLayoutRows = (rows: readonly Readonly<Record<string, SqliteVal
 
 export type JoinDef = {
   readonly pages: number;
+  /** Pages printed entirely centred, whatever the export flags (see `DatasetDescriptor.centeredPages`). */
+  readonly centeredPages?: readonly number[];
 };
 
-/** Lines with their words, page by page — `readLayoutSqlite` of the dev tools, exactly. */
+/**
+ * Lines with their words, page by page — `readLayoutSqlite` of the dev tools, exactly. `def`
+ * checks the page count when given, and names the pages that are centred as printed.
+ */
 export const joinExport = (rows: readonly LayoutRow[], words: ReadonlyMap<number, ParsedWord>, def: JoinDef | null): ParsedPage[] => {
   const pages = new Map<number, {page: number; lines: ParsedLine[]}>();
+  const centeredPages = def?.centeredPages ?? [];
   for (const r of rows) {
     let entry = pages.get(r.page);
     if (!entry) {
@@ -163,7 +169,7 @@ export const joinExport = (rows: readonly LayoutRow[], words: ReadonlyMap<number
         if (!w) throw new DataShapeError(`layout export: page ${r.page} line ${r.line} references word ${id}, missing from the words export`);
         lineWords.push(w);
       }
-      entry.lines.push({line: r.line, type: 'ayah', centered: r.centered, words: lineWords});
+      entry.lines.push({line: r.line, type: 'ayah', centered: r.centered || centeredPages.includes(r.page), words: lineWords});
     } else {
       throw new DataShapeError(`layout export: unknown line_type "${r.type}" on page ${r.page}`);
     }

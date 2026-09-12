@@ -111,6 +111,11 @@ describe('the export readers', () => {
     const words = parseWordsExport([{id: 1, location: '1:1:1', text: 'a'}, {id: 2, location: '1:1:2', text: 'b'}]);
     expect(joinExport(rows, words, {pages: 1})).toEqual([{page: 1, lines: [{line: 1, type: 'surah_name', centered: true, surah: 1, words: []}, {line: 2, type: 'ayah', centered: true, words: [...words.values()]}]}]);
     expect(() => joinExport(rows, words, {pages: 2})).toThrow(/1 pages, expected 2/);
+    // A page the print centres entirely is centred whatever the export flags (page 2 of the V4 export).
+    const flaggedJustified = [rows[0]!, {...rows[1]!, centered: false}];
+    expect(joinExport(flaggedJustified, words, null)[0]!.lines[1]!.centered).toBe(false);
+    expect(joinExport(flaggedJustified, words, {pages: 1, centeredPages: [1]})[0]!.lines[1]!.centered).toBe(true);
+    expect(joinExport(flaggedJustified, words, {pages: 1, centeredPages: [2]})[0]!.lines[1]!.centered).toBe(false);
     expect(() => joinExport([{...rows[1]!, last: 3}], words, null)).toThrow(/references word 3, missing from the words export/);
     expect(() => joinExport([{...rows[1]!, type: 'footer'}], words, null)).toThrow(/unknown line_type "footer"/);
     expect(() => joinExport([{...rows[1]!, first: null}], words, null)).toThrow(/has no word range/);
