@@ -43,6 +43,8 @@ export type RecitationProps = {
   audioFile: string;
   /** Font pin pattern in the public folder ('fonts/{mushaf}/p{page}.woff2'); null uses QUL's CDN. */
   fontFilePattern: string | null;
+  /** Mirror of QUL's two exports in the public folder ({words, layout} paths); null fetches them from Tarteel's CDN. */
+  dataFiles: {words: string; layout: string} | null;
   /** Stop after the last ayah that ends before this many seconds; null plays the whole recitation. */
   cutAtSeconds: number | null;
   /** Seconds a line is on screen before its first word is heard. */
@@ -62,6 +64,7 @@ export const defaultRecitationProps: RecitationProps = {
   timings: null,
   audioFile: 'audio/tawbah.mp3',
   fontFilePattern: null,
+  dataFiles: null,
   cutAtSeconds: 60,
   leadInSeconds: 0.4,
   slice: true,
@@ -99,8 +102,10 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   const lastAyah = chosen[chosen.length - 1]!.ayah;
   const byAyah = new Map(chosen.map((a) => [a.ayah, a]));
 
-  // One call: the package finds the page itself and pins the font of every line it returns.
+  // One call: the package finds the page itself and pins the font of every line it returns; `data`
+  // points it at a mirror of QUL's exports instead of Tarteel's CDN.
   const pattern = props.fontFilePattern;
+  const mirror = props.dataFiles;
   const lines = await getMushafLines({
     mushaf: props.mushaf,
     tajweed: props.tajweed,
@@ -110,6 +115,7 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
     toAyah: lastAyah,
     slice: props.slice,
     ...(pattern ? {fontUrl: (page: number, mushaf: MushafId) => staticFile(pattern.replace('{mushaf}', mushaf).replace('{page}', String(page)))} : {}),
+    ...(mirror ? {data: {words: staticFile(mirror.words), layout: staticFile(mirror.layout)}} : {}),
   });
 
   // A line starts when its first recited word starts and ends when the next line starts.

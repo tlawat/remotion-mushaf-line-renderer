@@ -29,6 +29,7 @@ export const RemotionRoot: React.FC = () => {
           // Set to 'fonts/{mushaf}/p{page}.woff2' (mirrored by `bash scripts/pull-all-assets.sh`)
           // to serve the fonts from the public folder instead of QUL's CDN.
           fontFile: null,
+          dataFiles: null,
           mode: 'replace',
         }}
       />

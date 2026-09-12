@@ -29,6 +29,8 @@ export type ThreeLinesProps = {
   lines: MushafLineData[] | null;
   /** Optional font pattern in the public folder, e.g. 'fonts/{mushaf}/p{page}.woff2'; null uses QUL's CDN. */
   fontFile: string | null;
+  /** Optional mirror of QUL's two exports in the public folder ({words, layout} paths); null fetches them from Tarteel's CDN. */
+  dataFiles: {words: string; layout: string} | null;
   /**
    * 'replace': one slot; each line leaves (its `exit`) as the next one enters, like a slideshow.
    * 'stack': the lines stay and stack down the page, each entering in turn.
@@ -51,15 +53,18 @@ export const durationFor = (mode: ThreeLinesProps['mode'], lineCount: number): n
 // browser tab), the Studio shows the resolved props, and the duration follows the line count.
 export const calculateThreeLinesMetadata: CalculateMetadataFunction<ThreeLinesProps> = async ({props}) => {
   const pattern = props.fontFile;
+  const mirror = props.dataFiles;
   const resolve = async () => {
     // One call for the whole page, and `fontUrl` pins the mirror on every line it returns; without
-    // it the fonts come from QUL's CDN.
+    // it the fonts come from QUL's CDN. `data` does the same for the two exports the lines are
+    // built from.
     const page = await getMushafLines({
       mushaf: props.mushaf,
       tajweed: props.tajweed,
       mandala: props.mandala,
       page: props.page,
       ...(pattern ? {fontUrl: (p: number, mushaf: MushafId) => staticFile(pattern.replace('{mushaf}', mushaf).replace('{page}', String(p)))} : {}),
+      ...(mirror ? {data: {words: staticFile(mirror.words), layout: staticFile(mirror.layout)}} : {}),
     });
     return props.lineNumbers.map((line) => {
       const found = page[line - 1];
