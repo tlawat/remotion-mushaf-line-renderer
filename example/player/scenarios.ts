@@ -2,9 +2,9 @@
 import {syntheticLine} from '../../packages/remotion-mushaf-line-renderer/test/fixtures/synthetic-lines';
 import {defaultLineHarnessProps, type LineHarnessProps} from '../src/harness/LineHarness';
 
-/** The page-10 tajweed font, copied by `node scripts/fetch-qul.mjs --fonts 10` into example/public. */
+/** The page-10 tajweed font, copied by `bun run qul fonts 10` into example/public. */
 export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
-/** QUL's two exports, mirrored by `node scripts/fetch-qul.mjs --data` into example/public. */
+/** QUL's two exports, mirrored by `bun run qul data` into example/public. */
 export const MIRROR_DATA = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
 /** Page 10 line 3 of the tajweed set: 2:62 ends and 2:63 begins on it (the fixture font's page). */
 const P10_L3 = {mushaf: 'qpc-v4-tajweed', page: 10, line: 3} as const;
@@ -75,7 +75,7 @@ export const scenarios: Record<string, LineHarnessProps> = {
   cdn: {...base, lines: [syntheticLine(1, 2, {}, 'qpc-v4-tajweed')], fontUrl: null},
   /**
    * The convenience form, resolved in the tab from the example's mirror of QUL's exports
-   * (`node scripts/fetch-qul.mjs --data`): the zips are fetched, unzipped and read in the browser.
+   * (`bun run qul data`): the zips are fetched, unzipped and read in the browser.
    */
   'resolve-data': {...base, lines: [], fit: 'line', resolve: P10_L3, data: MIRROR_DATA},
   /** The words export is missing: DATA_HTTP. */

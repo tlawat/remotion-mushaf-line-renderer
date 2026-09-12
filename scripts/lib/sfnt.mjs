@@ -28,7 +28,10 @@ export const parseSfnt = (bytes) => {
   const tables = new Map();
   for (let i = 0; i < numTables; i++) {
     const o = 12 + i * 16;
-    tables.set(String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]), {offset: u32(b, o + 8), length: u32(b, o + 12)});
+    tables.set(String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]), {
+      offset: u32(b, o + 8),
+      length: u32(b, o + 12),
+    });
   }
   const need = (tag) => {
     const t = tables.get(tag);
@@ -96,7 +99,10 @@ export const parseSfnt = (bytes) => {
       for (let cp = start; cp <= end; cp++) glyphByCodePoint.set(cp, gid0 + (cp - start));
     }
   };
-  const preferred = subtables.find((s) => s.platform === 3 && s.encoding === 10) ?? subtables.find((s) => s.platform === 3 && s.encoding === 1) ?? subtables[0];
+  const preferred =
+    subtables.find((s) => s.platform === 3 && s.encoding === 10) ??
+    subtables.find((s) => s.platform === 3 && s.encoding === 1) ??
+    subtables[0];
   if (!preferred) throw new Error('parseSfnt: cmap has no subtables');
   const format = u16(b, preferred.offset);
   if (format === 4) readFormat4(preferred.offset);
@@ -157,7 +163,8 @@ export const compareFonts = (a, b) => {
   const cpsB = [...b.advances.keys()].filter((cp) => cp >= 0xfc41 && cp <= 0xfcfc).sort((x, y) => x - y);
   if (cpsA.join(',') !== cpsB.join(',')) problems.push(`mapped code points differ (${cpsA.length} vs ${cpsB.length})`);
   for (const cp of cpsA) {
-    if (a.advances.get(cp) !== b.advances.get(cp)) problems.push(`advance of U+${cp.toString(16).toUpperCase()}: ${a.advances.get(cp)} vs ${b.advances.get(cp)}`);
+    if (a.advances.get(cp) !== b.advances.get(cp))
+      problems.push(`advance of U+${cp.toString(16).toUpperCase()}: ${a.advances.get(cp)} vs ${b.advances.get(cp)}`);
   }
   return problems;
 };

@@ -25,7 +25,7 @@ export type DatasetDescriptor = {
   readonly centeredPages: readonly number[];
   /**
    * Default sources: QUL's exports on Tarteel's CDN. The path prefix changes on every re-export,
-   * so a pinned URL names one publication; `scripts/fetch-qul.mjs --data` mirrors and checks it.
+   * so a pinned URL names one publication; `bun run qul data` mirrors and checks it.
    */
   readonly urls: {readonly words: string; readonly layout: string};
 };
@@ -112,7 +112,7 @@ export type MushafDefinition = {
 const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts';
 
 /**
- * Gaps on QUL's CDN found by `scripts/fetch-qul.mjs --etags` (recorded in scripts/cdn-etags.json):
+ * Gaps on QUL's CDN found by `bun run qul etags` (recorded in scripts/cdn-etags.json):
  * page → the format that is served instead of woff2. A unit test keeps this in sync with the file.
  */
 const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<number, 'woff' | 'ttf'>>>> = {

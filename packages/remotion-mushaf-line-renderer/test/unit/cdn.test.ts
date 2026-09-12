@@ -1,4 +1,4 @@
-// The registry's CDN URLs against the ETag survey written by `scripts/fetch-qul.mjs --etags`:
+// The registry's CDN URLs against the ETag survey written by `bun run qul etags`:
 // every URL the package would fetch must have answered 200, and every gap the survey found must be
 // routed around by CDN_FORMAT_EXCEPTIONS in src/mushafs.ts.
 import {existsSync, readFileSync} from 'node:fs';

@@ -36,7 +36,7 @@ To work offline on any page (the Studio, the `Recitation` composition, your own 
 whole mirror on a machine that can reach QUL. Node 22.13+ and git are all it needs:
 
 ```bash
-bash scripts/pull-all-assets.sh
+bun run qul mirror
 ```
 
 It downloads the two exports, then both font sets of every page (woff2 and ttf; where the CDN has no
@@ -63,12 +63,12 @@ Playwright suite (including the CDN test) and the Remotion render suite.
 
 ## Data tools (the same script, run locally)
 
-`scripts/fetch-qul.mjs` is a zero-dependency Node script (Node 22.13+ for its SQLite reader), so it
+`scripts/qul.mjs` is a zero-dependency Node script (Node 22.13+ for its SQLite reader), so it
 also runs without installing the workspace, on any machine that can reach `s3.us-east-1.wasabisys.com`
 (the exports), `static-cdn.tarteel.ai` (the fonts) and, for `--from-pages`, `qul.tarteel.ai`:
 
 ```bash
-node scripts/fetch-qul.mjs --data --fonts 1,10,604 --etags
+bun run qul data --etags && bun run qul fonts 1,10,604
 ```
 
 What it does:
@@ -91,10 +91,10 @@ What it does:
    `test/fixtures/fonts/<mushaf>/` (what git sees is governed by `.gitignore`), reports where the two
    sets differ, and checks that no standalone word has zero advance.
 5. `--etags` records the ETag of every CDN font in `scripts/cdn-etags.json` (commit it) so later runs
-   of `node scripts/verify-cdn.mjs` (`--data` covers the exports) can detect a republished file.
+   of `bun run qul verify` (`--data` covers the exports) can detect a republished file.
 
 Other export files (another QUL publication, a re-export you made) validate the same way:
-`node scripts/fetch-qul.mjs --layout-sqlite pages.db --words qpc-v4.json`.
+`bun run qul check --layout-sqlite pages.db --words qpc-v4.json`.
 
 At render time the package fetches the exports from the pinned URLs and the fonts from
 `https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/…`, unless a call carries an explicit `data`
@@ -143,9 +143,9 @@ pnpm test:render     # @remotion/bundler + @remotion/renderer renders of the exa
 ```
 
 The browser and render suites need `example/public/fonts/qpc-v4-tajweed/p10.ttf` (committed during
-development by the QUL assets workflow, or downloaded by `node scripts/fetch-qul.mjs --fonts 10`)
+development by the QUL assets workflow, or downloaded by `bun run qul fonts 10`)
 and, for their real-data tests, the mirrored exports under `example/public/data/qpc-v4/` (committed;
-`node scripts/fetch-qul.mjs --data` refreshes them); they skip or fail loudly without them. They use the Chromium
+`bun run qul data` refreshes them); they skip or fail loudly without them. They use the Chromium
 that `@playwright/test` installed (`npx playwright install chromium` if missing); set
 `MUSHAF_BROWSER_EXECUTABLE` (and `MUSHAF_CHROME_MODE=headless-shell|chrome-for-testing`) to use
 another browser for the render suite. `pnpm --filter remotion-mushaf-line-renderer-example dev`

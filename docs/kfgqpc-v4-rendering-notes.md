@@ -52,7 +52,7 @@ Headers observed:
 From QUL (Tarteel) downloads; we keep them in `database/seeders/MushafLayoutData/`. (The
 `remotion-mushaf-line-renderer` package reads exactly these two files — the layout SQLite and the
 `qpc-v4.json` words — at render time, straight from QUL's exports on Tarteel's CDN; the URLs it pins
-live in `scripts/lib/datasets.mjs` and `src/mushafs.ts`, and `node scripts/fetch-qul.mjs --data`
+live in `scripts/lib/datasets.mjs` and `src/mushafs.ts`, and `bun run qul data`
 mirrors and validates them.)
 
 1. **`qpc-v4-tajweed-15-lines.db`** (SQLite, 236 KB) — table `pages`:

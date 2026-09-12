@@ -5,7 +5,7 @@
  * Fonts come from QUL's CDN on first use (~300 KB per page). If a cold CDN makes the
  * "waiting for font" delayRender() time out, raise the budget for that render:
  *   npx remotion render ThreeLines --timeout=60000
- * or pin the font from the public folder via the `fontFile` prop (see scripts/fetch-qul.mjs --fonts).
+ * or pin the font from the public folder via the `fontFile` prop (see bun run qul fonts).
  */
 import {Config} from '@remotion/cli/config';
 

@@ -26,7 +26,7 @@ export const RemotionRoot: React.FC = () => {
           page: 10,
           lineNumbers: [3, 4, 5],
           lines: null,
-          // Set to 'fonts/{mushaf}/p{page}.woff2' (mirrored by `bash scripts/pull-all-assets.sh`)
+          // Set to 'fonts/{mushaf}/p{page}.woff2' (mirrored by `bun run qul mirror`)
           // to serve the fonts from the public folder instead of QUL's CDN.
           fontFile: null,
           dataFiles: null,
