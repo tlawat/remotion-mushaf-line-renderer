@@ -64,6 +64,9 @@ mirrors and validates them.)
      header/basmalah lines.
    - `is_centered`: all 114 headers, all 112 basmalahs, and **29 ayah lines** (pages 1–2, and the
      short last line of some surahs on pages 255, 528, 534, 545, 586, 593, 594, 600, 602–604).
+     The print (and QUL's own preview) centres **30**: the export leaves one line of page 2
+     flagged as justified, so the package's readers centre every line of pages 1–2 by rule
+     (`centeredPages` in `scripts/lib/datasets.mjs` / `src/mushafs.ts`).
      A centered line must be centered, not stretched — its glyph sum is far below full width
      (e.g. p1 l8 = 14,573 units vs ~40,600 for a full line).
 2. **`qpc-v4.csv` / `qpc-v4.json`** — `id, surah, ayah, word, location ("s:a:w"), text(code point)`.

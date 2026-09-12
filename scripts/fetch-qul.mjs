@@ -340,7 +340,7 @@ const downloadData = async () => {
 };
 
 /** Parsed pages from two export files (zipped or not), read the dev-tools way: node:zlib + node:sqlite. */
-const pagesFromExports = async (files, fullDef) => {
+const pagesFromExports = async (files, {expectPageCount = true} = {}) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fetch-qul-'));
   try {
     const unpacked = {};
@@ -352,7 +352,7 @@ const pagesFromExports = async (files, fullDef) => {
       fs.writeFileSync(unpacked[part], entry.data);
     }
     const words = await readWords(unpacked.words);
-    const parsedPages = await readLayoutSqlite(unpacked.layout, words, fullDef);
+    const parsedPages = await readLayoutSqlite(unpacked.layout, words, def, {expectPageCount});
     return {parsedPages, words: words.size, source: `qul-export:${path.basename(files.layout)}`};
   } finally {
     fs.rmSync(tmp, {recursive: true, force: true});
@@ -487,7 +487,7 @@ const main = async () => {
       files = {words: mirrorFile('words'), layout: mirrorFile('layout')};
     }
     log(`reading the exports ${rel(files.words)} + ${rel(files.layout)}`);
-    const {parsedPages, words, source} = await pagesFromExports(files, subset ? null : def);
+    const {parsedPages, words, source} = await pagesFromExports(files, {expectPageCount: subset === null});
     log(`exports: ${words} words, ${parsedPages.length} pages`);
     layout = compileAndValidate(filterSubset(parsedPages), source, subset, 'exports');
     if (!subset) {
@@ -510,7 +510,7 @@ const main = async () => {
         log(`preview and exports DIFFER in ${differences.length} place(s):\n - ${differences.slice(0, 40).join('\n - ')}${differences.length > 40 ? `\n - … ${differences.length - 40} more` : ''}`);
       }
     } else if (haveMirror()) {
-      const {parsedPages, source} = await pagesFromExports({words: mirrorFile('words'), layout: mirrorFile('layout')}, subset ? null : def);
+      const {parsedPages, source} = await pagesFromExports({words: mirrorFile('words'), layout: mirrorFile('layout')}, {expectPageCount: subset === null});
       const fromMirror = compileAndValidate(filterSubset(parsedPages), source, subset, 'exports');
       const differences = compareLayouts(fromMirror, preview);
       if (differences.length === 0) log(`preview and the mirrored exports agree on every page (${preview.wordCount} words)`);
@@ -527,7 +527,7 @@ const main = async () => {
 
   if (!layout && args.fonts && haveMirror()) {
     // The zero-advance check needs the words; the mirror has them.
-    const {parsedPages, source} = await pagesFromExports({words: mirrorFile('words'), layout: mirrorFile('layout')}, def);
+    const {parsedPages, source} = await pagesFromExports({words: mirrorFile('words'), layout: mirrorFile('layout')});
     layout = compileLayout(parsedPages, def, {source, generatedAt: new Date().toISOString()});
   }
 

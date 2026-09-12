@@ -71,9 +71,11 @@ describe.skipIf(DatabaseSync === null)('the b-tree walk against node:sqlite', ()
         db.exec('PRAGMA page_size = 512');
         db.exec('CREATE TABLE "t" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER, f REAL, s TEXT, b BLOB, e TEXT)');
         const insert = db.prepare('INSERT INTO t (n, f, s, b, e) VALUES (?, ?, ?, ?, ?)');
+        db.exec('BEGIN'); // one transaction: 3,000 single-row commits take seconds on a CI disk
         for (let i = 0; i < 3000; i++) insert.run(i % 7 === 0 ? -i : i * 1_000_003, i / 3, i % 50 === 0 ? long : `row ${i}`, new Uint8Array([i & 0xff, 0, 255]), i % 2 ? '' : null);
         insert.run(2 ** 40, -0.5, 'كلمة', new Uint8Array(0), 'x');
         insert.run(0, 1, '', null, 'true');
+        db.exec('COMMIT');
         db.exec('ALTER TABLE t ADD COLUMN added TEXT DEFAULT NULL');
         insert.run(1, 1, 'after alter', null, null);
       },
@@ -89,7 +91,7 @@ describe.skipIf(DatabaseSync === null)('the b-tree walk against node:sqlite', ()
     }
     expect(rows.filter((r) => r.s === long)).toHaveLength(60);
     expect(bytes.length).toBeGreaterThan(512 * 100); // a real multi-level tree
-  });
+  }, 30_000);
 
   it('reads the largest page size, a table with no rowid alias, and says what it refuses', () => {
     const {bytes, expected} = build(

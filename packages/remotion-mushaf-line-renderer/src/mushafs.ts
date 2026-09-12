@@ -16,6 +16,13 @@ export type DatasetDescriptor = {
   readonly pages: number;
   readonly linesOnPage: (page: number) => number;
   /**
+   * Pages whose every line is printed centred, whatever the layout export says of them. The two
+   * opening pages of the V4 print sit in an ornamental frame with every line centred (QUL's own
+   * preview shows them so); QUL's layout export flags one line of page 2 as justified, which
+   * `fit="line"` would stretch across the measure.
+   */
+  readonly centeredPages: readonly number[];
+  /**
    * Default sources: QUL's exports on Tarteel's CDN. The path prefix changes on every re-export,
    * so a pinned URL names one publication; `scripts/fetch-qul.mjs --data` mirrors and checks it.
    */
@@ -30,6 +37,7 @@ export const DATASETS: Readonly<Record<DatasetId, DatasetDescriptor>> = {
     layoutId: 19,
     pages: 604,
     linesOnPage: (page) => (page <= 2 ? 8 : 15),
+    centeredPages: [1, 2],
     urls: {
       words: `${QUL_EXPORTS}/quran-script/1748433334-i11ov-qpc-v4.json.zip`,
       layout: `${QUL_EXPORTS}/mushaf-layout/1748288079-a96tc-qpc-v4-tajweed-15-lines.db.zip`,

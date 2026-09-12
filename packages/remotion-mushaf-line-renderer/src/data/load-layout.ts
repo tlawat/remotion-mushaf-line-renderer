@@ -98,7 +98,7 @@ const build = async (dataset: DatasetDescriptor, urls: DataUrls): Promise<Compil
     const [wordsBytes, layoutBytes] = await Promise.all(PARTS.map((part) => fetchDataBytes(urls[part], part, budget, dataset)));
     const words = parseWordsExport(await decodeJson(wordsBytes as Uint8Array, urls.words, 'words'));
     const rows = parseLayoutRows(await decodeLayoutRows(layoutBytes as Uint8Array, urls.layout, dataset));
-    const layout = compileLayout(joinExport(rows, words, def), def, {source: `qul-export:${basename(urls.layout)}`, generatedAt: new Date().toISOString()});
+    const layout = compileLayout(joinExport(rows, words, dataset), def, {source: `qul-export:${basename(urls.layout)}`, generatedAt: new Date().toISOString()});
     const problems = checkLayout(layout, def);
     if (problems.length) throw new LayoutProblemsError(problems);
     return layout;

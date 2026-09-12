@@ -14,6 +14,7 @@ const SYNTHETIC: DatasetDescriptor = {
   layoutId: 0,
   pages: 3,
   linesOnPage: (page: number) => (page === 1 ? 3 : 4),
+  centeredPages: [1],
   urls: {words: 'https://cdn.test/exports/words.json.zip', layout: 'https://cdn.test/exports/layout.db.zip'},
 };
 let dataset = SYNTHETIC;
