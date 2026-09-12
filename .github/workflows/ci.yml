@@ -43,6 +43,9 @@ jobs:
       - name: Fixture font for the browser and render suites (when not committed)
         run: test -f example/public/fonts/qpc-v4-tajweed/p10.ttf || node scripts/fetch-qul.mjs --fonts 10
 
+      - name: Mirror of QUL's exports for the real-data tests (when not committed)
+        run: test -f example/public/data/qpc-v4/layout.db.zip || node scripts/fetch-qul.mjs --data
+
       - name: Install Chromium for Playwright and Remotion
         run: pnpm exec playwright install --with-deps chromium
 

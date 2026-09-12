@@ -1,14 +1,21 @@
 #!/usr/bin/env node
-// Compiles the KFGQPC V4 mushaf layout from QUL into the package's generated data module, and
-// optionally downloads font fixtures and records CDN ETags. Zero dependencies; Node >= 18
-// (the --layout-sqlite input mode needs Node >= 22.13 for node:sqlite).
+// The QUL data tools for the KFGQPC V4 mushaf: mirrors and validates QUL's two raw exports (the
+// ones the package fetches at runtime), compares them with QUL's preview pages, downloads font
+// fixtures and records CDN ETags. Zero dependencies; Node >= 22.13 (node:sqlite) for the export
+// routes, Node >= 18 for fonts and ETags alone.
 //
-//   node scripts/fetch-qul.mjs [--from-pages]                 # default: QUL's public preview pages
-//   node scripts/fetch-qul.mjs --layout-sqlite pages.db --words qpc-v4.json
+//   node scripts/fetch-qul.mjs --data [--etags]              # download the pinned exports into
+//                                                              example/public/data/qpc-v4/, record
+//                                                              them in scripts/cdn-etags.json, validate
+//   node scripts/fetch-qul.mjs                               # validate the mirror already there
+//   node scripts/fetch-qul.mjs --layout-sqlite pages.db --words qpc-v4.json   # validate other export files
+//   node scripts/fetch-qul.mjs --from-pages                  # compile QUL's preview pages and compare
+//                                                              them with the mirror, page by page
 //   node scripts/fetch-qul.mjs --fonts 1,10,604 [--etags] [--allow-zero-advance]
 //
 // Options:
-//   --out <file>          generated module path (default packages/…/src/data/qpc-v4.generated.ts)
+//   --data                download QUL's words and layout exports (the URLs pinned in
+//                         scripts/lib/datasets.mjs and src/mushafs.ts) into example/public/data/<dataset>/
 //   --cache <dir>         HTML cache directory (default .cache/qul)
 //   --concurrency <n>     parallel page requests (default 3, be polite to QUL)
 //   --pages a-b,c         subset of pages to fetch/parse (validation then runs with relaxed counts)
@@ -18,27 +25,34 @@
 //                         (page 328 of the tajweed set) the woff it serves instead is mirrored
 //   --etags               HEAD every CDN woff2 URL and write scripts/cdn-etags.json
 //   --allow-zero-advance  do not fail when a standalone word has zero advance in the fixture fonts
-//   --no-validate         skip validation (for debugging only; never commit such output)
+//   --no-validate         skip validation (for debugging only)
+//
+// The package itself never reads any of this: at render time it fetches the same two exports from
+// Tarteel's CDN (or the `data` source it is given) and builds the layout in memory. The mirror is
+// for the suites, the Studio and offline renders (`data` + staticFile()), and for checking the CDN.
 
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {QPC_V4} from './lib/datasets.mjs';
 import {parsePageHtml, QulParseError} from './lib/qul-html.mjs';
-import {compileLayout, validateLayout, emitModule, expandPage, LayoutValidationError} from './lib/compile.mjs';
+import {compileLayout, validateLayout, expandPage, LayoutValidationError} from './lib/compile.mjs';
 import {readWords, readLayoutSqlite} from './lib/qul-export.mjs';
 import {parseSfnt, compareFonts, detectFontMagic} from './lib/sfnt.mjs';
+import {unzip, unzipExport} from './lib/zip.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 remotion-mushaf-line-renderer/fetch-qul';
 
 const {values: args} = parseArgs({
   options: {
+    data: {type: 'boolean', default: false},
     'from-pages': {type: 'boolean', default: false},
     'layout-sqlite': {type: 'string'},
     words: {type: 'string'},
-    out: {type: 'string', default: path.join(ROOT, 'packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts')},
     cache: {type: 'string', default: path.join(ROOT, '.cache/qul')},
     concurrency: {type: 'string', default: '3'},
     pages: {type: 'string'},
@@ -59,6 +73,14 @@ if (args.help) {
 const def = QPC_V4;
 const log = (...a) => console.log('[fetch-qul]', ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const rel = (file) => path.relative(ROOT, file);
+
+/** Where the exports are mirrored: served by the example at /data/<dataset>/…, read by the suites. */
+const MIRROR_DIR = path.join(ROOT, 'example/public/data', def.dataset);
+const MIRROR_FILES = {words: 'words.json.zip', layout: 'layout.db.zip'};
+const EXPORT_EXTENSIONS = {words: ['.json'], layout: ['.db', '.sqlite', '.sqlite3']};
+const mirrorFile = (part) => path.join(MIRROR_DIR, MIRROR_FILES[part]);
+const haveMirror = () => Object.keys(MIRROR_FILES).every((part) => fs.existsSync(mirrorFile(part)));
 
 const parsePageList = (spec, max) => {
   if (!spec || spec === 'all') return Array.from({length: max}, (_, i) => i + 1);
@@ -280,6 +302,102 @@ const fontUrlVariants = (set, page, url) => {
   return out;
 };
 
+/**
+ * Downloads the two pinned exports into the mirror, the way a browser would fetch them (with an
+ * Origin header, so the CORS answer is recorded), and returns what to record about them.
+ */
+const downloadData = async () => {
+  fs.mkdirSync(MIRROR_DIR, {recursive: true});
+  const record = {};
+  for (const part of Object.keys(MIRROR_FILES)) {
+    const url = def.exports[part];
+    log(`downloading the ${part} export: ${url}`);
+    const res = await fetchWithRetry(url, {accept: '*/*', origin: 'https://example.com', timeoutMs: 180_000});
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const cors = res.headers.get('access-control-allow-origin');
+    if (!(bytes.length > 4 && bytes.readUInt32LE(0) === 0x04034b50)) {
+      throw new Error(`${url}: not a zip (${bytes.length} bytes, starts with ${JSON.stringify(bytes.subarray(0, 16).toString('latin1'))}); QUL may have moved the export — find the current link on qul.tarteel.ai and update scripts/lib/datasets.mjs and src/mushafs.ts`);
+    }
+    const entries = unzip(bytes);
+    log(` - ${bytes.length} bytes, ${entries.map((e) => `${e.name} (${e.method === 8 ? 'deflated' : 'stored'}, ${e.data.length} bytes)`).join(', ')}; cors ${JSON.stringify(cors)}, cache-control ${JSON.stringify(res.headers.get('cache-control'))}, etag ${JSON.stringify(res.headers.get('etag'))}`);
+    if (cors !== '*') log(` - WARNING: access-control-allow-origin is ${JSON.stringify(cors)}: a browser (every Remotion render path) cannot fetch this URL; renders must pass a mirror as \`data\``);
+    fs.writeFileSync(mirrorFile(part), bytes);
+    record[part] = {
+      url,
+      file: rel(mirrorFile(part)),
+      bytes: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      entries: entries.map((e) => e.name),
+      etag: res.headers.get('etag'),
+      contentType: res.headers.get('content-type'),
+      cacheControl: res.headers.get('cache-control'),
+      cors,
+      downloadedAt: new Date().toISOString(),
+    };
+  }
+  log(`mirrored into ${rel(MIRROR_DIR)}/`);
+  return record;
+};
+
+/** Parsed pages from two export files (zipped or not), read the dev-tools way: node:zlib + node:sqlite. */
+const pagesFromExports = async (files, fullDef) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fetch-qul-'));
+  try {
+    const unpacked = {};
+    for (const part of ['words', 'layout']) {
+      const bytes = fs.readFileSync(files[part]);
+      const isZip = bytes.length > 4 && bytes.readUInt32LE(0) === 0x04034b50;
+      const entry = isZip ? unzipExport(bytes, EXPORT_EXTENSIONS[part]) : {name: path.basename(files[part]), data: bytes};
+      unpacked[part] = path.join(tmp, `${part}${path.extname(entry.name) || (part === 'words' ? '.json' : '.db')}`);
+      fs.writeFileSync(unpacked[part], entry.data);
+    }
+    const words = await readWords(unpacked.words);
+    const parsedPages = await readLayoutSqlite(unpacked.layout, words, fullDef);
+    return {parsedPages, words: words.size, source: `qul-export:${path.basename(files.layout)}`};
+  } finally {
+    fs.rmSync(tmp, {recursive: true, force: true});
+  }
+};
+
+/** Page-by-page differences between two compiled layouts (source and generation time ignored). */
+const compareLayouts = (a, b) => {
+  const differences = [];
+  if (a.pages.length !== b.pages.length) differences.push(`${a.pages.length} vs ${b.pages.length} pages`);
+  const pages = Math.min(a.pages.length, b.pages.length);
+  for (let p = 1; p <= pages; p++) {
+    if (JSON.stringify(a.pages[p - 1]) === JSON.stringify(b.pages[p - 1])) continue;
+    const x = expandPage(a, p);
+    const y = expandPage(b, p);
+    if (x.lines.length !== y.lines.length) {
+      differences.push(`page ${p}: ${x.lines.length} vs ${y.lines.length} lines`);
+      continue;
+    }
+    for (let i = 0; i < x.lines.length; i++) {
+      const l = x.lines[i];
+      const m = y.lines[i];
+      const describe = (line) => `${line.type}${line.centered ? ' centred' : ''}${line.words.length ? ` ${line.words[0].location}..${line.words.at(-1).location} (${line.words.length} words)` : line.surah ? ` surah ${line.surah}` : ''}`;
+      if (JSON.stringify(l) !== JSON.stringify(m)) differences.push(`page ${p} line ${l.line}: ${describe(l)} vs ${describe(m)}`);
+    }
+  }
+  return differences;
+};
+
+/** Reads or writes scripts/cdn-etags.json, keeping the parts a run did not touch. */
+const SURVEY_FILE = path.join(ROOT, 'scripts/cdn-etags.json');
+const readSurvey = () => (fs.existsSync(SURVEY_FILE) ? JSON.parse(fs.readFileSync(SURVEY_FILE, 'utf8')) : null);
+const writeSurvey = (patch, reason) => {
+  const existing = readSurvey();
+  const next = {...(existing ?? {generatedAt: null, base: null, entries: {}, problems: []}), ...patch};
+  const {generatedAt: _a, ...before} = existing ?? {};
+  const {generatedAt: _b, ...after} = next;
+  if (existing && JSON.stringify(before) === JSON.stringify(after)) {
+    log(`${rel(SURVEY_FILE)} is unchanged (${reason}); kept the committed generation time`);
+    return;
+  }
+  fs.writeFileSync(SURVEY_FILE, JSON.stringify({...next, generatedAt: new Date().toISOString()}, null, 1) + '\n');
+  log(`wrote ${rel(SURVEY_FILE)} (${reason})`);
+};
+
 const recordEtags = async (extra = {}) => {
   const entries = {...extra};
   const urls = [];
@@ -308,91 +426,109 @@ const recordEtags = async (extra = {}) => {
       if (done % 200 === 0) log(`etags: ${done}/${urls.length}`);
     }
   });
-  const file = path.join(ROOT, 'scripts/cdn-etags.json');
   // Sorted by URL so re-runs produce a stable, reviewable diff (requests finish in any order), and
   // the committed file is left alone when only its generation time would change.
   const sorted = Object.fromEntries(Object.keys(entries).sort().map((url) => [url, entries[url]]));
   const base = def.fontUrl('qpc-v4-tajweed', 1, 'woff2').replace(/\/p1\.woff2.*$/, '');
-  const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  if (existing && existing.base === base && same(existing.entries, sorted) && same(existing.problems, problems)) {
-    log(`${path.relative(ROOT, file)} is unchanged (${Object.keys(entries).length} entries); kept the committed generation time`);
-  } else {
-    fs.writeFileSync(file, JSON.stringify({generatedAt: new Date().toISOString(), base, entries: sorted, problems}, null, 1) + '\n');
-    log(`wrote ${path.relative(ROOT, file)} (${Object.keys(entries).length} entries)`);
-  }
+  writeSurvey({base, entries: sorted, problems}, `${Object.keys(entries).length} font entries`);
   // Gaps are recorded, not fatal: the layout and the fixture fonts are still valid, and the
   // registry handles known gaps explicitly.
   if (problems.length) log(`etags: ${problems.length} CDN gap(s), recorded in cdn-etags.json:\n - ${problems.slice(0, 20).join('\n - ')}`);
   return problems;
 };
 
+/** Compiles parsed pages (all or a subset), reports, validates unless told not to. */
+const compileAndValidate = (parsedPages, source, subset, label) => {
+  const partial = subset !== null && subset.length !== def.pages;
+  const compileDef = partial ? {...def, pages: Math.max(...subset)} : def;
+  if (partial) {
+    // Fill unrequested pages with empty placeholders so ids stay meaningful only within requested pages.
+    const have = new Set(parsedPages.map((p) => p.page));
+    for (let p = 1; p <= compileDef.pages; p++) if (!have.has(p)) parsedPages.push({page: p, lines: []});
+  }
+  const compileReport = {};
+  const layout = compileLayout(parsedPages, compileDef, {source, generatedAt: new Date().toISOString()}, compileReport);
+  log(`${label}: compiled ${compileReport.regularWords} regular words, ${compileReport.markerWords} marker glyphs, code points per glyph ${JSON.stringify(compileReport.codePointLengths)}`);
+  if (compileReport.idOrderViolations.length) {
+    log(`${label}: QUL word ids out of reading order (database row ids of re-created words; harmless): ${compileReport.idOrderViolations.length}: ${compileReport.idOrderViolations.slice(0, 8).map((v) => `p${v.page} l${v.line} ${v.location} id ${v.qulId} after ${v.previousQulId}`).join('; ')}`);
+  }
+  if (compileReport.markers.length) {
+    const byKind = {};
+    for (const m of compileReport.markers) byKind[m.kind] = (byKind[m.kind] ?? 0) + 1;
+    log(`${label}: marker glyphs by kind: ${JSON.stringify(byKind)}; first ones: ${compileReport.markers.slice(0, 12).map((m) => `p${m.page} l${m.line} ${m.kind} ${m.location} (QUL id ${m.qulId})`).join('; ')}`);
+  }
+  if (!args['no-validate'] && !partial) {
+    const {centeredAyahLineList, ...report} = validateLayout(layout, def);
+    log(`${label}: validation passed: ${JSON.stringify(report)}`);
+    log(`${label}: centred ayah lines: ${centeredAyahLineList.map((c) => `p${c.page} l${c.line} (${c.first}, ${c.words} words)`).join('; ')}`);
+  } else if (partial) {
+    log(`${label}: partial run (${subset.length} page(s)): validation skipped`);
+  }
+  return layout;
+};
+
 const main = async () => {
   const subset = args.pages ? parsePageList(args.pages, def.pages) : null;
-  const wantLayout = args['from-pages'] || args['layout-sqlite'] || !args.fonts && !args.etags;
-  let layout = null;
+  const filterSubset = (pages) => (subset ? pages.filter((p) => subset.includes(p.page)) : pages);
+  let dataRecord = null;
+  if (args.data) dataRecord = await downloadData();
 
-  if (wantLayout) {
-    let parsedPages;
-    let source;
-    if (args['layout-sqlite']) {
-      if (!args.words) throw new Error('--layout-sqlite requires --words <file>');
-      log(`reading QUL export ${args['layout-sqlite']} + ${args.words}`);
-      const words = await readWords(args.words);
-      parsedPages = await readLayoutSqlite(args['layout-sqlite'], words, subset ? null : def);
-      if (subset) parsedPages = parsedPages.filter((p) => subset.includes(p.page));
-      source = `qul-export:${path.basename(args['layout-sqlite'])}`;
+  // The export route — what the package builds at runtime — from the mirror or the files given.
+  const explicitExport = Boolean(args['layout-sqlite'] || args.words);
+  const wantExport = args.data || explicitExport || (!args['from-pages'] && !args.fonts && !args.etags);
+  let layout = null;
+  if (wantExport) {
+    let files;
+    if (explicitExport) {
+      if (!args['layout-sqlite'] || !args.words) throw new Error('--layout-sqlite and --words go together');
+      files = {words: path.resolve(args.words), layout: path.resolve(args['layout-sqlite'])};
     } else {
-      const pages = subset ?? parsePageList('all', def.pages);
-      log(`fetching ${pages.length} preview page(s) from ${def.previewUrl(1).replace(/\?.*$/, '')}`);
-      parsedPages = await fetchPages(pages);
-      source = `qul-preview:layout-${def.layoutId}`;
+      if (!haveMirror()) throw new Error(`no mirror under ${rel(MIRROR_DIR)}/: run with --data (needs network), or pass --layout-sqlite and --words`);
+      files = {words: mirrorFile('words'), layout: mirrorFile('layout')};
     }
-    const partial = subset !== null && subset.length !== def.pages;
-    const compileDef = partial ? {...def, pages: Math.max(...subset)} : def;
-    if (partial) {
-      // Fill unrequested pages with empty placeholders so ids stay meaningful only within requested pages.
-      const have = new Set(parsedPages.map((p) => p.page));
-      for (let p = 1; p <= compileDef.pages; p++) if (!have.has(p)) parsedPages.push({page: p, lines: []});
-    }
-    const compileReport = {};
-    layout = compileLayout(parsedPages, compileDef, {source, generatedAt: new Date().toISOString()}, compileReport);
-    log(`compiled: ${compileReport.regularWords} regular words, ${compileReport.markerWords} marker glyphs, code points per glyph ${JSON.stringify(compileReport.codePointLengths)}`);
-    if (compileReport.idOrderViolations.length) {
-      log(`QUL word ids out of reading order (database row ids of re-created words; harmless): ${compileReport.idOrderViolations.length}: ${compileReport.idOrderViolations.slice(0, 8).map((v) => `p${v.page} l${v.line} ${v.location} id ${v.qulId} after ${v.previousQulId}`).join('; ')}`);
-    }
-    if (compileReport.markers.length) {
-      const byKind = {};
-      for (const m of compileReport.markers) byKind[m.kind] = (byKind[m.kind] ?? 0) + 1;
-      log(`marker glyphs by kind: ${JSON.stringify(byKind)}; first ones: ${compileReport.markers.slice(0, 12).map((m) => `p${m.page} l${m.line} ${m.kind} ${m.location} (QUL id ${m.qulId})`).join('; ')}`);
-    }
-    if (!args['no-validate'] && !partial) {
-      const {centeredAyahLineList, ...report} = validateLayout(layout, def);
-      log('validation passed:', JSON.stringify(report));
-      log(`centred ayah lines: ${centeredAyahLineList.map((c) => `p${c.page} l${c.line} (${c.first}, ${c.words} words)`).join('; ')}`);
-    } else if (partial) {
-      log(`partial run (${subset.length} page(s)): validation skipped, output NOT written`);
-    }
-    if (!partial) {
-      const module = emitModule(layout);
-      fs.mkdirSync(path.dirname(args.out), {recursive: true});
-      // Do not churn the committed module when only the generation timestamp would change.
-      const withoutTimestamp = (s) => s.replace(/generated \S+\./g, 'generated X.').replace(/\\?"generatedAt\\?":\\?"[^"\\]*\\?"/g, '"generatedAt":"X"');
-      const existing = fs.existsSync(args.out) ? fs.readFileSync(args.out, 'utf8') : null;
-      if (existing !== null && withoutTimestamp(existing) === withoutTimestamp(module)) {
-        log(`${path.relative(ROOT, args.out)} is unchanged (${layout.wordCount} words); kept the committed generation time`);
-      } else {
-        fs.writeFileSync(args.out, module);
-        log(`wrote ${path.relative(ROOT, args.out)} (${(module.length / 1024).toFixed(0)} KB, ${layout.wordCount} words)`);
-      }
+    log(`reading the exports ${rel(files.words)} + ${rel(files.layout)}`);
+    const {parsedPages, words, source} = await pagesFromExports(files, subset ? null : def);
+    log(`exports: ${words} words, ${parsedPages.length} pages`);
+    layout = compileAndValidate(filterSubset(parsedPages), source, subset, 'exports');
+    if (!subset) {
       fs.mkdirSync(args.cache, {recursive: true});
-      fs.writeFileSync(path.join(args.cache, 'report.json'), JSON.stringify({generatedAt: layout.generatedAt, source, wordCount: layout.wordCount}, null, 1));
+      fs.writeFileSync(path.join(args.cache, 'report.json'), JSON.stringify({generatedAt: layout.generatedAt, source, wordCount: layout.wordCount, files: {words: rel(files.words), layout: rel(files.layout)}}, null, 1));
     }
-  } else if (fs.existsSync(args.out)) {
-    // Load the committed module for the zero-advance check without a TypeScript toolchain.
-    const src = fs.readFileSync(args.out, 'utf8');
-    const m = src.match(/JSON\.parse\('([\s\S]*)'\) as CompiledLayout/);
-    if (m) layout = JSON.parse(m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'));
+  }
+
+  // The preview route: QUL's own pages, compiled the same way, compared with the exports.
+  if (args['from-pages']) {
+    const pages = subset ?? parsePageList('all', def.pages);
+    log(`fetching ${pages.length} preview page(s) from ${def.previewUrl(1).replace(/\?.*$/, '')}`);
+    const preview = compileAndValidate(await fetchPages(pages), `qul-preview:layout-${def.layoutId}`, subset, 'preview');
+    if (layout) {
+      const differences = compareLayouts(layout, preview);
+      if (differences.length === 0) {
+        log(`preview and exports agree on every page (${layout.wordCount} words)`);
+      } else {
+        process.exitCode = 1;
+        log(`preview and exports DIFFER in ${differences.length} place(s):\n - ${differences.slice(0, 40).join('\n - ')}${differences.length > 40 ? `\n - … ${differences.length - 40} more` : ''}`);
+      }
+    } else if (haveMirror()) {
+      const {parsedPages, source} = await pagesFromExports({words: mirrorFile('words'), layout: mirrorFile('layout')}, subset ? null : def);
+      const fromMirror = compileAndValidate(filterSubset(parsedPages), source, subset, 'exports');
+      const differences = compareLayouts(fromMirror, preview);
+      if (differences.length === 0) log(`preview and the mirrored exports agree on every page (${preview.wordCount} words)`);
+      else {
+        process.exitCode = 1;
+        log(`preview and the mirrored exports DIFFER in ${differences.length} place(s):\n - ${differences.slice(0, 40).join('\n - ')}${differences.length > 40 ? `\n - … ${differences.length - 40} more` : ''}`);
+      }
+      layout = fromMirror;
+    } else {
+      log('no mirror to compare with (run --data first); the preview compiled and validated on its own');
+      layout = preview;
+    }
+  }
+
+  if (!layout && args.fonts && haveMirror()) {
+    // The zero-advance check needs the words; the mirror has them.
+    const {parsedPages, source} = await pagesFromExports({words: mirrorFile('words'), layout: mirrorFile('layout')}, def);
+    layout = compileLayout(parsedPages, def, {source, generatedAt: new Date().toISOString()});
   }
 
   let fontEtags = {};
@@ -407,9 +543,8 @@ const main = async () => {
       log('font checks FAILED (see above)');
     }
   }
-  if (args.etags) {
-    await recordEtags(fontEtags);
-  }
+  if (dataRecord) writeSurvey({data: dataRecord}, 'the data exports');
+  if (args.etags) await recordEtags(fontEtags);
   if (process.exitCode) log('finished with errors');
   else log('done');
 };

@@ -11,6 +11,8 @@ KFGQPC V4 (1441H) mushaf, with an entrance animation written in `@remotion/trans
   `delayRender()`, line data is plain JSON for `calculateMetadata()`.
 - Deterministic: nothing is painted before the page font is loaded, so a render never captures a
   fallback font, and every frame after the entrance is byte-identical.
+- Code only: the mushaf data — QUL's two open exports, the words of the script and the line layout —
+  and the fonts are fetched from Tarteel's CDN at render time, or from a mirror you point it at.
 - Loud: every failure is a `MushafError` with a stable `code` and a message that names the fix.
 
 ```tsx
@@ -83,6 +85,7 @@ A complete project with this composition, a `<Player>` page and the test harness
 | `page` + `line`            | `number`, `number`                                            | Convenience form: resolves the line at render time behind its own `delayRender()`. Add `mushaf` / `tajweed` / `mandala` to pick the colouring.                              |
 | `tajweed`                  | `boolean`                                                     | Convenience form only. `false` (default) renders plain black glyphs that follow CSS `color`; `true` uses QUL's tajweed colour font. See [Colour](#colour).                  |
 | `mandala`                  | `boolean \| MushafColors`                                     | Convenience form only. The ayah-end rosette in its colours with the writing in the inherited CSS `color` — the colour font at palette 3. `{ink, accent, detail, background}` recolours it. `tajweed` wins if both are set. See [Colour](#colour). |
+| `data`                     | `{words?, layout?}`                                           | Convenience form only. Where to fetch QUL's two exports from (a mirror via `staticFile()`); default Tarteel's CDN. See [Data](#data).                                       |
 | `enter`                    | `{presentation, timing?}` or a bare `TransitionPresentation`  | Entrance animation. Progress runs over the local frame of the enclosing `<Sequence>`; the presentation stays mounted for the whole sequence. `timing` defaults to `enterTiming()`. |
 | `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>` (`exitTiming()` by default). A line leaves because its Sequence ends. |
 | `activeWordId`             | `string \| number \| null`                                    | Marks one word as current (`word.id` like `"9:1:3"`, or `word.wordId`): it gets `data-active="true"`, `.mushaf-word--active` and `activeWordStyle`.                          |
@@ -104,13 +107,15 @@ Only `ayah` lines render in this version. `surah_name` and `basmallah` lines are
 `getMushafLine()` with `words: []` and throw `UNSUPPORTED_LINE_TYPE` when passed to the component;
 skip them or draw your own header.
 
-### `getMushafLine({page, line, mushaf?, tajweed?, mandala?}): Promise<MushafLineData>`
+### `getMushafLine({page, line, mushaf?, tajweed?, mandala?, data?}): Promise<MushafLineData>`
 
 Pure and Remotion-free: safe in `calculateMetadata()`, in a Node script that prepares `inputProps`,
 or in a `<Player>` host. Pages are `1..604`, lines `1..15` (`1..8` on pages 1 and 2). `mushaf`
 defaults to the plain `'qpc-v4'`; `tajweed: true` resolves the colour set instead, and `mandala` the
 colour set at palette 3 with the colours you asked for (the returned `mushaf`, `palette` and
-`paletteColors` are the resolved look, so the data alone decides how the line is painted).
+`paletteColors` are the resolved look, so the data alone decides how the line is painted). The first
+call per tab fetches the mushaf data — QUL's two exports, from Tarteel's CDN unless `data` names
+another source (see [Data](#data)); every later call reads the cached layout.
 
 ```ts
 type MushafLineData = {
@@ -149,6 +154,8 @@ await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
 await getMushafLines({surah: 2, tajweed: true, fontUrl: (page, mushaf) => staticFile(`fonts/${mushaf}/p${page}.woff2`)});
 // `slice: true` records the range on the lines it cuts, so <MushafLine> shows only those ayahs.
 await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true});
+// `data` builds the lines from your own mirror of QUL's exports instead of Tarteel's CDN.
+await getMushafLines({page: 187, data: {words: staticFile('data/qpc-v4/words.json.zip'), layout: staticFile('data/qpc-v4/layout.db.zip')}});
 ```
 
 The ayah form finds the page itself (through an index over the compiled data), so nothing has to
@@ -159,7 +166,7 @@ you asked for — the lines at either end collapse to their words of the range, 
 in between stay whole (see [Slicing a line](#slicing-a-line)) — or keep the whole line and mark the
 range with `wordStyle` (its context says whether a word is `inSlice`).
 
-### `getMushafLocation({surah, ayah?, mushaf?}): Promise<{page, line}>`
+### `getMushafLocation({surah, ayah?, mushaf?, data?}): Promise<{page, line}>`
 
 Where a surah (or one of its ayahs) is printed. `AYAH_NOT_FOUND` names the last ayah of the surah
 when you ask for one past its end.
@@ -191,6 +198,13 @@ loadPageFont({mushaf: 'qpc-v4-tajweed', page: 10, url: staticFile('fonts/qpc-v4-
 Source rules are order-independent, so every Lambda chunk behaves the same: no `url` adopts whatever
 source is registered for that page (else the CDN); an explicit `url` replaces an implicit CDN
 registration; two different explicit urls throw `FONT_URL_CONFLICT`.
+
+### `loadMushafData({mushaf?, data?}): Promise<void>`
+
+Loads the mushaf data ahead of time — the same load `getMushafLine()` makes, cached once per
+source, so calling both costs nothing extra. For a `<Player>`, which never runs `calculateMetadata`,
+call it when the page loads so the first line resolves without a round trip. Pure and
+Remotion-free; both V4 ids share one dataset, so `mushaf` rarely matters.
 
 ### `slideFade(props?)` from `remotion-mushaf-line-renderer/presentations/slide-fade`
 
@@ -387,6 +401,50 @@ page 10 line 3: waiting for font ...`).
   of a second or so; the font then loads while the line is still hidden and the entrance starts on
   time, both in the Player and in renders.
 
+## Data
+
+The package carries no mushaf data. A line is built from QUL's two raw exports, fetched the first
+time a line is resolved in a tab (or in a Node script) and cached from then on:
+
+- the words of the QPC V4 script (`qpc-v4.json`, one entry per word: surah, ayah, position and the
+  one to four private-use code points the page font renders);
+- the 15-line layout (`qpc-v4-tajweed-15-lines.db`, a SQLite `pages` table: page, line, type,
+  centred, first and last word).
+
+Both are zips on Tarteel's CDN, `https://s3.us-east-1.wasabisys.com/static-cdn.tarteel.ai/qul-exports/…`,
+pinned to one publication each (QUL publishes every export under a new prefix; the repository's
+`scripts/fetch-qul.mjs --data` mirrors, records and validates the pinned ones). The package unzips
+them, reads the SQLite file and joins the two in memory — about 1.2 MB over the wire and a few
+hundred milliseconds, once per tab — then checks the result structurally: page count, lines per
+page, contiguous word ids, one ayah marker per ayah, glyph texts in the fonts' range.
+
+- **`data`** on `getMushafLine()`, `getMushafLines()`, `getMushafLocation()`, `loadMushafData()`
+  and the `<MushafLine page line>` form names other sources: `{words?, layout?}`, each an absolute
+  URL, a `staticFile()` result or a root-relative path, zipped or unzipped (the words as JSON, the
+  layout as SQLite or as a JSON array of its rows). Anything left out comes from the CDN.
+- **Mirror the exports** for renders that must not depend on the CDN — every render tab and every
+  Lambda chunk fetches them otherwise: put the two zips in `public/` (`node scripts/fetch-qul.mjs
+  --data` in this repository writes them to `example/public/data/qpc-v4/`) and resolve with
+
+  ```ts
+  const data = {words: staticFile('data/qpc-v4/words.json.zip'), layout: staticFile('data/qpc-v4/layout.db.zip')};
+  const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, data});
+  ```
+
+  in `calculateMetadata()`, so every tab gets the same JSON and nothing is fetched at render time
+  but the fonts. `staticFile()` carries a non-root `publicPath`, so Lambda sites find their mirror.
+  The exports are open data; mirroring them is fine.
+- **CORS:** a browser tab (the Studio, the Player and every renderer, `calculateMetadata()`
+  included) fetches cross-origin, so a mirror on another origin must send
+  `Access-Control-Allow-Origin`; a mirror in `public/` needs nothing.
+- **`<Player>` warm-up:** the Player never runs `calculateMetadata`, so either pass resolved lines
+  or call `loadMushafData()` when the page loads.
+- **Slow or cold CDN during a render:** raise the render budget (`--timeout`), as for the fonts; the
+  fetch budget adapts to it.
+- **Node:** a script that prepares `inputProps` needs Node 20.12 or newer to inflate the zips
+  (`DecompressionStream`), or a `data` source pointing at the unzipped files; and it needs absolute
+  URLs, since a root-relative path means nothing outside a browser.
+
 ## Colour
 
 Lines are **plain black by default**: the plain glyph set is a monochrome outline font, so the words
@@ -521,9 +579,9 @@ future highlighting APIs. Do not change their font, spacing or `direction`.
 Works in the Studio, `renderMedia()` / `renderStill()` / the CLI, Lambda and the `<Player>`:
 
 - Every browser tab creates and releases its own `delayRender()` handles; concurrency is safe.
-- The layout data (about 1 MB, ASCII) ships as a separate lazy chunk that is fetched once per tab,
-  only when a line is resolved at runtime; bundles with a non-root `publicPath` (Lambda sites) resolve
-  it correctly.
+- The mushaf data is fetched once per tab, the first time a line is resolved — from Tarteel's CDN
+  or from the `data` source given (a mirror pinned through `staticFile()` follows a non-root
+  `publicPath` on Lambda sites) — and compiled in memory; see [Data](#data).
 - Under `<Sequence premountFor>` the font loads while the line is hidden; the row is never visible
   with a wrong font, not even for one frame after a remount.
 - The line ignores hostile page CSS (`letter-spacing`, `font-weight`, `text-transform`, ...).
@@ -544,7 +602,12 @@ Works in the Studio, `renderMedia()` / `renderStill()` / the CLI, Lambda and the
 | `BAD_ENTER`              | `enter` must be a presentation (`{component, props}`) or `{presentation, timing?}` with a `TransitionTiming`.                                     |
 | `BAD_EXIT`               | Same for `exit`; also raised when the enclosing Sequence has no finite length to count back from.                                                 |
 | `BAD_SIZE`               | `fontSize` / `lineHeight` must be positive finite numbers.                                                                                        |
-| `DATA_NOT_COMPILED`, `DATA_LOAD_FAILED` | The layout chunk is missing or broken; check the bundle / `publicPath`, or re-run the data script when building from source.       |
+| `BAD_DATA_URL`           | `data.words` / `data.layout` is not an absolute URL, a `staticFile()` path or a root-relative path — or is root-relative in Node, where only an absolute URL can be fetched. |
+| `DATA_HTTP`              | An export URL answered with an HTTP error (404: QUL re-published under a new prefix, or your mirror path is wrong). The message names the pinned URL.            |
+| `DATA_NETWORK`           | The fetch failed (offline, CORS on a mirror, blocked host). Mirror the exports into `public/` and pass them as `data`.                                            |
+| `DATA_TIMEOUT`           | The fetch did not finish within the render budget: raise `--timeout` or mirror the exports.                                                                      |
+| `DATA_INVALID`           | The response is not the export (an HTML page, a truncated zip, another mushaf, a broken reading order). The message names the file and the first problem.        |
+| `DATA_LOAD_FAILED`       | Something unexpected while loading the data (the message carries it), or a page or line the loaded layout does not have.                                          |
 | `BAD_FONT_URL`           | `url` / `fontUrl` is not an absolute URL, a `staticFile()` path or a root-relative path.                                                          |
 | `FONT_HTTP`              | The font URL answered with an HTTP error (404: check the page number and the CDN path or your mirror).                                            |
 | `FONT_NETWORK`           | The fetch failed (offline, CORS on a mirror, blocked host).                                                                                       |
@@ -567,11 +630,12 @@ Studio-editable wrapper via `Interactive.withSchema`, further mushaf layouts fro
 
 ## Data and licences
 
-The layout data is compiled from QUL's public mushaf layout 19 (KFGQPC V4, 1441H) with
-`scripts/fetch-qul.mjs` in the repository and validated against the printed page's invariants
-(9,046 lines, 83,668 words, one ayah marker per ayah). The fonts are the King Fahd Glyph Complex fonts
-as published by QUL and are fetched from QUL's CDN at render time; they are not part of this package.
-Please respect the licences of the [King Fahd Complex](https://qurancomplex.gov.sa) and of
-[QUL](https://qul.tarteel.ai) when distributing renders or mirroring fonts.
+The lines are built at render time from QUL's exports of mushaf layout 19 (KFGQPC V4, 1441H) — the
+words of the script and the line layout, open data published by [QUL](https://qul.tarteel.ai) — and
+checked against the printed page's invariants (9,046 lines, 83,668 words, one ayah marker per
+ayah) by the repository's `scripts/fetch-qul.mjs`. The fonts are the King Fahd Glyph Complex fonts
+as published by QUL and are fetched from QUL's CDN at render time. Neither is part of this package.
+Please respect the licences of the [King Fahd Complex](https://qurancomplex.gov.sa) and of QUL when
+distributing renders or mirroring fonts.
 
 Package code: MIT.

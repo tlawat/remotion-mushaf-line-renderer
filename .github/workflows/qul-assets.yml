@@ -1,14 +1,15 @@
-# Downloads the QUL page fonts and compiles the KFGQPC V4 layout data on a GitHub runner (this
-# sandbox and some networks cannot reach qul.tarteel.ai), then commits the results to the branch the
-# workflow ran on.
+# Mirrors QUL's assets on a GitHub runner (this sandbox and some networks cannot reach QUL) and
+# commits the results to the branch the workflow ran on: the two data exports the package fetches
+# at runtime (downloaded from the URLs pinned in scripts/lib/datasets.mjs, validated against the
+# printed page's invariants, recorded with ETag, sha256 and CORS header) and the page fonts.
 #
-# Runs on "Run workflow" (inputs below) and on pushes that touch the compiler or this file (defaults:
-# fonts 1,10,604, compile and commit on).
+# Runs on "Run workflow" (inputs below) and on pushes that touch the data tools or this file
+# (defaults: data on, fonts 1,10,187,604, compare off, commit on).
 #
 # What gets committed (when committing is on):
-#   packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts   the compiled layout (ASCII)
-#   scripts/cdn-etags.json                                                 ETags of every CDN font
-#   example/public/fonts/<mushaf>/p{1,10,187,604}.{ttf,woff2}                  fixture fonts (development only:
+#   example/public/data/qpc-v4/{words.json.zip,layout.db.zip}      the mirrored exports (open data)
+#   scripts/cdn-etags.json                                         ETags of every CDN font + the exports
+#   example/public/fonts/<mushaf>/p{1,10,187,604}.{ttf,woff2}            fixture fonts (development only:
 #   packages/remotion-mushaf-line-renderer/test/fixtures/fonts/<mushaf>/... see .gitignore for the rule)
 #
 # With `fonts: all` the example's mirror of every page's woff2 is committed as well (development
@@ -18,16 +19,20 @@ name: QUL assets
 on:
   workflow_dispatch:
     inputs:
+      data:
+        description: 'Download QUL''s words and layout exports into example/public/data and validate them'
+        default: true
+        type: boolean
       fonts:
         description: 'Pages whose fonts to download: a list/ranges such as "1,10,604" or "1-20", or "all"'
         default: '1,10,187,604'
         type: string
-      compile:
-        description: 'Compile the layout data from QUL preview pages (604 requests, cached between runs)'
-        default: true
+      compare:
+        description: 'Also compile QUL''s preview pages (604 requests, cached between runs) and compare them with the exports'
+        default: false
         type: boolean
       commit:
-        description: 'Commit the generated module, cdn-etags.json and the fixture fonts to this branch'
+        description: 'Commit the mirrored exports, cdn-etags.json and the fixture fonts to this branch'
         default: true
         type: boolean
   push:
@@ -50,8 +55,9 @@ jobs:
     timeout-minutes: 90
     env:
       # Empty on push events; the shell falls back to the defaults.
+      DATA: ${{ github.event_name == 'push' || inputs.data }}
       FONTS: ${{ inputs.fonts || '1,10,187,604' }}
-      COMPILE: ${{ github.event_name == 'push' || inputs.compile }}
+      COMPARE: ${{ github.event_name != 'push' && inputs.compare }}
       COMMIT: ${{ github.event_name == 'push' || inputs.commit }}
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +73,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Restore the QUL preview page cache
+        if: env.COMPARE == 'true'
         uses: actions/cache@v4
         with:
           path: .cache/qul
@@ -74,31 +81,33 @@ jobs:
           restore-keys: |
             qul-preview-layout-19-
 
-      - name: Fetch fonts (and compile the layout)
+      - name: Mirror the exports and fonts (and compare with the preview pages)
         env:
           DEBUG: '1'
         run: |
           set -euo pipefail
           args=(--fonts "$FONTS" --etags)
-          if [ "$COMPILE" = "true" ]; then
+          if [ "$DATA" = "true" ]; then
+            args=(--data "${args[@]}")
+          fi
+          if [ "$COMPARE" = "true" ]; then
             args=(--from-pages "${args[@]}")
           fi
           echo "node scripts/fetch-qul.mjs ${args[*]}"
           node scripts/fetch-qul.mjs "${args[@]}" 2>&1 | tee fetch-qul.log
 
-      - name: Verify the CDN (plain and tajweed sets, CORS, ETags)
+      - name: Verify the CDN (exports, both font sets, CORS, ETags)
         run: |
           set -uo pipefail
           if [ "$FONTS" = "all" ]; then
-            node scripts/verify-cdn.mjs --all 2>&1 | tee verify-cdn.log
+            node scripts/verify-cdn.mjs --data --all 2>&1 | tee verify-cdn.log
           else
-            node scripts/verify-cdn.mjs --pages "$FONTS" 2>&1 | tee verify-cdn.log
+            node scripts/verify-cdn.mjs --data --pages "$FONTS" 2>&1 | tee verify-cdn.log
           fi
           exit 0
 
-      - name: Validate the compiled data with the package tests
-        if: env.COMPILE == 'true'
-        run: pnpm exec vitest run --project unit
+      - name: Validate the mirrored exports with the package tests (the runtime loader, the invariants, the dev-tools route)
+        run: pnpm exec vitest run --project unit --project scripts
 
       - name: Upload the report
         if: always()
@@ -107,7 +116,7 @@ jobs:
           name: qul-assets-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
-            packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts
+            example/public/data
             scripts/cdn-etags.json
             .cache/qul/report.json
             fetch-qul.log
@@ -119,15 +128,15 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # Only files that .gitignore allows are picked up: the module, the ETags, the fixture fonts
+          # Only files that .gitignore allows are picked up: the exports, the ETags, the fixture fonts
           # of pages 1, 10, 187 and 604, and (development only) the example's woff2 mirror.
-          git add packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts scripts/cdn-etags.json
+          git add example/public/data scripts/cdn-etags.json
           git add example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts
           if git diff --cached --quiet; then
             echo "Nothing changed; nothing to commit."
             exit 0
           fi
           git status --short
-          git commit -m "Compile QUL layout 19 data and add fixture fonts" \
+          git commit -m "Mirror QUL's exports and add fixture fonts" \
             -m "Fonts requested: ${FONTS}. Generated by the QUL assets workflow, run ${{ github.run_id }}."
           git push origin "HEAD:${{ github.ref_name }}"
