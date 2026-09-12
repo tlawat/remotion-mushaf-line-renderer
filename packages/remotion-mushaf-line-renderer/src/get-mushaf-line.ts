@@ -38,12 +38,12 @@ export const lineFromLayout = (layout: CompiledLayout, mushaf: MushafId, page: n
   assertPage(def, page);
   assertLine(def, page, line);
   if (page > layout.pages.length) {
-    throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Re-run scripts/fetch-qul.mjs.`, {mushaf, page});
+    throw new MushafError('DATA_LOAD_FAILED', `The layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Check the data source.`, {mushaf, page});
   }
   const index = indexPage(layout, page);
   const entry = index.lines[line - 1];
   if (!entry) {
-    throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" has ${index.lines.length} lines on page ${page}; line ${line} is missing. Re-run scripts/fetch-qul.mjs.`, {mushaf, page, line});
+    throw new MushafError('DATA_LOAD_FAILED', `The layout data for "${def.dataset}" has ${index.lines.length} lines on page ${page}; line ${line} is missing. Check the data source.`, {mushaf, page, line});
   }
 
   const words: MushafWord[] = [];

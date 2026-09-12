@@ -13,7 +13,7 @@
  */
 
 import type {MushafWordKind} from '../types';
-import type {SqliteRow, SqliteValue} from './sqlite';
+import type {SqliteValue} from './sqlite';
 
 export type ParsedWord = {
   readonly wordId: number;

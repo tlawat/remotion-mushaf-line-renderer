@@ -68,7 +68,7 @@ export const getMushafLocation = async ({mushaf, surah, ayah = 1, data}: GetMush
     if (hit) return {page, line};
   }
   // The ayah index said this page carries the ayah, so a line must contain it.
-  throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" places ${surah}:${ayah} on page ${page} but no line on that page carries it. Re-run scripts/fetch-qul.mjs.`, {mushaf: def.id, surah, ayah, page});
+  throw new MushafError('DATA_LOAD_FAILED', `The layout data for "${def.dataset}" places ${surah}:${ayah} on page ${page} but no line on that page carries it. Check the data source.`, {mushaf: def.id, surah, ayah, page});
 };
 
 const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined, mushaf: MushafId): MushafLineData =>
@@ -106,7 +106,7 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
       throw new MushafError('BAD_SLICE', 'getMushafLines(): `slice` goes with the {surah, fromAyah, toAyah} form — a page has no ayah range to slice to.', {page});
     }
     if (page > layout.pages.length) {
-      throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Re-run scripts/fetch-qul.mjs.`, {mushaf: id, page});
+      throw new MushafError('DATA_LOAD_FAILED', `The layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Check the data source.`, {mushaf: id, page});
     }
     const index = indexPage(layout, page);
     return index.lines.map((_, i) => resolved(lineFromLayout(layout, id, page, i + 1)));

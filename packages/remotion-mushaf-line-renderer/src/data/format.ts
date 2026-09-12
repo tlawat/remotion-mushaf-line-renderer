@@ -1,5 +1,6 @@
 /**
- * Compiled layout format produced by `scripts/fetch-qul.mjs` and consumed by `getMushafLine()`.
+ * Compiled layout format, built at runtime by `compile.ts` from QUL's exports (and by the same
+ * algorithm in `scripts/lib/compile.mjs` for the dev tools) and consumed by `getMushafLine()`.
  *
  * The compiler numbers every glyph (regular words and standalone marker glyphs) sequentially in
  * reading order, so on a page the ids are contiguous and appear in line order (line 1 glyphs, then
