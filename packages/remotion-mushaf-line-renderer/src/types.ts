@@ -270,9 +270,9 @@ export type GetMushafLinesOptions = MushafSelection & {
         readonly toAyah?: number;
         readonly page?: never;
         /**
-         * Record the range on every returned line as `line.slice`, so `<MushafLine>` shows only these
-         * ayahs: the first and last lines of a passage collapse to the words that belong to it, while
-         * the lines in between (which the slice keeps whole) render exactly as printed.
+         * Record the range as `line.slice` on the lines it cuts — the first and/or last of the passage,
+         * when they carry words of other ayahs — so `<MushafLine>` collapses them to the words that
+         * belong to it. The lines in between carry no slice and render exactly as printed.
          */
         readonly slice?: boolean;
       }

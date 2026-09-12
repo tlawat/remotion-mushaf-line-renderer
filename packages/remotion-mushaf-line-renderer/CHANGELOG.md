@@ -9,7 +9,7 @@
   the kept words sit at their printed advances, and every word span stays in the DOM (hidden ones
   carry `data-hidden` / `.mushaf-word--hidden`). A slice that keeps every word changes nothing; one
   that keeps none paints nothing. `getMushafLines({surah, fromAyah, toAyah, slice: true})` records
-  the range on every returned line as `line.slice`, so a passage carries its own slicing through
+  the range as `line.slice` on the lines it cuts, so a passage carries its own slicing through
   `inputProps` (the prop wins, `slice={null}` cancels); `sliceWords(line, slice?)` lists the kept
   words; `wordStyle`'s context gains `inSlice`. New error code `BAD_SLICE`.
 

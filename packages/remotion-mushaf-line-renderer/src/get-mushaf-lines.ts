@@ -2,6 +2,7 @@ import {ayahKey, indexAyahs, indexPage, type CompiledLayout} from './data/format
 import {loadLayout} from './data/load-layout';
 import {MushafError, describeValue} from './errors';
 import {lineFromLayout, withPalette} from './get-mushaf-line';
+import {resolveSlice} from './slice';
 import {assertPage, getMushafDefinition, paletteFor, resolveMushafId, type MushafDefinition} from './mushafs';
 import type {GetMushafLinesOptions, GetMushafLocationOptions, MushafFontUrl, MushafId, MushafLineData, MushafLocation} from './types';
 
@@ -82,7 +83,7 @@ const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined, mu
  *   printed — the page is found through the compiled ayah index, so callers never guess a start page.
  *   A line at either end of the range usually carries neighbouring ayahs too; that is how the mushaf
  *   is printed, and `lineAyahs(line)` says which ayahs a line holds. `slice: true` records the range
- *   on every line, so `<MushafLine>` shows only the ayahs asked for.
+ *   on the lines it cuts, so `<MushafLine>` shows only the ayahs asked for.
  *
  * Pure and Remotion-free, like `getMushafLine()`. `fontUrl` pins a mirror on every returned line.
  */
@@ -118,8 +119,11 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
   if (toAyah < fromAyah) {
     throw new MushafError('AYAH_NOT_FOUND', `toAyah (${toAyah}) is before fromAyah (${fromAyah}).`, {surah, fromAyah, toAyah});
   }
-  // The range, recorded on every line so <MushafLine> shows only these ayahs; the words stay whole.
-  const sliced = (line: MushafLineData): MushafLineData => (options.slice ? {...line, slice: {fromAyah, toAyah}} : line);
+  // The range, recorded on the lines it cuts — the first and/or last of the passage, when they
+  // carry words of other ayahs — so <MushafLine> shows only these ayahs there. Lines the range keeps
+  // whole carry nothing: they render as printed, and the data says so. The words stay whole always.
+  const range = {fromAyah, toAyah};
+  const sliced = (line: MushafLineData): MushafLineData => (options.slice && resolveSlice(line, range) !== null ? {...line, slice: range} : line);
   const out: MushafLineData[] = [];
   for (let page = start.page; page <= pagesOf(layout, def); page++) {
     const index = indexPage(layout, page);

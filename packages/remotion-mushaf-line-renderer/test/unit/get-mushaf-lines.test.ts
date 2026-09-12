@@ -50,15 +50,21 @@ describe('getMushafLines({page})', () => {
     expect((await getMushafLines({page: 1})).every((l) => l.palette === undefined && l.paletteColors === undefined)).toBe(true);
   });
 
-  it('records the range on every line with slice: true, and leaves the words whole', async () => {
+  it('records the range with slice: true on the lines it cuts only, and leaves the words whole', async () => {
     const plain = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3});
     const sliced = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, slice: true});
-    expect(sliced.map((l) => l.slice)).toEqual([{fromAyah: 2, toAyah: 3}, {fromAyah: 2, toAyah: 3}, {fromAyah: 2, toAyah: 3}]);
+    // p2l4 carries [2] and p3l1 [2, 3]: the range keeps every word, so they carry no slice and
+    // render as printed. p3l2 carries [3, 4]: cut, so it carries the range.
+    expect(sliced.map(lineAyahs)).toEqual([[2], [2, 3], [3, 4]]);
+    expect(sliced.map((l) => l.slice)).toEqual([undefined, undefined, {fromAyah: 2, toAyah: 3}]);
     expect(sliced.map((l) => l.words)).toEqual(plain.map((l) => l.words));
     expect(JSON.parse(JSON.stringify(sliced))).toEqual(sliced);
-    // The defaults are recorded as the concrete numbers they resolved to.
-    const whole = await getMushafLines({surah: 2, slice: true});
-    expect(whole[0]!.slice).toEqual({fromAyah: 1, toAyah: 4});
+    expect(Object.keys(sliced[0]!)).not.toContain('slice');
+    // The whole surah cuts nothing anywhere...
+    expect((await getMushafLines({surah: 2, slice: true})).every((l) => l.slice === undefined)).toBe(true);
+    // ... and a default is recorded as the concrete number it resolved to.
+    const tail = await getMushafLines({surah: 2, fromAyah: 3, slice: true});
+    expect(tail.map((l) => l.slice)).toEqual([{fromAyah: 3, toAyah: 4}, undefined]);
     expect(plain.every((l) => l.slice === undefined)).toBe(true);
     await expect(getMushafLines({surah: 2, slice: 'yes' as never})).rejects.toMatchObject({code: 'BAD_SLICE'});
   });
