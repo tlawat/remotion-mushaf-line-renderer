@@ -16,8 +16,8 @@ import {
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
-  type MushafLook,
   type MushafSlice,
+  type MushafThemeSelection,
   type MushafWord,
   revealRtl,
   slideFade,
@@ -53,21 +53,23 @@ export type LineHarnessProps = {
   activeWordId: string | number | null;
   /** When set, every word gets this opacity unless it is the active one. */
   dimOthersTo: number | null;
-  /** CSS `color` of the page. Plain glyphs follow it; so do mandala letters, through the palette. */
+  /** CSS `color` of the page. Plain glyphs follow it; so does everything a theme paints in `currentColor`. */
   color: string;
   /** Show only these ayahs of every line (the `slice` prop), or null for whole lines. */
   slice: MushafSlice | null;
   /** Put `slice` on the line data instead of the prop, to exercise that surface. */
   sliceOnData: boolean;
   /**
-   * The convenience form: one `<MushafLine look page line>` resolved in the browser tab (with
+   * The convenience form: one `<MushafLine theme page line>` resolved in the browser tab (with
    * `data` as its source), instead of the resolved `lines`. Rendered alone, in the first slot.
    */
-  resolve: {look: MushafLook; page: number; line: number} | null;
+  resolve: {theme: MushafThemeSelection; page: number; line: number} | null;
   /** Data source for `resolve` — URLs as they are (Player page, failure scenarios); each part given wins over dataFiles. */
   data: MushafDataSource | null;
   /** Data source from the public folder (render tests), pinned via staticFile() in calculateMetadata. */
   dataFiles: {words: string; layout: string} | null;
+  /** Background of the page, for the dark themes. */
+  background: string;
 };
 
 export const defaultLineHarnessProps: LineHarnessProps = {
@@ -94,6 +96,7 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   resolve: null,
   data: null,
   dataFiles: null,
+  background: '#ffffff',
 };
 
 export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarnessProps> = ({props}) => {
@@ -150,6 +153,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   sliceOnData,
   resolve,
   data,
+  background,
 }) => {
   const {width} = useVideoConfig();
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width);
@@ -164,9 +168,9 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
     exit === 'plain' ? undefined : presentation(exit, linearTiming({durationInFrames: exitFrames}), 'exit');
   // The convenience form has no line data to pin a font on: register the source for the page once
   // (idempotent), so the line adopts the fixture font like the resolved lines do.
-  if (resolve && fontUrl) loadPageFont({look: resolve.look, page: resolve.page, url: fontUrl});
+  if (resolve && fontUrl) loadPageFont({theme: resolve.theme, page: resolve.page, url: fontUrl});
   return (
-    <AbsoluteFill style={{backgroundColor: '#ffffff', color}}>
+    <AbsoluteFill style={{backgroundColor: background, color}}>
       {resolve ? (
         <Sequence
           from={from}
@@ -176,7 +180,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
           style={{top: 0, height: resolvedLineHeight}}
         >
           <MushafLine
-            look={resolve.look}
+            theme={resolve.theme}
             page={resolve.page}
             line={resolve.line}
             {...(data ? {data} : {})}

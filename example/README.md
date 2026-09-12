@@ -18,16 +18,16 @@ enters; in `stack` mode they stack down the page and stay.
 
 | Prop              | Default     | Meaning                                                                                      |
 | ----------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| `look`            | `'plain'`   | `'plain'`, `'tajweed'` or `'mandala'`.                                                       |
-| `colors`          | `null`      | Mandala only: `{ink, accent, detail, background}`.                                            |
+| `theme`           | `'plain'`   | `'plain'`, a preset (`light`, `dark`, `sepia`, `black`, `normal`, `p1`–`p5`) or `{base, colors, marker}`. |
 | `page`            | `10`        | The page.                                                                                    |
 | `lineNumbers`     | `[3, 4, 5]` | Which lines of it (ayah lines only).                                                         |
 | `fontFilePattern` | `null`      | `'fonts/{fontSet}/p{page}.woff2'` to serve the fonts from `public/`; `null` uses QUL's CDN.   |
+| `dataFiles`       | `null`      | `{words, layout}` paths of the mirrored exports in `public/`; `null` fetches them from Tarteel's CDN. |
 | `mode`            | `'replace'` | `'replace'` or `'stack'`.                                                                    |
 | `lines`           | `null`      | Filled in by `calculateMetadata`; a `<Player>` host passes resolved lines here.               |
 
 ```bash
-cd example && bunx remotion render ThreeLines out/three-lines.mp4 --props='{"look":"mandala"}'
+cd example && bunx remotion render ThreeLines out/three-lines.mp4 --props='{"theme":"normal"}'
 ```
 
 ### `Recitation`
@@ -41,15 +41,18 @@ starts.
 
 | Prop              | Default                      | Meaning                                                                          |
 | ----------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| `look`, `colors`  | `'plain'`, `null`            | As above.                                                                        |
+| `theme`           | `'plain'`                    | As above.                                                                        |
 | `timingsFile`     | `'audio/tawbah-timings.json'` | Timings JSON in `public/`; or pass `timings` inline.                            |
 | `audioFile`       | `'audio/tawbah.mp3'`         | Audio in `public/`. Not committed: put your recording there before rendering.    |
 | `fontFilePattern` | `null`                       | As above.                                                                        |
+| `dataFiles`       | `null`                       | As above.                                                                        |
 | `cutAtSeconds`    | `60`                         | Stop after the last ayah that ends before this; `null` plays everything.         |
 | `leadInSeconds`   | `0.4`                        | Seconds a line is on screen before its first word is heard.                      |
+| `slice`           | `true`                       | Show only the recited ayahs on the first and last lines (`getMushafLines({slice: true})`). |
 
 ```bash
-cd example && bunx remotion render Recitation out/recitation.mp4 --props='{"fontFilePattern":"fonts/{fontSet}/p{page}.woff2"}'
+cd example && bunx remotion render Recitation out/recitation.mp4 \
+  --props='{"fontFilePattern":"fonts/{fontSet}/p{page}.woff2","dataFiles":{"words":"data/qpc-v4/words.json.zip","layout":"data/qpc-v4/layout.db.zip"}}'
 ```
 
 The committed timings (`public/audio/tawbah-timings.json`, At-Tawbah 9:1-11) were produced by
@@ -59,8 +62,9 @@ development tool with the accuracy of that model, not part of the package.
 
 ### `LineHarness`
 
-The test harness: explicit lines, one entrance/exit for all of them, font-source knobs, highlighting
-scenarios. Used by `player/` (the `<Player>` page, scenarios in `player/scenarios.ts`) and by the
+The test harness: explicit lines or one line resolved in the tab from a `data` source, one
+entrance/exit for all of them, font and data source knobs, slicing, page colour and background,
+highlighting scenarios. Used by `player/` (the `<Player>` page, scenarios in `player/scenarios.ts`) and by the
 package's browser and render suites.
 
 ## Fonts
@@ -76,3 +80,10 @@ bun run qul mirror            # every page (development only; see CONTRIBUTING.m
 
 If a cold CDN makes the "waiting for font" `delayRender()` time out, raise the budget for that
 render: `bunx remotion render ThreeLines --timeout=60000`.
+
+## Data
+
+The lines are built from QUL's two exports, fetched from Tarteel's CDN the first time a line is
+resolved. The repository keeps a mirror of them under `public/data/qpc-v4/` (committed; refresh it
+with `bun run qul data`), and `dataFiles` points the compositions at it, so renders and the Studio
+do not depend on the CDN and Lambda sites find the mirror through `staticFile()`.

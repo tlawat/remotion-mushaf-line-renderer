@@ -72,7 +72,7 @@ export const downloadFonts = async (def, pages, layout, {concurrency, allowZeroA
     if (plain && tajweed) {
       const problems = compareFonts(plain, tajweed);
       if (problems.length) {
-        // The two sets are hinted/spaced independently (page 187 differs in two advances); each look
+        // The two sets are hinted/spaced independently (page 187 differs in two advances); each theme
         // uses one set consistently, so this is informational, not a failure.
         report.push(
           `p${page}: plain and tajweed fonts differ in ${problems.length} place(s): ${problems.slice(0, 5).join('; ')}${problems.length > 5 ? ' …' : ''}`,

@@ -11,21 +11,18 @@ import {
   fontSizeForWidth,
   getMushafLines,
   lineHeightForFontSize,
-  type MushafColors,
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
-  type MushafLook,
+  type MushafThemeSelection,
   revealRtl,
   slideFade,
 } from 'remotion-mushaf-line-renderer';
 import {type DataFiles, dataFromFiles, fontUrlFromPattern} from './sources';
 
 export type ThreeLinesProps = {
-  /** 'plain' follows CSS `color`; 'tajweed' is QUL's colour font; 'mandala' keeps only the ayah rosettes coloured. */
-  look: MushafLook;
-  /** Mandala only: `{ink, accent, detail, background}` recolour the rosette and the writing. */
-  colors: MushafColors | null;
+  /** 'plain' follows CSS `color`; a preset (light, dark, sepia, black, normal, p1-p5) or a custom theme selects the colour font. */
+  theme: MushafThemeSelection;
   page: number;
   lineNumbers: number[];
   /** Resolved once by calculateMetadata (null in defaultProps), so every render tab receives the same JSON. */
@@ -38,8 +35,7 @@ export type ThreeLinesProps = {
 };
 
 export const defaultThreeLinesProps: ThreeLinesProps = {
-  look: 'plain',
-  colors: null,
+  theme: 'plain',
   page: 10,
   lineNumbers: [3, 4, 5],
   lines: null,
@@ -71,8 +67,7 @@ export const calculateThreeLinesMetadata: CalculateMetadataFunction<ThreeLinesPr
     // One call for the whole page; `fontUrl` pins the mirror on every line (else QUL's CDN), and
     // `data` does the same for the two exports the lines are built from.
     const page = await getMushafLines({
-      look: props.look,
-      colors: props.look === 'mandala' && props.colors ? props.colors : undefined,
+      theme: props.theme,
       page: props.page,
       fontUrl: fontUrlFromPattern(props.fontFilePattern),
       data: dataFromFiles(props.dataFiles),
