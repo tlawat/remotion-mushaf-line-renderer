@@ -7,7 +7,7 @@ import {dissolve} from '@remotion/transitions/dissolve';
 import {fade} from '@remotion/transitions/fade';
 import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
-import {MushafLine, fontSizeForWidth, lineHeightForFontSize, type MushafLineAnimation, type MushafLineData, type MushafSlice, type MushafWord} from 'remotion-mushaf-line-renderer';
+import {MushafLine, fontSizeForWidth, lineHeightForFontSize, loadPageFont, type MushafDataSource, type MushafId, type MushafLineAnimation, type MushafLineData, type MushafSlice, type MushafWord} from 'remotion-mushaf-line-renderer';
 import {revealRtl} from 'remotion-mushaf-line-renderer/presentations/reveal-rtl';
 import {slideFade} from 'remotion-mushaf-line-renderer/presentations/slide-fade';
 
@@ -47,6 +47,15 @@ export type LineHarnessProps = {
   slice: MushafSlice | null;
   /** Put `slice` on the line data instead of the prop, to exercise that surface. */
   sliceOnData: boolean;
+  /**
+   * The convenience form: one `<MushafLine mushaf page line>` resolved in the browser tab (with
+   * `data` as its source), instead of the resolved `lines`. Rendered alone, in the first slot.
+   */
+  resolve: {mushaf: MushafId; page: number; line: number} | null;
+  /** Data source for `resolve` — URLs as they are (Player page, failure scenarios); each part given wins over dataFiles. */
+  data: MushafDataSource | null;
+  /** Data source from the public folder (render tests), pinned via staticFile() in calculateMetadata. */
+  dataFiles: {words: string; layout: string} | null;
 };
 
 export const defaultLineHarnessProps: LineHarnessProps = {
@@ -70,11 +79,16 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   color: '#000000',
   slice: null,
   sliceOnData: false,
+  resolve: null,
+  data: null,
+  dataFiles: null,
 };
 
 export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarnessProps> = ({props}) => {
   const fontUrl = props.fontUrl ?? (props.fontFile ? staticFile(props.fontFile) : null);
-  return {props: {...props, fontUrl, fontFile: null}};
+  const pinned = props.dataFiles ? {words: staticFile(props.dataFiles.words), layout: staticFile(props.dataFiles.layout)} : null;
+  const data = pinned || props.data ? {...pinned, ...props.data} : null;
+  return {props: {...props, fontUrl, fontFile: null, data, dataFiles: null}};
 };
 
 const presentation = (name: Exclude<EnterName, 'plain'>, timing: TransitionTiming, side: 'enter' | 'exit'): MushafLineAnimation => {
@@ -116,6 +130,8 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   color,
   slice,
   sliceOnData,
+  resolve,
+  data,
 }) => {
   const {width} = useVideoConfig();
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width);
@@ -123,8 +139,30 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   const wordStyle = dimOthersTo === null ? undefined : (_word: MushafWord, ctx: {active: boolean}) => ({opacity: ctx.active ? 1 : dimOthersTo});
   const enterAnimation = enter === 'plain' ? undefined : presentation(enter, linearTiming({durationInFrames: enterFrames}), 'enter');
   const exitAnimation = exit === 'plain' ? undefined : presentation(exit, linearTiming({durationInFrames: exitFrames}), 'exit');
+  // The convenience form has no line data to pin a font on: register the source for the page once
+  // (idempotent), so the line adopts the fixture font like the resolved lines do.
+  if (resolve && fontUrl) loadPageFont({mushaf: resolve.mushaf, page: resolve.page, url: fontUrl});
   return (
     <AbsoluteFill style={{backgroundColor: '#ffffff', color}}>
+      {resolve ? (
+        <Sequence from={from} durationInFrames={durationInFrames ?? undefined} premountFor={premountFor} name={`p${resolve.page} l${resolve.line} (resolved here)`} style={{top: 0, height: resolvedLineHeight}}>
+          <MushafLine
+            mushaf={resolve.mushaf}
+            page={resolve.page}
+            line={resolve.line}
+            {...(data ? {data} : {})}
+            fontSize={resolvedFontSize}
+            lineHeight={resolvedLineHeight}
+            fit={fit}
+            slice={slice === null ? undefined : slice}
+            enter={enterAnimation}
+            exit={exitAnimation}
+            activeWordId={activeWordId}
+            activeWordStyle={{color: '#b30000'}}
+            wordStyle={wordStyle}
+          />
+        </Sequence>
+      ) : null}
       {lines.map((line, i) => {
         const pinned = fontUrl ? {...line, fontUrl} : line;
         const data = sliceOnData && slice ? {...pinned, slice} : pinned;

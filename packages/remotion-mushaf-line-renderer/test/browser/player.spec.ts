@@ -567,6 +567,51 @@ test.describe('real data', () => {
   });
 });
 
+test.describe('data', () => {
+  test('the convenience form fetches, unzips and reads QUL\'s exports in the browser, once per tab', async ({page}) => {
+    test.skip(!hasMirror(), NO_MIRROR);
+    const downloads: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/data/qpc-v4/')) downloads.push(request.url());
+    });
+    const words = page.waitForResponse('**/data/qpc-v4/words.json.zip');
+    await open(page, 'resolve-data');
+    expect((await words).status()).toBe(200);
+    await rowsVisible(page, 1);
+    const root = page.locator(ROOT).first();
+    await expect(root).toHaveAttribute('data-page', '10');
+    await expect(root).toHaveAttribute('data-line', '3');
+    await expect(root.locator('.mushaf-word').first()).toHaveAttribute('data-location', '2:62:18');
+    await expect(root.locator('.mushaf-word').last()).toHaveAttribute('data-location', '2:63:2');
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p10'])).toBe(true);
+    // Both exports were fetched exactly once...
+    expect(downloads.filter((u) => u.endsWith('words.json.zip'))).toHaveLength(1);
+    expect(downloads.filter((u) => u.endsWith('layout.db.zip'))).toHaveLength(1);
+    // ... and a remount resolves from the cache, without a second download.
+    await page.evaluate(() => (window as unknown as {__harness: {remount: () => void}}).__harness.remount());
+    await page.waitForFunction(() => document.querySelector('[data-mount="1"]') !== null);
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROOT).first().locator('.mushaf-word').first()).toHaveAttribute('data-location', '2:62:18');
+    expect(downloads.filter((u) => u.endsWith('words.json.zip'))).toHaveLength(1);
+  });
+
+  test('failures name their cause: a missing export, an HTML page, a relative path', async ({page}) => {
+    test.skip(!hasMirror(), NO_MIRROR);
+    await open(page, 'data-404');
+    const http = page.locator('[data-error="DATA_HTTP"]');
+    await expect(http).toBeVisible();
+    await expect(http).toContainText('HTTP 404 for the mushaf words export');
+    await open(page, 'data-html');
+    const invalid = page.locator('[data-error="DATA_INVALID"]');
+    await expect(invalid).toBeVisible();
+    await expect(invalid).toContainText('is not JSON');
+    await open(page, 'data-relative');
+    const bad = page.locator('[data-error="BAD_DATA_URL"]');
+    await expect(bad).toBeVisible();
+    await expect(bad).toContainText('relative to the bundle is ambiguous');
+  });
+});
+
 test.describe('slicing', () => {
   const slicedAttr = (page: Page) => page.locator(ROOT).first().getAttribute('data-sliced');
   const rowFontSize = (page: Page) => page.locator(ROW).first().evaluate((row) => getComputedStyle(row).fontSize);

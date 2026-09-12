@@ -4,6 +4,10 @@ import {defaultLineHarnessProps, type LineHarnessProps} from '../src/harness/Lin
 
 /** The page-10 tajweed font, copied by `node scripts/fetch-qul.mjs --fonts 10` into example/public. */
 export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
+/** QUL's two exports, mirrored by `node scripts/fetch-qul.mjs --data` into example/public. */
+export const MIRROR_DATA = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
+/** Page 10 line 3 of the tajweed set: 2:62 ends and 2:63 begins on it (the fixture font's page). */
+const P10_L3 = {mushaf: 'qpc-v4-tajweed', page: 10, line: 3} as const;
 
 // Synthetic lines (the real data is compiled by the user); the glyphs come from the p10 fixture.
 const justified = () => syntheticLine(2, 3);
@@ -69,6 +73,17 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'font-html': {...base, fontUrl: '/player/index.html'},
   /** No pin: the CDN URL of the registry (needs network). */
   cdn: {...base, lines: [syntheticLine(1, 2, {}, 'qpc-v4-tajweed')], fontUrl: null},
+  /**
+   * The convenience form, resolved in the tab from the example's mirror of QUL's exports
+   * (`node scripts/fetch-qul.mjs --data`): the zips are fetched, unzipped and read in the browser.
+   */
+  'resolve-data': {...base, lines: [], fit: 'line', resolve: P10_L3, data: MIRROR_DATA},
+  /** The words export is missing: DATA_HTTP. */
+  'data-404': {...base, lines: [], resolve: P10_L3, data: {words: '/data/qpc-v4/missing.json.zip', layout: MIRROR_DATA.layout}},
+  /** An HTML page instead of the export: DATA_INVALID. */
+  'data-html': {...base, lines: [], resolve: P10_L3, data: {words: '/player/index.html', layout: MIRROR_DATA.layout}},
+  /** A path relative to nothing in particular: BAD_DATA_URL. */
+  'data-relative': {...base, lines: [], resolve: P10_L3, data: {words: 'data/qpc-v4/words.json.zip'}},
 };
 
 export const scenarioNames = Object.keys(scenarios);

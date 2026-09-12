@@ -84,6 +84,9 @@ type HarnessProps = {
   color: string;
   slice: {ayah?: number; fromAyah?: number; toAyah?: number} | null;
   sliceOnData: boolean;
+  resolve: {mushaf: 'qpc-v4' | 'qpc-v4-tajweed'; page: number; line: number} | null;
+  data: {words?: string; layout?: string} | null;
+  dataFiles: {words: string; layout: string} | null;
 };
 
 const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
@@ -107,6 +110,9 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   color: '#000000',
   slice: null,
   sliceOnData: false,
+  resolve: null,
+  data: null,
+  dataFiles: null,
   ...overrides,
 });
 
@@ -324,6 +330,34 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       const png = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
       writeFileSync(path.join(here, 'p10-l3.png'), png);
       expect(png.length).toBeGreaterThan(1000);
+    });
+
+    it('resolves the convenience form in the render tab from a staticFile() mirror, also under a Lambda publicPath', async () => {
+      // The tab fetches the two zips from the bundle's own public folder, unzips and reads them,
+      // and paints the very same picture as the line resolved ahead of time.
+      const resolve = {mushaf: 'qpc-v4-tajweed' as const, page: 10, line: 3};
+      const reference = await still(serveUrl, harnessProps({lines: [realLine!], fit: 'line'}));
+      const resolved = await still(serveUrl, harnessProps({lines: [], resolve, dataFiles: MIRROR, fit: 'line'}));
+      expect(resolved.equals(reference)).toBe(true);
+      // staticFile() carries the publicPath, so a Lambda site finds its mirror too.
+      const outDir = path.join(workDir, 'site-data');
+      await bundle({entryPoint: path.join(exampleDir, 'src/index.ts'), publicDir: path.join(exampleDir, 'public'), outDir, publicPath: '/sites/abc/'});
+      const {server, origin} = await serveUnder(outDir, '/sites/abc/');
+      try {
+        const fromSite = await still(`${origin}/sites/abc/`, harnessProps({lines: [], resolve, dataFiles: MIRROR, fit: 'line'}));
+        expect(fromSite.equals(reference)).toBe(true);
+      } finally {
+        server.close();
+      }
+    });
+
+    it('a missing export fails the render fast with DATA_HTTP, and an HTML page with DATA_INVALID', async () => {
+      const resolve = {mushaf: 'qpc-v4-tajweed' as const, page: 10, line: 3};
+      const started = Date.now();
+      await expect(still(serveUrl, harnessProps({lines: [], resolve, dataFiles: {words: 'data/qpc-v4/missing.json.zip', layout: MIRROR.layout}}))).rejects.toThrow(/DATA_HTTP|404/);
+      expect(Date.now() - started).toBeLessThan(25_000);
+      // The bundle's own index.html, served at the site root, in place of the words export.
+      await expect(still(serveUrl, harnessProps({lines: [], resolve, dataFiles: MIRROR, data: {words: '/index.html'}}))).rejects.toThrow(/DATA_INVALID|not JSON/);
     });
 
     it('slices a fitted line without changing its size, deterministically', async () => {
