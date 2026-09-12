@@ -10,6 +10,8 @@ const justified = () => syntheticLine(2, 3);
 const justifiedShort = () => syntheticLine(2, 4);
 const centered = () => syntheticLine(1, 2);
 const twoCodePoints = () => syntheticLine(3, 1);
+// Page 3 line 2 carries the end of 2:3 and the whole of 2:4 — the case slicing is for.
+const twoAyahs = () => syntheticLine(3, 2);
 
 // Synthetic lines are not real mushaf lines, so fitting them to the box would say nothing: the
 // scenarios pin the fixed type size and the real-data test covers fitting.
@@ -50,6 +52,19 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'mandala-gold': {...base, lines: [syntheticLine(2, 3, {palette: 3, paletteColors: {ink: '#1b1b1b', accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'}}, 'qpc-v4-tajweed')]},
   /** One word marked as current, the rest dimmed — the karaoke-style follow. */
   highlight: {...base, lines: [justified()], activeWordId: '2:1:2', dimOthersTo: 0.35},
+  /** The two-ayah line whole, as the reference for the slices below. */
+  'two-ayahs': {...base, lines: [twoAyahs()]},
+  /** Only 2:4: the words of 2:3 take no space and 2:4 sits centred, at the same size. */
+  'slice-ayah': {...base, lines: [twoAyahs()], slice: {ayah: 4}},
+  'slice-range': {...base, lines: [twoAyahs()], slice: {fromAyah: 3, toAyah: 3}},
+  /** Keeps every word: nothing changes. */
+  'slice-all': {...base, lines: [twoAyahs()], slice: {fromAyah: 3}},
+  /** Keeps none: a blank line that still takes its slot. */
+  'slice-empty': {...base, lines: [twoAyahs()], slice: {ayah: 9}},
+  /** The same slice, carried by the line data instead of the prop. */
+  'slice-data': {...base, lines: [twoAyahs()], slice: {ayah: 4}, sliceOnData: true},
+  /** revealRtl sweeps the whole measure; the centred slice appears as the sweep reaches it. */
+  'slice-reveal': {...base, lines: [twoAyahs()], slice: {ayah: 4}, enter: 'reveal', enterFrames: 20},
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
   /** No pin: the CDN URL of the registry (needs network). */

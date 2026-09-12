@@ -87,9 +87,10 @@ A complete project with this composition, a `<Player>` page and the test harness
 | `exit`                     | same shape as `enter`                                         | Exit animation: the presentation's **exiting** side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>` (`exitTiming()` by default). A line leaves because its Sequence ends. |
 | `activeWordId`             | `string \| number \| null`                                    | Marks one word as current (`word.id` like `"9:1:3"`, or `word.wordId`): it gets `data-active="true"`, `.mushaf-word--active` and `activeWordStyle`.                          |
 | `activeWordStyle`          | `CSSProperties`                                               | Applied to that word. Paint properties only (see `wordStyle`).                                                                                                             |
-| `wordStyle`                | `(word, {line, frame, fps, active}) => CSSProperties`         | Per-word style, called for every word on every frame — keep it pure. Paint only: `color`, `opacity`, `filter`, `background`, `textShadow`. Anything that changes glyph metrics would break the printed line breaks. |
+| `wordStyle`                | `(word, {line, frame, fps, active, inSlice}) => CSSProperties` | Per-word style, called for every word on every frame — keep it pure. Paint only: `color`, `opacity`, `filter`, `background`, `textShadow`. Anything that changes glyph metrics would break the printed line breaks. |
 | `wordClassName`            | `(word, ctx) => string`                                       | Appended to `mushaf-word mushaf-word--<kind>`.                                                                                                                             |
 | `fit`                      | `'line'` \| `'mushaf'`                                        | `'line'` (default) scales the line so it fills its box at the font's own word gaps; `'mushaf'` keeps one type size for every line. See [Sizing](#sizing).                    |
+| `slice`                    | `{ayah}` \| `{fromAyah, toAyah?}` \| `null`                  | Show only these ayahs of the line, collapsed and centred, at the line's own size. Wins over `line.slice`; `null` cancels it. See [Slicing a line](#slicing-a-line).          |
 | `fontSize`                 | `number` (px)                                                 | The base size; default `fontSizeForWidth(useVideoConfig().width)`. Under `fit="line"` the box decides the final size, see [Sizing](#sizing).                                |
 | `lineHeight`               | `number` (px)                                                 | Default `lineHeightForFontSize(fontSize)`. The height of the root element.                                                                                                 |
 | `style`, `className`       |                                                               | Applied to the root element. Colour is inherited from here (plain fonts only).                                                                                              |
@@ -123,6 +124,7 @@ type MushafLineData = {
   fontUrl?: string;           // optional font source pin, see Fonts
   palette?: number;           // CPAL palette of the colour font (3 = mandala), see Colour
   paletteColors?: {ink?: string; accent?: string; detail?: string; background?: string};  // CSS colours over that palette
+  slice?: {ayah: number} | {fromAyah: number; toAyah?: number};  // the ayahs to show, see Slicing a line
   surahNumber?: number;       // headers and basmallah lines
   words: Array<{id: string /* "surah:ayah:position" */; wordId: number; surah: number; ayah: number; position: number; kind: 'word' | 'end' | 'pause' | 'sajdah' | 'rub-el-hizb'; text: string}>;
 };
@@ -145,18 +147,27 @@ await getMushafLines({page: 187});
 await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
 // Both forms take mushaf/tajweed, and `fontUrl` pins a mirror on every line it returns.
 await getMushafLines({surah: 2, tajweed: true, fontUrl: (page, mushaf) => staticFile(`fonts/${mushaf}/p${page}.woff2`)});
+// `slice: true` records the range on every line, so <MushafLine> shows only those ayahs.
+await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true});
 ```
 
 The ayah form finds the page itself (through an index over the compiled data), so nothing has to
 know that At-Tawbah starts on page 187. `fromAyah` defaults to 1 and `toAyah` to the last ayah of the
 surah. The first and last lines usually carry neighbouring ayahs too — that is how the mushaf is
-printed; `lineAyahs(line)` says which ayahs a line holds, and `<MushafLine wordStyle>` can dim the
-words outside your range instead of dropping them.
+printed; `lineAyahs(line)` says which ayahs a line holds. Pass `slice: true` to show only the ayahs
+you asked for — the lines at either end collapse to their words of the range, centred, and the lines
+in between stay whole (see [Slicing a line](#slicing-a-line)) — or keep the whole line and mark the
+range with `wordStyle` (its context says whether a word is `inSlice`).
 
 ### `getMushafLocation({surah, ayah?, mushaf?}): Promise<{page, line}>`
 
 Where a surah (or one of its ayahs) is printed. `AYAH_NOT_FOUND` names the last ayah of the surah
 when you ask for one past its end.
+
+### `sliceWords(line, slice?): MushafWord[]`
+
+The words a slice keeps — the line's own `slice` by default, `null` for the whole line. Use it to
+skip a line the range never reaches, or to join word timings to what is on screen.
 
 ### `lineAyahs(line): number[]`
 
@@ -233,6 +244,42 @@ surah, pages 1–2) are centred and never stretched under either `fit`.
 Fitting measures the row once, after the page font has loaded and before the first frame is painted,
 so it is deterministic: the same font at the same size gives the same measurement in every render
 tab. Where there is no layout to measure (a server render, a zero-width box), the base size stands.
+
+## Slicing a line
+
+A printed line often carries the tail of one ayah and the start of the next — 44 % of the ayah lines
+of this mushaf hold more than one ayah. `slice` shows only the ayahs you name:
+
+```tsx
+<MushafLine line={line} slice={{ayah: 2}} />                   {/* one ayah */}
+<MushafLine line={line} slice={{fromAyah: 2, toAyah: 4}} />    {/* a range */}
+<MushafLine line={line} slice={{fromAyah: 2}} />               {/* from 2 to the end of the line */}
+```
+
+The words of the other ayahs are hidden and the words that remain are **centred in the measure**, so
+each slice reads as a line of its own. Three things are kept exactly:
+
+- **The type size.** The fit is measured from the whole line before the slice is applied, so a slice
+  is never zoomed to fill the measure and two slices of one line render at one size. This is why
+  `slice` and `fit` are independent, and why a slice can change on every frame at no cost.
+- **The printed advances.** The kept words sit at the font's own spacing, exactly as on the page.
+- **The DOM.** Every word span stays in the document (a hidden one carries `data-hidden="true"`,
+  `.mushaf-word--hidden` and `display: none`), so `.mushaf-word` selectors and word counts still hold.
+
+A slice that keeps every word of a line changes nothing — the interior lines of a sliced passage
+render as printed — and one that keeps none paints nothing and throws nothing, so one selector can
+be applied to a whole run of lines. The ayah-end rosette goes with the ayah it closes. `wordStyle`
+is still called for every word with `inSlice` in its context, but cannot re-show a hidden one;
+`activeWordId` may name a hidden word (it stays current, just unpainted). `revealRtl` sweeps the
+whole measure, so a centred slice appears as the sweep reaches it.
+
+The range is `{ayah}` or `{fromAyah, toAyah?}`, never a list: a line's ayahs are contiguous, so a
+list would only mean its outer range, and hiding an ayah *between* two kept ones would put words
+side by side that the mushaf never printed together.
+
+`getMushafLines({surah, fromAyah, toAyah, slice: true})` records the range on every returned line as
+`line.slice`, so a resolved passage carries its own slicing through `inputProps`; the `slice` prop
+wins over it, and `slice={null}` cancels it.
 
 ## Entrances and exits
 
@@ -451,12 +498,14 @@ line paints the font's default palette (the tajweed colours) and everything else
 ## DOM contract
 
 ```html
-<div class="mushaf-line" data-mushaf="qpc-v4" data-page="10" data-line="3" data-line-type="ayah" data-centered="false" style="position:relative;width:100%;height:<lineHeight>px">
+<div class="mushaf-line" data-mushaf="qpc-v4" data-page="10" data-line="3" data-line-type="ayah" data-centered="false" data-sliced="<first>-<last>|empty" style="position:relative;width:100%;height:<lineHeight>px">
+  <!-- data-sliced is present only while a slice is in effect -->
   <!-- presentation wrapper when `enter` is set (an AbsoluteFill for the stock presentations) -->
   <!-- font-palette is set on the row only when the line data carries a `palette` (see Colour) -->
   <div class="mushaf-line__row" style="position:absolute;inset:0;display:flex;direction:rtl;...;visibility:hidden|visible">
     <span class="mushaf-word mushaf-word--word" data-word-id="1234" data-location="2:62:1" data-surah="2" data-ayah="62" data-position="1" data-kind="word">ﱁ</span>
     <span class="mushaf-word mushaf-word--word mushaf-word--active" ... data-active="true">ﱂ</span>  <!-- when activeWordId names it -->
+    <span class="mushaf-word mushaf-word--word mushaf-word--hidden" ... data-hidden="true" style="display:none">ﱃ</span>  <!-- outside the slice -->
     ...
     <span class="mushaf-word mushaf-word--end" ...>ﱊ</span>
   </div>
@@ -485,6 +534,7 @@ Works in the Studio, `renderMedia()` / `renderStill()` / the CLI, Lambda and the
 | `UNKNOWN_MUSHAF`         | `mushaf` is not `qpc-v4` or `qpc-v4-tajweed`.                                                                                                     |
 | `BAD_TAJWEED`, `BAD_MANDALA` | `tajweed` must be `true` or `false`; `mandala` also takes an object of colours.                                                                |
 | `BAD_COLOR`              | A colour is not a CSS colour, or names a part the font does not paint. The message names the part.                                                |
+| `BAD_SLICE`              | `slice` must be `{ayah}` or `{fromAyah, toAyah?}` with positive integers (`toAyah` not before `fromAyah`); `slice: true` only on the ayah form of `getMushafLines()`. |
 | `AYAH_NOT_FOUND`         | `getMushafLines({surah, ...})` / `getMushafLocation()` was asked for a surah or ayah the mushaf does not have; the message names the last ayah.    |
 | `PAGE_OUT_OF_RANGE`, `LINE_OUT_OF_RANGE` | Pages are `1..604`; lines `1..15` (`1..8` on pages 1 and 2). The message names the page's line count.                             |
 | `BAD_LINE_PROP`          | Pass `line={MushafLineData}` or `page` + `line={number}` — and `tajweed` / `mandala` only with the second form.                                   |

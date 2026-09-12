@@ -1,6 +1,7 @@
 export {MushafLine} from './MushafLine';
 export {getMushafLine} from './get-mushaf-line';
 export {getMushafLines, getMushafLocation, lineAyahs} from './get-mushaf-lines';
+export {sliceWords} from './slice';
 export {loadPageFont} from './load-page-font';
 export {fontSizeForWidth, lineHeightForFontSize} from './layout';
 export {getMushafMetrics, MUSHAF_IDS} from './mushafs';
@@ -24,6 +25,7 @@ export type {
   MushafLocation,
   MushafMetrics,
   MushafSelection,
+  MushafSlice,
   MushafWord,
   MushafWordKind,
   WordContext,

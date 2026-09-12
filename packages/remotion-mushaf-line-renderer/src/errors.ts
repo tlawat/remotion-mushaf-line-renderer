@@ -3,6 +3,7 @@ export type MushafErrorCode =
   | 'BAD_TAJWEED'
   | 'BAD_MANDALA'
   | 'BAD_COLOR'
+  | 'BAD_SLICE'
   | 'PAGE_OUT_OF_RANGE'
   | 'AYAH_NOT_FOUND'
   | 'LINE_OUT_OF_RANGE'

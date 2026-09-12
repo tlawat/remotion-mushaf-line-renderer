@@ -81,7 +81,8 @@ const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined, mu
  * - `{surah, fromAyah?, toAyah?}`: every line that carries a word of that ayah range, wherever it is
  *   printed — the page is found through the compiled ayah index, so callers never guess a start page.
  *   A line at either end of the range usually carries neighbouring ayahs too; that is how the mushaf
- *   is printed, and `lineAyahs(line)` says which ayahs a line holds.
+ *   is printed, and `lineAyahs(line)` says which ayahs a line holds. `slice: true` records the range
+ *   on every line, so `<MushafLine>` shows only the ayahs asked for.
  *
  * Pure and Remotion-free, like `getMushafLine()`. `fontUrl` pins a mirror on every returned line.
  */
@@ -92,8 +93,16 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
   const palette = paletteFor(options);
   const resolved = (line: MushafLineData): MushafLineData => withPalette(pinFontUrl(line, options.fontUrl, id), palette);
 
+  if (options.slice !== undefined && typeof options.slice !== 'boolean') {
+    throw new MushafError('BAD_SLICE', `getMushafLines(): slice must be true or false when given, got ${describeValue(options.slice)}.`, {slice: options.slice});
+  }
+
   if (options.page !== undefined) {
     const page = assertPage(def, options.page);
+    // `slice` is typed `never` on this form; a JS caller still gets told why.
+    if ((options as {readonly slice?: unknown}).slice !== undefined) {
+      throw new MushafError('BAD_SLICE', 'getMushafLines(): `slice` goes with the {surah, fromAyah, toAyah} form — a page has no ayah range to slice to.', {page});
+    }
     if (page > layout.pages.length) {
       throw new MushafError('DATA_LOAD_FAILED', `Layout data for "${def.dataset}" has ${layout.pages.length} pages; page ${page} is missing. Re-run scripts/fetch-qul.mjs.`, {mushaf: id, page});
     }
@@ -109,6 +118,8 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
   if (toAyah < fromAyah) {
     throw new MushafError('AYAH_NOT_FOUND', `toAyah (${toAyah}) is before fromAyah (${fromAyah}).`, {surah, fromAyah, toAyah});
   }
+  // The range, recorded on every line so <MushafLine> shows only these ayahs; the words stay whole.
+  const sliced = (line: MushafLineData): MushafLineData => (options.slice ? {...line, slice: {fromAyah, toAyah}} : line);
   const out: MushafLineData[] = [];
   for (let page = start.page; page <= pagesOf(layout, def); page++) {
     const index = indexPage(layout, page);
@@ -118,7 +129,7 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
       const runs = index.runs.filter((run) => run.start <= entry.last && run.end >= entry.first);
       const overlaps = runs.some((run) => run.surah === surah && run.ayah >= fromAyah && run.ayah <= toAyah);
       if (overlaps) {
-        out.push(resolved(lineFromLayout(layout, id, page, line)));
+        out.push(sliced(resolved(lineFromLayout(layout, id, page, line))));
         continue;
       }
       // Every word of this line is past the range (later surah, or a later ayah): done.

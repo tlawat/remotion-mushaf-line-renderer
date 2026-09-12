@@ -4,6 +4,7 @@ import {MushafError, describeValue} from './errors';
 import {LineRenderer} from './internal/LineRenderer';
 import {ResolveLine} from './internal/ResolveLine';
 import {paletteFor, resolveMushafId} from './mushafs';
+import {assertSlice} from './slice';
 import type {MushafLineProps, MushafSelection} from './types';
 import {assertLineData} from './validate-line-data';
 
@@ -20,8 +21,9 @@ import {assertLineData} from './validate-line-data';
  * - Nothing is painted until the page font is loaded (a fallback font would show wrong words).
  */
 export const MushafLine: React.FC<MushafLineProps> = (props) => {
-  const {name, style, className, enter, exit, fit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName} = props;
-  const common = {style, className, enter, exit, fit, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
+  const {name, style, className, enter, exit, fit, slice, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName} = props;
+  if (slice !== undefined && slice !== null) assertSlice('<MushafLine slice>', slice);
+  const common = {style, className, enter, exit, fit, slice, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
   let body: React.ReactElement;
   if (typeof props.line === 'number') {
     const {mushaf, tajweed, mandala, page, line} = props as MushafSelection & {page: number; line: number};

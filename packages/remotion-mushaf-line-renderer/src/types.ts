@@ -71,6 +71,11 @@ export type MushafLineData = {
    * `mandala` records `{ink: 'currentColor'}` here plus whatever you asked for.
    */
   readonly paletteColors?: MushafColors;
+  /**
+   * Which ayahs of the line to show (see `MushafSlice`). Recorded by `getMushafLines({slice: true})`;
+   * the words are never trimmed, so the printed line is still all there for the layout.
+   */
+  readonly slice?: MushafSlice;
   /** Present on surah_name lines (the header's surah) and basmallah lines (carried forward). */
   readonly surahNumber?: number;
   /** Ordered by wordId. Empty for surah_name / basmallah lines. */
@@ -122,6 +127,12 @@ export type MushafLineCommonProps = {
    * under either value, as printed.
    */
   readonly fit?: 'line' | 'mushaf';
+  /**
+   * Show only these ayahs of the line, collapsed and centred in the measure (see `MushafSlice`).
+   * Wins over `line.slice`; `null` cancels a slice the data carries. The words that remain keep the
+   * line's own type size and their printed advances — nothing is zoomed or re-spaced.
+   */
+  readonly slice?: MushafSlice | null;
   /**
    * px. The base size: `fontSizeForWidth(useVideoConfig().width)` by default. Under `fit="line"` it
    * is the starting point the line is scaled from (so the box, not this number, decides the final
@@ -212,6 +223,17 @@ export type GetMushafLineOptions = MushafSelection & {
   readonly line: number;
 };
 
+/**
+ * Which ayahs of a line to show: `{ayah}` for one, `{fromAyah, toAyah}` for a range — open-ended
+ * after `fromAyah` when `toAyah` is omitted, so one selector means the same thing on every line of
+ * a passage. The rest of the line is hidden and the words that remain are centred in the measure at
+ * the line's own type size. The ayah-end rosette belongs to the ayah it closes. A slice that keeps
+ * every word of a line changes nothing; one that keeps none paints nothing and throws nothing.
+ */
+export type MushafSlice =
+  | {readonly ayah: number; readonly fromAyah?: never; readonly toAyah?: never}
+  | {readonly fromAyah: number; readonly toAyah?: number; readonly ayah?: never};
+
 /** A place in the mushaf: which line of which page. */
 export type MushafLocation = {
   readonly page: number;
@@ -237,6 +259,7 @@ export type GetMushafLinesOptions = MushafSelection & {
         readonly surah?: never;
         readonly fromAyah?: never;
         readonly toAyah?: never;
+        readonly slice?: never;
       }
     | {
         /** Every line that carries a word of ayahs `fromAyah`..`toAyah` of this surah, in reading order. */
@@ -246,6 +269,12 @@ export type GetMushafLinesOptions = MushafSelection & {
         /** Default: the last ayah of the surah. */
         readonly toAyah?: number;
         readonly page?: never;
+        /**
+         * Record the range on every returned line as `line.slice`, so `<MushafLine>` shows only these
+         * ayahs: the first and last lines of a passage collapse to the words that belong to it, while
+         * the lines in between (which the slice keeps whole) render exactly as printed.
+         */
+        readonly slice?: boolean;
       }
   );
 
@@ -277,4 +306,6 @@ export type WordContext = {
   readonly fps: number;
   /** `true` when this word is the one named by `activeWordId`. */
   readonly active: boolean;
+  /** `false` for the words a `slice` hides; `true` for every word when no slice is in effect. */
+  readonly inSlice: boolean;
 };

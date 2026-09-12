@@ -19,6 +19,7 @@ import {
   getMushafLocation,
   lineAyahs,
   lineHeightForFontSize,
+  sliceWords,
   springyTiming,
   type MushafId,
   type MushafLineAnimation,
@@ -86,6 +87,12 @@ export const ok = (
       wordClassName={(word) => `w-${word.wordId}`}
     />
     <MushafLine line={data} activeWordId={42} />
+    {/* slice: one ayah, a range, open-ended, on either form, and null to cancel the data's slice */}
+    <MushafLine line={data} slice={{ayah: 5}} />
+    <MushafLine line={data} slice={{fromAyah: 5, toAyah: 7}} />
+    <MushafLine line={data} slice={{fromAyah: 5}} />
+    <MushafLine page={187} line={2} slice={{ayah: 1}} />
+    <MushafLine line={data} slice={null} />
     {/* fit */}
     <MushafLine line={data} fit="line" />
     <MushafLine line={data} fit="mushaf" fontSize={112} />
@@ -99,6 +106,14 @@ export const tajweedWithData = <MushafLine line={data} tajweed />;
 export const mandalaWithData = <MushafLine line={data} mandala />;
 // @ts-expect-error only the parts the font paints can be coloured
 export const badPart = <MushafLine page={10} line={3} mandala={{glow: 'red'}} />;
+// @ts-expect-error a slice is one ayah or a range, not both
+export const bothSliceShapes = <MushafLine line={data} slice={{ayah: 5, fromAyah: 2}} />;
+// @ts-expect-error a range starts somewhere
+export const openStart = <MushafLine line={data} slice={{toAyah: 7}} />;
+// @ts-expect-error no ayah list: a line's ayahs are contiguous, so a range says the same thing
+export const ayahList = <MushafLine line={data} slice={{ayahs: [5, 6]}} />;
+export const sliced: readonly MushafWord[] = sliceWords(data, {ayah: 5});
+export const ownSlice: readonly MushafWord[] = sliceWords(data);
 // @ts-expect-error only 'line' and 'mushaf' fit the line
 export const badFit = <MushafLine line={data} fit="stretch" />;
 // @ts-expect-error wordStyle must return CSS properties
@@ -112,6 +127,7 @@ export const helpers = [
   getMushafLine({page: 187, line: 2, mandala: {ink: 'currentColor', accent: '#0aa'}}),
   getMushafLines({surah: 9, mandala: true}),
   getMushafLines({surah: 9, mandala: {accent: 'crimson'}}),
+  getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true}),
   getMushafLines({page: 187}),
   getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),
@@ -120,6 +136,8 @@ export const helpers = [
 export const bothShapes = getMushafLines({page: 187, surah: 9});
 // @ts-expect-error one of them is required
 export const neitherShape = getMushafLines({tajweed: true});
+// @ts-expect-error a page has no ayah range to slice to
+export const pageSlice = getMushafLines({page: 187, slice: true});
 
 export const ayahs: number[] = lineAyahs(data);
 export const sizes: number[] = [fontSizeForWidth(1920), fontSizeForWidth(1680, 'qpc-v4-tajweed'), lineHeightForFontSize(112)];

@@ -47,6 +47,8 @@ export type RecitationProps = {
   cutAtSeconds: number | null;
   /** Seconds a line is on screen before its first word is heard. */
   leadInSeconds: number;
+  /** Show only the recited ayahs on the first and last lines (the neighbours' words are hidden). */
+  slice: boolean;
   /** Filled in by calculateMetadata. */
   lines: MushafLineData[] | null;
   schedule: LineSchedule[] | null;
@@ -62,6 +64,7 @@ export const defaultRecitationProps: RecitationProps = {
   fontFilePattern: null,
   cutAtSeconds: 60,
   leadInSeconds: 0.4,
+  slice: true,
   lines: null,
   schedule: null,
 };
@@ -105,6 +108,7 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
     surah: timings.surah,
     fromAyah: firstAyah,
     toAyah: lastAyah,
+    slice: props.slice,
     ...(pattern ? {fontUrl: (page: number, mushaf: MushafId) => staticFile(pattern.replace('{mushaf}', mushaf).replace('{page}', String(page)))} : {}),
   });
 
