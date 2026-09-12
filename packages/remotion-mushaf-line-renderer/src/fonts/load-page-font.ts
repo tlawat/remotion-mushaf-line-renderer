@@ -20,8 +20,8 @@ import {type FontEntry, fontKey, getFontEntry, notifyFontStore, setFontEntry} fr
  * and registered through `new FontFace(family, bytes, descriptors)` with the mushaf's metrics
  * pinned, so the line box is identical on every platform.
  */
-export const loadPageFont = ({mushaf, look, page, url}: LoadPageFontOptions): LoadedPageFont => {
-  const {def, fontSet} = resolveSelection({mushaf, look});
+export const loadPageFont = ({mushaf, theme, page, url}: LoadPageFontOptions): LoadedPageFont => {
+  const {def, fontSet} = resolveSelection({mushaf, theme});
   const id = fontSet.id;
   assertPage(def, page);
   if (url !== undefined && (typeof url !== 'string' || url === '')) {

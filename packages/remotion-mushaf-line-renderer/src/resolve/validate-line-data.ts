@@ -1,6 +1,5 @@
 import {describeValue, MushafError} from '../errors';
-import {assertMushafColors} from '../mushaf/colors';
-import {assertLine, assertLook, assertPage, fontSetForLook, getMushafDefinition} from '../mushaf/registry';
+import {assertLine, assertPage, getMushafDefinition, resolveSelection} from '../mushaf/registry';
 import type {MushafLineData, MushafLineType, MushafWordKind} from '../types';
 import {assertSlice} from './slice';
 
@@ -30,19 +29,21 @@ export const assertLineData = (value: unknown): MushafLineData => {
     );
   }
   const data = value as Record<string, unknown>;
-  if (data.version !== 2) {
+  if (data.version !== 3) {
     throw new MushafError(
       'BAD_LINE_DATA',
-      `MushafLineData.version is ${describeValue(data.version)} but this version of remotion-mushaf-line-renderer understands version 2. Resolve the line again with getMushafLine() or upgrade the package.`,
+      `MushafLineData.version is ${describeValue(data.version)} but this version of remotion-mushaf-line-renderer understands version 3. Resolve the line again with getMushafLine() or upgrade the package.`,
       {field: 'version'},
     );
   }
   const def = getMushafDefinition(data.mushaf);
-  const look = assertLook(data.look);
-  const fontSet = fontSetForLook(def, look);
+  if (data.theme === undefined) fail('theme', "expected 'plain', a preset name or a theme object");
+  // The theme is checked the way a selection is (BAD_THEME / BAD_COLOR name the problem), and the
+  // font set has to be the one that theme needs.
+  const {fontSet} = resolveSelection({mushaf: def.id, theme: data.theme as MushafLineData['theme']});
   const page = assertPage(def, data.page);
   assertLine(def, page, data.line);
-  if (data.fontSet !== fontSet.id) fail('fontSet', `expected "${fontSet.id}" for the ${look} look`, data.fontSet);
+  if (data.fontSet !== fontSet.id) fail('fontSet', `expected "${fontSet.id}" for this theme`, data.fontSet);
   if (!LINE_TYPES.includes(data.type as MushafLineType))
     fail('type', `expected one of ${LINE_TYPES.join(', ')}`, data.type);
   if (typeof data.centered !== 'boolean') fail('centered', 'expected a boolean', data.centered);
@@ -50,18 +51,6 @@ export const assertLineData = (value: unknown): MushafLineData => {
     fail('fontFamily', `expected "${fontSet.fontFamily(page)}"`, data.fontFamily);
   if (data.fontUrl !== undefined && (typeof data.fontUrl !== 'string' || data.fontUrl === ''))
     fail('fontUrl', 'expected a non-empty string when present', data.fontUrl);
-  // Colours are written into a stylesheet, so they are checked here rather than dropped later.
-  if (data.colors !== undefined) {
-    if (look !== 'mandala') fail('colors', `only the mandala look takes colours (this line is ${look})`, data.colors);
-    assertMushafColors('MushafLineData.colors', data.colors);
-  }
-  // Only palettes the font actually has: an unknown one would silently paint the default palette.
-  if (data.palette !== undefined) {
-    if (fontSet.palettes.length === 0)
-      fail('palette', `the ${look} look uses the monochrome font, which has no palettes`, data.palette);
-    if (!fontSet.palettes.includes(data.palette as number))
-      fail('palette', `expected one of ${fontSet.palettes.join(', ')} when present`, data.palette);
-  }
   if (data.slice !== undefined) assertSlice('MushafLineData.slice', data.slice);
   if (data.surahNumber !== undefined && (!isPositiveInteger(data.surahNumber) || data.surahNumber > 114))
     fail('surahNumber', 'expected an integer from 1 to 114 when present', data.surahNumber);

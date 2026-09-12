@@ -21,16 +21,16 @@ type State = {readonly key: string; readonly data?: MushafLineData; readonly err
  * a `delayRender()` handle. Prefer resolving in `calculateMetadata()` and passing `line` instead:
  * it runs once rather than per render tab, and the Player never runs calculateMetadata.
  */
-export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, look, colors, page, line, data, ...common}) => {
-  // Validated during render, so a bad look, page or line throws where the caller can see it.
-  const selection = resolveSelection({mushaf, look, colors});
+export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, theme, page, line, data, ...common}) => {
+  // Validated during render, so a bad theme, page or line throws where the caller can see it.
+  const selection = resolveSelection({mushaf, theme});
   assertPage(selection.def, page);
   assertLine(selection.def, page, line);
   const {delayRender, continueRender} = useDelayRender();
   // The source URLs, not the object: a new `data` object naming the same sources is the same line.
   const words = data?.words;
   const layoutUrl = data?.layout;
-  const key = `${selection.def.id}/${selection.look}/${JSON.stringify(selection.colors ?? null)}/${page}/${line}/${words ?? ''} ${layoutUrl ?? ''}`;
+  const key = `${selection.def.id}/${JSON.stringify(selection.theme?.data ?? 'plain')}/${page}/${line}/${words ?? ''} ${layoutUrl ?? ''}`;
   const [state, setState] = useState<State | null>(null);
   const resolved = state?.key === key ? state : null;
   const handleRef = useRef<{key: string; handle: number} | null>(null);
@@ -44,12 +44,12 @@ export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, look, colors, p
   }
   useEffect(() => {
     let alive = true;
-    loadPageFont({mushaf, look, page}); // start the font early; idempotent; adopts any registered override
+    loadPageFont({mushaf, theme, page}); // start the font early; idempotent; adopts any registered override
     const source =
       words === undefined && layoutUrl === undefined
         ? {}
         : {data: {...(words === undefined ? {} : {words}), ...(layoutUrl === undefined ? {} : {layout: layoutUrl})}};
-    getMushafLine({mushaf, look, colors, page, line, ...source}).then(
+    getMushafLine({mushaf, theme, page, line, ...source}).then(
       (data) => {
         if (alive) setState({key, data});
       },
@@ -60,7 +60,7 @@ export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, look, colors, p
     return () => {
       alive = false;
     };
-  }, [key, mushaf, look, colors, page, line, words, layoutUrl]);
+  }, [key, mushaf, theme, page, line, words, layoutUrl]);
   useEffect(() => {
     // Released only after the resolved line committed, so the frame is never captured in between.
     if (resolved && handleRef.current?.key === key) {

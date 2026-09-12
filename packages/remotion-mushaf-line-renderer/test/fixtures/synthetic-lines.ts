@@ -5,12 +5,12 @@ import {lineFromLayout} from '../../src/resolve/get-mushaf-line';
 import type {MushafLineData, MushafSelection} from '../../src/types';
 import {syntheticLayout} from './synthetic-layout';
 
-export type SyntheticLineOptions = MushafSelection & Partial<Omit<MushafLineData, 'mushaf' | 'look' | 'colors'>>;
+export type SyntheticLineOptions = MushafSelection & Partial<Omit<MushafLineData, 'mushaf' | 'theme'>>;
 
-/** A line of the synthetic mushaf; `look` / `colors` select the appearance, other keys override the data. */
+/** A line of the synthetic mushaf; `theme` selects the appearance, other keys override the data. */
 export const syntheticLine = (page: number, line: number, options: SyntheticLineOptions = {}): MushafLineData => {
-  const {mushaf, look, colors, ...extra} = options;
-  return {...lineFromLayout(syntheticLayout, resolveSelection({mushaf, look, colors}), page, line), ...extra};
+  const {mushaf, theme, ...extra} = options;
+  return {...lineFromLayout(syntheticLayout, resolveSelection({mushaf, theme}), page, line), ...extra};
 };
 
 /** The ayah lines of the synthetic layout, in page order. */

@@ -26,39 +26,43 @@ describe('getMushafLines({page})', () => {
     const lines = await getMushafLines({page: 2});
     expect(lines.map((l) => l.type)).toEqual(['surah_name', 'basmallah', 'ayah', 'ayah']);
     expect(lines.map((l) => l.line)).toEqual([1, 2, 3, 4]);
-    expect(lines.every((l) => l.mushaf === 'qpc-v4')).toBe(true);
+    expect(lines.every((l) => l.mushaf === 'qpc-v4' && l.theme === 'plain')).toBe(true);
     expect(lines[2]!.words.map((w) => w.id)).toEqual(['2:1:1', '2:1:2', '2:1:3', '2:1:4']);
     // Non-ayah lines carry no words; consumers filter on line.type.
     expect(lines[0]!.words).toEqual([]);
   });
 
-  it('follows the look and pins the font url of every line', async () => {
+  it('follows the theme and pins the font url of every line', async () => {
     const lines = await getMushafLines({
       page: 1,
-      look: 'tajweed',
+      theme: 'light',
       fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
     });
-    expect(lines.every((l) => l.mushaf === 'qpc-v4' && l.look === 'tajweed' && l.fontSet === 'qpc-v4-tajweed')).toBe(
+    expect(lines.every((l) => l.mushaf === 'qpc-v4' && l.theme === 'light' && l.fontSet === 'qpc-v4-tajweed')).toBe(
       true,
     );
     expect(lines[0]!.fontFamily).toBe('mushaf-qpc-v4-tajweed-p1');
     expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
   });
 
-  it('carries the mandala look and colours on every line, alongside the pinned font url', async () => {
+  it('carries a custom theme on every line, resolved, alongside the pinned font url', async () => {
+    const theme = {base: 'normal' as const, colors: {accent: '#c8a45c'}};
     const lines = await getMushafLines({
       page: 1,
-      look: 'mandala',
-      colors: {accent: '#c8a45c'},
+      theme,
       fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
     });
-    expect(lines.every((l) => l.look === 'mandala' && l.fontSet === 'qpc-v4-tajweed')).toBe(true);
-    expect(lines.every((l) => l.colors?.accent === '#c8a45c' && l.colors.ink === 'currentColor')).toBe(true);
+    expect(lines.every((l) => l.fontSet === 'qpc-v4-tajweed')).toBe(true);
+    const c = 'currentColor';
+    expect(lines[0]!.theme).toEqual({
+      base: 3,
+      colors: {0: c, 1: c, 2: c, 3: c, 4: c, 5: c, 6: c, 7: c, 8: c, 9: c, 11: '#c8a45c', 13: c, 14: c, 15: c},
+    });
     expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
     // The ayah-range form resolves the same way.
-    const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, look: 'mandala'});
-    expect(range.every((l) => l.look === 'mandala')).toBe(true);
-    expect((await getMushafLines({page: 1})).every((l) => l.look === 'plain' && l.colors === undefined)).toBe(true);
+    const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, theme: 'normal'});
+    expect(range.every((l) => l.theme === 'normal')).toBe(true);
+    expect((await getMushafLines({page: 1})).every((l) => l.theme === 'plain' && l.fontSet === 'qpc-v4')).toBe(true);
   });
 
   it('records the range with slice: true on the lines it cuts only, and leaves the words whole', async () => {
