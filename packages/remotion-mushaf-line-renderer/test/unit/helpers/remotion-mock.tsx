@@ -3,7 +3,13 @@
 import React from 'react';
 import {vi} from 'vitest';
 
-export type MockEnv = {isRendering: boolean; isStudio: boolean; isPlayer: boolean; isClientSideRendering: boolean; isReadOnlyStudio: boolean};
+export type MockEnv = {
+  isRendering: boolean;
+  isStudio: boolean;
+  isPlayer: boolean;
+  isClientSideRendering: boolean;
+  isReadOnlyStudio: boolean;
+};
 
 export const createRemotionMock = () => {
   const state = {
@@ -12,7 +18,13 @@ export const createRemotionMock = () => {
     height: 1080,
     fps: 30,
     durationInFrames: 120,
-    env: {isRendering: false, isStudio: true, isPlayer: false, isClientSideRendering: false, isReadOnlyStudio: false} as MockEnv,
+    env: {
+      isRendering: false,
+      isStudio: true,
+      isPlayer: false,
+      isClientSideRendering: false,
+      isReadOnlyStudio: false,
+    } as MockEnv,
     nextHandle: 1,
   };
   const hook = {
@@ -29,21 +41,48 @@ export const createRemotionMock = () => {
       throw e;
     }),
   };
-  const AbsoluteFill = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<'div'>>(({style, children, ...rest}, ref) => (
-    <div
-      ref={ref}
-      data-absolute-fill=""
-      style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', ...style}}
-      {...rest}
-    >
-      {children}
-    </div>
-  ));
+  const AbsoluteFill = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<'div'>>(
+    ({style, children, ...rest}, ref) => (
+      <div
+        ref={ref}
+        data-absolute-fill=""
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          ...style,
+        }}
+        {...rest}
+      >
+        {children}
+      </div>
+    ),
+  );
   AbsoluteFill.displayName = 'AbsoluteFill';
-  const Sequence: React.FC<{name?: string; layout?: string; children?: React.ReactNode}> = ({name, children}) => <div data-sequence={name}>{children}</div>;
+  const Sequence: React.FC<{name?: string; layout?: string; children?: React.ReactNode}> = ({name, children}) => (
+    <div data-sequence={name}>{children}</div>
+  );
   const module = {
     useCurrentFrame: () => state.frame,
-    useVideoConfig: () => ({width: state.width, height: state.height, fps: state.fps, durationInFrames: state.durationInFrames, id: 'test', defaultProps: {}, props: {}, defaultCodec: null, defaultOutName: null, defaultVideoImageFormat: null, defaultPixelFormat: null}),
+    useVideoConfig: () => ({
+      width: state.width,
+      height: state.height,
+      fps: state.fps,
+      durationInFrames: state.durationInFrames,
+      id: 'test',
+      defaultProps: {},
+      props: {},
+      defaultCodec: null,
+      defaultOutName: null,
+      defaultVideoImageFormat: null,
+      defaultPixelFormat: null,
+    }),
     useRemotionEnvironment: () => state.env,
     getRemotionEnvironment: () => state.env,
     useDelayRender: () => hook,
@@ -59,9 +98,23 @@ export const createRemotionMock = () => {
     state.height = 1080;
     state.fps = 30;
     state.durationInFrames = 120;
-    state.env = {isRendering: false, isStudio: true, isPlayer: false, isClientSideRendering: false, isReadOnlyStudio: false};
+    state.env = {
+      isRendering: false,
+      isStudio: true,
+      isPlayer: false,
+      isClientSideRendering: false,
+      isReadOnlyStudio: false,
+    };
     state.nextHandle = 1;
-    for (const fn of [hook.delayRender, hook.continueRender, hook.cancelRender, global.delayRender, global.continueRender, global.cancelRender]) fn.mockClear();
+    for (const fn of [
+      hook.delayRender,
+      hook.continueRender,
+      hook.cancelRender,
+      global.delayRender,
+      global.continueRender,
+      global.cancelRender,
+    ])
+      fn.mockClear();
   };
   return {state, hook, global, module, reset};
 };
@@ -97,7 +150,11 @@ export const installFontFakes = () => {
   vi.stubGlobal('fetch', fetchMock);
   Object.defineProperty(document, 'fonts', {
     configurable: true,
-    value: {add: (f: unknown) => fontSet.add(f), delete: (f: unknown) => fontSet.delete(f), has: (f: unknown) => fontSet.has(f)},
+    value: {
+      add: (f: unknown) => fontSet.add(f),
+      delete: (f: unknown) => fontSet.delete(f),
+      has: (f: unknown) => fontSet.has(f),
+    },
   });
   return {faces, fontSet, fetchMock, holdLoads, releaseLoads};
 };

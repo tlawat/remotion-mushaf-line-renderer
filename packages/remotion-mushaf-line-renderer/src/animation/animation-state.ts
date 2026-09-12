@@ -1,6 +1,6 @@
-import {MushafError, type MushafErrorCode} from './errors';
+import {MushafError, type MushafErrorCode} from '../errors';
+import type {MushafLineAnimation, MushafLineAnimationProp} from '../types';
 import {enterTiming, exitTiming} from './timings';
-import type {MushafLineAnimation, MushafLineAnimationProp} from './types';
 
 export type AnimationState = {
   readonly progress: number;
@@ -20,11 +20,18 @@ const DEFAULT_TIMING = {enter: enterTiming(), exit: exitTiming()} as const;
  * fills in the package's default timing (`enterTiming()` / `exitTiming()`), so the rest of the
  * renderer only ever sees a complete `{presentation, timing}` pair.
  */
-export const normaliseAnimation = (prop: Prop, value: MushafLineAnimationProp | undefined): ResolvedAnimation | undefined => {
+export const normaliseAnimation = (
+  prop: Prop,
+  value: MushafLineAnimationProp | undefined,
+): ResolvedAnimation | undefined => {
   if (value === undefined) return undefined;
   const code: MushafErrorCode = prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT';
   if (!value || typeof value !== 'object') {
-    throw new MushafError(code, `\`${prop}\` must be {presentation, timing} or a TransitionPresentation such as fade(), got ${typeof value}.`, {[prop]: value});
+    throw new MushafError(
+      code,
+      `\`${prop}\` must be {presentation, timing} or a TransitionPresentation such as fade(), got ${typeof value}.`,
+      {[prop]: value},
+    );
   }
   if ('presentation' in value) {
     const timing = value.timing;
@@ -44,16 +51,34 @@ type Timing = NonNullable<MushafLineAnimation['timing']>;
 
 const validate = (prop: Prop, value: MushafLineAnimation, fps: number): {timing: Timing; durationInFrames: number} => {
   const code: MushafErrorCode = prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT';
-  if (!value || typeof value !== 'object' || !value.presentation || typeof value.presentation !== 'object' || value.presentation.component == null) {
-    throw new MushafError(code, `\`${prop}.presentation\` must be a TransitionPresentation, e.g. fade() from "@remotion/transitions/fade".`, {[prop]: value});
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !value.presentation ||
+    typeof value.presentation !== 'object' ||
+    value.presentation.component == null
+  ) {
+    throw new MushafError(
+      code,
+      `\`${prop}.presentation\` must be a TransitionPresentation, e.g. fade() from "@remotion/transitions/fade".`,
+      {[prop]: value},
+    );
   }
   const timing = value.timing;
   if (!timing || typeof timing.getProgress !== 'function' || typeof timing.getDurationInFrames !== 'function') {
-    throw new MushafError(code, `\`${prop}.timing\` must be a TransitionTiming, e.g. enterTiming() from this package or linearTiming({durationInFrames: 15}) from "@remotion/transitions".`, {[prop]: value});
+    throw new MushafError(
+      code,
+      `\`${prop}.timing\` must be a TransitionTiming, e.g. enterTiming() from this package or linearTiming({durationInFrames: 15}) from "@remotion/transitions".`,
+      {[prop]: value},
+    );
   }
   const durationInFrames = timing.getDurationInFrames({fps});
   if (typeof durationInFrames !== 'number' || !Number.isFinite(durationInFrames) || durationInFrames < 0) {
-    throw new MushafError(code, `${prop}.timing.getDurationInFrames() returned ${String(durationInFrames)}; expected a finite number >= 0.`, {durationInFrames});
+    throw new MushafError(
+      code,
+      `${prop}.timing.getDurationInFrames() returned ${String(durationInFrames)}; expected a finite number >= 0.`,
+      {durationInFrames},
+    );
   }
   return {timing, durationInFrames};
 };
@@ -61,7 +86,11 @@ const validate = (prop: Prop, value: MushafLineAnimation, fps: number): {timing:
 const progressAt = (prop: Prop, timing: Timing, localFrame: number, fps: number, durationInFrames: number): number => {
   const progress = localFrame >= durationInFrames ? 1 : timing.getProgress({frame: localFrame, fps});
   if (typeof progress !== 'number' || Number.isNaN(progress)) {
-    throw new MushafError(prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT', `${prop}.timing.getProgress() returned ${String(progress)} at frame ${localFrame}; expected a number.`, {progress, frame: localFrame});
+    throw new MushafError(
+      prop === 'enter' ? 'BAD_ENTER' : 'BAD_EXIT',
+      `${prop}.timing.getProgress() returned ${String(progress)} at frame ${localFrame}; expected a number.`,
+      {progress, frame: localFrame},
+    );
   }
   return progress;
 };
@@ -76,7 +105,15 @@ const progressAt = (prop: Prop, timing: Timing, localFrame: number, fps: number,
  * the clamped duration is observable, so such a check would misfire whenever the composition ends
  * before the Sequence does; the stock timings clamp on their own.
  */
-export const getEnterState = ({enter, frame, fps}: {enter: MushafLineAnimation; frame: number; fps: number}): EnterState => {
+export const getEnterState = ({
+  enter,
+  frame,
+  fps,
+}: {
+  enter: MushafLineAnimation;
+  frame: number;
+  fps: number;
+}): EnterState => {
   const {timing, durationInFrames} = validate('enter', enter, fps);
   const localFrame = Math.max(0, frame);
   return {progress: progressAt('enter', timing, localFrame, fps, durationInFrames), durationInFrames};
@@ -88,10 +125,24 @@ export const getEnterState = ({enter, frame, fps}: {enter: MushafLineAnimation; 
  * `useVideoConfig()`), exactly like the exiting side of a `<TransitionSeries>` transition: 0 until the
  * window starts, `getProgress` inside it, and the line is gone with its Sequence right after.
  */
-export const getExitState = ({exit, frame, fps, durationInFrames}: {exit: MushafLineAnimation; frame: number; fps: number; durationInFrames: number}): AnimationState => {
+export const getExitState = ({
+  exit,
+  frame,
+  fps,
+  durationInFrames,
+}: {
+  exit: MushafLineAnimation;
+  frame: number;
+  fps: number;
+  durationInFrames: number;
+}): AnimationState => {
   const {timing, durationInFrames: duration} = validate('exit', exit, fps);
   if (typeof durationInFrames !== 'number' || !Number.isFinite(durationInFrames)) {
-    throw new MushafError('BAD_EXIT', `An exit animation needs a finite sequence length to count back from; useVideoConfig().durationInFrames is ${String(durationInFrames)}. Give the enclosing <Sequence> a durationInFrames.`, {durationInFrames});
+    throw new MushafError(
+      'BAD_EXIT',
+      `An exit animation needs a finite sequence length to count back from; useVideoConfig().durationInFrames is ${String(durationInFrames)}. Give the enclosing <Sequence> a durationInFrames.`,
+      {durationInFrames},
+    );
   }
   const localFrame = frame - (durationInFrames - duration);
   const progress = localFrame < 0 ? 0 : progressAt('exit', timing, localFrame, fps, duration);

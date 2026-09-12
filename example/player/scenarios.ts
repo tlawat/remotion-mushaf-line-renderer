@@ -6,10 +6,10 @@ import {defaultLineHarnessProps, type LineHarnessProps} from '../src/harness/Lin
 export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
 /** QUL's two exports, mirrored by `bun run qul data` into example/public. */
 export const MIRROR_DATA = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
-/** Page 10 line 3 of the tajweed set: 2:62 ends and 2:63 begins on it (the fixture font's page). */
-const P10_L3 = {mushaf: 'qpc-v4-tajweed', page: 10, line: 3} as const;
+/** Page 10 line 3 in the colour font: 2:62 ends and 2:63 begins on it (the fixture font's page). */
+const P10_L3 = {look: 'tajweed', page: 10, line: 3} as const;
 
-// Synthetic lines (the real data is compiled by the user); the glyphs come from the p10 fixture.
+// Synthetic lines (three tiny pages that mimic the real data); the glyphs come from the p10 fixture font.
 const justified = () => syntheticLine(2, 3);
 const justifiedShort = () => syntheticLine(2, 4);
 const centered = () => syntheticLine(1, 2);
@@ -39,21 +39,57 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'exit-fade': {...base, lines: [justified()], exit: 'fade', exitFrames: 20, durationInFrames: 60},
   'exit-slide': {...base, lines: [justified()], exit: 'slide', exitFrames: 20, durationInFrames: 60},
   /** Two lines in one slot: the second starts (frame 40) as the first begins to leave; both fade. */
-  replace: {...base, lines: [justified(), centered()], slot: 'same', enter: 'fade', enterFrames: 20, exit: 'fade', exitFrames: 20, durationInFrames: 60, stagger: 40},
+  replace: {
+    ...base,
+    lines: [justified(), centered()],
+    slot: 'same',
+    enter: 'fade',
+    enterFrames: 20,
+    exit: 'fade',
+    exitFrames: 20,
+    durationInFrames: 60,
+    stagger: 40,
+  },
   /** The package's slide+fade: opacity finishes before the movement, travel is 28 % of a line box. */
-  'slide-fade': {...base, lines: [justified()], enter: 'slide-fade', enterFrames: 20, exit: 'slide-fade', exitFrames: 20, durationInFrames: 60},
+  'slide-fade': {
+    ...base,
+    lines: [justified()],
+    enter: 'slide-fade',
+    enterFrames: 20,
+    exit: 'slide-fade',
+    exitFrames: 20,
+    durationInFrames: 60,
+  },
   /** revealRtl with a soft mask edge instead of the hard clip-path one. */
   'soft-reveal': {...base, lines: [justified()], enter: 'soft-reveal', enterFrames: 20},
   /** Fade through: the first line's exit ends exactly where the second line's entrance starts. */
-  'fade-through': {...base, lines: [justified(), centered()], slot: 'same', enter: 'slide-fade', enterFrames: 20, exit: 'slide-fade', exitFrames: 20, durationInFrames: 40, stagger: 40},
-  /** Plain glyph set: the words follow CSS `color` (the harness paints the page black on white). */
-  plain: {...base, lines: [syntheticLine(2, 3, {}, 'qpc-v4')], fontUrl: '/fonts/qpc-v4/p10.ttf'},
+  'fade-through': {
+    ...base,
+    lines: [justified(), centered()],
+    slot: 'same',
+    enter: 'slide-fade',
+    enterFrames: 20,
+    exit: 'slide-fade',
+    exitFrames: 20,
+    durationInFrames: 40,
+    stagger: 40,
+  },
+  /** Plain look: the words follow CSS `color` (the harness paints the page black on white). */
+  plain: {...base, lines: [syntheticLine(2, 3, {look: 'plain'})], fontUrl: '/fonts/qpc-v4/p10.ttf'},
   /** The colour font at its default palette (0): the full tajweed colours. */
-  tajweed: {...base, lines: [syntheticLine(2, 3, {}, 'qpc-v4-tajweed')]},
+  tajweed: {...base, lines: [syntheticLine(2, 3, {look: 'tajweed'})]},
   /** Mandala: the colour font at palette 3, letters following the page's CSS `color`. */
-  mandala: {...base, lines: [syntheticLine(2, 3, {palette: 3, paletteColors: {ink: 'currentColor'}}, 'qpc-v4-tajweed')], color: 'rgb(27, 111, 63)'},
+  mandala: {...base, lines: [syntheticLine(2, 3, {look: 'mandala'})], color: 'rgb(27, 111, 63)'},
   /** Every part recoloured: ink, the rosette's petals and jewel, and the disc behind the number. */
-  'mandala-gold': {...base, lines: [syntheticLine(2, 3, {palette: 3, paletteColors: {ink: '#1b1b1b', accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'}}, 'qpc-v4-tajweed')]},
+  'mandala-gold': {
+    ...base,
+    lines: [
+      syntheticLine(2, 3, {
+        look: 'mandala',
+        colors: {ink: '#1b1b1b', accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'},
+      }),
+    ],
+  },
   /** One word marked as current, the rest dimmed — the karaoke-style follow. */
   highlight: {...base, lines: [justified()], activeWordId: '2:1:2', dimOthersTo: 0.35},
   /** The two-ayah line whole, as the reference for the slices below. */
@@ -72,14 +108,19 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
   /** No pin: the CDN URL of the registry (needs network). */
-  cdn: {...base, lines: [syntheticLine(1, 2, {}, 'qpc-v4-tajweed')], fontUrl: null},
+  cdn: {...base, lines: [syntheticLine(1, 2, {look: 'tajweed'})], fontUrl: null},
   /**
    * The convenience form, resolved in the tab from the example's mirror of QUL's exports
    * (`bun run qul data`): the zips are fetched, unzipped and read in the browser.
    */
   'resolve-data': {...base, lines: [], fit: 'line', resolve: P10_L3, data: MIRROR_DATA},
   /** The words export is missing: DATA_HTTP. */
-  'data-404': {...base, lines: [], resolve: P10_L3, data: {words: '/data/qpc-v4/missing.json.zip', layout: MIRROR_DATA.layout}},
+  'data-404': {
+    ...base,
+    lines: [],
+    resolve: P10_L3,
+    data: {words: '/data/qpc-v4/missing.json.zip', layout: MIRROR_DATA.layout},
+  },
   /** An HTML page instead of the export: DATA_INVALID. */
   'data-html': {...base, lines: [], resolve: P10_L3, data: {words: '/player/index.html', layout: MIRROR_DATA.layout}},
   /** A path relative to nothing in particular: BAD_DATA_URL. */

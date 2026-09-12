@@ -1,5 +1,5 @@
-import * as React from 'react';
 import type {TransitionPresentation, TransitionPresentationComponentProps} from '@remotion/transitions';
+import type * as React from 'react';
 
 type AnyProps = Record<string, unknown>;
 export type OnElementImage = TransitionPresentationComponentProps<AnyProps>['onElementImage'];
@@ -20,7 +20,15 @@ export const Presented: React.FC<{
   readonly onElementImage: OnElementImage;
   readonly bothEnteringAndExiting?: boolean;
   readonly children: React.ReactNode;
-}> = ({presentation, direction, progress, durationInFrames, onElementImage, bothEnteringAndExiting = false, children}) => {
+}> = ({
+  presentation,
+  direction,
+  progress,
+  durationInFrames,
+  onElementImage,
+  bothEnteringAndExiting = false,
+  children,
+}) => {
   const Component = presentation.component as React.ComponentType<TransitionPresentationComponentProps<AnyProps>>;
   return (
     <Component

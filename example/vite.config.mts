@@ -15,6 +15,16 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Pre-bundle the Remotion packages the harness uses so that only one copy of each is served.
-    include: ['react', 'react-dom/client', 'remotion', '@remotion/player', '@remotion/transitions', '@remotion/transitions/fade', '@remotion/transitions/slide', '@remotion/transitions/none', '@remotion/transitions/dissolve'],
+    include: [
+      'react',
+      'react-dom/client',
+      'remotion',
+      '@remotion/player',
+      '@remotion/transitions',
+      '@remotion/transitions/fade',
+      '@remotion/transitions/slide',
+      '@remotion/transitions/none',
+      '@remotion/transitions/dissolve',
+    ],
   },
 });

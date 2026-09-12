@@ -6,7 +6,10 @@ import {compileLayout, validateLayout} from '../../../../scripts/lib/compile.mjs
 import {SYNTH, SYNTH_PAGES} from '../../../../scripts/test/synthetic.mjs';
 import type {CompiledLayout} from '../../src/data/format';
 
-export const syntheticLayout: CompiledLayout = compileLayout(SYNTH_PAGES, SYNTH, {source: 'synthetic', generatedAt: '2026-01-01T00:00:00.000Z'});
+export const syntheticLayout: CompiledLayout = compileLayout(SYNTH_PAGES, SYNTH, {
+  source: 'synthetic',
+  generatedAt: '2026-01-01T00:00:00.000Z',
+});
 validateLayout(syntheticLayout, SYNTH);
 
 export const SYNTHETIC_DEF = SYNTH as {pages: number; linesOnPage: (p: number) => number};

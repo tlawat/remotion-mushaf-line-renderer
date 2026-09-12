@@ -7,7 +7,7 @@ vi.mock('../../src/data/load-layout', async () => {
   return {...actual, loadLayout: (id: string, data?: unknown) => loadMock(id, data)};
 });
 
-const {getMushafLines, getMushafLocation, lineAyahs} = await import('../../src/get-mushaf-lines');
+const {getMushafLines, getMushafLocation, lineAyahs} = await import('../../src/resolve/get-mushaf-lines');
 const {MushafError} = await import('../../src/errors');
 
 beforeEach(() => {
@@ -32,22 +32,33 @@ describe('getMushafLines({page})', () => {
     expect(lines[0]!.words).toEqual([]);
   });
 
-  it('follows the tajweed flag and pins the font url of every line', async () => {
-    const lines = await getMushafLines({page: 1, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`});
-    expect(lines.every((l) => l.mushaf === 'qpc-v4-tajweed')).toBe(true);
+  it('follows the look and pins the font url of every line', async () => {
+    const lines = await getMushafLines({
+      page: 1,
+      look: 'tajweed',
+      fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
+    });
+    expect(lines.every((l) => l.mushaf === 'qpc-v4' && l.look === 'tajweed' && l.fontSet === 'qpc-v4-tajweed')).toBe(
+      true,
+    );
     expect(lines[0]!.fontFamily).toBe('mushaf-qpc-v4-tajweed-p1');
     expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
   });
 
-  it('carries the mandala palette and colours on every line, alongside the pinned font url', async () => {
-    const lines = await getMushafLines({page: 1, mandala: {accent: '#c8a45c'}, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`});
-    expect(lines.every((l) => l.mushaf === 'qpc-v4-tajweed' && l.palette === 3)).toBe(true);
-    expect(lines.every((l) => l.paletteColors?.accent === '#c8a45c' && l.paletteColors.ink === 'currentColor')).toBe(true);
+  it('carries the mandala look and colours on every line, alongside the pinned font url', async () => {
+    const lines = await getMushafLines({
+      page: 1,
+      look: 'mandala',
+      colors: {accent: '#c8a45c'},
+      fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
+    });
+    expect(lines.every((l) => l.look === 'mandala' && l.fontSet === 'qpc-v4-tajweed')).toBe(true);
+    expect(lines.every((l) => l.colors?.accent === '#c8a45c' && l.colors.ink === 'currentColor')).toBe(true);
     expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
     // The ayah-range form resolves the same way.
-    const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, mandala: true});
-    expect(range.every((l) => l.palette === 3)).toBe(true);
-    expect((await getMushafLines({page: 1})).every((l) => l.palette === undefined && l.paletteColors === undefined)).toBe(true);
+    const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, look: 'mandala'});
+    expect(range.every((l) => l.look === 'mandala')).toBe(true);
+    expect((await getMushafLines({page: 1})).every((l) => l.look === 'plain' && l.colors === undefined)).toBe(true);
   });
 
   it('records the range with slice: true on the lines it cuts only, and leaves the words whole', async () => {
@@ -75,11 +86,10 @@ describe('getMushafLines({page})', () => {
     expect(loadMock).toHaveBeenCalledTimes(1);
     expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
     loadMock.mockClear();
-    // The ayah form locates the first ayah through getMushafLocation(): the same source, so the
-    // layout loaded first is the one it reads (cached), never the default one.
+    // The ayah form locates the first ayah on the layout it loaded: one load, from the same source.
     await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, data});
-    expect(loadMock.mock.calls.length).toBeGreaterThanOrEqual(2);
-    for (const call of loadMock.mock.calls) expect(call).toEqual(['qpc-v4', data]);
+    expect(loadMock).toHaveBeenCalledTimes(1);
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
     loadMock.mockClear();
     await getMushafLocation({surah: 2, data});
     expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
@@ -121,7 +131,9 @@ describe('getMushafLines({surah, fromAyah, toAyah})', () => {
     await expect(getMushafLines({surah: 2, fromAyah: 9})).rejects.toMatchObject({code: 'AYAH_NOT_FOUND'});
     await expect(getMushafLines({surah: 2, fromAyah: 9})).rejects.toThrow(/ends at ayah 4/);
     await expect(getMushafLines({surah: 9})).rejects.toThrow(/no surah 9/);
-    await expect(getMushafLines({surah: 2, fromAyah: 3, toAyah: 2})).rejects.toThrow(/toAyah \(2\) is before fromAyah \(3\)/);
+    await expect(getMushafLines({surah: 2, fromAyah: 3, toAyah: 2})).rejects.toThrow(
+      /toAyah \(2\) is before fromAyah \(3\)/,
+    );
     await expect(getMushafLines({surah: 0})).rejects.toThrow(/surah must be an integer from 1 to 114/);
   });
 });

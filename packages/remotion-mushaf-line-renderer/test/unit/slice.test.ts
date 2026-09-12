@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {assertSlice, isInSlice, resolveSlice, sliceWords} from '../../src/slice';
+import {assertSlice, isInSlice, resolveSlice, sliceWords} from '../../src/resolve/slice';
 import {syntheticLine} from '../fixtures/synthetic-lines';
 
 // Synthetic page 3: line 1 carries the end of 2:2 and the start of 2:3 — with the rub-el-hizb

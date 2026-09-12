@@ -3,20 +3,21 @@
 // produced by tools/align-recitation.py. The composition asks the package for the lines that carry
 // those ayahs, schedules one <Sequence> per line from the time of its first word, and animates each
 // line in and out with the package's slide+fade.
-import * as React from 'react';
-import {AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig, type CalculateMetadataFunction} from 'remotion';
+import type * as React from 'react';
+import {AbsoluteFill, Audio, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {
-  MushafLine,
   enterTiming,
   exitTiming,
   fontSizeForWidth,
   getMushafLines,
   lineHeightForFontSize,
-  type MushafId,
   type MushafColors,
+  MushafLine,
   type MushafLineData,
+  type MushafLook,
+  slideFade,
 } from 'remotion-mushaf-line-renderer';
-import {slideFade} from 'remotion-mushaf-line-renderer/presentations/slide-fade';
+import {type DataFiles, dataFromFiles, fontUrlFromPattern} from './sources';
 
 export type WordTiming = {id: string; start: number; end: number};
 export type AyahTiming = {ayah: number; start: number; end: number; complete?: boolean; words?: WordTiming[]};
@@ -31,20 +32,17 @@ export type LineSchedule = {
 };
 
 export type RecitationProps = {
-  mushaf: MushafId;
-  /** Colour font (tajweed) instead of plain black glyphs. */
-  tajweed: boolean;
-  /** The ayah rosettes in colour with the writing following CSS `color`; `{ink, accent, detail, background}` recolours it. */
-  mandala: boolean | MushafColors;
+  look: MushafLook;
+  colors: MushafColors | null;
   /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
   timingsFile: string | null;
   timings: RecitationTimings | null;
   /** Audio in the public folder, e.g. 'audio/tawbah.mp3'. */
   audioFile: string;
-  /** Font pin pattern in the public folder ('fonts/{mushaf}/p{page}.woff2'); null uses QUL's CDN. */
+  /** Font pattern in the public folder ('fonts/{fontSet}/p{page}.woff2'); null uses QUL's CDN. */
   fontFilePattern: string | null;
   /** Mirror of QUL's two exports in the public folder ({words, layout} paths); null fetches them from Tarteel's CDN. */
-  dataFiles: {words: string; layout: string} | null;
+  dataFiles: DataFiles | null;
   /** Stop after the last ayah that ends before this many seconds; null plays the whole recitation. */
   cutAtSeconds: number | null;
   /** Seconds a line is on screen before its first word is heard. */
@@ -57,9 +55,8 @@ export type RecitationProps = {
 };
 
 export const defaultRecitationProps: RecitationProps = {
-  mushaf: 'qpc-v4',
-  tajweed: false,
-  mandala: false,
+  look: 'plain',
+  colors: null,
   timingsFile: 'audio/tawbah-timings.json',
   timings: null,
   audioFile: 'audio/tawbah.mp3',
@@ -93,8 +90,10 @@ const wordStart = (timing: AyahTiming, position: number, wordCount: number): num
 };
 
 export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationProps> = async ({props}) => {
-  const timings: RecitationTimings | null = props.timings ?? (props.timingsFile ? await (await fetch(staticFile(props.timingsFile))).json() : null);
-  if (!timings || timings.ayat.length === 0) throw new Error('Recitation: pass `timings` or a `timingsFile` with at least one ayah.');
+  const timings: RecitationTimings | null =
+    props.timings ?? (props.timingsFile ? await (await fetch(staticFile(props.timingsFile))).json() : null);
+  if (!timings || timings.ayat.length === 0)
+    throw new Error('Recitation: pass `timings` or a `timingsFile` with at least one ayah.');
   const usable = timings.ayat.filter((a) => a.complete !== false);
   const cut = props.cutAtSeconds;
   const chosen = cut === null ? usable : usable.filter((a, i) => i === 0 || a.end <= cut);
@@ -104,18 +103,15 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
 
   // One call: the package finds the page itself and pins the font of every line it returns; `data`
   // points it at a mirror of QUL's exports instead of Tarteel's CDN.
-  const pattern = props.fontFilePattern;
-  const mirror = props.dataFiles;
   const lines = await getMushafLines({
-    mushaf: props.mushaf,
-    tajweed: props.tajweed,
-    mandala: props.mandala,
+    look: props.look,
+    colors: props.look === 'mandala' && props.colors ? props.colors : undefined,
     surah: timings.surah,
     fromAyah: firstAyah,
     toAyah: lastAyah,
     slice: props.slice,
-    ...(pattern ? {fontUrl: (page: number, mushaf: MushafId) => staticFile(pattern.replace('{mushaf}', mushaf).replace('{page}', String(page)))} : {}),
-    ...(mirror ? {data: {words: staticFile(mirror.words), layout: staticFile(mirror.layout)}} : {}),
+    fontUrl: fontUrlFromPattern(props.fontFilePattern),
+    data: dataFromFiles(props.dataFiles),
   });
 
   // A line starts when its first recited word starts and ends when the next line starts.
@@ -124,7 +120,8 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
     const timing = byAyah.get(word.ayah);
     if (!timing) return null;
     // Only needed without per-word times: the ayah's word count is then estimated from what is visible.
-    const wordCount = timing.words?.length ?? Math.max(word.position, line.words.filter((w) => w.ayah === word.ayah).length);
+    const wordCount =
+      timing.words?.length ?? Math.max(word.position, line.words.filter((w) => w.ayah === word.ayah).length);
     return Math.max(0, wordStart(timing, word.position, wordCount));
   });
   const lastEnd = byAyah.get(lastAyah)!.end;
@@ -156,7 +153,10 @@ export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFil
         const line = lines[slot.line]!;
         // Fully in place when its first word is heard, `leadInSeconds` earlier.
         const from = Math.max(0, Math.round((slot.start - leadInSeconds) * fps) - enterFrames);
-        const nextFrom = i + 1 < schedule.length ? Math.max(0, Math.round((schedule[i + 1]!.start - leadInSeconds) * fps) - enterFrames) : null;
+        const nextFrom =
+          i + 1 < schedule.length
+            ? Math.max(0, Math.round((schedule[i + 1]!.start - leadInSeconds) * fps) - enterFrames)
+            : null;
         // Fade through rather than cross-fade: this line's exit ends where the next one's entrance
         // begins, so the slot never holds two half-visible lines of text at once.
         const end = nextFrom !== null ? nextFrom : Math.round((slot.end + 1) * fps);
