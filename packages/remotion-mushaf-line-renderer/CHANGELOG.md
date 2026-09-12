@@ -5,36 +5,63 @@
 The API was redesigned for the open-source release. The package is not published yet, so nothing
 depends on the old shapes; data resolved by 0.2 (`version: 1`) must be resolved again.
 
-- **One `look` instead of three flags.** `mushaf` / `tajweed` / `mandala` are replaced by
-  `look: 'plain' | 'tajweed' | 'mandala'` and, for mandala, `colors: {ink, accent, detail,
-  background}`. The same two options work on `getMushafLine()`, `getMushafLines()`, `loadPageFont()`
-  and the convenience form of `<MushafLine>`. `colors` with any other look is refused (`BAD_COLOR`);
-  a wrong look is `BAD_LOOK`. `MUSHAF_LOOKS` lists the looks for Studio schemas.
-- **Line data version 2.** `mushaf` is the layout id only (`'qpc-v4'`); the appearance is `look` +
-  `fontSet` (`'qpc-v4' | 'qpc-v4-tajweed'`, what `fontUrl(page, fontSet)` receives) + `colors`.
-  `palette` stays as an advanced override. `paletteColors` is gone. The root element carries
-  `data-look`.
+- **Themes, the way QUL colours its pages.** `mushaf` / `tajweed` / `mandala` are replaced by one
+  `theme` option: `'plain'` (the monochrome font, follows CSS `color`), a preset, or a custom
+  `{base, colors?, marker?}`. The presets are the ten options of QUL's own preview page, colour for
+  colour: `light`, `dark`, `sepia`, `black`, `normal`, and the raw palettes `p1`–`p5` (`p6` is not
+  offered: the font has no palette 6). A custom theme starts from a palette or a preset and recolours
+  by part (`ink`, `silent`, `rules`, `frame`, `accent`, `detail`, `background`) or by CPAL entry;
+  `marker` colours the ayah-number glyph alone, which is how `black` keeps its number readable. The
+  same option works on `getMushafLine()`, `getMushafLines()`, `loadPageFont()` and the convenience
+  form of `<MushafLine>`. `MUSHAF_THEMES` and `MUSHAF_THEME_NAMES` are exported. Errors: `BAD_THEME`
+  (unknown preset, base or entry) and `BAD_COLOR`.
+- **Line data version 3.** `mushaf` is the layout id only (`'qpc-v4'`); the appearance is `theme` (a
+  preset name, or a custom theme resolved to entries) + `fontSet` (`'qpc-v4' | 'qpc-v4-tajweed'`,
+  what `fontUrl(page, fontSet)` receives). The root element carries `data-theme`; the ayah marker
+  carries its own `font-palette` when the theme colours it apart.
+- **The package ships no mushaf data.** The layout is built at render time from QUL's two raw
+  exports, the words of the QPC V4 script (JSON) and the 15-line layout (SQLite), each a zip on
+  Tarteel's CDN, fetched, unzipped, read and compiled in memory by the package itself, the way the
+  fonts are already fetched. What a line is does not change: same words, ids and lines as the
+  compiled module the package used to carry. What changes: resolving a line needs the network (or a
+  mirror) the first time per tab; the `data` option on `getMushafLine()`, `getMushafLines()`,
+  `getMushafLocation()` and the `<MushafLine page line>` form names other sources (`{words?,
+  layout?}`: absolute URLs, `staticFile()` paths or root-relative paths), which is how a mirror in
+  `public/` makes renders independent of the CDN; `loadMushafData({mushaf?, data?})` warms the
+  cache for a `<Player>`; the error codes `BAD_DATA_URL`, `DATA_HTTP`, `DATA_NETWORK`,
+  `DATA_TIMEOUT` and `DATA_INVALID` say what went wrong, and `DATA_NOT_COMPILED` is gone. Node
+  callers (scripts, tests) need Node 20.12 or newer to inflate the zips, or a `data` source
+  pointing at the unzipped files. The tarball is about 1 MB lighter.
+- **Line slicing.** `slice={{ayah}}` / `slice={{fromAyah, toAyah?}}` on `<MushafLine>` shows only
+  those ayahs of a line, collapsed and centred in the measure, so each slice reads as a line of its
+  own. The fit is measured from the whole line before the slice is applied, so a slice never changes
+  the type size (two slices of one line render at one size) and can change on every frame for free;
+  the kept words sit at their printed advances, and every word span stays in the DOM (hidden ones
+  carry `data-hidden` / `.mushaf-word--hidden`). A slice that keeps every word changes nothing; one
+  that keeps none paints nothing. `getMushafLines({surah, fromAyah, toAyah, slice: true})` records
+  the range as `line.slice` on the lines it cuts, so a passage carries its own slicing through
+  `inputProps` (the prop wins, `slice={null}` cancels); `sliceWords(line, slice?)` lists the kept
+  words; `wordStyle`'s context gains `inSlice`. New error code `BAD_SLICE`.
 - **Presentations from the root entry.** `slideFade`, `revealRtl` and their pure `*Style`
   functions are exported from `remotion-mushaf-line-renderer`; the `./presentations/*` subpaths
   are removed. `isMushafError()` is exported.
 - **Option types accept `undefined`** for every optional field, so props can be forwarded under
   `exactOptionalPropertyTypes`.
+- What used to be `tajweed: true` is `theme: 'light'`; what used to be `mandala` is `theme: 'normal'`
+  (`{base: 'normal', colors: {...}}` with colours).
 - **Repository:** Bun replaces pnpm, Biome formats and lints, the three pipeline scripts are one
-  `qul` CLI (`compile`, `fonts`, `etags`, `verify`, `mirror`), the package sources are grouped by
-  concern and the renderer is split into four hooks. Public README, CONTRIBUTING and architecture
+  `qul` CLI (`data`, `check`, `compare`, `fonts`, `etags`, `verify`, `mirror`), the package sources
+  are grouped by concern and the renderer is split into four hooks. Public README, CONTRIBUTING and architecture
   notes.
 
 Also new since 0.2.0 (developed before the redesign, never released on their own; described here
 in the 0.3.0 vocabulary):
 
-- **The mandala look, in CSS colours.** `look: 'mandala'` keeps the ayah-end rosette in its colours
+- **The normal theme, in CSS colours.** `theme: 'normal'` keeps the ayah-end rosette in its colours
   and writes the line in the inherited CSS `color`, the way most printed mushafs read outside a
-  tajweed edition. It is the colour font at CPAL palette 3, so nothing extra is downloaded. Four
-  `colors` paint everything the font paints: `ink` (everything written, including the rosette's
-  frame and the ayah number), `accent` (the petals), `detail` (the jewel) and `background` (the disc
-  behind the number). `'currentColor'` (the default `ink`) is resolved from the line's computed
-  colour and written into a `@font-palette-values` rule before the line is painted. New error code
-  `BAD_COLOR`.
+  tajweed edition. It is the colour font at CPAL palette 3, so nothing extra is downloaded.
+  `'currentColor'` (what it paints the writing with) is resolved from the line's computed colour and
+  written into a `@font-palette-values` rule before the line is painted. New error code `BAD_COLOR`.
 - **Fixed: the word gaps were too wide.** A line was set at a size derived from a 42,501-unit
   reference while real lines are around 40,000 units, and `justify-content: space-between` then
   spread the leftover into the gaps between words. Words now sit at the font's own advances, and the

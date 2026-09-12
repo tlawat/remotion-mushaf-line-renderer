@@ -7,7 +7,7 @@ export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
 /** QUL's two exports, mirrored by `bun run qul data` into example/public. */
 export const MIRROR_DATA = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
 /** Page 10 line 3 in the colour font: 2:62 ends and 2:63 begins on it (the fixture font's page). */
-const P10_L3 = {look: 'tajweed', page: 10, line: 3} as const;
+const P10_L3 = {theme: 'light', page: 10, line: 3} as const;
 
 // Synthetic lines (three tiny pages that mimic the real data); the glyphs come from the p10 fixture font.
 const justified = () => syntheticLine(2, 3);
@@ -74,19 +74,26 @@ export const scenarios: Record<string, LineHarnessProps> = {
     durationInFrames: 40,
     stagger: 40,
   },
-  /** Plain look: the words follow CSS `color` (the harness paints the page black on white). */
-  plain: {...base, lines: [syntheticLine(2, 3, {look: 'plain'})], fontUrl: '/fonts/qpc-v4/p10.ttf'},
-  /** The colour font at its default palette (0): the full tajweed colours. */
-  tajweed: {...base, lines: [syntheticLine(2, 3, {look: 'tajweed'})]},
-  /** Mandala: the colour font at palette 3, letters following the page's CSS `color`. */
-  mandala: {...base, lines: [syntheticLine(2, 3, {look: 'mandala'})], color: 'rgb(27, 111, 63)'},
+  /** Plain theme: the monochrome font, the words follow CSS `color` (the harness paints the page black on white). */
+  plain: {...base, lines: [syntheticLine(2, 3, {theme: 'plain'})], fontUrl: '/fonts/qpc-v4/p10.ttf'},
+  /** QUL's Light theme: the full tajweed colours on a light page. */
+  tajweed: {...base, lines: [syntheticLine(2, 3, {theme: 'light'})]},
+  /** QUL's Dark and Sepia themes: the tajweed colours for those backgrounds. */
+  dark: {...base, lines: [syntheticLine(2, 3, {theme: 'dark'})], background: '#343a40'},
+  sepia: {...base, lines: [syntheticLine(2, 3, {theme: 'sepia'})], background: '#fff7ea'},
+  /** QUL's Black theme: everything white, the ayah number black on the marker. */
+  black: {...base, lines: [syntheticLine(2, 3, {theme: 'black'})], background: '#343a40'},
+  /** Normal (QUL's default look): the colour font at palette 3, everything written following the page's CSS `color`. */
+  mandala: {...base, lines: [syntheticLine(2, 3, {theme: 'normal'})], color: 'rgb(27, 111, 63)'},
   /** Every part recoloured: ink, the rosette's petals and jewel, and the disc behind the number. */
   'mandala-gold': {
     ...base,
     lines: [
       syntheticLine(2, 3, {
-        look: 'mandala',
-        colors: {ink: '#1b1b1b', accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'},
+        theme: {
+          base: 'normal',
+          colors: {ink: '#1b1b1b', frame: '#1b1b1b', accent: '#c8a45c', detail: '#1b6f3f', background: 'transparent'},
+        },
       }),
     ],
   },
@@ -108,7 +115,7 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
   /** No pin: the CDN URL of the registry (needs network). */
-  cdn: {...base, lines: [syntheticLine(1, 2, {look: 'tajweed'})], fontUrl: null},
+  cdn: {...base, lines: [syntheticLine(1, 2, {theme: 'light'})], fontUrl: null},
   /**
    * The convenience form, resolved in the tab from the example's mirror of QUL's exports
    * (`bun run qul data`): the zips are fetched, unzipped and read in the browser.

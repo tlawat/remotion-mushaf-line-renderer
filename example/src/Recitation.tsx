@@ -11,10 +11,9 @@ import {
   fontSizeForWidth,
   getMushafLines,
   lineHeightForFontSize,
-  type MushafColors,
   MushafLine,
   type MushafLineData,
-  type MushafLook,
+  type MushafThemeSelection,
   slideFade,
 } from 'remotion-mushaf-line-renderer';
 import {type DataFiles, dataFromFiles, fontUrlFromPattern} from './sources';
@@ -32,8 +31,8 @@ export type LineSchedule = {
 };
 
 export type RecitationProps = {
-  look: MushafLook;
-  colors: MushafColors | null;
+  /** 'plain' follows CSS `color`; a preset (light, dark, sepia, black, normal, p1-p5) or a custom theme selects the colour font. */
+  theme: MushafThemeSelection;
   /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
   timingsFile: string | null;
   timings: RecitationTimings | null;
@@ -55,8 +54,7 @@ export type RecitationProps = {
 };
 
 export const defaultRecitationProps: RecitationProps = {
-  look: 'plain',
-  colors: null,
+  theme: 'plain',
   timingsFile: 'audio/tawbah-timings.json',
   timings: null,
   audioFile: 'audio/tawbah.mp3',
@@ -104,8 +102,7 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   // One call: the package finds the page itself and pins the font of every line it returns; `data`
   // points it at a mirror of QUL's exports instead of Tarteel's CDN.
   const lines = await getMushafLines({
-    look: props.look,
-    colors: props.look === 'mandala' && props.colors ? props.colors : undefined,
+    theme: props.theme,
     surah: timings.surah,
     fromAyah: firstAyah,
     toAyah: lastAyah,

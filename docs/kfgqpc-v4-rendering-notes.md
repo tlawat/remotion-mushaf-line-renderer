@@ -136,8 +136,22 @@ Rules learned the hard way:
   | 4 | no tajweed, white text (dark) |
   | 5 | no tajweed, black, alt marker colours |
   Switch with `@font-palette-values --plain { font-family: "qpc-p3"; base-palette: 3; }` and
-  `font-palette: --plain`. Palette indices 10–13 are the ayah-marker colours. `color:` does not
-  affect COLR glyphs; if you want the text to follow `currentColor`, use the plain `v4/` fonts.
+  `font-palette: --plain`. `color:` does not affect COLR glyphs; if you want the text to follow
+  `currentColor`, use the plain `v4/` fonts, or override the entries with the computed colour.
+  The 16 CPAL entries, from the CPAL/COLR tables and QUL's own palette rules (`app/views/shared/_page_font.html.erb`):
+  | entry | paints | palette 0 |
+  |---|---|---|
+  | 0, 14 | letters | `#000000` |
+  | 1, 2, 15 | silent letters (grey) | `#a5a5a5` |
+  | 3–9 | the tajweed rule colours (7, the 2-vowel prolongation, is by far the most used) | `#b50000 #ff7b00 #ce9e00 #09b000 #3f48e6 #2fadff #f40000` |
+  | 10 | rosette jewel | `#2ca4ab` |
+  | 11 | rosette petals | `#ff0080` |
+  | 12 | disc behind the ayah number | `#d8e9d8` |
+  | 13 | rosette frame, curls and the ayah number | `#000000` |
+  QUL's preview page offers ten themes as such rules: Light (base 0), Dark (base 5), Sepia (base 2),
+  Black (base 5, all white, plus `13 black` on the ayah-marker glyph only), and P1–P6 (the raw
+  palettes; P6 does not exist, so it falls back to the default). Its overrides for entries 16–18 are
+  no-ops: the font has 16 entries.
 - Kerning: GPOS `kern` exists but is negligible (6 pairs on p3). Advance-width layout is safe.
 - `unicode-range` also lets you declare all 604 faces under one family name if you prefer, but
   since every page reuses the same code points, you **must** keep one family per page.
