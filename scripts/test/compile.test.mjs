@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {parsePageHtml, QulParseError, decodeEntities} from '../lib/qul-html.mjs';
-import {compileLayout, validateLayout, emitModule, expandPage, LayoutValidationError} from '../lib/compile.mjs';
+import {compileLayout, validateLayout, expandPage, LayoutValidationError} from '../lib/compile.mjs';
 import {QPC_V4} from '../lib/datasets.mjs';
 import {SYNTH, SYNTH_PAGES, renderQulPageHtml} from './synthetic.mjs';
 
@@ -142,17 +142,6 @@ describe('compileLayout + validateLayout', () => {
     expect(() => validateLayout(outOfRange, SYNTH)).toThrow(/code point U\+41 outside/);
   });
 
-  it('emits an ASCII-only module whose string literal parses back to the layout', () => {
-    const layout = compileSynthetic();
-    const source = emitModule(layout);
-    expect(/^[\x00-\x7f]*$/.test(source)).toBe(true);
-    expect(source).toContain("import type {CompiledLayout} from './format';");
-    const m = source.match(/JSON\.parse\('([\s\S]*)'\) as CompiledLayout/);
-    expect(m).not.toBeNull();
-    const literal = m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\');
-    expect(JSON.parse(literal)).toEqual(layout);
-  });
-
   it('describes the real V4 dataset with the numbers the plan relies on', () => {
     expect(QPC_V4.pages).toBe(604);
     expect(QPC_V4.linesOnPage(1)).toBe(8);
@@ -161,5 +150,8 @@ describe('compileLayout + validateLayout', () => {
     expect(QPC_V4.fontUrl('qpc-v4-tajweed', 10, 'ttf')).toBe('https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p10.ttf?v=3.1');
     expect(QPC_V4.fontUrl('qpc-v4', 10, 'woff2')).toBe('https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2');
     expect(QPC_V4.previewUrl(19)).toBe('https://qul.tarteel.ai/mushaf_layouts/19?page_number=19');
+    // The two exports the package fetches at runtime: one pinned publication each on Tarteel's CDN.
+    expect(QPC_V4.exports.words).toMatch(/^https:\/\/s3\.us-east-1\.wasabisys\.com\/static-cdn\.tarteel\.ai\/qul-exports\/quran-script\/\d+-[a-z0-9]+-qpc-v4\.json\.zip$/);
+    expect(QPC_V4.exports.layout).toMatch(/^https:\/\/s3\.us-east-1\.wasabisys\.com\/static-cdn\.tarteel\.ai\/qul-exports\/mushaf-layout\/\d+-[a-z0-9]+-qpc-v4-tajweed-15-lines\.db\.zip$/);
   });
 });

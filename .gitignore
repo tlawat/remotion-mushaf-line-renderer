@@ -35,6 +35,10 @@ playwright-report/
 !example/public/fonts/**/*.woff2
 !example/public/fonts/**/*.woff
 
+# example/public/data/ holds the mirror of QUL's two data exports (open data, about 1.2 MB), written
+# by `node scripts/fetch-qul.mjs --data` and committed: the suites, CI and offline renders read it,
+# the npm package does not (it fetches the same exports from Tarteel's CDN at render time).
+
 # Stills written by the render suite for visual comparison.
 packages/remotion-mushaf-line-renderer/test/render/*.png
 

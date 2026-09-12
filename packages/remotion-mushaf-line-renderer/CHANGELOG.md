@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Breaking: the package ships no mushaf data.** The layout is built at render time from QUL's
+  two raw exports — the words of the QPC V4 script (JSON) and the 15-line layout (SQLite), each a
+  zip on Tarteel's CDN — fetched, unzipped, read and compiled in memory by the package itself, the
+  way the fonts are already fetched. Nothing changes in what a line is: same words, ids and lines
+  as the compiled module the package used to carry. What changes: resolving a line needs the
+  network (or a mirror) the first time per tab; the `data` option on `getMushafLine()`,
+  `getMushafLines()`, `getMushafLocation()` and the `<MushafLine page line>` form names other
+  sources (`{words?, layout?}`: absolute URLs, `staticFile()` paths or root-relative paths), which
+  is how a mirror in `public/` makes renders independent of the CDN; `loadMushafData({mushaf?,
+  data?})` warms the cache for a `<Player>`; the error codes `BAD_DATA_URL`, `DATA_HTTP`,
+  `DATA_NETWORK`, `DATA_TIMEOUT` and `DATA_INVALID` say what went wrong, and `DATA_NOT_COMPILED` is
+  gone. Node callers (scripts, tests) need Node 20.12 or newer to inflate the zips, or a `data`
+  source pointing at the unzipped files. The tarball is about 1 MB lighter.
+
 - **Line slicing.** `slice={{ayah}}` / `slice={{fromAyah, toAyah?}}` on `<MushafLine>` shows only
   those ayahs of a line, collapsed and centred in the measure — each slice reads as a line of its
   own. The fit is measured from the whole line before the slice is applied, so a slice never changes

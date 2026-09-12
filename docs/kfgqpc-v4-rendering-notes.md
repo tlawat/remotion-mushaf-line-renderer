@@ -49,7 +49,11 @@ Headers observed:
 
 ## 3. Layout data you need alongside the fonts
 
-From QUL (Tarteel) downloads:
+From QUL (Tarteel) downloads. (The
+`remotion-mushaf-line-renderer` package reads exactly these two files — the layout SQLite and the
+`qpc-v4.json` words — at render time, straight from QUL's exports on Tarteel's CDN; the URLs it pins
+live in `scripts/lib/datasets.mjs` and `src/mushafs.ts`, and `node scripts/fetch-qul.mjs --data`
+mirrors and validates them.)
 
 1. **`qpc-v4-tajweed-15-lines.db`** (SQLite, 236 KB) — table `pages`:
    `page_number, line_number, line_type, is_centered, first_word_id, last_word_id, surah_number`

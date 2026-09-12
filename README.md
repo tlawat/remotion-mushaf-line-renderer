@@ -11,17 +11,20 @@ printed in the KFGQPC V4 (1441H) mushaf, using the per-page glyph fonts publishe
 
 ## Fonts and data via GitHub Actions
 
-The layout data is compiled from QUL's public mushaf-layout preview pages (layout 19, KFGQPC V4) and
-the page fonts come from QUL's CDN. Neither is part of this repository's source; the **QUL assets**
-workflow (`.github/workflows/qul-assets.yml`) fetches both on a GitHub runner and commits the results
-to the branch it was started on:
+The package holds no mushaf data and no fonts: at render time it fetches QUL's two raw exports (the
+words of the QPC V4 script and the 15-line layout, layout 19) and the page fonts from Tarteel's CDN.
+For the suites, the Studio and offline renders this repository keeps a mirror of both; the **QUL
+assets** workflow (`.github/workflows/qul-assets.yml`) fetches them on a GitHub runner and commits the
+results to the branch it was started on:
 
 1. Actions tab → *QUL assets* → *Run workflow* (or `gh workflow run "QUL assets" --ref <branch>`),
-   inputs: `fonts` (pages whose fonts to download, default `1,10,187,604`, or `all`), `compile`
-   (default on), `commit` (default on).
-2. The run compiles and validates the layout, downloads the fonts with the parity and glyph checks,
-   records the CDN ETags, checks the CDN (both font sets, CORS), runs the package's data tests, and
-   commits `packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts`,
+   inputs: `data` (download and validate the exports, default on), `fonts` (pages whose fonts to
+   download, default `1,10,187,604`, or `all`), `compare` (also compile QUL's preview pages and
+   compare them with the exports, default off), `commit` (default on).
+2. The run downloads the exports into `example/public/data/qpc-v4/` and validates them against the
+   printed page's invariants, downloads the fonts with the parity and glyph checks, records the CDN
+   ETags (the exports' too, with their CORS header and sha256), checks the CDN, runs the package's
+   unit tests (the runtime loader against the mirror included), and commits `example/public/data`,
    `scripts/cdn-etags.json` and the fixture fonts of pages 1, 10, 187 and 604.
 3. Pull the branch; the browser and render suites now run offline, and the render suite writes
    `test/render/p10-l3.png` for a visual check against the printed page.
@@ -29,61 +32,74 @@ to the branch it was started on:
 ### Mirror every page locally
 
 To work offline on any page (the Studio, the `Recitation` composition, your own renders), pull the
-whole mirror on a machine that can reach QUL. Node 18+ and git are all it needs:
+whole mirror on a machine that can reach QUL. Node 22.13+ and git are all it needs:
 
 ```bash
 bash scripts/pull-all-assets.sh
 ```
 
-It downloads both font sets of every page (woff2 and ttf; where the CDN has no woff2, page 328 of the
-tajweed set, the woff it serves instead), refreshes `scripts/cdn-etags.json`, commits what
-`.gitignore` admits (every page's woff2, about 95 MB, plus the fixture pages' ttf) and pushes the
-current branch. `FONTS=187-207` limits the pages, `PUSH=0` commits without pushing, `COMPILE=1`
-recompiles the layout as well. Point the example at the mirror with `fontFile` (`ThreeLines`) or
-`fontFilePattern` (`Recitation`), both `'fonts/{mushaf}/p{page}.woff2'`.
+It downloads the two exports, then both font sets of every page (woff2 and ttf; where the CDN has no
+woff2, page 328 of the tajweed set, the woff it serves instead), refreshes `scripts/cdn-etags.json`,
+commits what `.gitignore` admits (the exports, every page's woff2 — about 95 MB — plus the fixture
+pages' ttf) and pushes the current branch. `FONTS=187-207` limits the pages, `DATA=0` leaves the
+exports alone, `COMPARE=1` compares them with QUL's preview pages, `PUSH=0` commits without
+pushing. Point the example at the mirror with `fontFile` (`ThreeLines`) or `fontFilePattern`
+(`Recitation`), both `'fonts/{mushaf}/p{page}.woff2'`, and with `dataFiles`
+(`{words: 'data/qpc-v4/words.json.zip', layout: 'data/qpc-v4/layout.db.zip'}`).
 
-Licence rule: the fonts are King Fahd Complex fonts published by QUL and are **not redistributed** by
-this project. The fixture fonts of four pages, and the example's mirror if you pulled it, are
-committed during development only, so the suites run without network access; the npm package never
-contains fonts (`pnpm check:package` fails if the tarball does) and the package code never depends
-on committed fonts (CDN by default, an explicit `fontUrl` pin when you host them yourself). Release
-checklist: delete the `!**/…/p1.*`-style negation lines and the two `!example/public/fonts/**` lines
-from `.gitignore`, run
+Licence rule: the exports are open data and stay committed. The fonts are King Fahd Complex fonts
+published by QUL and are **not redistributed** by this project. The fixture fonts of four pages, and
+the example's mirror if you pulled it, are committed during development only, so the suites run
+without network access; the npm package never contains fonts or data (`pnpm check:package` fails if
+the tarball does) and the package code never depends on committed files (CDN by default, an explicit
+`fontUrl` / `data` pin when you host them yourself). Release checklist: delete the
+`!**/…/p1.*`-style negation lines and the two `!example/public/fonts/**` lines from `.gitignore`, run
 `git rm -r --cached example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts`,
 commit; CI keeps working because it downloads the page-10 fixture font itself when it is missing.
 
 `.github/workflows/ci.yml` runs on every push: unit tests, typechecks, build, packaging checks, the
 Playwright suite (including the CDN test) and the Remotion render suite.
 
-## Data pipeline (the same script, run locally)
+## Data tools (the same script, run locally)
 
-The compiler is a zero-dependency Node script (Node 18+), so it also runs without installing the
-workspace, on any machine that can reach `qul.tarteel.ai` and `static-cdn.tarteel.ai`:
+`scripts/fetch-qul.mjs` is a zero-dependency Node script (Node 22.13+ for its SQLite reader), so it
+also runs without installing the workspace, on any machine that can reach `s3.us-east-1.wasabisys.com`
+(the exports), `static-cdn.tarteel.ai` (the fonts) and, for `--from-pages`, `qul.tarteel.ai`:
 
 ```bash
-node scripts/fetch-qul.mjs --from-pages --fonts 1,10,604 --etags
+node scripts/fetch-qul.mjs --data --fonts 1,10,604 --etags
 ```
 
 What it does:
 
-1. Downloads the 604 preview pages (cached under `.cache/qul/19/`, so re-runs are free) and parses
-   every line and word.
-2. Validates the result against the invariants the renderer relies on (9,046 lines, 83,668 words,
-   contiguous word ids, one ayah marker per ayah, the known page shapes) and refuses to write on any
+1. `--data` downloads the two exports the package pins (`scripts/lib/datasets.mjs` and
+   `src/mushafs.ts` hold the same URLs; a unit test keeps them equal) into
+   `example/public/data/qpc-v4/{words.json.zip,layout.db.zip}`, prints what the zips hold and the
+   headers a browser would see (CORS, cache-control, ETag), and records URL, ETag, sha256 and CORS
+   in `scripts/cdn-etags.json`. Without `--data` it validates the mirror already there.
+2. Reads the exports the dev-tools way (Node's zlib and `node:sqlite`, independently of the
+   package's own readers), compiles them with the same algorithm the package runs at render time and
+   validates the result against the invariants of the printed page (9,046 lines, 83,668 words,
+   contiguous word ids, one ayah marker per ayah, the known page shapes). Exit code 1 on any
    mismatch.
-3. Writes `packages/remotion-mushaf-line-renderer/src/data/qpc-v4.generated.ts` (ASCII-only, commit it).
+3. `--from-pages` downloads the 604 preview pages (cached under `.cache/qul/19/`, so re-runs are
+   free), compiles them too and compares the two layouts page by page — the way to explain a
+   difference between what QUL shows and what it exports.
 4. `--fonts 1,10,604` (or `all`) downloads those page fonts (plain and tajweed sets, woff2 + ttf) into
    `example/public/fonts/<mushaf>/` and, for the fixture pages 1, 10, 187 and 604, the package's
    `test/fixtures/fonts/<mushaf>/` (what git sees is governed by `.gitignore`), reports where the two
    sets differ, and checks that no standalone word has zero advance.
 5. `--etags` records the ETag of every CDN font in `scripts/cdn-etags.json` (commit it) so later runs
-   of `node scripts/verify-cdn.mjs` can detect a republished font.
+   of `node scripts/verify-cdn.mjs` (`--data` covers the exports) can detect a republished file.
 
-If QUL rejects the requests (bot protection), retry later or use an official QUL export:
-`node scripts/fetch-qul.mjs --layout-sqlite pages.db --words qpc-v4.json` (Node 22.13+ for SQLite input).
+Other export files (another QUL publication, a re-export you made) validate the same way:
+`node scripts/fetch-qul.mjs --layout-sqlite pages.db --words qpc-v4.json`.
 
-At render time the package fetches fonts from `https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/…`
-unless a line carries an explicit `fontUrl`.
+At render time the package fetches the exports from the pinned URLs and the fonts from
+`https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/…`, unless a call carries an explicit `data`
+source or a line an explicit `fontUrl`. QUL publishes each export under a new prefix, so a pinned
+URL names one publication; when QUL re-exports, `--data` fails with a 404 and the two pins are
+updated together.
 
 ## Real-life example: a recited passage
 
@@ -103,7 +119,7 @@ screen while the audio plays:
 
 ```bash
 cd example && pnpm exec remotion render Recitation out/recitation.mp4 \
-  --props='{"fontFilePattern":"fonts/{mushaf}/p{page}.woff2"}'
+  --props='{"fontFilePattern":"fonts/{mushaf}/p{page}.woff2","dataFiles":{"words":"data/qpc-v4/words.json.zip","layout":"data/qpc-v4/layout.db.zip"}}'
 ```
 
 The timings of the committed example (`example/public/audio/tawbah-timings.json`, At-Tawbah 9:1-11)
@@ -126,8 +142,9 @@ pnpm test:render     # @remotion/bundler + @remotion/renderer renders of the exa
 ```
 
 The browser and render suites need `example/public/fonts/qpc-v4-tajweed/p10.ttf` (committed during
-development by the QUL assets workflow, or downloaded by `node scripts/fetch-qul.mjs --fonts 10`);
-they skip or fail loudly without it. They use the Chromium
+development by the QUL assets workflow, or downloaded by `node scripts/fetch-qul.mjs --fonts 10`)
+and, for their real-data tests, the mirrored exports under `example/public/data/qpc-v4/` (committed;
+`node scripts/fetch-qul.mjs --data` refreshes them); they skip or fail loudly without them. They use the Chromium
 that `@playwright/test` installed (`npx playwright install chromium` if missing); set
 `MUSHAF_BROWSER_EXECUTABLE` (and `MUSHAF_CHROME_MODE=headless-shell|chrome-for-testing`) to use
 another browser for the render suite. `pnpm --filter remotion-mushaf-line-renderer-example dev`
