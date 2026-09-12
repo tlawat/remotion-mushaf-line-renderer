@@ -7,12 +7,12 @@ out/
 coverage/
 test-results/
 playwright-report/
+.remotion/
 
-# QUL fonts are fetched by scripts/fetch-qul.mjs (or the "QUL assets" workflow) and are not
-# redistributed. During development only, the fixture pages 1, 10, 187 and 604 are committed so the
-# browser and render suites run without network access. Before the public release delete the ten
-# negation lines below and run:
-#   git rm -r --cached example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts
+# QUL fonts are fetched by `bun run qul fonts` (or the "QUL assets" workflow) and are not
+# redistributed by this project. During development only, the fixture pages 1, 10, 187 and 604 are
+# committed so the browser and render suites run without network access. Before the public release
+# delete the negation lines below and run the release checklist in CONTRIBUTING.md.
 # (CI downloads the fixture font itself when it is missing; the npm package never contains fonts.)
 **/public/fonts/**/*.ttf
 **/public/fonts/**/*.woff
@@ -29,9 +29,8 @@ playwright-report/
 !**/test/fixtures/fonts/**/p187.*
 !**/test/fixtures/fonts/**/p604.*
 # Development only as well: the example's mirror of every page's woff2 (and the woff the CDN serves
-# where it has no woff2), pulled by scripts/pull-all-assets.sh so the Studio and the Recitation
-# composition work offline for any page. About 95 MB for both sets. Delete these two lines before
-# the public release too (same git rm as above).
+# where it has no woff2), pulled by `bun run qul mirror` so the Studio and the Recitation
+# composition work offline for any page. About 95 MB for both sets. Same release checklist.
 !example/public/fonts/**/*.woff2
 !example/public/fonts/**/*.woff
 

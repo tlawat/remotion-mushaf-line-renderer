@@ -1,6 +1,6 @@
 // <Player> harness: renders the LineHarness composition for one scenario and exposes a small
 // window.__harness API (seek, remount, switch scenario) for the Playwright suite. Also a handy
-// manual check: `pnpm --filter remotion-mushaf-line-renderer-example player`, then open
+// manual check: `bun run --cwd example player`, then open
 // http://localhost:4173/player/?scenario=fade
 import {Player, type PlayerRef} from '@remotion/player';
 import * as React from 'react';
@@ -30,12 +30,16 @@ const initialScenario = params.get('scenario') ?? 'static';
 if (params.get('hostile') === '1') {
   // Hostile page CSS: the line must not inherit any of it.
   const style = document.createElement('style');
-  style.textContent = 'body { letter-spacing: 6px; word-spacing: 12px; font-weight: 700; font-style: italic; text-transform: uppercase; line-height: 3; font-family: serif; }';
+  style.textContent =
+    'body { letter-spacing: 6px; word-spacing: 12px; font-weight: 700; font-style: italic; text-transform: uppercase; line-height: 3; font-family: serif; }';
   document.head.appendChild(style);
 }
 
 const errorFallback = ({error}: {error: Error}): React.ReactNode => (
-  <pre data-error={(error as Error & {code?: string}).code ?? 'Error'} style={{whiteSpace: 'pre-wrap', padding: 16, margin: 0, color: '#b00020', background: '#fff'}}>
+  <pre
+    data-error={(error as Error & {code?: string}).code ?? 'Error'}
+    style={{whiteSpace: 'pre-wrap', padding: 16, margin: 0, color: '#b00020', background: '#fff'}}
+  >
     {error.message}
   </pre>
 );
@@ -63,7 +67,11 @@ const App: React.FC = () => {
     };
   }, [scenario, mountKey]);
   if (!props) {
-    return <pre data-error="UNKNOWN_SCENARIO">Unknown scenario "{scenario}". Known: {scenarioNames.join(', ')}</pre>;
+    return (
+      <pre data-error="UNKNOWN_SCENARIO">
+        Unknown scenario "{scenario}". Known: {scenarioNames.join(', ')}
+      </pre>
+    );
   }
   return (
     <div data-mount={mountKey} data-scenario={scenario}>

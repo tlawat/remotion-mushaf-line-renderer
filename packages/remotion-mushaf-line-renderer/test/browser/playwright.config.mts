@@ -1,5 +1,5 @@
-import {defineConfig} from '@playwright/test';
 import {fileURLToPath} from 'node:url';
+import {defineConfig} from '@playwright/test';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const exampleDir = fileURLToPath(new URL('../../../../example/', import.meta.url));
@@ -26,7 +26,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `pnpm --dir "${exampleDir}" exec vite --port 4173 --strictPort`,
+    command: `bun run --cwd "${exampleDir}" player`,
     url: 'http://localhost:4173/player/',
     reuseExistingServer: true,
     timeout: 120_000,
