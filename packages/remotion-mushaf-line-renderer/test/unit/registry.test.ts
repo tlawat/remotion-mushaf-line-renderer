@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 // @ts-expect-error — plain JS module from scripts/
 import {QPC_V4} from '../../../../scripts/lib/datasets.mjs';
-import {MANDALA_PALETTE, MUSHAFS, MUSHAF_IDS, assertLine, assertPage, getMushafDefinition, isMushafId, paletteFor, resolveMushafId} from '../../src/mushafs';
+import {DATASETS, MANDALA_PALETTE, MUSHAFS, MUSHAF_IDS, assertLine, assertPage, getDataset, getMushafDefinition, isMushafId, paletteFor, resolveMushafId} from '../../src/mushafs';
 
 describe('mushaf registry', () => {
   it('agrees with the compiler dataset descriptor', () => {
@@ -11,6 +11,12 @@ describe('mushaf registry', () => {
       expect(def.layoutId).toBe(QPC_V4.layoutId);
       expect(def.dataset).toBe(QPC_V4.dataset);
       for (const p of [1, 2, 3, 187, 604]) expect(def.linesOnPage(p)).toBe(QPC_V4.linesOnPage(p));
+      // Both ids build their lines from the one dataset, whose export URLs the scripts pin too.
+      const dataset = getDataset(def.dataset);
+      expect(dataset).toBe(DATASETS['qpc-v4']);
+      expect(dataset).toMatchObject({id: QPC_V4.dataset, layoutId: QPC_V4.layoutId, pages: QPC_V4.pages});
+      expect(dataset.urls).toEqual(QPC_V4.exports);
+      for (const url of Object.values(dataset.urls)) expect(url).toMatch(/^https:\/\/s3\.us-east-1\.wasabisys\.com\/static-cdn\.tarteel\.ai\/qul-exports\/[a-z-]+\/\d+-[a-z0-9]+-[a-z0-9-]+\.(json|db)\.zip$/);
       expect(def.invariants).toEqual({
         lines: QPC_V4.invariants.lines,
         ayahLines: QPC_V4.invariants.ayahLines,

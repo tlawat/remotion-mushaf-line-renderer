@@ -4,6 +4,9 @@
 
 export const CDN_BASE = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts';
 
+/** QUL's raw exports on Tarteel's CDN; the path prefix changes on every re-export, so a URL pins one publication. */
+export const QUL_EXPORTS = 'https://s3.us-east-1.wasabisys.com/static-cdn.tarteel.ai/qul-exports';
+
 /** KFGQPC V4 (1441H print) — QUL mushaf layout id 19. */
 export const QPC_V4 = {
   dataset: 'qpc-v4',
@@ -13,6 +16,14 @@ export const QPC_V4 = {
   /** Pages 1 and 2 (Al-Fatihah and the opening of Al-Baqarah) carry 8 lines, all centred. */
   linesOnPage: (page) => (page <= 2 ? 8 : 15),
   previewUrl: (page) => `https://qul.tarteel.ai/mushaf_layouts/19?page_number=${page}`,
+  /**
+   * The two exports the package fetches at runtime (src/mushafs.ts pins the same URLs; a unit test
+   * keeps them equal): the words of the QPC V4 script as JSON, and the 15-line layout as SQLite.
+   */
+  exports: {
+    words: `${QUL_EXPORTS}/quran-script/1748433334-i11ov-qpc-v4.json.zip`,
+    layout: `${QUL_EXPORTS}/mushaf-layout/1748288079-a96tc-qpc-v4-tajweed-15-lines.db.zip`,
+  },
   fontSets: {
     'qpc-v4': {dir: 'v4', query: ''},
     'qpc-v4-tajweed': {dir: 'v4-tajweed', query: '?v=3.1'},

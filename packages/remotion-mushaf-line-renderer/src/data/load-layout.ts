@@ -1,5 +1,6 @@
 import {MushafError} from '../errors';
 import type {DatasetId} from '../mushafs';
+import type {MushafDataSource} from '../types';
 import type {CompiledLayout} from './format';
 
 /**
@@ -14,7 +15,9 @@ const DATASETS: Record<DatasetId, () => Promise<CompiledLayout | null>> = {
 
 const cache = new Map<DatasetId, Promise<CompiledLayout>>();
 
-export const loadLayout = (id: DatasetId): Promise<CompiledLayout> => {
+// `data` (the source override) is accepted already and honoured by the runtime loader that replaces
+// the bundled module; the bundled module has one source, so it is ignored here.
+export const loadLayout = (id: DatasetId, _data?: MushafDataSource): Promise<CompiledLayout> => {
   let pending = cache.get(id);
   if (!pending) {
     pending = DATASETS[id]()

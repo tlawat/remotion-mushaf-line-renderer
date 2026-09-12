@@ -4,7 +4,7 @@ import {syntheticLayout} from '../fixtures/synthetic-layout';
 const loadMock = vi.fn();
 vi.mock('../../src/data/load-layout', async () => {
   const actual = await vi.importActual<typeof import('../../src/data/load-layout')>('../../src/data/load-layout');
-  return {...actual, loadLayout: (id: string) => loadMock(id)};
+  return {...actual, loadLayout: (id: string, data?: unknown) => loadMock(id, data)};
 });
 
 const {getMushafLine} = await import('../../src/get-mushaf-line');
@@ -115,6 +115,17 @@ describe('getMushafLine', () => {
   it('surfaces data loading failures as DATA_LOAD_FAILED', async () => {
     loadMock.mockRejectedValue(new MushafError('DATA_LOAD_FAILED', 'Could not load layout data for "qpc-v4": boom'));
     await expect(getMushafLine({mushaf: 'qpc-v4', page: 1, line: 1})).rejects.toMatchObject({code: 'DATA_LOAD_FAILED'});
+  });
+
+  it('hands the data source to the loader, and nothing when none is given', async () => {
+    await getMushafLine({page: 1, line: 2});
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', undefined);
+    const data = {words: '/data/qpc-v4/words.json.zip', layout: 'https://mirror.example/layout.db.zip'};
+    // The colour font shares the dataset, so the same source serves both ids.
+    const line = await getMushafLine({page: 1, line: 2, tajweed: true, data});
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
+    // The source is where the data came from, not part of the line: the JSON stays the same.
+    expect(Object.keys(line)).not.toContain('data');
   });
 });
 

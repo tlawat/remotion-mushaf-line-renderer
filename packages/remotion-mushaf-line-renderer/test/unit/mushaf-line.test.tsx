@@ -13,7 +13,7 @@ vi.mock('remotion', async (importOriginal) => ({...(await importOriginal<typeof 
 const loadMock = vi.fn();
 vi.mock('../../src/data/load-layout', async () => {
   const actual = await vi.importActual<typeof import('../../src/data/load-layout')>('../../src/data/load-layout');
-  return {...actual, loadLayout: (id: string) => loadMock(id)};
+  return {...actual, loadLayout: (id: string, data?: unknown) => loadMock(id, data)};
 });
 
 const {MushafLine} = await import('../../src/MushafLine');
@@ -243,6 +243,37 @@ describe('<MushafLine>', () => {
     await waitFor(() => expect(coloured.container.querySelector('.mushaf-line')).not.toBeNull());
     expect(coloured.container.querySelector<HTMLElement>('.mushaf-line')!.dataset.mushaf).toBe('qpc-v4-tajweed');
     expect(rowOf(coloured.container).style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
+  });
+
+  it('forwards the data source on the convenience path and re-resolves when it changes', async () => {
+    const data = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
+    loadMock.mockClear(); // the fixtures above were resolved through it too
+    const {container, rerender} = render(<MushafLine page={2} line={3} data={data} />);
+    await waitFor(() => expect(container.querySelector('.mushaf-line')).not.toBeNull());
+    expect(loadMock).toHaveBeenCalledTimes(1);
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
+    // A new object naming the same sources is the same line: no second resolution.
+    rerender(<MushafLine page={2} line={3} data={{...data}} />);
+    await waitFor(() => expect(container.querySelector('.mushaf-line')).not.toBeNull());
+    expect(loadMock).toHaveBeenCalledTimes(1);
+    // Another source is another resolution, behind a new handle.
+    rerender(<MushafLine page={2} line={3} data={{layout: 'https://mirror.example/layout.db.zip'}} />);
+    await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2));
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', {layout: 'https://mirror.example/layout.db.zip'});
+    expect(remotion.hook.delayRender).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(container.querySelector('.mushaf-line')).not.toBeNull());
+  });
+
+  it('refuses data next to resolved line data, which is already loaded', () => {
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        {/* @ts-expect-error the prop types forbid this; the runtime says why */}
+        <MushafLine line={line} data={{words: '/x'}} />
+      </Boundary>,
+    );
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/already loaded.*pass `data` to getMushafLine/i);
   });
 
   it('refuses tajweed and mandala next to resolved line data, which carries its own font set', () => {
