@@ -8,20 +8,20 @@ import type {GetMushafLineOptions, MushafId, MushafLineData, MushafWord, MushafW
  * Resolves one line of a mushaf page to plain, JSON-serialisable data.
  *
  * Pure and Remotion-free: safe to call in `calculateMetadata()`, in a Node script that prepares
- * `inputProps`, or in a `<Player>` host. The only asynchronous step is the lazy import of the
- * compiled layout, which is cached after the first call.
+ * `inputProps`, or in a `<Player>` host. The only asynchronous step is loading the mushaf data
+ * (QUL's exports, from Tarteel's CDN or the `data` source given), cached after the first call.
  *
  * `mushaf` defaults to the plain `'qpc-v4'` glyphs (black, following CSS `color`); pass
  * `tajweed: true` for QUL's colour font, or `mandala` for its coloured ayah rosettes with the text
  * in the inherited CSS `color`. The returned `mushaf`, `palette` and `paletteColors` are the resolved look, so the data
  * alone determines how the line is painted.
  */
-export const getMushafLine = async ({mushaf, tajweed, mandala, page, line}: GetMushafLineOptions): Promise<MushafLineData> => {
+export const getMushafLine = async ({mushaf, tajweed, mandala, page, line, data}: GetMushafLineOptions): Promise<MushafLineData> => {
   const id = resolveMushafId(mushaf, tajweed, mandala);
   const def = getMushafDefinition(id);
   assertPage(def, page);
   assertLine(def, page, line);
-  const layout = await loadLayout(def.dataset);
+  const layout = await loadLayout(def.dataset, data);
   return withPalette(lineFromLayout(layout, id, page, line), paletteFor({tajweed, mandala}));
 };
 

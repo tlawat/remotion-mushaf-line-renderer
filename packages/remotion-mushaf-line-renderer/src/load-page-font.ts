@@ -1,5 +1,6 @@
 import {cancelRender, continueRender, delayRender, getRemotionEnvironment} from 'remotion';
 import {MushafError, describeValue} from './errors';
+import {getLoadBudget, isFinalStatus, sleep, type LoadBudget} from './fetch-budget';
 import {fontKey, getFontEntry, notifyFontStore, setFontEntry, type FontEntry} from './font-store';
 import {assertPage, getMushafDefinition, resolveMushafId, type MushafDefinition} from './mushafs';
 import type {LoadPageFontOptions, LoadedPageFont} from './types';
@@ -145,23 +146,10 @@ const toMushafError = (err: unknown, entry: FontEntry, page: number): MushafErro
   return new MushafError('FONT_NETWORK', `Could not load mushaf font ${entry.fontFamily} (page ${page}) from ${entry.url}: ${err instanceof Error ? err.message : String(err)}`, {url: entry.url, page, cause: err});
 };
 
-export type FontLoadBudget = {
-  readonly attempts: number;
-  readonly perAttemptMs: number;
-  readonly backoffMs: number;
-};
+export type FontLoadBudget = LoadBudget;
 
-/**
- * Sizes the fetch attempts so that a definite failure always beats the `delayRender` timeout:
- * while rendering the handle times out at `--timeout − 2 s` (30 s default), so two attempts of
- * ~12.75 s plus one backoff fit inside it; outside rendering (Studio, Player) there is no timeout
- * and three generous attempts are used.
- */
-export const getFontLoadBudget = (isRendering: boolean, puppeteerTimeout: number | undefined): FontLoadBudget => {
-  if (!isRendering) return {attempts: 3, perAttemptMs: 15_000, backoffMs: 500};
-  const handleTimeout = (puppeteerTimeout ?? 30_000) - 2_000;
-  return {attempts: 2, perAttemptMs: Math.max(4_000, Math.floor((handleTimeout - 2_500) / 2)), backoffMs: 500};
-};
+/** The shared budget (see `fetch-budget.ts`), under the name the font loader has always exported. */
+export const getFontLoadBudget = getLoadBudget;
 
 const run = async (entry: FontEntry, generation: number, def: MushafDefinition, page: number): Promise<FontFace> => {
   const env = getRemotionEnvironment();
@@ -216,10 +204,6 @@ type FetchOptions = FontLoadBudget & {
   readonly page: number;
   readonly fontFamily: string;
 };
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-const isFinalStatus = (status: number) => status < 500 && status !== 408 && status !== 429;
 
 export const fetchFontBytes = async (url: string, o: FetchOptions): Promise<ArrayBuffer> => {
   let last: MushafError | null = null;

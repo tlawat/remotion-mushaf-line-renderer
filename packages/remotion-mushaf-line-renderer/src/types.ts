@@ -169,10 +169,33 @@ export type MushafLineCommonProps = {
 
 export type MushafLineProps = MushafLineCommonProps &
   (
-    // Resolved data decides its own mushaf and colouring (pass `tajweed` to getMushafLine() instead).
-    | {readonly line: MushafLineData; readonly mushaf?: never; readonly page?: never; readonly tajweed?: never; readonly mandala?: never}
-    | (MushafSelection & {readonly page: number; readonly line: number})
+    // Resolved data decides its own mushaf and colouring, and is already loaded (pass `tajweed` /
+    // `data` to getMushafLine() instead).
+    | {readonly line: MushafLineData; readonly mushaf?: never; readonly page?: never; readonly tajweed?: never; readonly mandala?: never; readonly data?: never}
+    | (MushafSelection & MushafDataOptions & {readonly page: number; readonly line: number})
   );
+
+/**
+ * Where the mushaf data comes from: QUL's two raw exports — the words of the script (JSON) and the
+ * line layout (SQLite) — each as the CDN's zip or unzipped. Absolute URLs, `staticFile()` results
+ * or root-relative paths (in a browser); anything left out is fetched from QUL's exports on
+ * Tarteel's CDN. Point both at a mirror in `public/` through `staticFile()` for offline, faster or
+ * reproducible renders.
+ */
+export type MushafDataSource = {
+  readonly words?: string;
+  readonly layout?: string;
+};
+
+export type MushafDataOptions = {
+  /** Data source override, see `MushafDataSource`. Default: QUL's exports on Tarteel's CDN. */
+  readonly data?: MushafDataSource;
+};
+
+export type LoadMushafDataOptions = MushafDataOptions & {
+  /** Default `'qpc-v4'`; both V4 ids share one dataset. */
+  readonly mushaf?: MushafId;
+};
 
 /** Chooses the mushaf and its colouring. All optional: the default is plain `'qpc-v4'`. */
 export type MushafSelection = {
@@ -218,10 +241,11 @@ export type MushafColors = {
   readonly background?: string;
 };
 
-export type GetMushafLineOptions = MushafSelection & {
-  readonly page: number;
-  readonly line: number;
-};
+export type GetMushafLineOptions = MushafSelection &
+  MushafDataOptions & {
+    readonly page: number;
+    readonly line: number;
+  };
 
 /**
  * Which ayahs of a line to show: `{ayah}` for one, `{fromAyah, toAyah}` for a range — open-ended
@@ -240,7 +264,7 @@ export type MushafLocation = {
   readonly line: number;
 };
 
-export type GetMushafLocationOptions = {
+export type GetMushafLocationOptions = MushafDataOptions & {
   readonly mushaf?: MushafId;
   readonly surah: number;
   /** Default 1 — the start of the surah. */
@@ -250,9 +274,10 @@ export type GetMushafLocationOptions = {
 /** Pins the font source of every resolved line, so `calculateMetadata()` need not map over them. */
 export type MushafFontUrl = (page: number, mushaf: MushafId) => string;
 
-export type GetMushafLinesOptions = MushafSelection & {
-  readonly fontUrl?: MushafFontUrl;
-} & (
+export type GetMushafLinesOptions = MushafSelection &
+  MushafDataOptions & {
+    readonly fontUrl?: MushafFontUrl;
+  } & (
     | {
         /** Every line of this page, `surah_name` and `basmallah` lines included. */
         readonly page: number;

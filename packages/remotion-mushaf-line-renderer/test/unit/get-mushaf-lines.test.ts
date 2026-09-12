@@ -4,7 +4,7 @@ import {syntheticLayout} from '../fixtures/synthetic-layout';
 const loadMock = vi.fn();
 vi.mock('../../src/data/load-layout', async () => {
   const actual = await vi.importActual<typeof import('../../src/data/load-layout')>('../../src/data/load-layout');
-  return {...actual, loadLayout: (id: string) => loadMock(id)};
+  return {...actual, loadLayout: (id: string, data?: unknown) => loadMock(id, data)};
 });
 
 const {getMushafLines, getMushafLocation, lineAyahs} = await import('../../src/get-mushaf-lines');
@@ -67,6 +67,25 @@ describe('getMushafLines({page})', () => {
     expect(tail.map((l) => l.slice)).toEqual([{fromAyah: 3, toAyah: 4}, undefined]);
     expect(plain.every((l) => l.slice === undefined)).toBe(true);
     await expect(getMushafLines({surah: 2, slice: 'yes' as never})).rejects.toMatchObject({code: 'BAD_SLICE'});
+  });
+
+  it('hands one data source to every load, the ayah form included', async () => {
+    const data = {layout: '/data/qpc-v4/layout.db.zip'};
+    await getMushafLines({page: 2, data});
+    expect(loadMock).toHaveBeenCalledTimes(1);
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
+    loadMock.mockClear();
+    // The ayah form locates the first ayah through getMushafLocation(): the same source, so the
+    // layout loaded first is the one it reads (cached), never the default one.
+    await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, data});
+    expect(loadMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    for (const call of loadMock.mock.calls) expect(call).toEqual(['qpc-v4', data]);
+    loadMock.mockClear();
+    await getMushafLocation({surah: 2, data});
+    expect(loadMock).toHaveBeenLastCalledWith('qpc-v4', data);
+    loadMock.mockClear();
+    await getMushafLines({surah: 3});
+    for (const call of loadMock.mock.calls) expect(call).toEqual(['qpc-v4', undefined]);
   });
 
   it('rejects a page outside the mushaf, and one the data does not reach', async () => {

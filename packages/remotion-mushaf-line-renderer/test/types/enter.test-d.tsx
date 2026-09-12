@@ -21,6 +21,7 @@ import {
   lineHeightForFontSize,
   sliceWords,
   springyTiming,
+  type MushafDataSource,
   type MushafId,
   type MushafLineAnimation,
   type MushafLineData,
@@ -97,8 +98,20 @@ export const ok = (
     <MushafLine line={data} fit="line" />
     <MushafLine line={data} fit="mushaf" fontSize={112} />
     <MushafLine line={data} activeWordId={null} />
+    {/* data source: either export, both, or none (QUL's CDN) — on the convenience form only */}
+    <MushafLine page={10} line={3} data={{words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'}} />
+    <MushafLine page={10} line={3} tajweed data={{layout: 'https://mirror.example/layout.db.zip'}} />
+    <MushafLine page={10} line={3} data={{}} />
   </>
 );
+
+// @ts-expect-error resolved data is already loaded; `data` goes to getMushafLine()
+export const dataWithData = <MushafLine line={data} data={{words: '/x'}} />;
+// @ts-expect-error a source is a URL
+export const badDataUrl = <MushafLine page={10} line={3} data={{words: 42}} />;
+// @ts-expect-error only the two exports have a source
+export const badDataKey = <MushafLine page={10} line={3} data={{fonts: '/x'}} />;
+export const source: MushafDataSource = {words: '/data/qpc-v4/words.json.zip'};
 
 // @ts-expect-error resolved data carries its own font set
 export const tajweedWithData = <MushafLine line={data} tajweed />;
@@ -131,6 +144,11 @@ export const helpers = [
   getMushafLines({page: 187}),
   getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, tajweed: true, fontUrl: (page, mushaf) => `/fonts/${mushaf}/p${page}.woff2`}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),
+  // The data source goes with every helper.
+  getMushafLine({page: 187, line: 2, data: {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'}}),
+  getMushafLines({page: 187, data: {layout: 'https://mirror.example/layout.db.zip'}}),
+  getMushafLines({surah: 9, slice: true, data: {}}),
+  getMushafLocation({surah: 9, data: {words: '/w'}}).then(({page}) => page),
 ];
 // @ts-expect-error a page and an ayah range are two different questions
 export const bothShapes = getMushafLines({page: 187, surah: 9});

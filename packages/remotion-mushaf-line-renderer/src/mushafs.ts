@@ -4,6 +4,41 @@ import type {MushafColors} from './types';
 
 export type DatasetId = 'qpc-v4';
 
+/**
+ * A dataset is what a mushaf's lines are built from at runtime: QUL's two raw exports, the words
+ * of the script (JSON) and the line layout (SQLite), fetched, joined and compiled in memory. Both
+ * V4 ids share one dataset; only the glyph fonts differ.
+ */
+export type DatasetDescriptor = {
+  readonly id: DatasetId;
+  /** QUL mushaf layout id. */
+  readonly layoutId: number;
+  readonly pages: number;
+  readonly linesOnPage: (page: number) => number;
+  /**
+   * Default sources: QUL's exports on Tarteel's CDN. The path prefix changes on every re-export,
+   * so a pinned URL names one publication; `scripts/fetch-qul.mjs --data` mirrors and checks it.
+   */
+  readonly urls: {readonly words: string; readonly layout: string};
+};
+
+const QUL_EXPORTS = 'https://s3.us-east-1.wasabisys.com/static-cdn.tarteel.ai/qul-exports';
+
+export const DATASETS: Readonly<Record<DatasetId, DatasetDescriptor>> = {
+  'qpc-v4': {
+    id: 'qpc-v4',
+    layoutId: 19,
+    pages: 604,
+    linesOnPage: (page) => (page <= 2 ? 8 : 15),
+    urls: {
+      words: `${QUL_EXPORTS}/quran-script/1748433334-i11ov-qpc-v4.json.zip`,
+      layout: `${QUL_EXPORTS}/mushaf-layout/1748288079-a96tc-qpc-v4-tajweed-15-lines.db.zip`,
+    },
+  },
+};
+
+export const getDataset = (id: DatasetId): DatasetDescriptor => DATASETS[id];
+
 /** CPAL entries by what they paint — the colours of `MushafColors`. Every entry belongs to one. */
 export type PaletteRoles = {
   /** Everything drawn in the writing colour: the letters, the rosette's frame and the ayah number. */
@@ -78,10 +113,10 @@ const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<number, 'wo
 const v4 = (id: string, dir: 'v4' | 'v4-tajweed', colr: boolean): MushafDefinition => ({
   id,
   name: colr ? 'KFGQPC V4 1441H (tajweed)' : 'KFGQPC V4 1441H',
-  layoutId: 19,
-  pages: 604,
+  layoutId: DATASETS['qpc-v4'].layoutId,
+  pages: DATASETS['qpc-v4'].pages,
   linesPerPage: 15,
-  linesOnPage: (page) => (page <= 2 ? 8 : 15),
+  linesOnPage: DATASETS['qpc-v4'].linesOnPage,
   dataset: 'qpc-v4',
   fontFamily: (page) => `mushaf-${id}-p${page}`,
   // QUL's own pages request the tajweed set with `?v=3.1`, so that cache key is the warm one on

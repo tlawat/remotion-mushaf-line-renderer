@@ -54,11 +54,11 @@ const pageOfAyah = (layout: CompiledLayout, def: MushafDefinition, surah: number
 const pagesOf = (layout: CompiledLayout, def: MushafDefinition): number => Math.min(def.pages, layout.pages.length);
 
 /** Where a surah (or one of its ayahs) is printed: `{page, line}` of its first word. */
-export const getMushafLocation = async ({mushaf, surah, ayah = 1}: GetMushafLocationOptions): Promise<MushafLocation> => {
+export const getMushafLocation = async ({mushaf, surah, ayah = 1, data}: GetMushafLocationOptions): Promise<MushafLocation> => {
   const def = getMushafDefinition(mushaf ?? resolveMushafId(undefined, undefined));
   assertSurah(surah);
   assertAyah('ayah', ayah);
-  const layout = await loadLayout(def.dataset);
+  const layout = await loadLayout(def.dataset, data);
   const page = pageOfAyah(layout, def, surah, ayah);
   const index = indexPage(layout, page);
   for (let line = 1; line <= index.lines.length; line++) {
@@ -85,12 +85,13 @@ const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined, mu
  *   is printed, and `lineAyahs(line)` says which ayahs a line holds. `slice: true` records the range
  *   on the lines it cuts, so `<MushafLine>` shows only the ayahs asked for.
  *
- * Pure and Remotion-free, like `getMushafLine()`. `fontUrl` pins a mirror on every returned line.
+ * Pure and Remotion-free, like `getMushafLine()`. `fontUrl` pins a mirror on every returned line;
+ * `data` names the mushaf data source (default: QUL's exports on Tarteel's CDN).
  */
 export const getMushafLines = async (options: GetMushafLinesOptions): Promise<MushafLineData[]> => {
   const id = resolveMushafId(options.mushaf, options.tajweed, options.mandala);
   const def = getMushafDefinition(id);
-  const layout = await loadLayout(def.dataset);
+  const layout = await loadLayout(def.dataset, options.data);
   const palette = paletteFor(options);
   const resolved = (line: MushafLineData): MushafLineData => withPalette(pinFontUrl(line, options.fontUrl, id), palette);
 
@@ -114,7 +115,8 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
   const surah = assertSurah(options.surah);
   const fromAyah = assertAyah('fromAyah', options.fromAyah ?? 1);
   // Locating the first ayah first, so a missing one is reported as such rather than as a bad range.
-  const start = await getMushafLocation({mushaf: id, surah, ayah: fromAyah});
+  // The same data source, so the layout is the one loaded above (cached), never a second one.
+  const start = await getMushafLocation({mushaf: id, surah, ayah: fromAyah, ...(options.data ? {data: options.data} : {})});
   const toAyah = options.toAyah === undefined ? lastAyahOf(layout, surah) : assertAyah('toAyah', options.toAyah);
   if (toAyah < fromAyah) {
     throw new MushafError('AYAH_NOT_FOUND', `toAyah (${toAyah}) is before fromAyah (${fromAyah}).`, {surah, fromAyah, toAyah});

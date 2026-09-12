@@ -5,8 +5,15 @@ import {LineRenderer} from './internal/LineRenderer';
 import {ResolveLine} from './internal/ResolveLine';
 import {paletteFor, resolveMushafId} from './mushafs';
 import {assertSlice} from './slice';
-import type {MushafLineProps, MushafSelection} from './types';
+import type {MushafDataOptions, MushafLineProps, MushafSelection} from './types';
 import {assertLineData} from './validate-line-data';
+
+/** Options that only mean something while a line is being resolved, so they are refused next to resolved data. */
+const RESOLVE_ONLY: Readonly<Record<'tajweed' | 'mandala' | 'data', string>> = {
+  tajweed: 'Resolved line data already carries its font set, so `tajweed` cannot be set alongside `line={MushafLineData}`. Pass `tajweed` to getMushafLine()/getMushafLines() where the data is resolved.',
+  mandala: 'Resolved line data already carries its font set and palette, so `mandala` cannot be set alongside `line={MushafLineData}`. Pass `mandala` to getMushafLine()/getMushafLines() where the data is resolved.',
+  data: 'Resolved line data is already loaded, so `data` cannot be set alongside `line={MushafLineData}`. Pass `data` to getMushafLine()/getMushafLines() where the data is resolved.',
+};
 
 /**
  * Renders one line of the mushaf, pixel-faithful to the printed page.
@@ -26,18 +33,12 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
   const common = {style, className, enter, exit, fit, slice, fontSize, lineHeight, activeWordId, activeWordStyle, wordStyle, wordClassName};
   let body: React.ReactElement;
   if (typeof props.line === 'number') {
-    const {mushaf, tajweed, mandala, page, line} = props as MushafSelection & {page: number; line: number};
-    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed, mandala)} palette={paletteFor({tajweed, mandala})} page={page} line={line} {...common} />;
+    const {mushaf, tajweed, mandala, page, line, data} = props as MushafSelection & MushafDataOptions & {page: number; line: number};
+    body = <ResolveLine mushaf={resolveMushafId(mushaf, tajweed, mandala)} palette={paletteFor({tajweed, mandala})} page={page} line={line} data={data} {...common} />;
   } else if (props.line !== null && typeof props.line === 'object') {
-    for (const flag of ['tajweed', 'mandala'] as const) {
+    for (const flag of ['tajweed', 'mandala', 'data'] as const) {
       const value = (props as Record<string, unknown>)[flag];
-      if (value !== undefined) {
-        throw new MushafError(
-          'BAD_LINE_PROP',
-          `Resolved line data already carries its font set and palette, so \`${flag}\` cannot be set alongside \`line={MushafLineData}\`. Pass \`${flag}\` to getMushafLine()/getMushafLines() where the data is resolved.`,
-          {[flag]: value},
-        );
-      }
+      if (value !== undefined) throw new MushafError('BAD_LINE_PROP', RESOLVE_ONLY[flag], {[flag]: value});
     }
     const line = assertLineData(props.line);
     body = <LineRenderer key={`${line.mushaf}/${line.page}/${line.line}`} line={line} {...common} />;
