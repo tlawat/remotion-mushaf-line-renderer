@@ -14,7 +14,7 @@ export type ZipInput = {
 const le16 = (n: number): number[] => [n & 0xff, (n >>> 8) & 0xff];
 const le32 = (n: number): number[] => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
 
-export const makeZip = (entries: readonly ZipInput[], options: {readonly comment?: string} = {}): Uint8Array => {
+export const makeZip = (entries: readonly ZipInput[], options: {readonly comment?: string} = {}): Uint8Array<ArrayBuffer> => {
   const encoder = new TextEncoder();
   const parts: number[] = [];
   const central: number[] = [];

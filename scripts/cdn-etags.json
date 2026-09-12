@@ -14501,5 +14501,37 @@
  },
  "problems": [
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p328.woff2?v=3.1: HTTP 404; available instead: https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p328.woff2 (font/woff2, 67100 bytes), https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff/p328.woff (font/woff, 83848 bytes), https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/ttf/p328.ttf (font/ttf, null bytes), https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff/p328.woff?v=3.1 (font/woff, 105800 bytes), https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff/p328.woff (font/woff, 105800 bytes), https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p328.ttf?v=3.1 (font/ttf, null bytes), https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p328.ttf (font/ttf, null bytes)"
- ]
+ ],
+ "data": {
+  "words": {
+   "url": null,
+   "file": "example/public/data/qpc-v4/words.json.zip",
+   "bytes": 1101714,
+   "sha256": "cb31d2f478c5a295cf85242e2b452f27d09fe916267f9824185a8e04cb3ec823",
+   "entries": [
+    "qpc-v4.json"
+   ],
+   "etag": null,
+   "contentType": null,
+   "cacheControl": null,
+   "cors": null,
+   "downloadedAt": null,
+   "note": "stand-in re-serialised from the previous preview compile (qul-preview:layout-19, 2026-09-05), not downloaded; node scripts/fetch-qul.mjs --data replaces it with QUL's published file and fills the headers in"
+  },
+  "layout": {
+   "url": null,
+   "file": "example/public/data/qpc-v4/layout.db.zip",
+   "bytes": 99095,
+   "sha256": "ab9fef80702b66a71fe25edf2dcdaa44cb9da7e8d420adce8bd118be2bad9cc7",
+   "entries": [
+    "qpc-v4-tajweed-15-lines.db"
+   ],
+   "etag": null,
+   "contentType": null,
+   "cacheControl": null,
+   "cors": null,
+   "downloadedAt": null,
+   "note": "stand-in re-serialised from the previous preview compile (qul-preview:layout-19, 2026-09-05), not downloaded; node scripts/fetch-qul.mjs --data replaces it with QUL's published file and fills the headers in"
+  }
+ }
 }

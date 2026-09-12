@@ -1,8 +1,16 @@
 // Browser suite against the example's <Player> harness (example/player). Synthetic lines are
 // rendered with the page-10 tajweed fixture font (test/fixtures/fonts, example/public/fonts).
 import {expect, test, type Page} from '@playwright/test';
+import {existsSync} from 'node:fs';
+import path from 'node:path';
 
 type Box = {x: number; y: number; width: number; height: number};
+
+/** The example's mirror of QUL's two exports (`node scripts/fetch-qul.mjs --data`), served by Vite with the rest of public/. */
+const MIRROR = {words: 'http://localhost:4173/data/qpc-v4/words.json.zip', layout: 'http://localhost:4173/data/qpc-v4/layout.db.zip'};
+// Resolved from the config's rootDir (this folder): Playwright's loader has no import.meta.url to offer.
+const hasMirror = () => existsSync(path.resolve(test.info().config.rootDir, '../../../../example/public/data/qpc-v4/layout.db.zip'));
+const NO_MIRROR = 'QUL\'s exports are not mirrored under example/public/data (node scripts/fetch-qul.mjs --data)';
 
 const ROW = '.mushaf-line__row';
 const ROOT = '.mushaf-line';
@@ -523,14 +531,13 @@ test.describe('font failures', () => {
 });
 
 test.describe('real data', () => {
-  // Runs once the layout module has been compiled (scripts/fetch-qul.mjs or the QUL assets workflow).
+  // Runs once QUL's exports are mirrored (scripts/fetch-qul.mjs --data or the QUL assets workflow).
   test('page 10 line 3 renders every word right to left, justified, with the ayah marker', async ({page}) => {
-    // Through the built package (plain ESM), which is what the harness consumes too.
+    test.skip(!hasMirror(), NO_MIRROR);
+    // Through the built package (plain ESM), which is what the harness consumes too: Node fetches
+    // the mirror from the Vite server and builds the layout the same way a browser would.
     const pkg = (await import('../../dist/esm/index.mjs')) as typeof import('../../src/index');
-    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3}).catch((e: {code?: string}) => {
-      test.skip(e.code === 'DATA_NOT_COMPILED', 'the layout data is not compiled');
-      throw e;
-    });
+    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3, data: MIRROR});
     expect(line.words.length).toBeGreaterThan(5);
     expect(line.words[0]!.id).toBe('2:62:18'); // ... عِندَ | رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا
     expect(line.words.some((w) => w.kind === 'end' && w.ayah === 62)).toBe(true);
@@ -629,11 +636,9 @@ test.describe('slicing', () => {
   });
 
   test('with fit="line" a slice keeps the size the whole line was fitted to, frame after frame', async ({page}) => {
+    test.skip(!hasMirror(), NO_MIRROR);
     const pkg = (await import('../../dist/esm/index.mjs')) as typeof import('../../src/index');
-    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3}).catch((e: {code?: string}) => {
-      test.skip(e.code === 'DATA_NOT_COMPILED', 'the layout data is not compiled');
-      throw e;
-    });
+    const line = await pkg.getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3, data: MIRROR});
     // ... رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا — 2:62 ends, 2:63 begins.
     const data = {...line, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'};
     const setProps = (overrides: unknown) => page.evaluate((p) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps(p), overrides);

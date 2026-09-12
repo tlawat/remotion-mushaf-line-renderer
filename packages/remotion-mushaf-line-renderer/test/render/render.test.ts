@@ -11,14 +11,17 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {layout as realLayout} from '../../src/data/qpc-v4.generated';
-import {lineFromLayout} from '../../src/get-mushaf-line';
+import {getMushafLine} from '../../src/get-mushaf-line';
+import type {MushafLineData} from '../../src/types';
 import {syntheticLine} from '../fixtures/synthetic-lines';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(here, '../../../../example');
 const FIXTURE_FONT = 'fonts/qpc-v4-tajweed/p10.ttf';
 const hasFixtureFont = existsSync(path.join(exampleDir, 'public', FIXTURE_FONT));
+/** The example's mirror of QUL's two exports (`node scripts/fetch-qul.mjs --data`), served like any public file. */
+const MIRROR = {words: 'data/qpc-v4/words.json.zip', layout: 'data/qpc-v4/layout.db.zip'};
+const hasMirror = existsSync(path.join(exampleDir, 'public', MIRROR.words)) && existsSync(path.join(exampleDir, 'public', MIRROR.layout));
 
 type ChromeMode = 'headless-shell' | 'chrome-for-testing';
 
@@ -128,6 +131,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
   '.png': 'image/png',
+  '.zip': 'application/zip',
+  '.db': 'application/vnd.sqlite3',
 };
 
 /** Serves `dir` under `prefix` (e.g. /sites/abc/), the way Lambda serves a site bundle. */
@@ -155,6 +160,11 @@ const serveUnder = (dir: string, prefix: string): Promise<{server: Server; origi
     });
   });
 
+/** The example's public folder served at the root, so Node can fetch the mirror by absolute URL. */
+let publicServer: {server: Server; origin: string} | null = null;
+/** Page 10 line 3 of the tajweed set, resolved once through the runtime loader from the mirror. */
+let realLine: MushafLineData | null = null;
+
 describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer', () => {
   beforeAll(async () => {
     workDir = mkdtempSync(path.join(tmpdir(), 'mushaf-render-'));
@@ -163,9 +173,14 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       publicDir: path.join(exampleDir, 'public'),
       outDir: path.join(workDir, 'bundle'),
     });
+    if (hasMirror) {
+      publicServer = await serveUnder(path.join(exampleDir, 'public'), '/');
+      realLine = await getMushafLine({mushaf: 'qpc-v4-tajweed', page: 10, line: 3, data: {words: `${publicServer.origin}/${MIRROR.words}`, layout: `${publicServer.origin}/${MIRROR.layout}`}});
+    }
   });
 
   afterAll(() => {
+    publicServer?.server.close();
     if (workDir) rmSync(workDir, {recursive: true, force: true});
   });
 
@@ -302,9 +317,9 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     }
   });
 
-  describe.skipIf(!realLayout)('with the compiled KFGQPC V4 data', () => {
+  describe.skipIf(!hasMirror)('with the mirrored KFGQPC V4 exports', () => {
     it('renders page 10 line 3 with the fixture font (saved next to this file for visual comparison)', async () => {
-      const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
+      const line = realLine!;
       expect(line.words.length).toBeGreaterThan(3);
       const png = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
       writeFileSync(path.join(here, 'p10-l3.png'), png);
@@ -313,7 +328,7 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
 
     it('slices a fitted line without changing its size, deterministically', async () => {
       // 2:62 ends and 2:63 begins on page 10 line 3.
-      const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
+      const line = realLine!;
       const whole = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
       const sliced = await still(serveUrl, harnessProps({lines: [line], fit: 'line', slice: {ayah: 63}}));
       writeFileSync(path.join(here, 'p10-l3-slice.png'), sliced);
@@ -324,7 +339,7 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     });
 
     it('renders the mandala palette and its colours, the letters following CSS color', async () => {
-      const line = lineFromLayout(realLayout!, 'qpc-v4-tajweed', 10, 3);
+      const line = realLine!;
       const tajweed = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
       // The palette and its colours ride on the data, so the renderer needs nothing else; the
       // letters take the page's colour through the palette, exactly as plain glyphs would.

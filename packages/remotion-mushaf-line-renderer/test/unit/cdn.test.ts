@@ -3,7 +3,7 @@
 // routed around by CDN_FORMAT_EXCEPTIONS in src/mushafs.ts.
 import {existsSync, readFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
-import {MUSHAF_IDS, getMushafDefinition} from '../../src/mushafs';
+import {DATASETS, MUSHAF_IDS, getMushafDefinition} from '../../src/mushafs';
 
 const file = new URL('../../../../scripts/cdn-etags.json', import.meta.url);
 
@@ -31,6 +31,20 @@ describe.skipIf(!existsSync(file))('CDN survey (scripts/cdn-etags.json)', () => 
       }
     }
     expect(missing).toEqual([]);
+  });
+
+  it('records the data exports the registry pins, served with CORS for any origin, once they were downloaded', () => {
+    const data = (survey as Survey & {data?: Record<string, {url: string | null; cors: string | null; sha256: string}>}).data;
+    if (!data) return; // no --data run recorded yet
+    for (const part of ['words', 'layout'] as const) {
+      const entry = data[part];
+      expect(entry, part).toBeDefined();
+      expect(entry!.sha256).toMatch(/^[0-9a-f]{64}$/);
+      // A stand-in written without a download carries no URL; a downloaded export is the pinned one.
+      if (entry!.url === null) continue;
+      expect(entry!.url).toBe(DATASETS['qpc-v4'].urls[part]);
+      expect(entry!.cors, `${part} export must be fetchable cross-origin`).toBe('*');
+    }
   });
 
   it('routes around every gap the survey found', () => {
