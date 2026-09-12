@@ -19,7 +19,9 @@ const MAX_PROBLEMS = 60;
 export class LayoutValidationError extends Error {
   constructor(problems) {
     const shown = problems.slice(0, MAX_PROBLEMS);
-    super(`Layout validation failed with ${problems.length} problem(s):\n - ${shown.join('\n - ')}${problems.length > shown.length ? `\n - … ${problems.length - shown.length} more` : ''}`);
+    super(
+      `Layout validation failed with ${problems.length} problem(s):\n - ${shown.join('\n - ')}${problems.length > shown.length ? `\n - … ${problems.length - shown.length} more` : ''}`,
+    );
     this.problems = problems;
   }
 }
@@ -76,16 +78,31 @@ export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
           // Reading order: within an ayah positions increase by one; a new ayah comes after the
           // previous one and starts at position 1.
           if (last && w.surah === last.surah && w.ayah === last.ayah) {
-            if (w.position !== last.position + 1) problem(`page ${page} line ${line.line}: word ${location} follows ${last.surah}:${last.ayah}:${last.position}`);
+            if (w.position !== last.position + 1)
+              problem(
+                `page ${page} line ${line.line}: word ${location} follows ${last.surah}:${last.ayah}:${last.position}`,
+              );
           } else {
-            if (last && (w.surah < last.surah || (w.surah === last.surah && w.ayah < last.ayah))) problem(`page ${page} line ${line.line}: word ${location} comes after ${last.surah}:${last.ayah}:${last.position}`);
-            if (w.position !== 1) problem(`page ${page} line ${line.line}: ayah ${w.surah}:${w.ayah} starts at position ${w.position}`);
+            if (last && (w.surah < last.surah || (w.surah === last.surah && w.ayah < last.ayah)))
+              problem(
+                `page ${page} line ${line.line}: word ${location} comes after ${last.surah}:${last.ayah}:${last.position}`,
+              );
+            if (w.position !== 1)
+              problem(`page ${page} line ${line.line}: ayah ${w.surah}:${w.ayah} starts at position ${w.position}`);
           }
           last = {surah: w.surah, ayah: w.ayah, position: w.position};
-          if (w.wordId <= lastQulId) idOrderViolations.push({page, line: line.line, location, qulId: w.wordId, previousQulId: lastQulId});
+          if (w.wordId <= lastQulId)
+            idOrderViolations.push({page, line: line.line, location, qulId: w.wordId, previousQulId: lastQulId});
           lastQulId = w.wordId;
         } else {
-          markers.push({page, line: line.line, qulId: w.wordId, kind: w.kind, location: `${w.surah}:${w.ayah}:${w.position}`, text: w.text});
+          markers.push({
+            page,
+            line: line.line,
+            qulId: w.wordId,
+            kind: w.kind,
+            location: `${w.surah}:${w.ayah}:${w.position}`,
+            text: w.text,
+          });
         }
         const cps = Array.from(w.text).length;
         codePointLengths[cps] = (codePointLengths[cps] ?? 0) + 1;
@@ -93,7 +110,14 @@ export const compileLayout = (parsedPages, def, meta = {}, report = {}) => {
         k.push(KNOWN_KINDS[w.kind] ?? '?');
         // Ayah runs: consecutive regular words of one ayah with consecutive positions share a run;
         // a marker always gets a run of its own (its position follows no sequence).
-        if (regular && run && !run.marker && run.surah === w.surah && run.ayah === w.ayah && w.position === run.firstPosition + run.count) {
+        if (
+          regular &&
+          run &&
+          !run.marker &&
+          run.surah === w.surah &&
+          run.ayah === w.ayah &&
+          w.position === run.firstPosition + run.count
+        ) {
           run.count++;
         } else {
           if (run) a.push(run.surah, run.ayah, run.firstPosition, run.count);
@@ -132,7 +156,13 @@ export const expandPage = (layout, pageNumber) => {
   const runs = [];
   let cursor = 0;
   for (let i = 0; i < page.a.length; i += 4) {
-    runs.push({surah: page.a[i], ayah: page.a[i + 1], firstPosition: page.a[i + 2], start: cursor, end: cursor + page.a[i + 3] - 1});
+    runs.push({
+      surah: page.a[i],
+      ayah: page.a[i + 1],
+      firstPosition: page.a[i + 2],
+      start: cursor,
+      end: cursor + page.a[i + 3] - 1,
+    });
     cursor += page.a[i + 3];
   }
   const wordAt = (i) => {
@@ -141,7 +171,15 @@ export const expandPage = (layout, pageNumber) => {
     const position = run.firstPosition + (i - run.start);
     const kindChar = page.k[i];
     const kind = Object.keys(KNOWN_KINDS).find((name) => KNOWN_KINDS[name] === kindChar);
-    return {wordId: page.w + i, surah: run.surah, ayah: run.ayah, position, kind, text: page.t[i], location: `${run.surah}:${run.ayah}:${position}`};
+    return {
+      wordId: page.w + i,
+      surah: run.surah,
+      ayah: run.ayah,
+      position,
+      kind,
+      text: page.t[i],
+      location: `${run.surah}:${run.ayah}:${position}`,
+    };
   };
   const lines = [];
   let wc = 0;
@@ -168,7 +206,21 @@ export const expandPage = (layout, pageNumber) => {
  */
 export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
   const problems = [];
-  const report = {pages: layout.pages.length, lines: 0, ayahLines: 0, surahNameLines: 0, basmallahLines: 0, centeredAyahLines: 0, centeredAyahLineList: [], words: 0, markerWords: 0, twoCodePointWords: 0, codePointLengths: {}, kinds: {}, ayahs: 0};
+  const report = {
+    pages: layout.pages.length,
+    lines: 0,
+    ayahLines: 0,
+    surahNameLines: 0,
+    basmallahLines: 0,
+    centeredAyahLines: 0,
+    centeredAyahLineList: [],
+    words: 0,
+    markerWords: 0,
+    twoCodePointWords: 0,
+    codePointLengths: {},
+    kinds: {},
+    ayahs: 0,
+  };
   const allLines = []; // every line of the mushaf in order, for the centred-line rule
   const inv = def.invariants ?? {};
   const cpMin = inv.codePointMin ?? 0xfc41;
@@ -195,9 +247,11 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
     const page = layout.pages[p - 1];
     if (page.w !== expectedNextId) problems.push(`page ${p}: first word id ${page.w}, expected ${expectedNextId}`);
     expectedNextId = page.w + page.t.length;
-    if (page.k.length !== page.t.length) problems.push(`page ${p}: k has ${page.k.length} chars for ${page.t.length} words`);
+    if (page.k.length !== page.t.length)
+      problems.push(`page ${p}: k has ${page.k.length} chars for ${page.t.length} words`);
     const expectedLines = def.linesOnPage(p);
-    if (expanded.lines.length !== expectedLines) problems.push(`page ${p}: ${expanded.lines.length} lines, expected ${expectedLines}`);
+    if (expanded.lines.length !== expectedLines)
+      problems.push(`page ${p}: ${expanded.lines.length} lines, expected ${expectedLines}`);
 
     for (const line of expanded.lines) {
       report.lines++;
@@ -206,18 +260,27 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         report.ayahLines++;
         if (line.centered) {
           report.centeredAyahLines++;
-          report.centeredAyahLineList.push({page: p, line: line.line, first: line.words[0]?.location, words: line.words.length});
+          report.centeredAyahLineList.push({
+            page: p,
+            line: line.line,
+            first: line.words[0]?.location,
+            words: line.words.length,
+          });
         }
         if (line.words.length === 0) problems.push(`page ${p} line ${line.line}: ayah line without words`);
       } else {
         if (!line.centered) problems.push(`page ${p} line ${line.line}: ${line.type} line must be centered`);
         if (line.type === 'surah_name') {
           report.surahNameLines++;
-          if (line.surah !== lastSurahHeader + 1) problems.push(`page ${p} line ${line.line}: surah header ${line.surah} follows ${lastSurahHeader}`);
+          if (line.surah !== lastSurahHeader + 1)
+            problems.push(`page ${p} line ${line.line}: surah header ${line.surah} follows ${lastSurahHeader}`);
           lastSurahHeader = line.surah;
         } else {
           report.basmallahLines++;
-          if (line.surah !== lastSurahHeader) problems.push(`page ${p} line ${line.line}: basmallah carries surah ${line.surah}, expected ${lastSurahHeader}`);
+          if (line.surah !== lastSurahHeader)
+            problems.push(
+              `page ${p} line ${line.line}: basmallah carries surah ${line.surah}, expected ${lastSurahHeader}`,
+            );
         }
       }
       for (const w of line.words) {
@@ -225,11 +288,15 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         report.kinds[w.kind ?? '?'] = (report.kinds[w.kind ?? '?'] ?? 0) + 1;
         if (!w.kind) problems.push(`page ${p} line ${line.line}: word ${w.location} has unknown kind char`);
         const cps = Array.from(w.text).map((c) => c.codePointAt(0));
-        if (cps.length < 1 || cps.length > MAX_CODE_POINTS) problems.push(`page ${p} line ${line.line}: word ${w.location} has ${cps.length} code points`);
+        if (cps.length < 1 || cps.length > MAX_CODE_POINTS)
+          problems.push(`page ${p} line ${line.line}: word ${w.location} has ${cps.length} code points`);
         if (cps.length === 2) report.twoCodePointWords++;
         report.codePointLengths[cps.length] = (report.codePointLengths[cps.length] ?? 0) + 1;
         for (const cp of cps) {
-          if (cp < cpMin || cp > cpMax) problems.push(`page ${p} line ${line.line}: word ${w.location} code point U+${cp.toString(16).toUpperCase()} outside U+${cpMin.toString(16).toUpperCase()}–U+${cpMax.toString(16).toUpperCase()}`);
+          if (cp < cpMin || cp > cpMax)
+            problems.push(
+              `page ${p} line ${line.line}: word ${w.location} code point U+${cp.toString(16).toUpperCase()} outside U+${cpMin.toString(16).toUpperCase()}–U+${cpMax.toString(16).toUpperCase()}`,
+            );
         }
         if (!REGULAR_KINDS.has(w.kind)) {
           report.markerWords++;
@@ -241,14 +308,18 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         if (!st) {
           st = {count: 0, ends: 0, lastPosition: 0, endPosition: 0};
           ayahState.set(key, st);
-          if (currentAyah && (w.surah < currentAyah.surah || (w.surah === currentAyah.surah && w.ayah < currentAyah.ayah))) {
+          if (
+            currentAyah &&
+            (w.surah < currentAyah.surah || (w.surah === currentAyah.surah && w.ayah < currentAyah.ayah))
+          ) {
             problems.push(`page ${p} line ${line.line}: ayah ${key} comes after ${currentAyah.key}`);
           }
         } else if (currentAyah && currentAyah.key !== key) {
           problems.push(`page ${p} line ${line.line}: ayah ${key} is split by other ayahs`);
         }
         currentAyah = {key, surah: w.surah, ayah: w.ayah};
-        if (w.position !== st.lastPosition + 1) problems.push(`page ${p} line ${line.line}: word ${w.location} expected position ${st.lastPosition + 1}`);
+        if (w.position !== st.lastPosition + 1)
+          problems.push(`page ${p} line ${line.line}: word ${w.location} expected position ${st.lastPosition + 1}`);
         st.lastPosition = w.position;
         st.count++;
         if (w.kind === 'end') {
@@ -267,19 +338,33 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
     let j = i + 1;
     while (j < allLines.length && allLines[j].type === 'ayah' && allLines[j].centered) j++;
     const next = allLines[j];
-    if (next && next.type !== 'surah_name') problems.push(`page ${line.page} line ${line.line}: centred ayah line is not the last line of a surah (next: page ${next.page} line ${next.line} ${next.type})`);
+    if (next && next.type !== 'surah_name')
+      problems.push(
+        `page ${line.page} line ${line.line}: centred ayah line is not the last line of a surah (next: page ${next.page} line ${next.line} ${next.type})`,
+      );
   }
 
   report.ayahs = ayahState.size;
   for (const [key, st] of ayahState) {
     if (st.ends !== 1) problems.push(`ayah ${key}: ${st.ends} end markers`);
-    else if (st.endPosition !== st.lastPosition) problems.push(`ayah ${key}: end marker at position ${st.endPosition} is not the last word (${st.lastPosition})`);
+    else if (st.endPosition !== st.lastPosition)
+      problems.push(`ayah ${key}: end marker at position ${st.endPosition} is not the last word (${st.lastPosition})`);
   }
   if (layout.wordCount !== totalWords) problems.push(`wordCount ${layout.wordCount} but ${totalWords} words found`);
 
   if (strictCounts) {
-    for (const key of ['lines', 'ayahLines', 'surahNameLines', 'basmallahLines', 'centeredAyahLines', 'words', 'markerWords', 'ayahs']) {
-      if (inv[key] !== undefined && report[key] !== inv[key]) problems.push(`${key}: ${report[key]}, expected ${inv[key]}`);
+    for (const key of [
+      'lines',
+      'ayahLines',
+      'surahNameLines',
+      'basmallahLines',
+      'centeredAyahLines',
+      'words',
+      'markerWords',
+      'ayahs',
+    ]) {
+      if (inv[key] !== undefined && report[key] !== inv[key])
+        problems.push(`${key}: ${report[key]}, expected ${inv[key]}`);
     }
   }
 
@@ -296,9 +381,11 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
       continue;
     }
     const where = `page ${exp.page}${exp.line ? ` line ${exp.line}` : ''}`;
-    if (exp.lines !== undefined && expanded.lines.length !== exp.lines) problems.push(`${where}: ${expanded.lines.length} lines, expected ${exp.lines}`);
+    if (exp.lines !== undefined && expanded.lines.length !== exp.lines)
+      problems.push(`${where}: ${expanded.lines.length} lines, expected ${exp.lines}`);
     if (exp.allCentered && expanded.lines.some((l) => !l.centered)) problems.push(`${where}: not all lines centered`);
-    if (exp.noBasmallah && expanded.lines.some((l) => l.type === 'basmallah')) problems.push(`${where}: unexpected basmallah line`);
+    if (exp.noBasmallah && expanded.lines.some((l) => l.type === 'basmallah'))
+      problems.push(`${where}: unexpected basmallah line`);
     if (exp.surahNameLines !== undefined) {
       const n = expanded.lines.filter((l) => l.type === 'surah_name').length;
       if (n !== exp.surahNameLines) problems.push(`${where}: ${n} surah_name lines, expected ${exp.surahNameLines}`);
@@ -310,11 +397,16 @@ export const validateLayout = (layout, def, {strictCounts = true} = {}) => {
         continue;
       }
       if (exp.type && line.type !== exp.type) problems.push(`${where}: type ${line.type}, expected ${exp.type}`);
-      if (exp.surah !== undefined && line.surah !== exp.surah) problems.push(`${where}: surah ${line.surah}, expected ${exp.surah}`);
-      if (exp.centered !== undefined && line.centered !== exp.centered) problems.push(`${where}: centered ${line.centered}, expected ${exp.centered}`);
-      if (exp.firstLocation && line.words[0]?.location !== exp.firstLocation) problems.push(`${where}: first word ${line.words[0]?.location}, expected ${exp.firstLocation}`);
-      if (exp.lastLocation && line.words.at(-1)?.location !== exp.lastLocation) problems.push(`${where}: last word ${line.words.at(-1)?.location}, expected ${exp.lastLocation}`);
-      if (exp.lastKind && line.words.at(-1)?.kind !== exp.lastKind) problems.push(`${where}: last word kind ${line.words.at(-1)?.kind}, expected ${exp.lastKind}`);
+      if (exp.surah !== undefined && line.surah !== exp.surah)
+        problems.push(`${where}: surah ${line.surah}, expected ${exp.surah}`);
+      if (exp.centered !== undefined && line.centered !== exp.centered)
+        problems.push(`${where}: centered ${line.centered}, expected ${exp.centered}`);
+      if (exp.firstLocation && line.words[0]?.location !== exp.firstLocation)
+        problems.push(`${where}: first word ${line.words[0]?.location}, expected ${exp.firstLocation}`);
+      if (exp.lastLocation && line.words.at(-1)?.location !== exp.lastLocation)
+        problems.push(`${where}: last word ${line.words.at(-1)?.location}, expected ${exp.lastLocation}`);
+      if (exp.lastKind && line.words.at(-1)?.kind !== exp.lastKind)
+        problems.push(`${where}: last word kind ${line.words.at(-1)?.kind}, expected ${exp.lastKind}`);
     }
   }
 

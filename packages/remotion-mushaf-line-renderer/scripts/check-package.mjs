@@ -84,7 +84,7 @@ const checkApi = async (label, mod) => {
     else fail(`${label}: an unreachable data source failed with ${e?.code ?? e?.name ?? e}: ${e?.message ?? ''}`);
   }
   if (!mirror) {
-    ok(`${label}: no mirror under example/public/data/qpc-v4 (node scripts/fetch-qul.mjs --data); the loader was not exercised against real files`);
+    ok(`${label}: no mirror under example/public/data/qpc-v4 (bun run qul data); the loader was not exercised against real files`);
     return;
   }
   try {

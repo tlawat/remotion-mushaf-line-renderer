@@ -39,7 +39,12 @@ export const unzip = (buf) => {
 /** The one file of an export zip: the first whose name ends with one of the extensions, else the only file. */
 export const unzipExport = (buf, extensions) => {
   const entries = unzip(buf).filter((e) => !e.name.startsWith('__MACOSX/') && !e.name.split('/').pop().startsWith('.'));
-  const hit = extensions.map((ext) => entries.find((e) => e.name.toLowerCase().endsWith(ext))).find(Boolean) ?? (entries.length === 1 ? entries[0] : null);
-  if (!hit) throw new Error(`zip: no entry named *${extensions.join(' / *')} among ${entries.map((e) => e.name).join(', ') || 'none'}`);
+  const hit =
+    extensions.map((ext) => entries.find((e) => e.name.toLowerCase().endsWith(ext))).find(Boolean) ??
+    (entries.length === 1 ? entries[0] : null);
+  if (!hit)
+    throw new Error(
+      `zip: no entry named *${extensions.join(' / *')} among ${entries.map((e) => e.name).join(', ') || 'none'}`,
+    );
   return hit;
 };

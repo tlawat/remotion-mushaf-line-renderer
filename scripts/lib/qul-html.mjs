@@ -13,8 +13,8 @@
 // The parser is deliberately regex-based and defensive: it fails loudly on anything unexpected
 // instead of guessing, because a wrong word silently becomes a wrong Quran line.
 
-import {KNOWN_KINDS} from './datasets.mjs';
 import {MAX_CODE_POINTS, REGULAR_KINDS} from './compile.mjs';
+import {KNOWN_KINDS} from './datasets.mjs';
 
 const ENTITY = /&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/gi;
 
@@ -85,7 +85,9 @@ export const parsePageHtml = (html, page) => {
       if (!kindClass) throw new QulParseError(`page ${page} line ${lineNumber}: span.char without char-<type> class`);
       const kind = kindClass.slice('char-'.length);
       if (!(kind in KNOWN_KINDS)) {
-        throw new QulParseError(`page ${page} line ${lineNumber}: unknown char type "${kind}" (known: ${Object.keys(KNOWN_KINDS).join(', ')})`);
+        throw new QulParseError(
+          `page ${page} line ${lineNumber}: unknown char type "${kind}" (known: ${Object.keys(KNOWN_KINDS).join(', ')})`,
+        );
       }
       const a = attrs(m[2]);
       const regular = REGULAR_KINDS.has(kind);
@@ -93,14 +95,18 @@ export const parsePageHtml = (html, page) => {
       const location = a['data-location'] ?? '';
       const loc = location.match(/^(\d+):(\d+):(\d+)$/);
       if (regular && (!Number.isInteger(wordId) || wordId < 1 || !loc)) {
-        throw new QulParseError(`page ${page} line ${lineNumber}: word with invalid id/location (${a['data-word-id']}, ${location})`);
+        throw new QulParseError(
+          `page ${page} line ${lineNumber}: word with invalid id/location (${a['data-word-id']}, ${location})`,
+        );
       }
       const inner = m[3].match(/<a[^>]*>([\s\S]*?)<\/a>/);
       const rawText = inner ? inner[1] : m[3];
       const text = decodeEntities(rawText).replace(/\s+/gu, '');
       const cps = codePoints(text);
       if (cps.length < 1 || cps.length > MAX_CODE_POINTS) {
-        throw new QulParseError(`page ${page} line ${lineNumber}: word ${location} has ${cps.length} code points ("${text}", max ${MAX_CODE_POINTS})`);
+        throw new QulParseError(
+          `page ${page} line ${lineNumber}: word ${location} has ${cps.length} code points ("${text}", max ${MAX_CODE_POINTS})`,
+        );
       }
       // Marker glyphs (pause, sajdah, rub-el-hizb) are standalone records in QUL's markup whose ids
       // and positions follow no sequence; a marker without a location borrows its neighbour's.
@@ -115,9 +121,21 @@ export const parsePageHtml = (html, page) => {
     }
     for (let i = 0; i < words.length; i++) {
       if (words[i].surah !== null) continue;
-      const donor = words.slice(0, i).reverse().find((w) => w.surah !== null) ?? words.slice(i + 1).find((w) => w.surah !== null);
-      if (!donor) throw new QulParseError(`page ${page} line ${lineNumber}: no word with a location to attach the ${words[i].kind} marker to`);
-      words[i] = {...words[i], surah: donor.surah, ayah: donor.ayah, position: Number.isInteger(words[i].position) ? words[i].position : donor.position};
+      const donor =
+        words
+          .slice(0, i)
+          .reverse()
+          .find((w) => w.surah !== null) ?? words.slice(i + 1).find((w) => w.surah !== null);
+      if (!donor)
+        throw new QulParseError(
+          `page ${page} line ${lineNumber}: no word with a location to attach the ${words[i].kind} marker to`,
+        );
+      words[i] = {
+        ...words[i],
+        surah: donor.surah,
+        ayah: donor.ayah,
+        position: Number.isInteger(words[i].position) ? words[i].position : donor.position,
+      };
     }
     if (type !== 'ayah' && words.length > 0) {
       throw new QulParseError(`page ${page} line ${lineNumber}: ${type} line contains ${words.length} words`);
@@ -133,10 +151,12 @@ export const parsePageHtml = (html, page) => {
   // not lines of the mushaf. An empty ayah line anywhere else is an error.
   while (lines.length > 0 && lines.at(-1).type === 'ayah' && lines.at(-1).words.length === 0) lines.pop();
   for (const line of lines) {
-    if (line.type === 'ayah' && line.words.length === 0) throw new QulParseError(`page ${page} line ${line.line}: ayah line without words`);
+    if (line.type === 'ayah' && line.words.length === 0)
+      throw new QulParseError(`page ${page} line ${line.line}: ayah line without words`);
   }
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].line !== i + 1) throw new QulParseError(`page ${page}: line numbers are not 1..n (got ${lines.map((l) => l.line).join(',')})`);
+    if (lines[i].line !== i + 1)
+      throw new QulParseError(`page ${page}: line numbers are not 1..n (got ${lines.map((l) => l.line).join(',')})`);
   }
   return {page, lines};
 };

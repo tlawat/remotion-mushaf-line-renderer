@@ -383,7 +383,7 @@ page 10 line 3: waiting for font ...`).
   tajweed set is served as woff) and fetches the format that exists; a survey of all 1,208 URLs is
   kept in the repository and checked by the unit tests.
 - **Mirror the fonts** for offline, faster or reproducible renders: download them into `public/`
-  (`node scripts/fetch-qul.mjs --fonts 10` in this repository does that for both sets) and pin them
+  (`bun run qul fonts 10` in this repository does that for both sets) and pin them
   in `calculateMetadata()` so every render tab gets the same JSON:
 
   ```ts
@@ -413,7 +413,7 @@ time a line is resolved in a tab (or in a Node script) and cached from then on:
 
 Both are zips on Tarteel's CDN, `https://s3.us-east-1.wasabisys.com/static-cdn.tarteel.ai/qul-exports/…`,
 pinned to one publication each (QUL publishes every export under a new prefix; the repository's
-`scripts/fetch-qul.mjs --data` mirrors, records and validates the pinned ones). The package unzips
+`bun run qul data` mirrors, records and validates the pinned ones). The package unzips
 them, reads the SQLite file and joins the two in memory — about 1.2 MB over the wire and a few
 hundred milliseconds, once per tab — then checks the result structurally: page count, lines per
 page, contiguous word ids, one ayah marker per ayah, glyph texts in the fonts' range.
@@ -423,7 +423,7 @@ page, contiguous word ids, one ayah marker per ayah, glyph texts in the fonts' r
   URL, a `staticFile()` result or a root-relative path, zipped or unzipped (the words as JSON, the
   layout as SQLite or as a JSON array of its rows). Anything left out comes from the CDN.
 - **Mirror the exports** for renders that must not depend on the CDN — every render tab and every
-  Lambda chunk fetches them otherwise: put the two zips in `public/` (`node scripts/fetch-qul.mjs
+  Lambda chunk fetches them otherwise: put the two zips in `public/` (`node bun run qul
   --data` in this repository writes them to `example/public/data/qpc-v4/`) and resolve with
 
   ```ts
@@ -633,7 +633,7 @@ Studio-editable wrapper via `Interactive.withSchema`, further mushaf layouts fro
 The lines are built at render time from QUL's exports of mushaf layout 19 (KFGQPC V4, 1441H) — the
 words of the script and the line layout, open data published by [QUL](https://qul.tarteel.ai) — and
 checked against the printed page's invariants (9,046 lines, 83,668 words, one ayah marker per
-ayah) by the repository's `scripts/fetch-qul.mjs`. The fonts are the King Fahd Glyph Complex fonts
+ayah) by the repository's `bun run qul`. The fonts are the King Fahd Glyph Complex fonts
 as published by QUL and are fetched from QUL's CDN at render time. Neither is part of this package.
 Please respect the licences of the [King Fahd Complex](https://qurancomplex.gov.sa) and of QUL when
 distributing renders or mirroring fonts.

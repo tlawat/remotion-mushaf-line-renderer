@@ -6,11 +6,11 @@ import path from 'node:path';
 
 type Box = {x: number; y: number; width: number; height: number};
 
-/** The example's mirror of QUL's two exports (`node scripts/fetch-qul.mjs --data`), served by Vite with the rest of public/. */
+/** The example's mirror of QUL's two exports (`bun run qul data`), served by Vite with the rest of public/. */
 const MIRROR = {words: 'http://localhost:4173/data/qpc-v4/words.json.zip', layout: 'http://localhost:4173/data/qpc-v4/layout.db.zip'};
 // Resolved from the config's rootDir (this folder): Playwright's loader has no import.meta.url to offer.
 const hasMirror = () => existsSync(path.resolve(test.info().config.rootDir, '../../../../example/public/data/qpc-v4/layout.db.zip'));
-const NO_MIRROR = 'QUL\'s exports are not mirrored under example/public/data (node scripts/fetch-qul.mjs --data)';
+const NO_MIRROR = 'QUL\'s exports are not mirrored under example/public/data (bun run qul data)';
 
 const ROW = '.mushaf-line__row';
 const ROOT = '.mushaf-line';
@@ -531,7 +531,7 @@ test.describe('font failures', () => {
 });
 
 test.describe('real data', () => {
-  // Runs once QUL's exports are mirrored (scripts/fetch-qul.mjs --data or the QUL assets workflow).
+  // Runs once QUL's exports are mirrored (bun run qul data or the QUL assets workflow).
   test('page 10 line 3 renders every word right to left, justified, with the ayah marker', async ({page}) => {
     test.skip(!hasMirror(), NO_MIRROR);
     // Through the built package (plain ESM), which is what the harness consumes too: Node fetches

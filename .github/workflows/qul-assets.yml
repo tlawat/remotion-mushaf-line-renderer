@@ -1,7 +1,7 @@
-# Mirrors QUL's assets on a GitHub runner (this sandbox and some networks cannot reach QUL) and
-# commits the results to the branch the workflow ran on: the two data exports the package fetches
-# at runtime (downloaded from the URLs pinned in scripts/lib/datasets.mjs, validated against the
-# printed page's invariants, recorded with ETag, sha256 and CORS header) and the page fonts.
+# Mirrors QUL's assets on a GitHub runner (some networks cannot reach QUL) and commits the results
+# to the branch the workflow ran on: the two data exports the package fetches at runtime (downloaded
+# from the URLs pinned in scripts/lib/datasets.mjs, validated against the printed page's invariants,
+# recorded with ETag, sha256 and CORS header) and the page fonts.
 #
 # Runs on "Run workflow" (inputs below) and on pushes that touch the data tools or this file
 # (defaults: data on, fonts 1,10,187,604, compare off, commit on).
@@ -9,11 +9,11 @@
 # What gets committed (when committing is on):
 #   example/public/data/qpc-v4/{words.json.zip,layout.db.zip}      the mirrored exports (open data)
 #   scripts/cdn-etags.json                                         ETags of every CDN font + the exports
-#   example/public/fonts/<mushaf>/p{1,10,187,604}.{ttf,woff2}            fixture fonts (development only:
-#   packages/remotion-mushaf-line-renderer/test/fixtures/fonts/<mushaf>/... see .gitignore for the rule)
+#   example/public/fonts/<set>/p{1,10,187,604}.{ttf,woff2}         fixture fonts (development only:
+#   packages/remotion-mushaf-line-renderer/test/fixtures/fonts/<set>/...   see .gitignore for the rule)
 #
 # With `fonts: all` the example's mirror of every page's woff2 is committed as well (development
-# only, see .gitignore); scripts/pull-all-assets.sh does the same from a developer's machine.
+# only, see .gitignore); `bun run qul mirror` does the same from a developer's machine.
 name: QUL assets
 
 on:
@@ -38,8 +38,7 @@ on:
   push:
     paths:
       - '.github/workflows/qul-assets.yml'
-      - '.npmrc'
-      - 'scripts/fetch-qul.mjs'
+      - 'scripts/qul.mjs'
       - 'scripts/lib/**'
 
 permissions:
@@ -62,15 +61,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-
-      - name: Enable pnpm
-        run: corepack enable
+          node-version-file: .node-version
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Restore the QUL preview page cache
         if: env.COMPARE == 'true'
@@ -81,33 +81,35 @@ jobs:
           restore-keys: |
             qul-preview-layout-19-
 
-      - name: Mirror the exports and fonts (and compare with the preview pages)
+      - name: Mirror the exports
+        if: env.DATA == 'true'
         env:
           DEBUG: '1'
-        run: |
-          set -euo pipefail
-          args=(--fonts "$FONTS" --etags)
-          if [ "$DATA" = "true" ]; then
-            args=(--data "${args[@]}")
-          fi
-          if [ "$COMPARE" = "true" ]; then
-            args=(--from-pages "${args[@]}")
-          fi
-          echo "node scripts/fetch-qul.mjs ${args[*]}"
-          node scripts/fetch-qul.mjs "${args[@]}" 2>&1 | tee fetch-qul.log
+        run: node scripts/qul.mjs data 2>&1 | tee data.log
+
+      - name: Compare the preview pages with the exports
+        if: env.COMPARE == 'true'
+        env:
+          DEBUG: '1'
+        run: node scripts/qul.mjs compare 2>&1 | tee compare.log
+
+      - name: Download the fonts and record the ETags
+        env:
+          DEBUG: '1'
+        run: node scripts/qul.mjs fonts "$FONTS" --etags 2>&1 | tee fonts.log
 
       - name: Verify the CDN (exports, both font sets, CORS, ETags)
         run: |
           set -uo pipefail
           if [ "$FONTS" = "all" ]; then
-            node scripts/verify-cdn.mjs --data --all 2>&1 | tee verify-cdn.log
+            node scripts/qul.mjs verify --data --all 2>&1 | tee verify.log
           else
-            node scripts/verify-cdn.mjs --data --pages "$FONTS" 2>&1 | tee verify-cdn.log
+            node scripts/qul.mjs verify --data --pages "$FONTS" 2>&1 | tee verify.log
           fi
           exit 0
 
       - name: Validate the mirrored exports with the package tests (the runtime loader, the invariants, the dev-tools route)
-        run: pnpm exec vitest run --project unit --project scripts
+        run: bun run test
 
       - name: Upload the report
         if: always()
@@ -118,9 +120,10 @@ jobs:
           path: |
             example/public/data
             scripts/cdn-etags.json
-            .cache/qul/report.json
-            fetch-qul.log
-            verify-cdn.log
+            data.log
+            compare.log
+            fonts.log
+            verify.log
 
       - name: Commit the results
         if: env.COMMIT == 'true'
