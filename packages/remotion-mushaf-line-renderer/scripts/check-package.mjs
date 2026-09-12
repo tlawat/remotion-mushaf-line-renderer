@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Packaging checks, run after `pnpm build`:
+// Packaging checks, run after `bun run build`:
 //   1. every file named in package.json#exports exists;
 //   2. dist/*/index.* stay small (the package ships code only: the mushaf data is fetched at runtime);
 //   3. the ESM and CJS builds load in Node, export the public API, and resolve a line through the
 //      runtime loader (from the example's mirror of QUL's exports when it is present) — and fail
 //      with a DATA_* error, not a hang, when the source is unreachable;
-//   4. `pnpm pack` + @arethetypeswrong/cli agree the types resolve under every module setting, and
+//   4. `bun pm pack` + @arethetypeswrong/cli agree the types resolve under every module setting, and
 //      the tarball carries no data, fonts, tests or sources.
 import {execFileSync} from 'node:child_process';
 import {existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync} from 'node:fs';
@@ -121,16 +121,17 @@ for (const [name, factory] of [
 // 4. pack + attw ----------------------------------------------------------------------------------
 const tmp = mkdtempSync(path.join(tmpdir(), 'mushaf-pack-'));
 try {
-  execFileSync('pnpm', ['pack', '--pack-destination', tmp], {cwd: pkgDir, stdio: 'pipe'});
+  execFileSync('bun', ['pm', 'pack', '--destination', tmp], {cwd: pkgDir, stdio: 'pipe'});
   const tgz = readdirSync(tmp).find((f) => f.endsWith('.tgz'));
-  if (!tgz) throw new Error('pnpm pack produced no tarball');
+  if (!tgz) throw new Error('bun pm pack produced no tarball');
   const listing = execFileSync('tar', ['-tzf', path.join(tmp, tgz)], {encoding: 'utf8'}).split('\n').filter(Boolean);
   const mustShip = ['package/dist/esm/index.mjs', 'package/dist/cjs/index.js', 'package/dist/esm/index.d.mts', 'package/dist/cjs/index.d.ts', 'package/README.md', 'package/LICENSE'];
   for (const f of mustShip) if (!listing.includes(f)) fail(`tarball is missing ${f}`);
   const leaks = listing.filter((f) => /\.(ttf|woff2?|zip|db|sqlite3?|json|test\.[cm]?[jt]sx?)$/.test(f) && f !== 'package/package.json' || f.startsWith('package/test/') || f.startsWith('package/src/'));
   if (leaks.length) fail(`tarball ships files it should not: ${leaks.join(', ')}`);
   ok(`tarball ${tgz}: ${listing.length} files, ${(statSync(path.join(tmp, tgz)).size / 1024).toFixed(0)} KB`);
-  const attw = execFileSync('pnpm', ['exec', 'attw', path.join(tmp, tgz), '--profile', 'node16', '--format', 'ascii'], {cwd: pkgDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']});
+  const attwBin = path.join(path.dirname(require.resolve('@arethetypeswrong/cli/package.json')), 'dist/index.js');
+  const attw = execFileSync(process.execPath, [attwBin, path.join(tmp, tgz), '--profile', 'node16', '--format', 'ascii'], {cwd: pkgDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']});
   console.log(attw.trim().split('\n').map((l) => `      ${l}`).join('\n'));
   ok('@arethetypeswrong/cli found no problems');
 } catch (e) {
