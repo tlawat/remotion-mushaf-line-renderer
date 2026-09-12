@@ -89,7 +89,7 @@ describe('<MushafLine>', () => {
     expect(root.className).toBe('mushaf-line hero');
     expect(root.dataset).toMatchObject({
       mushaf: 'qpc-v4',
-      look: 'plain',
+      theme: 'plain',
       page: '2',
       line: '3',
       lineType: 'ayah',
@@ -245,12 +245,12 @@ describe('<MushafLine>', () => {
     await waitFor(() => expect(onError2).toHaveBeenCalled());
   });
 
-  it('is plain by default and switches font set with the tajweed look on the convenience path', async () => {
+  it('is plain by default and switches font set with a theme on the convenience path', async () => {
     const plain = render(<MushafLine page={2} line={3} />);
     await waitFor(() => expect(plain.container.querySelector('.mushaf-line')).not.toBeNull());
     expect(plain.container.querySelector<HTMLElement>('.mushaf-line')!.dataset).toMatchObject({
       mushaf: 'qpc-v4',
-      look: 'plain',
+      theme: 'plain',
     });
     expect(rowOf(plain.container).style.fontFamily).toBe('"mushaf-qpc-v4-p2"');
     // Nothing sets a colour: the glyphs inherit CSS `color`, which is what makes them black.
@@ -258,11 +258,11 @@ describe('<MushafLine>', () => {
     expect(rowOf(plain.container).style.color).toBe('');
     cleanup();
 
-    const coloured = render(<MushafLine page={2} line={3} look="tajweed" />);
+    const coloured = render(<MushafLine page={2} line={3} theme="light" />);
     await waitFor(() => expect(coloured.container.querySelector('.mushaf-line')).not.toBeNull());
     expect(coloured.container.querySelector<HTMLElement>('.mushaf-line')!.dataset).toMatchObject({
       mushaf: 'qpc-v4',
-      look: 'tajweed',
+      theme: 'light',
     });
     expect(rowOf(coloured.container).style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
     cleanup();
@@ -270,10 +270,10 @@ describe('<MushafLine>', () => {
     const onError = vi.fn();
     render(
       <Boundary onError={onError}>
-        <MushafLine page={2} line={3} look={'neon' as never} />
+        <MushafLine page={2} line={3} theme={'neon' as never} />
       </Boundary>,
     );
-    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LOOK'});
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_THEME'});
   });
 
   it('forwards the data source on the convenience path and re-resolves when it changes', async () => {
@@ -307,34 +307,34 @@ describe('<MushafLine>', () => {
     expect(onError.mock.calls[0]?.[0].message).toMatch(/already loaded.*pass `data` to getMushafLine/i);
   });
 
-  it('refuses look and colors next to resolved line data, which carries its own', () => {
+  it('refuses theme and mushaf next to resolved line data, which carries its own', () => {
     const onError = vi.fn();
     render(
       <Boundary onError={onError}>
         {/* @ts-expect-error the prop types forbid this; the runtime says why */}
-        <MushafLine line={line} look="tajweed" />
+        <MushafLine line={line} theme="light" />
       </Boundary>,
     );
     expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
-    expect(onError.mock.calls[0]?.[0].message).toMatch(/pass `look` to getMushafLine/i);
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/pass `theme` to getMushafLine/i);
 
     const onColorsError = vi.fn();
     render(
       <Boundary onError={onColorsError}>
-        {/* @ts-expect-error same rule for the colours */}
-        <MushafLine line={line} colors={{ink: 'red'}} />
+        {/* @ts-expect-error same rule for the mushaf id */}
+        <MushafLine line={line} mushaf="qpc-v4" />
       </Boundary>,
     );
     expect(onColorsError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_LINE_PROP'});
-    expect(onColorsError.mock.calls[0]?.[0].message).toMatch(/pass `colors` to getMushafLine/i);
+    expect(onColorsError.mock.calls[0]?.[0].message).toMatch(/pass `mushaf` to getMushafLine/i);
   });
 
-  it('selects the mandala palette on the row, and leaves font-palette alone without it', async () => {
-    const mandala = render(<MushafLine page={2} line={3} look="mandala" />);
+  it('selects the theme palette on the row, and leaves font-palette alone without one', async () => {
+    const mandala = render(<MushafLine page={2} line={3} theme="normal" />);
     await waitFor(() => expect(mandala.container.querySelector('.mushaf-line')).not.toBeNull());
     expect(mandala.container.querySelector<HTMLElement>('.mushaf-line')!.dataset).toMatchObject({
       mushaf: 'qpc-v4',
-      look: 'mandala',
+      theme: 'normal',
     });
     const row = rowOf(mandala.container);
     expect(row.style.fontFamily).toBe('"mushaf-qpc-v4-tajweed-p2"');
@@ -342,13 +342,12 @@ describe('<MushafLine>', () => {
     expect(row.style.getPropertyValue('font-palette')).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
     cleanup();
 
-    // Resolved data carries the look (and an explicit palette) just the same, and nothing is set without them.
+    // A bare base palette (p3) needs no overrides, so its ident is not hashed; plain data sets nothing.
     const colourLine = {
       ...justified,
-      look: 'tajweed' as const,
+      theme: 'p3' as const,
       fontSet: 'qpc-v4-tajweed' as const,
       fontFamily: 'mushaf-qpc-v4-tajweed-p2',
-      palette: 3,
     };
     const fromData = render(<MushafLine line={colourLine} />);
     expect(rowOf(fromData.container).style.getPropertyValue('font-palette')).toBe(
@@ -361,7 +360,7 @@ describe('<MushafLine>', () => {
   it('resolves the ink from the inherited CSS color, and follows an explicit one', async () => {
     const mandalaLine = {
       ...justified,
-      look: 'mandala' as const,
+      theme: 'normal' as const,
       fontSet: 'qpc-v4-tajweed' as const,
       fontFamily: 'mushaf-qpc-v4-tajweed-p2',
     };
@@ -370,7 +369,7 @@ describe('<MushafLine>', () => {
     // `color`, so the colour is read from the row and written into the palette rule.
     const inherited = render(
       <div style={{color: 'rgb(27, 111, 63)'}}>
-        <MushafLine line={{...mandalaLine, colors: {ink: 'currentColor'}}} />
+        <MushafLine line={mandalaLine} />
       </div>,
     );
     const rule = paletteRuleFor(rowOf(inherited.container));
@@ -386,7 +385,13 @@ describe('<MushafLine>', () => {
     // An explicit colour needs no resolution, and each part paints only its own entries.
     const explicit = render(
       <MushafLine
-        line={{...mandalaLine, colors: {ink: '#1b6f3f', accent: '#c8a45c', detail: '#0aa', background: 'transparent'}}}
+        line={{
+          ...mandalaLine,
+          theme: {
+            base: 'normal',
+            colors: {ink: '#1b6f3f', accent: '#c8a45c', detail: '#0aa', background: 'transparent'},
+          },
+        }}
       />,
     );
     const explicitRule = paletteRuleFor(rowOf(explicit.container));
@@ -394,7 +399,37 @@ describe('<MushafLine>', () => {
     expect(explicitRule).toContain('10 #0aa');
     expect(explicitRule).toContain('11 #c8a45c');
     expect(explicitRule).toContain('12 transparent');
-    expect(explicitRule).toContain('13 #1b6f3f');
+    expect(explicitRule).toContain('14 #1b6f3f');
+    expect(explicitRule).not.toContain('13 #1b6f3f'); // the frame is its own part
+  });
+
+  it('gives the ayah-number marker its own palette when the theme colours it apart (QUL black)', () => {
+    const black = {
+      ...justified,
+      theme: 'black' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+    };
+    const {container} = render(<MushafLine line={black} />);
+    const row = rowOf(container);
+    const rowIdent = row.style.getPropertyValue('font-palette');
+    expect(paletteRuleFor(row)).toContain('override-colors:0 #ffffff,1 #ffffff');
+    // Every word inherits the row's palette except the marker, which names the second rule.
+    const words = [...container.querySelectorAll<HTMLElement>('.mushaf-word')];
+    expect(
+      words.filter((w) => w.dataset.kind !== 'end').every((w) => w.style.getPropertyValue('font-palette') === ''),
+    ).toBe(true);
+    const marker = container.querySelector<HTMLElement>('.mushaf-word--end')!;
+    const markerIdent = marker.style.getPropertyValue('font-palette');
+    expect(markerIdent).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-5-[0-9a-f]{8}$/);
+    expect(markerIdent).not.toBe(rowIdent);
+    expect(paletteRuleFor(marker)).toContain('13 #000000');
+    // Without a marker colour no word carries its own palette.
+    cleanup();
+    const light = render(<MushafLine line={{...black, theme: 'light'}} />);
+    expect(
+      light.container.querySelector<HTMLElement>('.mushaf-word--end')!.style.getPropertyValue('font-palette'),
+    ).toBe('');
   });
 
   it('styles and marks individual words through the per-word hooks', () => {

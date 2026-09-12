@@ -13,6 +13,8 @@ export type LineContextValue = {
   readonly ready: boolean;
   readonly frame: number;
   readonly fps: number;
+  /** `font-palette` ident for the ayah-number marker glyph, when the theme colours it apart from the row. */
+  readonly markerPalette: string | undefined;
   readonly activeWordId: MushafLineCommonProps['activeWordId'];
   readonly activeWordStyle: MushafLineCommonProps['activeWordStyle'];
   readonly wordStyle: MushafLineCommonProps['wordStyle'];

@@ -538,7 +538,10 @@ test.describe('colour and per-word hooks', () => {
     const mandala = await page.locator(ROW).screenshot();
     await open(page, 'tajweed');
     await rowsVisible(page, 1);
-    await expect(page.locator(ROW)).toHaveCSS('font-palette', 'normal');
+    // The light theme is QUL's Light rule: base palette 0 with every entry written out.
+    const light = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
+    expect(light).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-0-[0-9a-f]{8}$/);
+    expect(await paletteRule(page, light)).toContain('base-palette: 0');
     expect(mandala.equals(await page.locator(ROW).screenshot())).toBe(false);
   });
 
@@ -547,7 +550,7 @@ test.describe('colour and per-word hooks', () => {
     await rowsVisible(page, 1);
     const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
     const rule = await paletteRule(page, ident);
-    // One entry per part: ink (letters, and 13 = frame + number), detail (10 = jewel),
+    // One entry per part: ink (letters), frame (13 = frame + number), detail (10 = jewel),
     // accent (11 = petals), background (12 = the disc).
     expect(rule).toContain('0 rgb(27, 27, 27)');
     expect(rule).toContain('13 rgb(27, 27, 27)');
@@ -559,6 +562,45 @@ test.describe('colour and per-word hooks', () => {
     await open(page, 'mandala');
     await rowsVisible(page, 1);
     expect(gold.equals(await page.locator(ROW).screenshot())).toBe(false);
+  });
+
+  test("QUL's dark and sepia themes write their own colours for every entry", async ({page}) => {
+    await open(page, 'dark');
+    await rowsVisible(page, 1);
+    const darkIdent = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
+    expect(darkIdent).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-5-[0-9a-f]{8}$/);
+    const dark = await paletteRule(page, darkIdent);
+    expect(dark).toContain('base-palette: 5');
+    expect(dark).toContain('0 rgb(232, 232, 232)'); // #e8e8e8, the letters
+    expect(dark).toContain('7 rgb(77, 150, 255)'); // #4d96ff, the 2-vowel prolongation
+    expect(dark).toContain('12 rgb(52, 58, 64)'); // #343a40, the disc matches the page
+    const darkShot = await page.locator(ROW).screenshot();
+    await open(page, 'sepia');
+    await rowsVisible(page, 1);
+    const sepiaIdent = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
+    const sepia = await paletteRule(page, sepiaIdent);
+    expect(sepia).toContain('base-palette: 2');
+    expect(sepia).toContain('0 rgb(61, 41, 20)'); // #3d2914
+    expect(darkShot.equals(await page.locator(ROW).screenshot())).toBe(false);
+  });
+
+  test("QUL's black theme paints everything white and the ayah number black, through a second palette", async ({
+    page,
+  }) => {
+    await open(page, 'black');
+    await rowsVisible(page, 1);
+    const rowIdent = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
+    const rowRule = await paletteRule(page, rowIdent);
+    for (const entry of [0, 7, 12, 13]) expect(rowRule).toContain(`${entry} rgb(255, 255, 255)`);
+    // Ordinary words inherit the row's palette; the marker glyph names its own rule, black at 13.
+    await expect(page.locator('.mushaf-word[data-kind="word"]').first()).toHaveCSS('font-palette', rowIdent);
+    const marker = page.locator('.mushaf-word--end').first();
+    const markerIdent = await marker.evaluate((el) => getComputedStyle(el).fontPalette);
+    expect(markerIdent).not.toBe(rowIdent);
+    const markerRule = await paletteRule(page, markerIdent);
+    expect(markerRule).toContain('13 rgb(0, 0, 0)');
+    // The synthetic lines borrow arbitrary page-10 glyphs, so the pixels of the second palette are
+    // checked with a real ayah marker in the render suite (test/render, "dark and black themes").
   });
 
   test('activeWordId and wordStyle reach exactly one word', async ({page}) => {
@@ -602,7 +644,7 @@ test.describe('real data', () => {
     // Through the built package (plain ESM), which is what the harness consumes too: Node fetches
     // the mirror from the Vite server and builds the layout the same way a browser would.
     const pkg = (await import('../../dist/esm/index.mjs')) as unknown as typeof import('../../src/index');
-    const line = await pkg.getMushafLine({look: 'tajweed', page: 10, line: 3, data: MIRROR});
+    const line = await pkg.getMushafLine({theme: 'light', page: 10, line: 3, data: MIRROR});
     expect(line.words.length).toBeGreaterThan(5);
     expect(line.words[0]!.id).toBe('2:62:18'); // ... عِندَ | رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا
     expect(line.words.some((w) => w.kind === 'end' && w.ayah === 62)).toBe(true);
@@ -767,7 +809,7 @@ test.describe('slicing', () => {
   test('with fit="line" a slice keeps the size the whole line was fitted to, frame after frame', async ({page}) => {
     test.skip(!hasMirror(), NO_MIRROR);
     const pkg = (await import('../../dist/esm/index.mjs')) as unknown as typeof import('../../src/index');
-    const line = await pkg.getMushafLine({look: 'tajweed', page: 10, line: 3, data: MIRROR});
+    const line = await pkg.getMushafLine({theme: 'light', page: 10, line: 3, data: MIRROR});
     // ... رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا — 2:62 ends, 2:63 begins.
     const data = {...line, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'};
     const setProps = (overrides: unknown) =>

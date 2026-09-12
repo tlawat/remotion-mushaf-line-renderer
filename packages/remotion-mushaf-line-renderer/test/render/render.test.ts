@@ -95,9 +95,10 @@ type HarnessProps = {
   color: string;
   slice: {ayah?: number; fromAyah?: number; toAyah?: number} | null;
   sliceOnData: boolean;
-  resolve: {look: 'plain' | 'tajweed' | 'mandala'; page: number; line: number} | null;
+  resolve: {theme: 'plain' | 'light' | 'normal'; page: number; line: number} | null;
   data: {words?: string; layout?: string} | null;
   dataFiles: {words: string; layout: string} | null;
+  background: string;
 };
 
 const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
@@ -124,6 +125,7 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   resolve: null,
   data: null,
   dataFiles: null,
+  background: '#ffffff',
   ...overrides,
 });
 
@@ -213,7 +215,7 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     if (hasMirror) {
       publicServer = await serveUnder(path.join(exampleDir, 'public'), '/');
       realLine = await getMushafLine({
-        look: 'tajweed',
+        theme: 'light',
         page: 10,
         line: 3,
         data: {words: `${publicServer.origin}/${MIRROR.words}`, layout: `${publicServer.origin}/${MIRROR.layout}`},
@@ -372,11 +374,11 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
   });
 
   describe.skipIf(!hasMirror)('with the mirrored KFGQPC V4 exports', () => {
-    const p10l3 = () => ({look: 'tajweed', page: 10, line: 3}) as const;
-    /** The same line under another look, without a second load (the layout is cached per source). */
-    const relook = (look: 'plain' | 'mandala') =>
+    const p10l3 = () => ({theme: 'light', page: 10, line: 3}) as const;
+    /** The same line under another theme, without a second load (the layout is cached per source). */
+    const relook = (theme: 'plain' | 'normal' | 'dark' | 'black') =>
       getMushafLine({
-        look,
+        theme,
         page: 10,
         line: 3,
         data: {words: `${publicServer!.origin}/${MIRROR.words}`, layout: `${publicServer!.origin}/${MIRROR.layout}`},
@@ -452,9 +454,9 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     it('renders the mandala palette and its colours, the letters following CSS color', async () => {
       const line = realLine!;
       const tajweed = await still(serveUrl, harnessProps({lines: [line], fit: 'line'}));
-      // The look and its colours ride on the data, so the renderer needs nothing else; the
+      // The theme rides on the data, so the renderer needs nothing else; the
       // letters take the page's colour through the palette, exactly as plain glyphs would.
-      const mandalaLine = await relook('mandala');
+      const mandalaLine = await relook('normal');
       const mandala = await still(
         serveUrl,
         harnessProps({lines: [mandalaLine], fit: 'line', color: 'rgb(27, 111, 63)'}),
@@ -470,12 +472,26 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       const gold = await still(
         serveUrl,
         harnessProps({
-          lines: [{...mandalaLine, colors: {ink: 'currentColor', accent: '#c8a45c'}}],
+          lines: [{...mandalaLine, theme: {base: 'normal', colors: {accent: '#c8a45c'}}}],
           fit: 'line',
           color: '#000000',
         }),
       );
       expect(gold.equals(black)).toBe(false);
+    });
+
+    it("renders QUL's dark and black themes on a dark page as two different pictures", async () => {
+      const dark = await relook('dark');
+      const blackLine = await relook('black');
+      const onDark = (line: unknown) => harnessProps({lines: [line], fit: 'line', background: '#343a40'});
+      const darkPng = await still(serveUrl, onDark(dark));
+      const blackPng = await still(serveUrl, onDark(blackLine));
+      writeFileSync(path.join(here, 'p10-l3-black.png'), blackPng);
+      expect(darkPng.equals(blackPng)).toBe(false);
+      // The marker's second palette is what makes black differ from a bare all-white palette-5 line.
+      const white = Object.fromEntries(Array.from({length: 16}, (_, e) => [String(e), '#ffffff']));
+      const bare = await still(serveUrl, onDark({...blackLine, theme: {base: 5, colors: white}}));
+      expect(bare.equals(blackPng)).toBe(false);
     });
   });
 });

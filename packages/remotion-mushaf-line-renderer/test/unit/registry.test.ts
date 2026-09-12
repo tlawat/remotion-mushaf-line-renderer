@@ -5,13 +5,11 @@ import {
   assertLine,
   assertPage,
   DATASETS,
-  fontSetForLook,
+  fontSetById,
   getDataset,
   getMushafDefinition,
   isMushafId,
-  MANDALA_PALETTE,
   MUSHAF_IDS,
-  MUSHAF_LOOKS,
   MUSHAFS,
   resolveSelection,
 } from '../../src/mushaf/registry';
@@ -63,69 +61,44 @@ describe('mushaf registry', () => {
     expect(v4.fontSets.color.colr).toBe(true);
     expect(v4.fontSets.plain.palettes).toEqual([]);
     expect(v4.fontSets.color.palettes).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(v4.fontSets.color.palettes).toContain(MANDALA_PALETTE);
+    expect(fontSetById(v4, 'qpc-v4-tajweed')).toBe(v4.fontSets.color);
+    expect(fontSetById(v4, 'other')).toBeUndefined();
   });
 
-  it('resolves the look into a font set and, for mandala, its colours', () => {
-    expect(MUSHAF_LOOKS).toEqual(['plain', 'tajweed', 'mandala']);
-    // Nothing said: the V4 mushaf, plain glyphs, no colours to write into a palette.
-    expect(resolveSelection({})).toEqual({def: v4, look: 'plain', fontSet: v4.fontSets.plain});
-    expect(resolveSelection({mushaf: 'qpc-v4', look: 'plain'})).toEqual({
+  it('resolves the theme into a font set and a palette', () => {
+    // Nothing said: the V4 mushaf, plain glyphs, no palette to write.
+    expect(resolveSelection({})).toEqual({def: v4, fontSet: v4.fontSets.plain, theme: null});
+    expect(resolveSelection({mushaf: 'qpc-v4', theme: 'plain'})).toEqual({
       def: v4,
-      look: 'plain',
       fontSet: v4.fontSets.plain,
+      theme: null,
     });
-    // Tajweed: the colour font at its own colours.
-    expect(resolveSelection({look: 'tajweed'})).toEqual({def: v4, look: 'tajweed', fontSet: v4.fontSets.color});
-    // Mandala: the colour font, ink following the inherited CSS colour, the rosette's ornaments the font's own.
-    expect(resolveSelection({look: 'mandala'})).toEqual({
-      def: v4,
-      look: 'mandala',
-      fontSet: v4.fontSets.color,
-      colors: {ink: 'currentColor'},
-    });
-    expect(resolveSelection({look: 'mandala', colors: {accent: '#c8a45c'}}).colors).toEqual({
-      ink: 'currentColor',
-      accent: '#c8a45c',
-    });
-    // An explicit ink replaces the default rather than being layered on it.
-    expect(resolveSelection({look: 'mandala', colors: {ink: '#1b6f3f'}}).colors).toEqual({ink: '#1b6f3f'});
-    expect(fontSetForLook(v4, 'plain')).toBe(v4.fontSets.plain);
-    expect(fontSetForLook(v4, 'mandala')).toBe(v4.fontSets.color);
-  });
-
-  it('refuses a wrong look, colours outside mandala, and colours that are not colours', () => {
-    expect(() => resolveSelection({look: 'colour' as never})).toThrow(
-      /look must be one of 'plain', 'tajweed', 'mandala' when given, got "colour"/,
-    );
-    expect(() => resolveSelection({look: true as never})).toThrow(/got true/);
-    expect(() => resolveSelection({colors: {ink: 'red'}})).toThrow(
-      /colors can only be given with look: 'mandala' \(got look: 'plain'\)/,
-    );
-    expect(() => resolveSelection({look: 'tajweed', colors: {}})).toThrow(/got look: 'tajweed'/);
-    expect(() => resolveSelection({look: 'mandala', colors: {glow: 'red'} as never})).toThrow(
-      /colors.glow is not a colourable part/,
-    );
-    expect(() => resolveSelection({look: 'mandala', colors: {ink: 'red; } body {display:none'}})).toThrow(
-      /colors.ink must be a CSS colour/,
-    );
-    expect(() => resolveSelection({look: 'mandala', colors: ['red'] as never})).toThrow(
-      /must be an object of CSS colours/,
-    );
+    // Any theme: the colour font, with the theme resolved.
+    const light = resolveSelection({theme: 'light'});
+    expect(light.fontSet).toBe(v4.fontSets.color);
+    expect(light.theme).toMatchObject({name: 'light', base: 0});
+    const custom = resolveSelection({theme: {base: 'normal', colors: {accent: '#c8a45c'}}});
+    expect(custom.fontSet).toBe(v4.fontSets.color);
+    expect(custom.theme?.base).toBe(3);
+    expect(custom.theme?.name).toBeUndefined();
+    expect(() => resolveSelection({theme: 'tajweed' as never})).toThrow(/theme must be 'plain', a preset/);
   });
 
   it('knows which CPAL entries paint which part of the colour font', () => {
-    // Read from the font's CPAL table. 13 (the rosette's frame and the ayah number) is written in
-    // the letter colour by the font itself, so it belongs to the ink.
-    expect(v4.fontSets.color.paletteRoles).toEqual({
-      ink: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14, 15],
+    // Read from the font's CPAL table, the COLR layer counts and QUL's own palette rules.
+    expect(v4.fontSets.color.colorParts).toEqual({
+      ink: [0, 14],
+      silent: [1, 2, 15],
+      rules: [3, 4, 5, 6, 7, 8, 9],
+      frame: [13],
       accent: [11],
       detail: [10],
       background: [12],
     });
-    const all = Object.values(v4.fontSets.color.paletteRoles).flat();
+    const all = Object.values(v4.fontSets.color.colorParts).flat();
     expect(new Set(all).size).toBe(16);
-    expect(Object.values(v4.fontSets.plain.paletteRoles).flat()).toEqual([]);
+    expect(v4.fontSets.color.entries).toBe(16);
+    expect(Object.values(v4.fontSets.plain.colorParts).flat()).toEqual([]);
   });
 
   it('validates ids, pages and lines', () => {

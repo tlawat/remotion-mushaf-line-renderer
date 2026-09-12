@@ -23,10 +23,13 @@ export const Word: React.FC<{readonly word: MushafWord}> = ({word}) => {
   const context: WordContext = {line: ctx.line, frame: ctx.frame, fps: ctx.fps, active, inSlice: !hidden};
   const extra = ctx.wordStyle?.(word, context);
   const extraClass = ctx.wordClassName?.(word, context);
+  // The ayah-number marker glyph takes the theme's marker palette (QUL's `.char-end` rule).
+  const marker = word.kind === 'end' && ctx.markerPalette ? {fontPalette: ctx.markerPalette} : undefined;
   const style =
-    extra || (active && ctx.activeWordStyle) || hidden
+    extra || marker || (active && ctx.activeWordStyle) || hidden
       ? {
           ...WORD_STYLE,
+          ...marker,
           ...(active ? ctx.activeWordStyle : undefined),
           ...extra,
           ...(hidden ? HIDDEN_WORD_STYLE : undefined),

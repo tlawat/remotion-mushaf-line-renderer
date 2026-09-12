@@ -125,11 +125,11 @@ const checkApi = async (label, mod) => {
   }
   try {
     const data = {words: `${mirror.origin}/qpc-v4/words.json.zip`, layout: `${mirror.origin}/qpc-v4/layout.db.zip`};
-    const line = await mod.getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2, look: 'mandala', data});
+    const line = await mod.getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2, theme: 'normal', data});
     if (line.words[0]?.id !== '1:1:1') fail(`${label}: page 1 line 2 should start at 1:1:1, got ${line.words[0]?.id}`);
-    else if (line.version !== 2 || line.look !== 'mandala' || line.fontSet !== 'qpc-v4-tajweed')
+    else if (line.version !== 3 || line.theme !== 'normal' || line.fontSet !== 'qpc-v4-tajweed')
       fail(
-        `${label}: unexpected line data ${JSON.stringify({version: line.version, look: line.look, fontSet: line.fontSet})}`,
+        `${label}: unexpected line data ${JSON.stringify({version: line.version, theme: line.theme, fontSet: line.fontSet})}`,
       );
     else
       ok(

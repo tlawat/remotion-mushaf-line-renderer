@@ -69,7 +69,7 @@ describe.skipIf(!hasMirror)('the mirrored QUL exports', () => {
     expect(fatihah.words.map((w) => w.id)).toEqual(['1:1:1', '1:1:2', '1:1:3', '1:1:4', '1:1:5']);
     expect(fatihah.words.at(-1)?.kind).toBe('end');
     expect(fatihah.centered).toBe(true);
-    const p10l3 = lineFromLayout(layout, resolveSelection({look: 'tajweed'}), 10, 3);
+    const p10l3 = lineFromLayout(layout, resolveSelection({theme: 'light'}), 10, 3);
     expect(p10l3.words[0]?.id).toBe('2:62:18');
     expect(p10l3.words.at(-1)?.id).toBe('2:63:2');
     expect(p10l3.words.length).toBeGreaterThan(5);

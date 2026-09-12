@@ -116,8 +116,8 @@ const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined): M
  * `data` names the mushaf data source (default: QUL's exports on Tarteel's CDN).
  */
 export const getMushafLines = async (options: GetMushafLinesOptions): Promise<MushafLineData[]> => {
-  const {mushaf, look, colors, fontUrl, data} = options;
-  const resolved = resolveSelection({mushaf, look, colors});
+  const {mushaf, theme, fontUrl, data} = options;
+  const resolved = resolveSelection({mushaf, theme});
   const {def} = resolved;
   const layout = await loadLayout(def.dataset, data);
   const lineAt = (page: number, line: number): MushafLineData =>
