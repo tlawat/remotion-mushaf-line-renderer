@@ -543,7 +543,19 @@ const main = async () => {
       log('font checks FAILED (see above)');
     }
   }
-  if (dataRecord) writeSurvey({data: dataRecord}, 'the data exports');
+  if (dataRecord) {
+    // An export that is byte-for-byte what the survey already records keeps its recorded download
+    // time, so a re-run that changes nothing commits nothing.
+    const recorded = readSurvey()?.data ?? {};
+    const stable = Object.fromEntries(
+      Object.entries(dataRecord).map(([part, record]) => {
+        const {downloadedAt: _now, ...fresh} = record;
+        const {downloadedAt: _then, ...known} = recorded[part] ?? {};
+        return [part, JSON.stringify(fresh) === JSON.stringify(known) ? recorded[part] : record];
+      }),
+    );
+    writeSurvey({data: stable}, 'the data exports');
+  }
   if (args.etags) await recordEtags(fontEtags);
   if (process.exitCode) log('finished with errors');
   else log('done');
