@@ -3,89 +3,86 @@
 [![CI](https://github.com/tlawat/remotion-mushaf-line-renderer/actions/workflows/ci.yml/badge.svg)](https://github.com/tlawat/remotion-mushaf-line-renderer/actions/workflows/ci.yml)
 [![MIT licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-Render lines of the Quran in [Remotion](https://www.remotion.dev) videos exactly as they are printed
-in the KFGQPC V4 (1441H) mushaf: the same page fonts, the same line breaks, the same word spacing,
-with entrances and exits in `@remotion/transitions` vocabulary.
+Render lines of the KFGQPC V4 (1441H) mushaf in [Remotion](https://www.remotion.dev), using QUL's
+per-page fonts and 15-line layout.
 
 ![Page 10, line 3 of the mushaf in the normal theme](docs/assets/p10-l3-mandala.png)
+
+## Install
+
+Not on npm yet. Until the first release, build it from this repository (see [Development](#development)).
+
+```bash
+npm install remotion-mushaf-line-renderer
+```
+
+Peer dependencies: `remotion` and `@remotion/transitions` ≥ 4.0.374, `react` ≥ 18.
+
+## Usage
 
 ```tsx
 import {MushafLine, getMushafLines, slideFade} from 'remotion-mushaf-line-renderer';
 
-// in calculateMetadata(): every line that carries At-Tawbah 9:1-11
-const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, theme: 'normal'});
+// calculateMetadata(): the printed lines that carry At-Tawbah 9:1-11
+const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
 
-// in the composition: one <Sequence> per line
-<Sequence from={i * 60} durationInFrames={60} premountFor={fps}>
-  <MushafLine line={line} enter={slideFade()} exit={slideFade()} />
-</Sequence>;
+// composition: one <Sequence> per line
+{lines.map((line, i) => (
+  <Sequence key={line.line} from={i * 60} durationInFrames={60} premountFor={fps}>
+    <MushafLine line={line} enter={slideFade()} exit={slideFade()} />
+  </Sequence>
+))}
 ```
 
-## Why
+## API
 
-Quran text cannot be typeset like other text. The [Quranic Universal Library (QUL)](https://qul.tarteel.ai)
-publishes one font per page of the printed mushaf in which every word is a single pre-shaped glyph,
-plus the layout data that says which words sit on which line. This package turns that into a Remotion
-component: you ask for a page, a line, a surah or an ayah range, and get frames that match the print.
+| Export                                   | Does                                                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| `getMushafLines({page})`                 | Every line of a page, as JSON.                                                |
+| `getMushafLines({surah, fromAyah, toAyah})` | The lines that carry an ayah range. `slice: true` trims the first/last line to the range. |
+| `getMushafLine({page, line})`            | One line.                                                                     |
+| `getMushafLocation({surah, ayah})`       | `{page, line}` where an ayah starts.                                          |
+| `<MushafLine line={data} />`             | Renders a line. Waits for the page font behind `delayRender()`.               |
+| `<MushafLine page={10} line={3} />`      | Same, resolving the line at render time.                                      |
+| `slideFade()`, `revealRtl()`             | Presentations for `enter` / `exit`. Any DOM presentation from `@remotion/transitions` works too. |
+| `loadPageFont()`, `loadMushafData()`     | Preload a font or the data, e.g. for a `<Player>`.                            |
 
-- **Faithful.** One DOM element per word, at the font's own advances. No shaping, no justification, no
-  line breaking to get wrong. Nothing is painted before the page font has loaded.
-- **Remotion-native.** Timing from the enclosing `<Sequence>`, `delayRender()` for the fonts, plain
-  JSON line data for `calculateMetadata()`, works in the Studio, the CLI, Lambda and the `<Player>`.
-- **QUL's themes.** Plain glyphs that follow CSS `color`, or the colour font with the same ten themes
-  QUL's preview page offers (light, dark, sepia, black, normal, the raw palettes), plus custom themes
-  down to single palette entries.
-- **Motion that reads well.** `slideFade()` and `revealRtl()` presentations, eased default timings,
-  and every DOM presentation from `@remotion/transitions`.
-- **Loud errors.** Every failure is a `MushafError` with a stable code and a message that names the fix.
+Main `<MushafLine>` props: `theme` (`'plain'` follows CSS `color`; `'light'`, `'dark'`, `'sepia'`,
+`'black'`, `'normal'`, `'p1'`–`'p5'` or a custom palette), `slice`, `fit`, `fontSize`, `enter`,
+`exit`, `activeWordId`, `wordStyle`.
 
-## Get started
+Full reference: [package README](packages/remotion-mushaf-line-renderer/README.md).
+
+## Limitations
+
+- Only `ayah` lines render. Surah-name and basmalah lines come back with no words and throw
+  `UNSUPPORTED_LINE_TYPE` in `<MushafLine>`.
+- Only the KFGQPC V4 15-line mushaf.
+- Data (~1.2 MB, once per tab) and fonts (~300 KB per page) are fetched from QUL's CDN at render time.
+  Pass `data` and `fontUrl` to use a mirror in `public/` instead.
+
+## Development
+
+Requires Bun ≥ 1.2 and Node ≥ 20.
 
 ```bash
-bun add remotion-mushaf-line-renderer   # or npm install
+bun install
+bun run build   # build the package
+bun run dev     # Remotion Studio on example/
+bun run test    # unit tests
 ```
 
-Then read the **[package documentation](packages/remotion-mushaf-line-renderer/README.md)**: quick
-start, the full `<MushafLine>` API, themes, sizing, animation, fonts, per-word hooks,
-errors. It is what npm shows too.
+| Path                                                                               | Contents                                  |
+| ---------------------------------------------------------------------------------- | ----------------------------------------- |
+| [`packages/remotion-mushaf-line-renderer`](packages/remotion-mushaf-line-renderer) | The package                               |
+| [`example`](example)                                                               | Example Remotion project and test harness |
+| [`scripts`](scripts)                                                               | `qul` CLI: mirror and check QUL's data and fonts |
+| [`docs`](docs)                                                                     | Architecture and font notes               |
 
-## In this repository
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the test suites and checks CI runs.
 
-| Path                                                                       | What it is                                                                                        |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| [`packages/remotion-mushaf-line-renderer`](packages/remotion-mushaf-line-renderer) | The npm package: the component, the resolvers, the runtime data loader, the font loader.   |
-| [`example`](example)                                                       | A Remotion project: three lines of a page, a recitation synced to audio, and a `<Player>` harness. |
-| [`scripts`](scripts)                                                       | The `qul` CLI that mirrors and checks QUL's exports and page fonts (`example/public/data` holds the mirror). |
-| [`docs`](docs)                                                             | Architecture notes and what we learned about the QUL fonts.                                       |
+## Licence
 
-Try the example:
-
-```bash
-git clone https://github.com/tlawat/remotion-mushaf-line-renderer.git
-cd remotion-mushaf-line-renderer
-bun install && bun run build
-bun run dev          # opens the Remotion Studio on the example
-```
-
-## Documentation
-
-- [Package README](packages/remotion-mushaf-line-renderer/README.md): install, API, guides, errors.
-- [Example README](example/README.md): the compositions, their props, mirroring fonts, recitation timings.
-- [Architecture](docs/architecture.md): how the data pipeline, the resolvers and the component fit together.
-- [KFGQPC V4 rendering notes](docs/kfgqpc-v4-rendering-notes.md) and [lessons learned with the QUL fonts](docs/qul-fonts-lessons-learned.md).
-- [Changelog](packages/remotion-mushaf-line-renderer/CHANGELOG.md).
-
-## Contributing
-
-Bug reports, questions and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains
-the toolchain (Bun, Biome, vitest, Playwright), the test suites, the data pipeline and the rules
-around the fonts.
-
-## Licences
-
-The code is [MIT](LICENSE). The lines are built at render time from QUL's open exports of its mushaf
-layout (the words of the script and the line layout); the package ships none of it. The fonts are
-King Fahd Glyph Complex fonts published by QUL: the package fetches them from QUL's CDN at render
-time and never redistributes them. Please respect the licences of the
-[King Fahd Complex](https://qurancomplex.gov.sa) and of [QUL](https://qul.tarteel.ai) when you
-distribute renders or mirror the fonts.
+Code: [MIT](LICENSE). The package ships no data and no fonts. The data is open data from
+[QUL](https://qul.tarteel.ai); the fonts belong to the [King Fahd Complex](https://qurancomplex.gov.sa)
+and must not be redistributed unless their licence allows it.
