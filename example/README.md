@@ -21,7 +21,7 @@ enters; in `stack` mode they stack down the page and stay.
 | `theme`           | `'plain'`   | `'plain'`, a preset (`light`, `dark`, `sepia`, `black`, `normal`, `p1`–`p5`) or `{base, colors, marker}`. |
 | `page`            | `10`        | The page.                                                                                    |
 | `lineNumbers`     | `[3, 4, 5]` | Which lines of it (ayah lines only).                                                         |
-| `fontFilePattern` | `null`      | `'fonts/{fontSet}/p{page}.woff2'` to serve the fonts from `public/`; `null` uses QUL's CDN.   |
+| `fonts`           | `'fallback'` | `'fallback'`: QUL's CDN, then the fonts packages; `'cdn'`: the CDN only; `'package'`: the packages only. |
 | `dataFiles`       | `null`      | `{words, layout}` paths of the mirrored exports in `public/`; `null` fetches them from Tarteel's CDN. |
 | `mode`            | `'replace'` | `'replace'` or `'stack'`.                                                                    |
 | `lines`           | `null`      | Filled in by `calculateMetadata`; a `<Player>` host passes resolved lines here.               |
@@ -44,7 +44,7 @@ starts.
 | `theme`           | `'plain'`                    | As above.                                                                        |
 | `timingsFile`     | `'audio/tawbah-timings.json'` | Timings JSON in `public/`; or pass `timings` inline.                            |
 | `audioFile`       | `'audio/tawbah.mp3'`         | Audio in `public/`. Not committed: put your recording there before rendering.    |
-| `fontFilePattern` | `null`                       | As above.                                                                        |
+| `fonts`           | `'fallback'`                 | As above.                                                                        |
 | `dataFiles`       | `null`                       | As above.                                                                        |
 | `cutAtSeconds`    | `60`                         | Stop after the last ayah that ends before this; `null` plays everything.         |
 | `leadInSeconds`   | `0.4`                        | Seconds a line is on screen before its first word is heard.                      |
@@ -52,7 +52,7 @@ starts.
 
 ```bash
 cd example && bunx remotion render Recitation out/recitation.mp4 \
-  --props='{"fontFilePattern":"fonts/{fontSet}/p{page}.woff2","dataFiles":{"words":"data/qpc-v4/words.json.zip","layout":"data/qpc-v4/layout.db.zip"}}'
+  --props='{"fonts":"package","dataFiles":{"words":"data/qpc-v4/words.json.zip","layout":"data/qpc-v4/layout.db.zip"}}'
 ```
 
 The committed timings (`public/audio/tawbah-timings.json`, At-Tawbah 9:1-11) were produced by
@@ -69,17 +69,18 @@ package's browser and render suites.
 
 ## Fonts
 
-By default the fonts come from QUL's CDN on first use (about 300 KB per page). To work offline or to
-make renders reproducible, mirror them into `public/fonts/` and point the compositions at them with
-`fontFilePattern`:
+The page fonts come from QUL's CDN on first use (70–115 KB per page). The example also depends on
+both fonts packages (`remotion-mushaf-fonts-qpc-v4` and `-qpc-v4-tajweed`, workspace packages here)
+and passes them as `fontFallback`, so a render still finishes when the CDN is down; the `fonts` prop
+switches to the CDN alone or to the packages alone (offline, reproducible):
 
 ```bash
-bun run qul fonts 10          # one page, both sets
-bun run qul mirror            # every page (development only; see CONTRIBUTING.md about the fonts)
+bunx remotion render ThreeLines out/three-lines.mp4 --props='{"fonts":"package"}'
 ```
 
-If a cold CDN makes the "waiting for font" `delayRender()` time out, raise the budget for that
-render: `bunx remotion render ThreeLines --timeout=60000`.
+In this repository the packages' `fonts/` folders are filled from the committed mirror
+(`public/fonts/`) by `bun run fonts-packages:fill`, which `bun run dev` runs first; run it yourself
+before rendering with the CLI. `bun run qul fonts 10` refreshes one page of the mirror from the CDN.
 
 ## Data
 

@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased (0.4.0)
+
+- **Fonts packages as the fallback when QUL's CDN fails.** The page fonts still load from QUL's CDN
+  by default. Two new npm packages, `remotion-mushaf-fonts-qpc-v4` (the `'plain'` theme, 43 MB) and
+  `remotion-mushaf-fonts-qpc-v4-tajweed` (every other theme, 51 MB), ship all 604 page fonts of a set,
+  unmodified, as a snapshot of QUL's CDN (versioned `1.<YYYYMMDD>.<patch>`). Pass one to
+  `<MushafLine fontFallback>` (or `loadPageFont({fallback})`): the CDN is tried first, and the package
+  is used only when it fails (an outage, a firewall, a VPC, a timeout); while rendering the CDN's
+  budget leaves 6 s of the `delayRender` timeout for it. Pass it as `fontSrc` to never contact the
+  CDN. The packages list each page as `new URL(file, import.meta.url)`, so the bundler emits the
+  files as assets: no copy step, nothing downloaded unless a line needs it. They are optional peers.
+- **`fontSrc`** on `<MushafLine>` and `loadPageFont()`: `'cdn'` (default), a fonts package, or a
+  resolver `(file) => url | url[]` receiving a `MushafFontFile` (`getMushafFontFile()` returns the
+  same). Each source loads its own font face under its own family, so lines with different sources
+  never affect each other and the result does not depend on which line loaded first.
+- **The line root carries `data-font-origin`** (`cdn`, `package`, `custom`) once its font has loaded;
+  `loadPageFont()` returns `origin()` too.
+- **New errors:** `BAD_FONT_SRC`, `BAD_FONT_FALLBACK` (a fallback without the line's font set is
+  reported the first time the line renders), `FONT_FALLBACK_INVALID` (package bytes that differ from
+  the declared size or SHA-256) and `FONT_UNAVAILABLE` (the source and the fallback both failed; the
+  message lists every attempt).
+- **Removed** (the package is still unpublished): `MushafLineData.fontUrl`, `getMushafLines({fontUrl})`,
+  `loadPageFont({url})`, the `MushafFontUrl` type and the errors `BAD_FONT_URL`, `FONT_URL_CONFLICT`
+  and `FONT_SUPERSEDED`. Each old option is refused with a message naming its replacement:
+
+  ```tsx
+  // 0.3
+  getMushafLines({page: 10, theme, fontUrl: (page, fontSet) => staticFile(`fonts/${fontSet}/p${page}.woff2`)});
+  // 0.4
+  <MushafLine line={line} fontSrc={(f) => staticFile(`fonts/${f.fontSet}/${f.fileName}`)} />
+  // or drop the mirror and keep a fallback:
+  <MushafLine line={line} fontFallback={tajweedFonts} />
+  ```
+
 ## 0.3.0
 
 The API was redesigned for the open-source release. The package is not published yet, so nothing
