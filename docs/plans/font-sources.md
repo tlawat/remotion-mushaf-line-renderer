@@ -1,6 +1,6 @@
 # Font sources: implementation plan (v2)
 
-> **Status: implemented** (commits `3f21016` and after). Differences from the plan below:
+> **Status: implemented** (commits `07e0ffb` and after). Differences from the plan below:
 > - The fonts packages are named in their default export (`name`), so messages can say which package
 >   failed; `MushafFontPackage` has that field.
 > - The `fontSrc` + `fontFallback` pair is a source of its own, with its own family (a hash suffix),
@@ -12,8 +12,8 @@
 >   and webpack) in scratch projects. Open question 1 (the approval's scope) is recorded in
 >   `docs/licensing/qul-approval.md` and blocks a real publish.
 
-**Baseline:** HEAD `05a9908`. **Supersedes:** the file-cache plan committed in `05a9908`, which you can read with
-`git show 05a9908:docs/plans/font-sources.md`. That plan's verified Remotion facts and loader internals
+**Baseline:** HEAD `878a378`. **Supersedes:** the file-cache plan committed in `878a378`, which you can read with
+`git show 878a378:docs/plans/font-sources.md`. That plan's verified Remotion facts and loader internals
 still apply, and this plan points to them where it reuses them. Its public-folder cache, `sync` command and
 cache manifest are dropped.
 
