@@ -97,27 +97,40 @@ results to the branch it was started on: Actions tab, *QUL assets*, *Run workflo
 (default on), the pages whose fonts to download (`1,10,187,604` by default, or `all`) and `compare`
 (default off).
 
-## Fonts: the rule
+## Fonts: licence and packaging
 
-The fonts are King Fahd Complex fonts published by QUL and are **not redistributed** by this project.
-The npm package never contains fonts (`bun run check:package` fails if the tarball does) and the
-package code never depends on committed fonts: it fetches from QUL's CDN by default and takes an
-explicit `fontUrl` when you host them yourself.
+The fonts are King Fahd Complex fonts published by QUL. QUL approved packaging them; the record of
+that approval and its scope is [`docs/licensing/qul-approval.md`](docs/licensing/qul-approval.md).
 
-During development, four pages' fonts (1, 10, 187, 604) are committed as test fixtures so the
-browser and render suites run without network access, and the example's mirror of every page may be
-committed as well (`bun run qul mirror`). `.gitignore` spells out the exceptions.
+- **The main package never contains fonts.** `bun run check:package` fails if the tarball does, if
+  the code imports a fonts package, or if the fonts packages stop being optional peers. At runtime
+  the package fetches from QUL's CDN, and falls back to a fonts package the user passes in.
+- **The fonts ship only in the two fonts packages,** `packages/fonts-qpc-v4` and
+  `packages/fonts-qpc-v4-tajweed` (`remotion-mushaf-fonts-<set>` on npm). Each commits a
+  `manifest.json` (every file's name, size, MD5 and SHA-256), the generated `index.js` / `index.d.ts`,
+  its licence and notes; its `fonts/` folder is not committed but filled from the example's mirror
+  and checked against the manifest:
 
-**Release checklist, before the repository goes public:** delete the `!**/…/p1.*`-style negation
-lines and the two `!example/public/fonts/**` lines from `.gitignore`, run
+  ```bash
+  bun run fonts-packages:fill         # fill both from example/public/fonts (offline)
+  bun run check:fonts-packages        # manifest ↔ entry ↔ npm pack, byte for byte
+  bun run fonts-packages help         # snapshot, generate, fill, verify, check, drift, download
+  ```
 
-```bash
-git rm -r --cached example/public/fonts packages/remotion-mushaf-line-renderer/test/fixtures/fonts
-```
+  The example imports both packages, so fill them before the Studio, the browser suite or the render
+  suite (`bun run dev` does it for you).
+- **Snapshots and versions.** A version is `1.<YYYYMMDD>.<patch>`: the date of QUL's fonts it holds.
+  The *Fonts packages* workflow compares the snapshot with the CDN every week and, when QUL has
+  rebuilt pages, downloads them, takes a new snapshot and opens a pull request. By hand:
+  `fonts-packages download <set> --out <dir>`, then `fonts-packages snapshot <set> --from <dir>`.
+  Change `patch` only for packaging fixes.
+- **Publishing** is the same workflow's `publish` action, fonts packages before the main package. It
+  runs as a dry run unless you untick it, and a real publish also needs the repository variable
+  `FONTS_PUBLISH_APPROVED=true`, to be set once the approval record covers publishing on npm.
 
-and commit. CI keeps working because it downloads the page-10 fixture font itself when it is missing.
-Note that the fonts remain in the git history; purging them needs a history rewrite, which is a
-separate decision.
+The example's mirror of every page (`example/public/fonts`) and the ttf fixtures of pages 1, 10, 187
+and 604 stay committed: the suites and the fill step read them offline. `.gitignore` spells out the
+exceptions.
 
 ## Project layout
 

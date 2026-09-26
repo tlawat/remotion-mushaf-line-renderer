@@ -156,7 +156,7 @@ Rules learned the hard way:
 - `unicode-range` also lets you declare all 604 faces under one family name if you prefer, but
   since every page reuses the same code points, you **must** keep one family per page.
 - Preload strategy: `<link rel="preload" as="font" crossorigin>` for the current page ±1.
-  Fonts are 25–100 KB each in woff2; the whole Mushaf is roughly 20–30 MB.
+  Fonts are 24–114 KB each in woff2; the whole Mushaf is 43 MB (plain) or 51 MB (tajweed).
 
 ## 5. Rendering as vectors (SVG/canvas/video) — what our extraction pipeline does
 

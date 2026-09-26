@@ -57,12 +57,26 @@ been persisted by an older version.
 
 ## 4. Fonts (`src/fonts/`)
 
-`loadPageFont()` fetches the font bytes itself (precise HTTP errors, magic-byte check, retries sized
-to the render's `--timeout`), registers a `FontFace` with the mushaf's metrics pinned, and adds it to
-`document.fonts`. The font store (`font-store.ts`) keeps one entry per font set and page on
-`globalThis`, so Studio fast-refresh and duplicate package copies share one registry, and lets React
-subscribe to its status with `useSyncExternalStore`. Source rules are order-independent: an explicit
-URL replaces an implicit CDN one, two different explicit URLs conflict.
+`planFontSource()` (`font-source.ts`) turns a line's `fontSrc` and `fontFallback` into the steps
+of one load: QUL's CDN (or the fonts package, or the resolver's URLs), then the fallback package
+whose font set matches the line. It validates both (`BAD_FONT_SRC`, `BAD_FONT_FALLBACK`) during
+render, so a mistake shows up before an outage does, and names the load: a store key and a family,
+one per source (`mushaf-<set>-p<page>` for the CDN, a hash suffix for anything else).
+
+`loadPageFont()` runs the steps in order. Each step fetches the bytes itself (precise HTTP errors,
+magic-byte check, retries), checks a package file against its declared size and SHA-256, and
+registers a `FontFace` with the mushaf's metrics pinned; the first step that succeeds wins, and a
+failed step falls through to the next. While rendering the whole load has a deadline inside the
+`delayRender` timeout, and the primary source's budget leaves 6 s for a fallback package
+(`getFontStepBudget()` in `fetch-budget.ts`). The font store (`font-store.ts`) keeps one entry per
+source key on `globalThis`, so Studio fast-refresh and duplicate package copies share one registry,
+and lets React subscribe to its status with `useSyncExternalStore`. Because each source has its own
+entry and family, no load can replace another: a line's font depends only on its own props.
+
+The fonts packages (`packages/fonts-<set>/`) are data, not code the package imports: their default
+export lists every page as `new URL('./fonts/p<page>.woff2', import.meta.url)`, which bundlers turn
+into emitted assets, plus each file's size and SHA-256. `scripts/fonts-package.mjs` generates that
+entry from the committed manifest, fills `fonts/` from the example's mirror, and checks the tarball.
 
 The palette store (`palette-store.ts`) owns the `@font-palette-values` rules a colour-font line
 needs: CSS has no inline way to say "palette 3, ink green", so the rule is written into one shared
@@ -104,5 +118,7 @@ are unit-tested frame by frame.
 `tsup` emits ESM (`dist/esm/index.mjs`) and CJS (`dist/cjs/index.js`) with bundled declarations.
 `scripts/check-package.mjs` verifies the exports map, that the entries stay small and embed no data,
 that both builds load in Node, fail fast on an unreachable data source and resolve a line through the
-runtime loader from the example's mirror, that the tarball ships no fonts, data or tests, and runs
-`@arethetypeswrong/cli` on it.
+runtime loader from the example's mirror, that the tarball ships no fonts, data or tests, that the
+fonts packages stay optional peers the code never imports, and runs `@arethetypeswrong/cli` on it.
+`scripts/fonts-package.mjs check` does the same for the fonts packages: the entry matches the
+manifest, and `npm pack` would publish exactly the manifest's 604 files plus the metadata.

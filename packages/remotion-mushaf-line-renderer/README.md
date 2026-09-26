@@ -13,9 +13,10 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
   load behind `delayRender()`. Line data is plain JSON, made for `calculateMetadata()`.
 - **Deterministic.** Nothing is painted before the page font is loaded, so a render never captures a
   fallback font, and every settled frame is byte-identical across render workers.
-- **Code only.** The mushaf data (QUL's two open exports: the words of the script and the line
-  layout) and the fonts are fetched from Tarteel's CDN at render time, or from a mirror you point
-  the package at. The tarball holds no data and no fonts.
+- **Code only, with a fallback.** The mushaf data (QUL's two open exports: the words of the script
+  and the line layout) and the page fonts are fetched from Tarteel's CDN at render time. The fonts
+  also ship on npm in two separate packages, for when the CDN fails (see
+  [When the CDN fails](#when-the-cdn-fails)). This package's tarball holds no data and no fonts.
 - **QUL's themes.** Plain glyphs that follow CSS `color`, or the colour font with the ten themes QUL's
   own preview page offers (light, dark, sepia, black, normal, the raw palettes) and custom themes
   down to single palette entries.
@@ -33,6 +34,7 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 - [Slicing a line](#slicing-a-line)
 - [Entrances and exits](#entrances-and-exits)
 - [Fonts](#fonts)
+- [When the CDN fails](#when-the-cdn-fails)
 - [Data](#data)
 - [Per-word hooks](#per-word-hooks)
 - [DOM contract](#dom-contract)
@@ -50,6 +52,13 @@ bun add remotion-mushaf-line-renderer
 
 Peer dependencies: `remotion` and `@remotion/transitions` (4.0.374 or newer) and `react` (18 or newer).
 
+Optional: the fonts for when QUL's CDN fails, `remotion-mushaf-fonts-qpc-v4-tajweed` for the colour
+themes or `remotion-mushaf-fonts-qpc-v4` for `'plain'` (see [When the CDN fails](#when-the-cdn-fails)):
+
+```bash
+bun add remotion-mushaf-fonts-qpc-v4-tajweed
+```
+
 ## Quick start
 
 Resolve the line data once in `calculateMetadata()` and pass it to the component. It then runs once
@@ -59,6 +68,8 @@ per render instead of once per browser tab, the Studio shows the resolved props,
 ```tsx
 import {AbsoluteFill, Composition, Sequence, useVideoConfig, type CalculateMetadataFunction} from 'remotion';
 import {MushafLine, getMushafLines, slideFade, type MushafLineData} from 'remotion-mushaf-line-renderer';
+// Optional: used only if QUL's CDN fails (see "When the CDN fails").
+import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
 
 type Props = {lines: MushafLineData[] | null};
 
@@ -76,7 +87,7 @@ const Passage: React.FC<Props> = ({lines}) => {
     <AbsoluteFill style={{backgroundColor: '#fbf7ee', color: '#1b1b1b', justifyContent: 'center'}}>
       {lines!.map((line, i) => (
         <Sequence key={line.line} from={i * HOLD} durationInFrames={HOLD} premountFor={fps} layout="none">
-          <MushafLine line={line} enter={slideFade()} exit={slideFade()} />
+          <MushafLine line={line} enter={slideFade()} exit={slideFade()} fontFallback={tajweedFonts} />
         </Sequence>
       ))}
     </AbsoluteFill>
@@ -97,7 +108,8 @@ The V4 mushaf is 604 pages of 15 lines (8 on the first two). QUL publishes one f
 every word is a single pre-shaped glyph; a line is a sequence of code points that only mean something
 together with that page's font. This package builds the layout of every page (which words are on
 which line) from QUL's exports the first time a line is resolved, and, at render time, fetches the
-page font, waits for it, and lays the words out at the font's own advances. There is no shaping, no
+page font (from QUL's CDN, or from a fonts package when the CDN fails), waits for it, and lays the
+words out at the font's own advances. There is no shaping, no
 justification and no line breaking to get wrong.
 
 Two things flow through your code:
@@ -132,6 +144,8 @@ Two things flow through your code:
 | `wordStyle`              | `(word, ctx) => CSSProperties`                     | Per-word style, called for every word on every frame with `{line, frame, fps, active, inSlice}`. Paint properties only.                                            |
 | `wordClassName`          | `(word, ctx) => string`                            | Appended to `mushaf-word mushaf-word--<kind>`.                                                                                                                     |
 | `name`                   | `string`                                           | Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline.                                                                       |
+| `fontSrc`                | `'cdn'` (default) \| fonts package \| `(file) => url \| url[]` | Where the page font comes from. See [Fonts](#fonts).                                                                                                 |
+| `fontFallback`           | fonts package \| fonts package[]                    | Where the page font comes from when `fontSrc` fails. See [When the CDN fails](#when-the-cdn-fails).                                                                 |
 
 There is no start-time prop: place the line in a `<Sequence from>`. There is no `layout` prop: the
 root element is a normal-flow block of `width: 100%` and `height: lineHeight`; position it with
@@ -161,8 +175,8 @@ Several lines at once, in reading order. Two shapes:
 await getMushafLines({page: 187});
 // Every line that carries a word of these ayahs, wherever they are printed.
 await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
-// Both shapes take the selection, and `fontUrl` pins a mirror on every line they return.
-await getMushafLines({surah: 2, theme: 'light', fontUrl: (page, fontSet) => staticFile(`fonts/${fontSet}/p${page}.woff2`)});
+// Both shapes take the selection (mushaf and theme).
+await getMushafLines({surah: 2, theme: 'light'});
 // `slice: true` records the range on the lines it cuts, so <MushafLine> shows only those ayahs.
 await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true});
 // `data` builds the lines from your own mirror of QUL's exports instead of Tarteel's CDN.
@@ -203,8 +217,7 @@ type MushafLineData = {
   line: number;
   type: 'ayah' | 'surah_name' | 'basmallah';
   centered: boolean;          // centred as printed (last line of a surah, pages 1-2)
-  fontFamily: string;         // "mushaf-<fontSet>-p<page>"
-  fontUrl?: string;           // optional font source pin, see Fonts
+  fontFamily: string;         // "mushaf-<fontSet>-p<page>", the family under the default font source
   slice?: {ayah: number} | {fromAyah: number; toAyah?: number};  // the ayahs to show, see Slicing a line
   surahNumber?: number;       // surah_name and basmallah lines
   words: Array<{
@@ -444,45 +457,111 @@ both sides.
 
 ## Fonts
 
-Each page has its own font (about 300 KB as woff2). By default it is fetched from QUL's CDN
+Each page has its own font: 71 KB (monochrome) or 85 KB (colour) as woff2 for a typical page, 114 KB
+at most. By default it is fetched from QUL's CDN
 (`https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/{v4|v4-tajweed}/woff2/p{N}.woff2`, CORS `*`),
 checked for its magic bytes, registered with `new FontFace()` with the mushaf's metrics pinned, and
 only then is the line painted. Renders wait for it behind a labelled `delayRender()`.
 
+Where the font comes from is `fontSrc`, a prop of `<MushafLine>` (and an option of `loadPageFont()`):
+
+| `fontSrc`                                   | The page font comes from                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `'cdn'` (default)                           | QUL's CDN.                                                                                                        |
+| a fonts package (`import fonts from '…'`)   | The package only, bundled with your code: the CDN is never contacted. See [When the CDN fails](#when-the-cdn-fails). |
+| `(file) => url` or `(file) => [url, …]`     | Your own URLs, tried in order. `file` is a `MushafFontFile`: `{fontSet, page, format, fileName, cdnUrl, …}`.          |
+
+`fontFallback` adds a fonts package after the source: it is used only when the source fails.
+
+```tsx
+// Your own mirror in public/ (copy the files there yourself): note page 328 of the colour set is .woff.
+<MushafLine line={line} fontSrc={(f) => staticFile(`fonts/${f.fontSet}/${f.fileName}`)} />
+// A mirror, then QUL's CDN.
+<MushafLine line={line} fontSrc={(f) => [`https://fonts.example.com/${f.fontSet}/${f.fileName}`, f.cdnUrl]} />
+```
+
+`getMushafFontFile({page, theme?, mushaf?})` returns the same `MushafFontFile` a resolver receives.
+
+- **One face per source.** Lines with different sources never share a font face: each source loads
+  its own, under its own family (`mushaf-<fontSet>-p<page>` for the CDN, with a suffix for anything
+  else), so a line's font depends only on its own props and every render tab paints the same.
 - **Slow or cold CDN during a render:** raise the render budget, `npx remotion render --timeout=60000`
-  (or `timeoutInMilliseconds` in the Node APIs). The fetch budget adapts to it.
+  (or `timeoutInMilliseconds` in the Node APIs). The fetch budget adapts to it. Or pass a fallback.
 - **CDN gaps:** the registry knows the pages whose woff2 is missing on the CDN (page 328 of the
   colour set is served as woff) and fetches the format that exists.
-- **Mirror the fonts** for offline, faster or reproducible renders: download them into `public/`
-  and pin them where the data is resolved, so every render worker gets the same JSON:
-
-  ```ts
-  const lines = await getMushafLines({page: 10, fontUrl: (page, fontSet) => staticFile(`fonts/${fontSet}/p${page}.woff2`)});
-  ```
-
-  `fontUrl` also accepts any URL of your own mirror. Mirroring is for your own renders: the fonts are
-  King Fahd Complex fonts published by QUL, so do not redistribute them (in a public site or a
-  package) unless their licence allows it.
 - **`<Player>` warm-up:** the Player does not run `calculateMetadata`, and a line mounted at frame 0
-  would show nothing until its font arrives. Call `loadPageFont({page, theme})` when your page loads,
-  or mount the line early with `<Sequence premountFor>`.
+  would show nothing until its font arrives. Call `loadPageFont({page, theme, fontSrc, fallback})`
+  with the same sources as the line when your page loads, or mount the line early with
+  `<Sequence premountFor>`.
 - **`premountFor`:** Remotion 4 does not premount by default. Give each `<Sequence>` a `premountFor`
   of a second or so; the font then loads while the line is still hidden and the entrance starts on
   time, both in the Player and in renders.
 
-### `loadPageFont({page, theme?, mushaf?, url?}): {fontFamily, waitUntilDone}`
+### `loadPageFont({page, theme?, mushaf?, fontSrc?, fallback?}): {fontFamily, waitUntilDone, origin}`
 
 Google-fonts style loader. Idempotent; wraps `delayRender()` / `cancelRender()` internally; a no-op
 during server rendering. `<MushafLine>` calls it for you. Call it yourself to warm a font in a
-`<Player>` before the line mounts, or to register a font source once for the whole page:
+`<Player>` before the line mounts, with the sources the line will use:
 
 ```ts
-loadPageFont({theme: 'light', page: 10, url: staticFile('fonts/qpc-v4-tajweed/p10.woff2')});
+const font = loadPageFont({theme: 'light', page: 10, fallback: tajweedFonts});
+await font.waitUntilDone();
+font.origin(); // 'cdn' | 'package' | 'custom'
 ```
 
-Source rules are order-independent, so every Lambda chunk behaves the same: no `url` adopts whatever
-source is registered for that page (else the CDN); an explicit `url` replaces an implicit CDN
-registration; two different explicit urls throw `FONT_URL_CONFLICT`.
+## When the CDN fails
+
+By default every page font comes from QUL's CDN. When the CDN is unreachable (an outage, a firewall,
+a cloud render in a VPC with no outbound access) or keeps timing out, the render fails after its
+retries with `FONT_HTTP`, `FONT_NETWORK` or `FONT_TIMEOUT`. For those cases the fonts ship on npm,
+unmodified, in two packages:
+
+| Package                                  | For                                                                    | Size  |
+| ---------------------------------------- | ---------------------------------------------------------------------- | ----- |
+| `remotion-mushaf-fonts-qpc-v4`           | the `'plain'` theme (monochrome glyphs that follow CSS `color`)        | 43 MB |
+| `remotion-mushaf-fonts-qpc-v4-tajweed`   | every other theme (the colour font)                                    | 51 MB |
+
+Install the one your theme uses (or both) and pass it as `fontFallback`:
+
+```bash
+npm i remotion-mushaf-fonts-qpc-v4-tajweed
+```
+
+```tsx
+import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
+
+<MushafLine line={line} fontFallback={tajweedFonts} />
+// Both sets, when themes vary: the line picks the one its theme uses.
+<MushafLine line={line} fontFallback={[plainFonts, tajweedFonts]} />
+```
+
+- **The CDN is still tried first,** with its usual retries. Only when it fails is the page loaded
+  from the package; a warning is logged (once per font set) and the line root gets
+  `data-font-origin="package"`. While rendering, the CDN's budget leaves at least 6 s of the
+  `delayRender` timeout for the fallback.
+- **Nothing to copy, no script to run.** The package lists every page as
+  `new URL('./fonts/p<page>.woff2', import.meta.url)`, so the bundler emits the files as assets:
+  Remotion's bundler (the Studio, `bundle()`, the CLI, Lambda and Cloud Run sites, including under a
+  non-root `publicPath`), Vite and Next.js (Turbopack and webpack) all serve them. A page is only
+  downloaded when a line needs it.
+- **Checked before use.** Each file's size and SHA-256 are compared with what the package declares
+  (SHA-256 needs a secure context: https or localhost); a mismatch is `FONT_FALLBACK_INVALID`, never
+  masked by another source. When the package fails too, `FONT_UNAVAILABLE` lists every attempt.
+- **Offline or reproducible renders:** pass the package as the only source,
+  `fontSrc={tajweedFonts}`: the CDN is never contacted and every frame uses the same files.
+- **A wrong set is caught early.** A fallback that does not hold the line's font set throws
+  `BAD_FONT_FALLBACK` the first time the line renders, not during an outage.
+- **Cost.** Importing a package puts all of its files in every bundle you build (43 or 51 MB of
+  assets; the JavaScript only grows by the list of URLs). A Lambda site uploads them once and
+  afterwards only when they change.
+- **Snapshots.** A package holds QUL's fonts as of its version date (`1.<YYYYMMDD>.<patch>`). QUL
+  occasionally rebuilds pages in place; if the CDN has a newer build than your package, pages that
+  fall back are drawn from the older one. Keep the package current, or use `fontSrc={pkg}` when every
+  frame must come from the same files.
+- **Player hosts** serve the package's assets like any other import. With a Content Security Policy,
+  allow `connect-src https://static-cdn.tarteel.ai` for the CDN (the package's files are same-origin).
+- **Licence.** The fonts are © King Fahd Glorious Qur'an Printing Complex and are distributed with
+  QUL's approval; they are not open source. See each package's `LICENSE.md`.
 
 ## Data
 
@@ -559,8 +638,8 @@ break the printed line breaks and is overridden by the pinned row style. Under a
 ## DOM contract
 
 ```html
-<div class="mushaf-line" data-mushaf="qpc-v4" data-theme="plain" data-page="10" data-line="3" data-line-type="ayah" data-centered="false" data-sliced="<first>-<last>|empty" style="position:relative;width:100%;height:<lineHeight>px">
-  <!-- data-sliced is present only while a slice is in effect -->
+<div class="mushaf-line" data-mushaf="qpc-v4" data-theme="plain" data-page="10" data-line="3" data-line-type="ayah" data-centered="false" data-font-origin="cdn|package|custom" data-sliced="<first>-<last>|empty" style="position:relative;width:100%;height:<lineHeight>px">
+  <!-- data-font-origin is present once the page font has loaded; data-sliced only while a slice is in effect -->
   <!-- presentation wrapper when `enter` / `exit` is set (an AbsoluteFill for the stock presentations) -->
   <!-- font-palette is set on the row for every theme but plain; the ayah marker gets its own when the theme colours it apart -->
   <div class="mushaf-line__row" style="position:absolute;inset:0;display:flex;direction:rtl;...;visibility:hidden|visible">
@@ -612,14 +691,15 @@ across package copies.
 | `DATA_TIMEOUT`                           | The fetch did not finish within the render budget: raise `--timeout` or mirror the exports.                                                    |
 | `DATA_INVALID`                           | The response is not the export (an HTML page, a truncated zip, another mushaf, a broken reading order). The message names the file and the first problem. |
 | `DATA_LOAD_FAILED`                       | Something unexpected while loading the data (the message carries it), or a page or line the loaded layout does not have.                       |
-| `BAD_FONT_URL`                           | `url` / `fontUrl` is not a non-empty string.                                                                                                   |
+| `BAD_FONT_SRC`                           | `fontSrc` is not `'cdn'`, a fonts package or a resolver, a resolver returned no URL, a package holds the other font set, or a removed option (`url`, `fontUrl`) was passed. |
+| `BAD_FONT_FALLBACK`                      | `fontFallback` is not a fonts package (or an array of them), or none of them holds the line's font set. Install the package the message names. |
 | `FONT_HTTP`                              | The font URL answered with an HTTP error (404: check the page number and the CDN path or your mirror).                                         |
-| `FONT_NETWORK`                           | The fetch failed (offline, CORS on a mirror, blocked host).                                                                                    |
-| `FONT_TIMEOUT`                           | The fetch did not finish within the render budget: raise `--timeout` or mirror the fonts.                                                      |
+| `FONT_NETWORK`                           | The fetch failed (offline, CORS on a mirror, blocked host). Pass a fonts package as `fontFallback`.                                            |
+| `FONT_TIMEOUT`                           | The fetch did not finish within the render budget: raise `--timeout`, or pass a fonts package as `fontFallback`.                               |
 | `FONT_INVALID`                           | The response is not a font file (an HTML error page, for example). The message shows the first bytes.                                          |
 | `FONT_PARSE`, `FONT_NOT_AVAILABLE`       | The browser rejected the font bytes or did not register the face; the file is corrupt or not a WOFF2/WOFF/TTF/OTF.                             |
-| `FONT_URL_CONFLICT`                      | Two different explicit sources for one page in the same document. Use one.                                                                     |
-| `FONT_SUPERSEDED`                        | An explicit `url` replaced a pending CDN load; the caller of the old load sees this, the line simply reloads.                                  |
+| `FONT_FALLBACK_INVALID`                  | A fonts package served other bytes than it declares (size or SHA-256). Reinstall it; make sure nothing in your build rewrites font files.     |
+| `FONT_UNAVAILABLE`                       | The source and the fallback both failed; the message lists every attempt. Check that the fonts package is imported where the composition is defined. |
 | `CANVAS_PRESENTATION`                    | The presentation captures the scene to a canvas; use a DOM presentation.                                                                       |
 
 The delayRender label `<MushafLine> page N line M: waiting for font ...` appearing in a timeout means
@@ -637,9 +717,11 @@ mushaf layouts from QUL.
 The lines are built at render time from QUL's exports of mushaf layout 19 (KFGQPC V4, 1441H), the
 words of the script and the line layout, open data published by [QUL](https://qul.tarteel.ai), and
 checked against the printed page's invariants (9,046 lines, 83,668 words, one ayah marker per ayah)
-both at load time and by the repository's `qul` CLI. The fonts are the King Fahd Glyph Complex fonts
-as published by QUL and are fetched from QUL's CDN at render time. Neither is part of this package.
-Please respect the licences of the [King Fahd Complex](https://qurancomplex.gov.sa) and of QUL when
-distributing renders or mirroring fonts.
+both at load time and by the repository's `qul` CLI. The fonts are the King Fahd Complex fonts as
+published by QUL, fetched from QUL's CDN at render time, and redistributed with QUL's approval,
+unmodified, in the two fonts packages (see their `LICENSE.md`). Neither the data nor the fonts are
+part of this package. Please respect the terms of the [King Fahd Complex](https://qurancomplex.gov.sa)
+and of QUL when distributing renders, and remember that a bundle you deploy with a fonts package in
+it serves the fonts too.
 
 Package code: [MIT](./LICENSE).

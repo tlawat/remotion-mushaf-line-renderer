@@ -1,5 +1,17 @@
 # Font sources: implementation plan (v2)
 
+> **Status: implemented** (commits `3f21016` and after). Differences from the plan below:
+> - The fonts packages are named in their default export (`name`), so messages can say which package
+>   failed; `MushafFontPackage` has that field.
+> - The `fontSrc` + `fontFallback` pair is a source of its own, with its own family (a hash suffix),
+>   rather than sharing the plain CDN family: a CDN-only line and a line with a fallback on the same
+>   page could otherwise register two different faces under one family.
+> - The example's mirror stays committed (open question 4): the fonts packages fill from it offline.
+> - Verified hosts: Remotion `bundle()` and a Lambda-style `publicPath` (render suite), the Vite
+>   Player harness (browser suite), and an installed package under Vite 8 and Next.js 16 (Turbopack
+>   and webpack) in scratch projects. Open question 1 (the approval's scope) is recorded in
+>   `docs/licensing/qul-approval.md` and blocks a real publish.
+
 **Baseline:** HEAD `05a9908`. **Supersedes:** the file-cache plan committed in `05a9908`, which you can read with
 `git show 05a9908:docs/plans/font-sources.md`. That plan's verified Remotion facts and loader internals
 still apply, and this plan points to them where it reuses them. Its public-folder cache, `sync` command and
