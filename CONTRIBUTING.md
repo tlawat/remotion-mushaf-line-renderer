@@ -99,8 +99,10 @@ results to the branch it was started on: Actions tab, *QUL assets*, *Run workflo
 
 ## Fonts: licence and packaging
 
-The fonts are King Fahd Complex fonts published by QUL. QUL approved packaging them; the record of
-that approval and its scope is [`docs/licensing/qul-approval.md`](docs/licensing/qul-approval.md).
+The fonts are King Fahd Complex fonts published by QUL. The maintainers report that QUL approved
+packaging them; the written record of that approval and its scope,
+[`docs/licensing/qul-approval.md`](docs/licensing/qul-approval.md), is still being completed, and
+nothing is published until it is (the publish workflow is gated on it).
 
 - **The main package never contains fonts.** `bun run check:package` fails if the tarball does, if
   the code imports a fonts package, or if the fonts packages stop being optional peers. At runtime

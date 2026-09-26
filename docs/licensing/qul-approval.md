@@ -1,10 +1,12 @@
 # QUL's approval to package the fonts
 
 The two fonts packages (`remotion-mushaf-fonts-qpc-v4`, `remotion-mushaf-fonts-qpc-v4-tajweed`)
-redistribute the KFGQPC V4 page fonts as published by the Quranic Universal Library (QUL). This file
-records the approval that allows it, so that anyone can check what it covers. The *Fonts packages*
+redistribute the KFGQPC V4 page fonts as published by the Quranic Universal Library (QUL). The
+maintainers report that QUL approved packaging them; this file is where that approval is recorded, so
+that anyone can check what it covers. **The record is incomplete** (the fields marked _To fill in_
+below), and until it is complete publishing is not to be treated as approved: the *Fonts packages*
 workflow refuses a real npm publish until the repository variable `FONTS_PUBLISH_APPROVED` is set to
-`true`; set it only once the record below is complete.
+`true`, which is to happen only once the record and the questions below are settled.
 
 ## What was approved
 
