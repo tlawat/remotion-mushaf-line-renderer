@@ -74,9 +74,12 @@ const findPageFile = (dir, page) => {
 
 /** QUL's CDN URL of a file of the snapshot (the manifest names its format). */
 export const cdnUrlOf = (set, fileName) => {
-  const format = path.extname(fileName).slice(1);
-  const page = Number(fileName.match(/^p(\d+)\./)[1]);
-  return QPC_V4.fontUrl(set, page, format);
+  const m = /^p([1-9]\d*)\.(woff2|woff)$/.exec(String(fileName));
+  const page = m ? Number(m[1]) : Number.NaN;
+  if (!m || page > PAGES) {
+    throw new Error(`${set}: ${JSON.stringify(fileName)} is not a page font file name (p<1-${PAGES}>.woff2 or .woff)`);
+  }
+  return QPC_V4.fontUrl(assertSet(set), page, m[2]);
 };
 
 const describeFile = (bytes) => ({bytes: bytes.length, md5: hash('md5', bytes), sha256: hash('sha256', bytes)});

@@ -72,3 +72,11 @@ describe.each(SETS)('remotion-mushaf-fonts-%s', (set) => {
     expect(p10).toMatchObject({bytes: manifest.files[10].bytes, sha256: manifest.files[10].sha256});
   });
 });
+
+describe('cdnUrlOf', () => {
+  it('refuses anything that is not a page font file name', () => {
+    expect(cdnUrlOf('qpc-v4-tajweed', 'p328.woff')).toBe(fontSetOf('qpc-v4-tajweed').cdnUrl(328));
+    for (const bad of ['p0.woff2', 'p605.woff2', 'p10.ttf', 'x10.woff2', 'p10', '', undefined])
+      expect(() => cdnUrlOf('qpc-v4', bad), String(bad)).toThrow(/is not a page font file name/);
+  });
+});
