@@ -114,6 +114,29 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'slice-reveal': {...base, lines: [twoAyahs()], slice: {ayah: 4}, enter: 'reveal', enterFrames: 20},
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
+  /**
+   * A real line (page 10 line 3, from the mirror of QUL's exports) from QUL's CDN, with the fonts
+   * packages as the fallback. The suite takes the CDN down (or serves it) with page.route().
+   */
+  fallback: {
+    ...base,
+    lines: [],
+    fit: 'line',
+    resolve: P10_L3,
+    data: MIRROR_DATA,
+    fontUrl: null,
+    fontPackages: 'fallback',
+  },
+  /** The same line from the fonts package only: the CDN is never contacted. */
+  'package-only': {
+    ...base,
+    lines: [],
+    fit: 'line',
+    resolve: P10_L3,
+    data: MIRROR_DATA,
+    fontUrl: null,
+    fontPackages: 'source',
+  },
   /** No pin: the CDN URL of the registry (needs network). */
   cdn: {...base, lines: [syntheticLine(1, 2, {theme: 'light'})], fontUrl: null},
   /**

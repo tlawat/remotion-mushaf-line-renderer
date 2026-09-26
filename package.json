@@ -28,7 +28,10 @@
     "check:package": "bun run --cwd packages/remotion-mushaf-line-renderer check:package",
     "qul": "node scripts/qul.mjs",
     "fonts": "node scripts/qul.mjs fonts 1,10,187,604",
-    "verify:cdn": "node scripts/qul.mjs verify"
+    "verify:cdn": "node scripts/qul.mjs verify",
+    "fonts-packages": "node scripts/fonts-package.mjs",
+    "fonts-packages:fill": "node scripts/fonts-package.mjs fill all",
+    "check:fonts-packages": "node scripts/fonts-package.mjs check all"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

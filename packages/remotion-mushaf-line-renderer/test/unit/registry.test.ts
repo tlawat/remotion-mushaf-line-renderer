@@ -43,7 +43,7 @@ describe('mushaf registry', () => {
       words: QPC_V4.invariants.words,
     });
     for (const set of [v4.fontSets.plain, v4.fontSets.color])
-      expect(set.fontUrl(10)).toBe(QPC_V4.fontUrl(set.id, 10, 'woff2'));
+      expect(set.cdnUrl(10)).toBe(QPC_V4.fontUrl(set.id, 10, 'woff2'));
   });
 
   it('names fonts per page and set', () => {
@@ -51,10 +51,8 @@ describe('mushaf registry', () => {
     expect(v4.fontSets.color.id).toBe('qpc-v4-tajweed');
     expect(v4.fontSets.plain.fontFamily(10)).toBe('mushaf-qpc-v4-p10');
     expect(v4.fontSets.color.fontFamily(604)).toBe('mushaf-qpc-v4-tajweed-p604');
-    expect(v4.fontSets.plain.fontUrl(10)).toBe(
-      'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2',
-    );
-    expect(v4.fontSets.color.fontUrl(10)).toBe(
+    expect(v4.fontSets.plain.cdnUrl(10)).toBe('https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2');
+    expect(v4.fontSets.color.cdnUrl(10)).toBe(
       'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p10.woff2?v=3.1',
     );
     expect(v4.fontSets.plain.colr).toBe(false);

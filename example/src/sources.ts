@@ -1,15 +1,30 @@
 import {staticFile} from 'remotion';
-import type {MushafDataSource, MushafFontUrl} from 'remotion-mushaf-line-renderer';
+// The fonts packages: importing them is what puts their files in the bundle (as assets); nothing is
+// downloaded unless a line needs a page from them.
+import plainFonts from 'remotion-mushaf-fonts-qpc-v4';
+import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
+import type {MushafDataSource, MushafFontFallback, MushafFontSet, MushafFontSrc} from 'remotion-mushaf-line-renderer';
 
 /**
- * Turns a public-folder pattern such as `'fonts/{fontSet}/p{page}.woff2'` into the `fontUrl`
- * callback `getMushafLines()` takes, so every resolved line carries the mirrored font's URL as plain
- * JSON. `null` means no pin: the fonts come from QUL's CDN.
+ * Where the compositions' page fonts come from:
+ * - 'fallback': QUL's CDN, and the fonts packages when it fails (the recommended setup);
+ * - 'cdn': QUL's CDN only (the package's default);
+ * - 'package': the fonts packages only, never the CDN (offline, reproducible renders).
  */
-export const fontUrlFromPattern = (pattern: string | null): MushafFontUrl | undefined =>
-  pattern
-    ? (page, fontSet) => staticFile(pattern.replace('{fontSet}', fontSet).replace('{page}', String(page)))
-    : undefined;
+export type FontMode = 'fallback' | 'cdn' | 'package';
+
+/** Both sets: `<MushafLine>` picks the one the line's theme uses. */
+export const fontFallback: MushafFontFallback = [plainFonts, tajweedFonts];
+
+/** The `<MushafLine>` font props for a mode and the line's font set. */
+export const fontProps = (
+  mode: FontMode,
+  fontSet: MushafFontSet,
+): {fontSrc?: MushafFontSrc; fontFallback?: MushafFontFallback} => {
+  if (mode === 'cdn') return {};
+  if (mode === 'package') return {fontSrc: fontSet === 'qpc-v4' ? plainFonts : tajweedFonts};
+  return {fontFallback};
+};
 
 /** Files of a mirror of QUL's two exports in the public folder ({words, layout}); `null` uses Tarteel's CDN. */
 export type DataFiles = {words: string; layout: string};

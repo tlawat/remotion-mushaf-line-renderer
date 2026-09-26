@@ -88,6 +88,7 @@ type HarnessProps = {
   fit: 'line' | 'mushaf';
   fontFile: string | null;
   fontUrl: string | null;
+  fontPackages: 'none' | 'fallback' | 'source';
   fontSize: number | null;
   lineHeight: number | null;
   activeWordId: string | number | null;
@@ -115,6 +116,7 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   fit: 'mushaf', // synthetic lines: keep the fixed type size so frames stay comparable
   fontFile: FIXTURE_FONT,
   fontUrl: null,
+  fontPackages: 'none',
   fontSize: null,
   lineHeight: null,
   activeWordId: null,
@@ -391,6 +393,59 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       writeFileSync(path.join(here, 'p10-l3.png'), png);
       expect(png.length).toBeGreaterThan(1000);
     });
+
+    it('falls back to the bundled fonts package when the font source fails, painting the same, also under a Lambda publicPath', async () => {
+      // The bundle carries both fonts packages as assets (the example imports them).
+      const walk = (dir: string): string[] =>
+        readdirSync(dir, {withFileTypes: true}).flatMap((e) =>
+          e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)],
+        );
+      const emitted = walk(path.join(workDir, 'bundle')).filter((f) => /\.woff2?$/.test(f));
+      expect(emitted.length).toBeGreaterThanOrEqual(2 * 604);
+      // The reference: the very file the package holds, served from the example's public folder.
+      const line = realLine!;
+      const reference = await still(
+        serveUrl,
+        harnessProps({lines: [line], fit: 'line', fontFile: 'fonts/qpc-v4-tajweed/p10.woff2'}),
+      );
+      // A source that cannot be reached (nothing listens on port 9), with the packages as the fallback.
+      const unreachable = {fontFile: null, fontUrl: 'http://127.0.0.1:9/p10.woff2'} as const;
+      const started = Date.now();
+      const fallback = await still(
+        serveUrl,
+        harnessProps({lines: [line], fit: 'line', ...unreachable, fontPackages: 'fallback'}),
+      );
+      expect(fallback.equals(reference)).toBe(true);
+      expect(Date.now() - started).toBeLessThan(20_000);
+      // The package as the only source paints the same.
+      const only = await still(
+        serveUrl,
+        harnessProps({lines: [line], fit: 'line', fontFile: null, fontPackages: 'source'}),
+      );
+      expect(only.equals(reference)).toBe(true);
+      // Without the fallback the same source fails the render.
+      await expect(still(serveUrl, harnessProps({lines: [line], fit: 'line', ...unreachable}))).rejects.toThrow(
+        /FONT_NETWORK|Could not fetch/,
+      );
+      // The package's assets follow the bundle's publicPath, like staticFile() does.
+      const outDir = path.join(workDir, 'site-fonts');
+      await bundle({
+        entryPoint: path.join(exampleDir, 'src/index.ts'),
+        publicDir: path.join(exampleDir, 'public'),
+        outDir,
+        publicPath: '/sites/fonts/',
+      });
+      const {server, origin} = await serveUnder(outDir, '/sites/fonts/');
+      try {
+        const fromSite = await still(
+          `${origin}/sites/fonts/`,
+          harnessProps({lines: [line], fit: 'line', ...unreachable, fontPackages: 'fallback'}),
+        );
+        expect(fromSite.equals(reference)).toBe(true);
+      } finally {
+        server.close();
+      }
+    }, 180_000);
 
     it('resolves the convenience form in the render tab from a staticFile() mirror, also under a Lambda publicPath', async () => {
       // The tab fetches the two zips from the bundle's own public folder, unzips and reads them,

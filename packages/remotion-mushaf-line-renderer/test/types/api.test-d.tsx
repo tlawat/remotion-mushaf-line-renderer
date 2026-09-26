@@ -12,6 +12,7 @@ import {
   enterTiming,
   exitTiming,
   fontSizeForWidth,
+  getMushafFontFile,
   getMushafLine,
   getMushafLines,
   getMushafLocation,
@@ -21,7 +22,10 @@ import {
   MUSHAF_THEME_NAMES,
   MUSHAF_THEMES,
   type MushafDataSource,
+  type MushafFontFallback,
+  type MushafFontPackage,
   type MushafFontSet,
+  type MushafFontSrc,
   type MushafId,
   MushafLine,
   type MushafLineAnimation,
@@ -157,6 +161,29 @@ export const badTheme = <MushafLine page={10} line={3} theme="neon" />;
 export const noBase = <MushafLine page={10} line={3} theme={{colors: {ink: 'red'}}} />;
 // @ts-expect-error only 'line' and 'mushaf' fit the line
 export const badFit = <MushafLine line={data} fit="stretch" />;
+// Font sources: a fonts package (the shape its default export has), a resolver, or 'cdn'.
+export const fontsPackage: MushafFontPackage = {
+  kind: 'remotion-mushaf-fonts',
+  schema: 1,
+  name: 'remotion-mushaf-fonts-qpc-v4-tajweed',
+  version: '1.20260912.0',
+  mushaf: 'qpc-v4',
+  fontSet: 'qpc-v4-tajweed',
+  snapshot: '2026-09-12',
+  files: {10: {url: '/p10.woff2', bytes: 1, sha256: '0'.repeat(64)}},
+};
+export const sources: MushafFontSrc[] = ['cdn', fontsPackage, (f) => [`/a/${f.fileName}`, f.cdnUrl]];
+export const fallbacks: MushafFontFallback[] = [fontsPackage, [fontsPackage, fontsPackage]];
+export const withFallback = <MushafLine line={data} fontFallback={fontsPackage} />;
+export const packageOnly = <MushafLine line={data} fontSrc={fontsPackage} />;
+export const ownUrls = (
+  <MushafLine page={10} line={3} theme="light" fontSrc={(f) => `/fonts/${f.fontSet}/${f.fileName}`} />
+);
+// @ts-expect-error a bare URL is not a source: pass () => url
+export const bareUrl = <MushafLine line={data} fontSrc="/p10.woff2" />;
+// @ts-expect-error a fallback is a fonts package, not a URL
+export const urlFallback = <MushafLine line={data} fontFallback="/p10.woff2" />;
+
 // @ts-expect-error wordStyle must return CSS properties
 export const badWordStyle = <MushafLine line={data} wordStyle={() => 'red'} />;
 
@@ -174,7 +201,6 @@ export const helpers = [
     fromAyah: 1,
     toAyah: 11,
     theme: 'light',
-    fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
   }),
   getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true}),
   getMushafLocation({surah: 9}).then(({page, line}) => page + line),
@@ -188,8 +214,14 @@ export const helpers = [
   getMushafLines({surah: 9, slice: true, data: {}}),
   getMushafLocation({surah: 9, data: {words: '/w'}}).then(({page}) => page),
   loadPageFont({page: 10}).waitUntilDone(),
-  loadPageFont({theme: 'light', page: 10, url: '/fonts/qpc-v4-tajweed/p10.woff2'}).fontFamily,
+  loadPageFont({theme: 'light', page: 10, fontSrc: (f) => `/fonts/${f.fontSet}/${f.fileName}`}).fontFamily,
+  loadPageFont({theme: 'light', page: 10, fallback: fontsPackage}).origin(),
+  getMushafFontFile({theme: 'light', page: 328}).fileName,
 ];
+// @ts-expect-error `url` was removed: use fontSrc
+export const loadWithUrl = loadPageFont({page: 10, url: '/p10.woff2'});
+// @ts-expect-error `fontUrl` was removed from getMushafLines
+export const pinnedLines = getMushafLines({page: 10, fontUrl: () => '/p10.woff2'});
 // @ts-expect-error a page and an ayah range are two different questions
 export const bothShapes = getMushafLines({page: 187, surah: 9});
 // @ts-expect-error one of them is required

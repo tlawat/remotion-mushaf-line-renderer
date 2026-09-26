@@ -9,11 +9,14 @@ test-results/
 playwright-report/
 .remotion/
 
-# QUL fonts are fetched by `bun run qul fonts` (or the "QUL assets" workflow) and are not
-# redistributed by this project. During development only, the fixture pages 1, 10, 187 and 604 are
-# committed so the browser and render suites run without network access. Before the public release
-# delete the negation lines below and run the release checklist in CONTRIBUTING.md.
-# (CI downloads the fixture font itself when it is missing; the npm package never contains fonts.)
+# QUL's fonts ship in the two fonts packages (packages/fonts-<set>/, published on npm), never in the
+# main package. Their fonts/ folders are
+# filled from the mirror below (`bun run fonts-packages:fill`) and checked against the committed
+# manifest.json, so the files themselves are not committed twice.
+packages/fonts-*/fonts/
+# The example's mirror of every page (woff2, and the woff where QUL has no woff2) and the ttf
+# fixtures of pages 1, 10, 187 and 604 are committed: the suites, CI and the fonts packages' fill
+# step read them offline. Other ttf/woff files under public/ or the fixtures are downloads.
 **/public/fonts/**/*.ttf
 **/public/fonts/**/*.woff
 **/public/fonts/**/*.woff2
@@ -28,9 +31,6 @@ playwright-report/
 !**/test/fixtures/fonts/**/p10.*
 !**/test/fixtures/fonts/**/p187.*
 !**/test/fixtures/fonts/**/p604.*
-# Development only as well: the example's mirror of every page's woff2 (and the woff the CDN serves
-# where it has no woff2), pulled by `bun run qul mirror` so the Studio and the Recitation
-# composition work offline for any page. About 95 MB for both sets. Same release checklist.
 !example/public/fonts/**/*.woff2
 !example/public/fonts/**/*.woff
 

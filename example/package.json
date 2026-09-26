@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Example Remotion project for remotion-mushaf-line-renderer: three lines of a page with fade, slide and revealRtl entrances, a recited passage driven by a timings JSON, plus a <Player> page used by the browser tests.",
   "scripts": {
-    "dev": "remotion studio --no-open",
+    "dev": "bun run --cwd .. fonts-packages:fill && remotion studio --no-open",
     "render": "remotion render ThreeLines out/three-lines.mp4",
     "still": "remotion still ThreeLines out/three-lines.png --frame=150",
     "render:recitation": "remotion render Recitation out/recitation.mp4",
@@ -18,6 +18,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "remotion": "4.0.521",
+    "remotion-mushaf-fonts-qpc-v4": "workspace:*",
+    "remotion-mushaf-fonts-qpc-v4-tajweed": "workspace:*",
     "remotion-mushaf-line-renderer": "workspace:*"
   },
   "devDependencies": {

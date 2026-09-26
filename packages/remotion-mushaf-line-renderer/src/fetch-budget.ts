@@ -22,6 +22,44 @@ export const getLoadBudget = (isRendering: boolean, puppeteerTimeout: number | u
   return {attempts: 2, perAttemptMs: Math.max(4_000, Math.floor((handleTimeout - 2_500) / 2)), backoffMs: 500};
 };
 
+/** Time kept back, while rendering, for a fonts package after the primary font source has failed. */
+export const FALLBACK_RESERVE_MS = 6_000;
+
+/** What a font step is: the primary source (CDN or your URLs) or a fonts package (same origin, fast). */
+export type FontStepKind = 'primary' | 'package';
+
+/**
+ * Budget of one font step. The primary source gets today's budget, minus `reserveMs` when a fonts
+ * package comes after it, so the fallback still fits inside the `delayRender` timeout. A package
+ * step is served by the bundle itself and gets two short attempts.
+ */
+export const getFontStepBudget = (
+  kind: FontStepKind,
+  isRendering: boolean,
+  puppeteerTimeout: number | undefined,
+  reserveMs: number,
+): LoadBudget => {
+  if (kind === 'package') {
+    return isRendering
+      ? {attempts: 2, perAttemptMs: 2_500, backoffMs: 250}
+      : {attempts: 2, perAttemptMs: 10_000, backoffMs: 250};
+  }
+  if (!isRendering) return {attempts: 3, perAttemptMs: 15_000, backoffMs: 500};
+  const handleTimeout = (puppeteerTimeout ?? 30_000) - 2_000;
+  return {
+    attempts: 2,
+    perAttemptMs: Math.max(4_000, Math.floor((handleTimeout - 2_500 - reserveMs) / 2)),
+    backoffMs: 500,
+  };
+};
+
+/**
+ * While rendering, the time by which a font load must have settled, so that a definite error (and
+ * the fallback before it) always beats the `delayRender` timeout. `null` outside rendering.
+ */
+export const getFontDeadline = (isRendering: boolean, puppeteerTimeout: number | undefined, now: number) =>
+  isRendering ? now + (puppeteerTimeout ?? 30_000) - 2_000 - 500 : null;
+
 /** Remotion's renderer sets this on the page before it loads; absent in the Studio, the Player and Node. */
 export const readPuppeteerTimeout = (): number | undefined => {
   if (typeof window === 'undefined') return undefined;

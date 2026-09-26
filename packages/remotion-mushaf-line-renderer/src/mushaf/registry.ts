@@ -66,8 +66,12 @@ export type FontSetDefinition = {
   readonly entries: number;
   /** Which CPAL entries paint which part of the glyphs; all empty for a monochrome set. */
   readonly colorParts: Readonly<Record<MushafColorPart, readonly number[]>>;
+  /** The family under the default source (`fontSrc: 'cdn'`); other sources add a suffix. */
   readonly fontFamily: (page: number) => string;
-  readonly fontUrl: (page: number) => string;
+  /** The file format QUL publishes for this page: woff2, or woff where the CDN has no woff2. */
+  readonly format: (page: number) => 'woff2' | 'woff';
+  /** QUL's CDN URL of the page font. */
+  readonly cdnUrl: (page: number) => string;
 };
 
 export type MushafDefinition = {
@@ -102,7 +106,7 @@ const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts';
  * Gaps on QUL's CDN found by `scripts/qul.mjs etags` (recorded in scripts/cdn-etags.json):
  * page → the format that is served instead of woff2. A unit test keeps this in sync with the file.
  */
-const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<number, 'woff' | 'ttf'>>>> = {
+export const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<number, 'woff'>>>> = {
   'qpc-v4-tajweed': {328: 'woff'},
 };
 
@@ -146,7 +150,8 @@ const v4FontSet = (id: MushafFontSet, dir: 'v4' | 'v4-tajweed', colr: boolean): 
   fontFamily: (page) => `mushaf-${id}-p${page}`,
   // QUL's own pages request the tajweed set with `?v=3.1`, so that cache key is the warm one on
   // Cloudflare; the plain set is never requested by QUL, so it stays a bare path.
-  fontUrl: (page) => {
+  format: (page) => CDN_FORMAT_EXCEPTIONS[id]?.[page] ?? 'woff2',
+  cdnUrl: (page) => {
     const format = CDN_FORMAT_EXCEPTIONS[id]?.[page] ?? 'woff2';
     return `${CDN}/${dir}/${format}/p${page}.${format}${colr ? '?v=3.1' : ''}`;
   },

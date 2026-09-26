@@ -1,0 +1,50 @@
+{
+  "name": "remotion-mushaf-fonts-qpc-v4",
+  "version": "1.20260912.0",
+  "description": "QUL's KFGQPC V4 monochrome (plain) page fonts: glyph outlines that follow CSS color, used by the 'plain' theme, unmodified. The fallback (or offline) font source of remotion-mushaf-line-renderer; bundled as assets when imported.",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tlawat/remotion-mushaf-line-renderer.git",
+    "directory": "packages/fonts-qpc-v4"
+  },
+  "homepage": "https://github.com/tlawat/remotion-mushaf-line-renderer/tree/main/packages/fonts-qpc-v4#readme",
+  "bugs": "https://github.com/tlawat/remotion-mushaf-line-renderer/issues",
+  "keywords": [
+    "remotion",
+    "quran",
+    "mushaf",
+    "qul",
+    "kfgqpc",
+    "fonts"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./manifest.json": "./manifest.json",
+    "./fonts/*": "./fonts/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "manifest.json",
+    "fonts",
+    "LICENSE.md",
+    "NOTICE.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "prepack": "node ../../scripts/fonts-package.mjs verify qpc-v4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -16,6 +16,7 @@ export type {MushafErrorCode} from './errors';
 // Errors
 export {isMushafError, MushafError} from './errors';
 // Fonts
+export {getMushafFontFile} from './fonts/font-file';
 export {loadPageFont} from './fonts/load-page-font';
 export {getMushafMetrics, MUSHAF_IDS} from './mushaf/registry';
 // Themes
@@ -26,6 +27,7 @@ export {getMushafLines, getMushafLocation, lineAyahs} from './resolve/get-mushaf
 export {sliceWords} from './resolve/slice';
 // Types
 export type {
+  GetMushafFontFileOptions,
   GetMushafLineOptions,
   GetMushafLinesOptions,
   GetMushafLocationOptions,
@@ -34,8 +36,14 @@ export type {
   LoadPageFontOptions,
   MushafColorPart,
   MushafDataSource,
+  MushafFontFallback,
+  MushafFontFile,
+  MushafFontFormat,
+  MushafFontOrigin,
+  MushafFontPackage,
+  MushafFontResolver,
   MushafFontSet,
-  MushafFontUrl,
+  MushafFontSrc,
   MushafId,
   MushafLineAnimation,
   MushafLineAnimationProp,

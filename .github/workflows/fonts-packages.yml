@@ -1,0 +1,128 @@
+name: Fonts packages
+
+# The two fonts packages (packages/fonts-<set>/, remotion-mushaf-fonts-<set> on npm) hold QUL's page
+# fonts as of a snapshot date. This workflow
+#   - checks every week whether QUL's CDN still serves the snapshot's files (drift), and on drift
+#     downloads the current files, takes a new snapshot and opens a pull request with it;
+#   - publishes a package on demand (dry run by default; a real publish also needs the repository
+#     variable FONTS_PUBLISH_ENABLED set to "true").
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: drift (check only), snapshot (take one and open a PR even without drift) or publish
+        type: choice
+        options: [drift, snapshot, publish]
+        default: drift
+      set:
+        type: choice
+        options: [all, qpc-v4, qpc-v4-tajweed]
+        default: all
+      tag:
+        description: npm dist-tag for publish
+        type: choice
+        options: [next, latest]
+        default: next
+      dry_run:
+        description: publish with --dry-run
+        type: boolean
+        default: true
+
+concurrency:
+  group: fonts-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    if: github.event_name == 'schedule' || inputs.action == 'drift' || inputs.action == 'snapshot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        set: ${{ fromJSON((github.event_name == 'schedule' || inputs.set == 'all') && '["qpc-v4","qpc-v4-tajweed"]' || format('["{0}"]', inputs.set)) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Compare the snapshot with QUL's CDN
+        id: drift
+        run: |
+          set +e
+          node scripts/fonts-package.mjs drift ${{ matrix.set }} --json > drift.json
+          code=$?
+          set -e
+          cat drift.json
+          if [ "$code" = 2 ]; then echo "::error::the CDN could not be checked"; exit 1; fi
+          echo "changed=$([ "$code" = 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ${{ matrix.set }}"
+            node -e "const d=require('./drift.json'); console.log(d.changed.length ? 'Pages that differ from snapshot ' + d.snapshot + ': ' + d.changed.map(c => c.page).join(', ') : 'No drift from snapshot ' + d.snapshot + '.')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Take a new snapshot from the CDN
+        if: steps.drift.outputs.changed == 'true' || inputs.action == 'snapshot'
+        run: |
+          node scripts/fonts-package.mjs download ${{ matrix.set }} --out "$RUNNER_TEMP/fonts"
+          node scripts/fonts-package.mjs snapshot ${{ matrix.set }} --from "$RUNNER_TEMP/fonts" --date "$(date -u +%F)"
+          node scripts/fonts-package.mjs check ${{ matrix.set }} --metadata
+
+      - name: Open a pull request with the snapshot
+        if: steps.drift.outputs.changed == 'true' || inputs.action == 'snapshot'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: fonts-snapshot/${{ matrix.set }}
+          add-paths: packages/fonts-${{ matrix.set }}
+          commit-message: Take a new snapshot of QUL's ${{ matrix.set }} fonts
+          title: New snapshot of QUL's ${{ matrix.set }} fonts
+          body: |
+            QUL's CDN no longer serves the files of the current snapshot of `remotion-mushaf-fonts-${{ matrix.set }}` (or a snapshot was asked for).
+            This updates `manifest.json`, the generated entry, the version and the CHANGELOG. After merging, publish with the "Fonts packages" workflow.
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        set: ${{ fromJSON(inputs.set == 'all' && '["qpc-v4","qpc-v4-tajweed"]' || format('["{0}"]', inputs.set)) }}
+    steps:
+      - name: Refuse a real publish unless publishing is enabled
+        if: ${{ !inputs.dry_run && vars.FONTS_PUBLISH_ENABLED != 'true' }}
+        run: |
+          echo "::error::Set the repository variable FONTS_PUBLISH_ENABLED to true to publish the fonts packages."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+
+      # From the committed mirror when it holds the snapshot, else from QUL's CDN; every file is
+      # checked against manifest.json either way.
+      - name: Fill and check the package
+        run: |
+          node scripts/fonts-package.mjs fill ${{ matrix.set }} --cdn
+          node scripts/fonts-package.mjs check ${{ matrix.set }}
+
+      - name: Publish
+        working-directory: packages/fonts-${{ matrix.set }}
+        run: npm publish --provenance --access public --tag ${{ inputs.tag }} ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

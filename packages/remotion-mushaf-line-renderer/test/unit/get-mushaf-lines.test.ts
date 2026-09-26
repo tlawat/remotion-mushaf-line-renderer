@@ -32,33 +32,27 @@ describe('getMushafLines({page})', () => {
     expect(lines[0]!.words).toEqual([]);
   });
 
-  it('follows the theme and pins the font url of every line', async () => {
-    const lines = await getMushafLines({
-      page: 1,
-      theme: 'light',
-      fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
-    });
+  it('follows the theme on every line, and refuses the removed fontUrl option', async () => {
+    const lines = await getMushafLines({page: 1, theme: 'light'});
     expect(lines.every((l) => l.mushaf === 'qpc-v4' && l.theme === 'light' && l.fontSet === 'qpc-v4-tajweed')).toBe(
       true,
     );
     expect(lines[0]!.fontFamily).toBe('mushaf-qpc-v4-tajweed-p1');
-    expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
+    expect(lines[0]).not.toHaveProperty('fontUrl');
+    await expect(
+      getMushafLines({page: 1, fontUrl: (page: number) => `/fonts/p${page}.woff2`} as never),
+    ).rejects.toMatchObject({code: 'BAD_FONT_SRC', message: expect.stringContaining('`fontUrl` was removed in 0.4')});
   });
 
-  it('carries a custom theme on every line, resolved, alongside the pinned font url', async () => {
+  it('carries a custom theme on every line, resolved', async () => {
     const theme = {base: 'normal' as const, colors: {accent: '#c8a45c'}};
-    const lines = await getMushafLines({
-      page: 1,
-      theme,
-      fontUrl: (page, fontSet) => `/fonts/${fontSet}/p${page}.woff2`,
-    });
+    const lines = await getMushafLines({page: 1, theme});
     expect(lines.every((l) => l.fontSet === 'qpc-v4-tajweed')).toBe(true);
     const c = 'currentColor';
     expect(lines[0]!.theme).toEqual({
       base: 3,
       colors: {0: c, 1: c, 2: c, 3: c, 4: c, 5: c, 6: c, 7: c, 8: c, 9: c, 11: '#c8a45c', 13: c, 14: c, 15: c},
     });
-    expect(lines[0]!.fontUrl).toBe('/fonts/qpc-v4-tajweed/p1.woff2');
     // The ayah-range form resolves the same way.
     const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, theme: 'normal'});
     expect(range.every((l) => l.theme === 'normal')).toBe(true);

@@ -2,13 +2,7 @@ import {ayahKey, type CompiledLayout, indexAyahs, indexPage} from '../data/forma
 import {loadLayout} from '../data/load-layout';
 import {describeValue, MushafError} from '../errors';
 import {assertPage, type MushafDefinition, resolveSelection} from '../mushaf/registry';
-import type {
-  GetMushafLinesOptions,
-  GetMushafLocationOptions,
-  MushafFontUrl,
-  MushafLineData,
-  MushafLocation,
-} from '../types';
+import type {GetMushafLinesOptions, GetMushafLocationOptions, MushafLineData, MushafLocation} from '../types';
 import {lineFromLayout} from './get-mushaf-line';
 import {resolveSlice} from './slice';
 
@@ -98,9 +92,6 @@ export const getMushafLocation = async ({
   return locate(layout, def, surah, ayah);
 };
 
-const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined): MushafLineData =>
-  fontUrl ? {...line, fontUrl: fontUrl(line.page, line.fontSet)} : line;
-
 /**
  * Resolves several lines at once, in reading order — the two shapes an app actually needs:
  *
@@ -112,16 +103,23 @@ const pinFontUrl = (line: MushafLineData, fontUrl: MushafFontUrl | undefined): M
  *   is printed, and `lineAyahs(line)` says which ayahs a line holds. `slice: true` records the range
  *   on the lines it cuts, so `<MushafLine>` shows only the ayahs asked for.
  *
- * Pure and Remotion-free, like `getMushafLine()`. `fontUrl` pins a mirror on every returned line;
- * `data` names the mushaf data source (default: QUL's exports on Tarteel's CDN).
+ * Pure and Remotion-free, like `getMushafLine()`. `data` names the mushaf data source (default:
+ * QUL's exports on Tarteel's CDN). Where the fonts come from is decided where the lines are drawn
+ * (`<MushafLine fontSrc fontFallback>`), not here.
  */
 export const getMushafLines = async (options: GetMushafLinesOptions): Promise<MushafLineData[]> => {
-  const {mushaf, theme, fontUrl, data} = options;
+  const {mushaf, theme, data} = options;
+  if ((options as {readonly fontUrl?: unknown}).fontUrl !== undefined) {
+    throw new MushafError(
+      'BAD_FONT_SRC',
+      'getMushafLines(): `fontUrl` was removed in 0.4. Pass `fontSrc` (your own URLs) or `fontFallback` (a fonts package) to <MushafLine> or loadPageFont() instead.',
+      {fontUrl: (options as {readonly fontUrl?: unknown}).fontUrl},
+    );
+  }
   const resolved = resolveSelection({mushaf, theme});
   const {def} = resolved;
   const layout = await loadLayout(def.dataset, data);
-  const lineAt = (page: number, line: number): MushafLineData =>
-    pinFontUrl(lineFromLayout(layout, resolved, page, line), fontUrl);
+  const lineAt = (page: number, line: number): MushafLineData => lineFromLayout(layout, resolved, page, line);
 
   if (options.slice !== undefined && typeof options.slice !== 'boolean') {
     throw new MushafError(

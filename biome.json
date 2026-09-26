@@ -16,7 +16,10 @@
       "!**/public",
       "!**/test-results",
       "!**/playwright-report",
-      "!scripts/cdn-etags.json"
+      "!scripts/cdn-etags.json",
+      "!packages/fonts-*/index.js",
+      "!packages/fonts-*/index.d.ts",
+      "!packages/fonts-*/manifest.json"
     ]
   },
   "formatter": {

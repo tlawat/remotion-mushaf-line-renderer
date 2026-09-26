@@ -16,7 +16,7 @@ import {
   type MushafThemeSelection,
   slideFade,
 } from 'remotion-mushaf-line-renderer';
-import {type DataFiles, dataFromFiles, fontUrlFromPattern} from './sources';
+import {type DataFiles, dataFromFiles, type FontMode, fontProps} from './sources';
 
 export type WordTiming = {id: string; start: number; end: number};
 export type AyahTiming = {ayah: number; start: number; end: number; complete?: boolean; words?: WordTiming[]};
@@ -38,8 +38,8 @@ export type RecitationProps = {
   timings: RecitationTimings | null;
   /** Audio in the public folder, e.g. 'audio/tawbah.mp3'. */
   audioFile: string;
-  /** Font pattern in the public folder ('fonts/{fontSet}/p{page}.woff2'); null uses QUL's CDN. */
-  fontFilePattern: string | null;
+  /** Where the page fonts come from: 'fallback' (QUL's CDN, then the fonts packages), 'cdn' or 'package'. */
+  fonts: FontMode;
   /** Mirror of QUL's two exports in the public folder ({words, layout} paths); null fetches them from Tarteel's CDN. */
   dataFiles: DataFiles | null;
   /** Stop after the last ayah that ends before this many seconds; null plays the whole recitation. */
@@ -58,7 +58,7 @@ export const defaultRecitationProps: RecitationProps = {
   timingsFile: 'audio/tawbah-timings.json',
   timings: null,
   audioFile: 'audio/tawbah.mp3',
-  fontFilePattern: null,
+  fonts: 'fallback',
   dataFiles: null,
   cutAtSeconds: 60,
   leadInSeconds: 0.4,
@@ -99,15 +99,14 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   const lastAyah = chosen[chosen.length - 1]!.ayah;
   const byAyah = new Map(chosen.map((a) => [a.ayah, a]));
 
-  // One call: the package finds the page itself and pins the font of every line it returns; `data`
-  // points it at a mirror of QUL's exports instead of Tarteel's CDN.
+  // One call: the package finds the page itself; `data` points it at a mirror of QUL's exports
+  // instead of Tarteel's CDN.
   const lines = await getMushafLines({
     theme: props.theme,
     surah: timings.surah,
     fromAyah: firstAyah,
     toAyah: lastAyah,
     slice: props.slice,
-    fontUrl: fontUrlFromPattern(props.fontFilePattern),
     data: dataFromFiles(props.dataFiles),
   });
 
@@ -134,7 +133,7 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   return {props: {...props, lines, schedule}, durationInFrames};
 };
 
-export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFile, leadInSeconds}) => {
+export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFile, leadInSeconds, fonts}) => {
   const {width, height, fps} = useVideoConfig();
   if (!lines || !schedule) throw new Error('Recitation: `lines`/`schedule` are null; calculateMetadata fills them in.');
   const measure = width - 2 * MARGIN_X;
@@ -166,7 +165,14 @@ export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFil
             name={`p${line.page} l${line.line} (${line.words[0]!.id})`}
             style={{top, height: lineHeight, left: MARGIN_X, width: measure}}
           >
-            <MushafLine line={line} fontSize={fontSize} lineHeight={lineHeight} enter={ENTER} exit={EXIT} />
+            <MushafLine
+              line={line}
+              fontSize={fontSize}
+              lineHeight={lineHeight}
+              enter={ENTER}
+              exit={EXIT}
+              {...fontProps(fonts, line.fontSet)}
+            />
           </Sequence>
         );
       })}

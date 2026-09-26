@@ -18,7 +18,7 @@ import {
   revealRtl,
   slideFade,
 } from 'remotion-mushaf-line-renderer';
-import {type DataFiles, dataFromFiles, fontUrlFromPattern} from './sources';
+import {type DataFiles, dataFromFiles, type FontMode, fontProps} from './sources';
 
 export type ThreeLinesProps = {
   /** 'plain' follows CSS `color`; a preset (light, dark, sepia, black, normal, p1-p5) or a custom theme selects the colour font. */
@@ -27,8 +27,8 @@ export type ThreeLinesProps = {
   lineNumbers: number[];
   /** Resolved once by calculateMetadata (null in defaultProps), so every render tab receives the same JSON. */
   lines: MushafLineData[] | null;
-  /** Font pattern in the public folder, e.g. 'fonts/{fontSet}/p{page}.woff2'; null uses QUL's CDN. */
-  fontFilePattern: string | null;
+  /** Where the page fonts come from: 'fallback' (QUL's CDN, then the fonts packages), 'cdn' or 'package'. */
+  fonts: FontMode;
   /** Mirror of QUL's two exports in the public folder ({words, layout} paths); null fetches them from Tarteel's CDN. */
   dataFiles: DataFiles | null;
   mode: 'replace' | 'stack';
@@ -39,7 +39,7 @@ export const defaultThreeLinesProps: ThreeLinesProps = {
   page: 10,
   lineNumbers: [3, 4, 5],
   lines: null,
-  fontFilePattern: null,
+  fonts: 'fallback',
   dataFiles: null,
   mode: 'replace',
 };
@@ -64,12 +64,11 @@ export const durationFor = (mode: ThreeLinesProps['mode'], lineCount: number): n
 // browser tab), the Studio shows the resolved props, and the duration follows the line count.
 export const calculateThreeLinesMetadata: CalculateMetadataFunction<ThreeLinesProps> = async ({props}) => {
   const resolve = async () => {
-    // One call for the whole page; `fontUrl` pins the mirror on every line (else QUL's CDN), and
-    // `data` does the same for the two exports the lines are built from.
+    // One call for the whole page; `data` points it at a mirror of QUL's two exports (else
+    // Tarteel's CDN). Where the fonts come from is decided where the lines are drawn (`fonts`).
     const page = await getMushafLines({
       theme: props.theme,
       page: props.page,
-      fontUrl: fontUrlFromPattern(props.fontFilePattern),
       data: dataFromFiles(props.dataFiles),
     });
     return props.lineNumbers.map((line) => {
@@ -102,7 +101,7 @@ const transitions: Array<{enter: MushafLineAnimation; exit: MushafLineAnimation}
   {enter: {presentation: revealRtl({softness: 8})}, exit: {presentation: revealRtl({softness: 8})}},
 ];
 
-export const ThreeLines: React.FC<ThreeLinesProps> = ({lines, mode}) => {
+export const ThreeLines: React.FC<ThreeLinesProps> = ({lines, mode, fonts}) => {
   const {width, height, fps} = useVideoConfig();
   if (!lines) {
     throw new Error(
@@ -136,6 +135,7 @@ export const ThreeLines: React.FC<ThreeLinesProps> = ({lines, mode}) => {
               lineHeight={lineHeight}
               enter={enter}
               exit={replace ? exit : undefined}
+              {...fontProps(fonts, line.fontSet)}
             />
           </Sequence>
         );
