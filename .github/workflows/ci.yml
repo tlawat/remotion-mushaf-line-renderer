@@ -45,6 +45,13 @@ jobs:
       - name: Packaging checks (exports, sizes, tarball, arethetypeswrong)
         run: bun run check:package
 
+      # The example imports both fonts packages; their fonts/ folders are filled from the committed
+      # mirror (offline) and checked byte for byte against the manifests.
+      - name: Fonts packages (fill from the mirror, verify, tarball)
+        run: |
+          bun run fonts-packages:fill
+          bun run check:fonts-packages
+
       - name: Fixture font for the browser and render suites (when not committed)
         run: test -f example/public/fonts/qpc-v4-tajweed/p10.ttf || bun run qul fonts 10
 

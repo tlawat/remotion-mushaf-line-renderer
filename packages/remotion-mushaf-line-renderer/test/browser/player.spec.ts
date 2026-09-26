@@ -82,12 +82,19 @@ const paletteRule = async (page: Page, ident: string): Promise<string> => {
   return rule;
 };
 
-// A loaded FontFace with that family is in document.fonts. (`document.fonts.check()` is not usable
-// here: it also answers true while no face of the family is registered yet.)
+// A loaded FontFace of that page font is in document.fonts: the family itself, or the family with
+// the suffix a source other than the plain CDN adds (the scenarios pin their fixture font through
+// `fontSrc`). (`document.fonts.check()` is not usable here: it also answers true while no face of
+// the family is registered yet.)
 const fontsLoaded = (page: Page, families: string[]) =>
   page.evaluate((fams) => {
     const faces = Array.from(document.fonts);
-    return fams.every((f) => faces.some((face) => face.family.replace(/^"|"$/g, '') === f && face.status === 'loaded'));
+    return fams.every((f) =>
+      faces.some((face) => {
+        const family = face.family.replace(/^"|"$/g, '');
+        return (family === f || new RegExp(`^${f}-[0-9a-z]+$`).test(family)) && face.status === 'loaded';
+      }),
+    );
   }, families);
 
 test.describe('static line', () => {
@@ -521,7 +528,7 @@ test.describe('colour and per-word hooks', () => {
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p2'])).toBe(true);
     // The row selects the palette and the words inherit it (font-palette is an inherited property).
     const ident = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
-    expect(ident).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-3-[0-9a-f]{8}$/);
+    expect(ident).toMatch(/^--mushaf-qpc-v4-tajweed-p2(-[0-9a-z]+)?-palette-3-[0-9a-f]{8}$/);
     await expect(page.locator('.mushaf-word').first()).toHaveCSS('font-palette', ident);
     // ... and the rule it names is in the document, carrying the page's colour for everything
     // written — the letters and the rosette's frame and number (13) — and nothing for the
@@ -540,7 +547,7 @@ test.describe('colour and per-word hooks', () => {
     await rowsVisible(page, 1);
     // The light theme is QUL's Light rule: base palette 0 with every entry written out.
     const light = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
-    expect(light).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-0-[0-9a-f]{8}$/);
+    expect(light).toMatch(/^--mushaf-qpc-v4-tajweed-p2(-[0-9a-z]+)?-palette-0-[0-9a-f]{8}$/);
     expect(await paletteRule(page, light)).toContain('base-palette: 0');
     expect(mandala.equals(await page.locator(ROW).screenshot())).toBe(false);
   });
@@ -568,7 +575,7 @@ test.describe('colour and per-word hooks', () => {
     await open(page, 'dark');
     await rowsVisible(page, 1);
     const darkIdent = await page.locator(ROW).evaluate((row) => getComputedStyle(row).fontPalette);
-    expect(darkIdent).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-5-[0-9a-f]{8}$/);
+    expect(darkIdent).toMatch(/^--mushaf-qpc-v4-tajweed-p2(-[0-9a-z]+)?-palette-5-[0-9a-f]{8}$/);
     const dark = await paletteRule(page, darkIdent);
     expect(dark).toContain('base-palette: 5');
     expect(dark).toContain('0 rgb(232, 232, 232)'); // #e8e8e8, the letters
@@ -655,7 +662,8 @@ test.describe('real data', () => {
     await page.evaluate(
       (data) =>
         (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps({
-          lines: [{...data, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'}],
+          lines: [data],
+          fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2',
           fit: 'line',
         }),
       line,
@@ -811,7 +819,8 @@ test.describe('slicing', () => {
     const pkg = (await import('../../dist/esm/index.mjs')) as unknown as typeof import('../../src/index');
     const line = await pkg.getMushafLine({theme: 'light', page: 10, line: 3, data: MIRROR});
     // ... رَبِّهِمْ وَلَا خَوْفٌ عَلَيْهِمْ وَلَا هُمْ يَحْزَنُونَ (62) وَإِذْ أَخَذْنَا — 2:62 ends, 2:63 begins.
-    const data = {...line, fontUrl: '/fonts/qpc-v4-tajweed/p10.woff2'};
+    const data = line;
+    const fontUrl = '/fonts/qpc-v4-tajweed/p10.woff2';
     const setProps = (overrides: unknown) =>
       page.evaluate(
         (p) => (window as unknown as {__harness: {setProps: (p: unknown) => void}}).__harness.setProps(p),
@@ -819,7 +828,7 @@ test.describe('slicing', () => {
       );
     await open(page, 'static');
     await rowsVisible(page, 3);
-    await setProps({lines: [data], fit: 'line'});
+    await setProps({lines: [data], fontUrl, fit: 'line'});
     await rowsVisible(page, 1);
     await expect(page.locator(ROOT).first()).toHaveAttribute('data-page', '10');
     const fitted = await rowFontSize(page);
@@ -839,17 +848,89 @@ test.describe('slicing', () => {
       expect(Math.abs(gapLeft - gapRight)).toBeLessThanOrEqual(2);
     };
 
-    await setProps({lines: [data], fit: 'line', slice: {ayah: 63}});
+    await setProps({lines: [data], fontUrl, fit: 'line', slice: {ayah: 63}});
     await expect(page.locator(ROOT).first()).toHaveAttribute('data-sliced', /^\d+-\d+$/);
     await rowsVisible(page, 1);
     expect(await rowFontSize(page)).toBe(fitted);
     await centredBand(63);
     // Another slice on the same mounted line: no re-measure, same size, new band.
-    await setProps({lines: [data], fit: 'line', slice: {ayah: 62}});
+    await setProps({lines: [data], fontUrl, fit: 'line', slice: {ayah: 62}});
     await expect(page.locator(ROOT).first()).toHaveAttribute('data-sliced', /^\d+-\d+$/);
     await rowsVisible(page, 1);
     expect(await rowFontSize(page)).toBe(fitted);
     await centredBand(62);
+  });
+});
+
+test.describe('fonts package fallback', () => {
+  // The line resolves from the mirror of QUL's exports; the font comes from "QUL's CDN", which each
+  // test controls with page.route(): taken down, answering HTML, or serving the real file. The
+  // fonts packages are workspace dependencies of the example, filled by `bun run fonts-packages:fill`.
+  const CDN_P10 = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2/p10.woff2?v=3.1';
+  const fromRoot = (p: string) => path.resolve(test.info().config.rootDir, p);
+  const mirrorP10 = () => fromRoot('../../../../example/public/fonts/qpc-v4-tajweed/p10.woff2');
+  const packaged = () => existsSync(fromRoot('../../../fonts-qpc-v4-tajweed/fonts/p10.woff2'));
+  const NO_PACKAGE = 'the fonts packages are not filled (bun run fonts-packages:fill)';
+
+  const rowShot = (page: Page) => page.locator(ROW).first().screenshot();
+
+  test('paints from the package when the CDN is unreachable, exactly as from the CDN', async ({page}) => {
+    test.skip(!hasMirror() || !packaged(), `${NO_MIRROR}, or ${NO_PACKAGE}`);
+    const warnings: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'warning') warnings.push(m.text());
+    });
+    await page.route('https://static-cdn.tarteel.ai/**', (route) => route.abort('internetdisconnected'));
+    await open(page, 'fallback');
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-font-origin', 'package');
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p10'])).toBe(true);
+    expect(warnings.some((w) => w.includes('loaded from remotion-mushaf-fonts-qpc-v4-tajweed@'))).toBe(true);
+    const fromPackage = await rowShot(page);
+
+    // The same line with the CDN up (serving the very file the package holds).
+    const cdn = await page.context().newPage();
+    await cdn.route(CDN_P10, (route) =>
+      route.fulfill({path: mirrorP10(), contentType: 'font/woff2', headers: {'access-control-allow-origin': '*'}}),
+    );
+    await open(cdn, 'fallback');
+    await rowsVisible(cdn, 1);
+    await expect(cdn.locator(ROOT).first()).toHaveAttribute('data-font-origin', 'cdn');
+    expect(Buffer.compare(fromPackage, await rowShot(cdn))).toBe(0);
+  });
+
+  test('falls back when the CDN answers with an HTML page', async ({page}) => {
+    test.skip(!hasMirror() || !packaged(), `${NO_MIRROR}, or ${NO_PACKAGE}`);
+    await page.route('https://static-cdn.tarteel.ai/**', (route) =>
+      route.fulfill({status: 200, contentType: 'text/html', body: '<!DOCTYPE html><html>blocked</html>'}),
+    );
+    await open(page, 'fallback');
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-font-origin', 'package');
+  });
+
+  test('uses the package alone as fontSrc: the CDN is never asked', async ({page}) => {
+    test.skip(!hasMirror() || !packaged(), `${NO_MIRROR}, or ${NO_PACKAGE}`);
+    const cdnRequests: string[] = [];
+    await page.route('https://static-cdn.tarteel.ai/**', (route) => {
+      cdnRequests.push(route.request().url());
+      return route.abort();
+    });
+    await open(page, 'package-only');
+    await rowsVisible(page, 1);
+    await expect(page.locator(ROOT).first()).toHaveAttribute('data-font-origin', 'package');
+    expect(cdnRequests).toEqual([]);
+  });
+
+  test('fails with FONT_UNAVAILABLE, naming both sources, when the package file is missing too', async ({page}) => {
+    test.skip(!hasMirror() || !packaged(), `${NO_MIRROR}, or ${NO_PACKAGE}`);
+    await page.route('https://static-cdn.tarteel.ai/**', (route) => route.abort('internetdisconnected'));
+    await page.route('**/fonts-qpc-v4-tajweed/fonts/p10.woff2*', (route) => route.fulfill({status: 404, body: ''}));
+    await open(page, 'fallback');
+    const err = page.locator('[data-error="FONT_UNAVAILABLE"]');
+    await expect(err).toBeVisible();
+    await expect(err).toContainText("QUL's CDN");
+    await expect(err).toContainText('remotion-mushaf-fonts-qpc-v4-tajweed@');
   });
 });
 

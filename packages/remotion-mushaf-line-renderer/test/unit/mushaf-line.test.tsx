@@ -95,6 +95,7 @@ describe('<MushafLine>', () => {
       lineType: 'ayah',
       centered: 'false',
     });
+    expect(root.dataset.fontOrigin).toBeUndefined(); // set once the font has loaded
     expect(root.style.position).toBe('relative');
     expect(root.style.height).toBe('246px');
     expect(root.style.top).toBe('12px');
@@ -114,6 +115,62 @@ describe('<MushafLine>', () => {
     expect(Array.from(row.childNodes).every((n) => n.nodeType === 1)).toBe(true); // no whitespace text nodes
     expect(spans[0]!.textContent).toBe(justified.words[0]!.text);
     await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
+    expect(root.dataset.fontOrigin).toBe('cdn');
+  });
+
+  it('paints from a fonts package when the CDN fails, and marks where the font came from', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const bytes = new Uint8Array([0x77, 0x4f, 0x46, 0x32, 1, 2, 3, 4, 5, 6, 7, 8]).buffer;
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join('');
+    const pkg = {
+      kind: 'remotion-mushaf-fonts',
+      schema: 1,
+      name: 'remotion-mushaf-fonts-qpc-v4',
+      version: '1.20260912.0',
+      mushaf: 'qpc-v4',
+      fontSet: 'qpc-v4',
+      snapshot: '2026-09-12',
+      files: {2: {url: '/pkg/p2.woff2', bytes: 12, sha256: digest}},
+    } as const;
+    fakes.fetchMock.mockImplementation((async (url: string) =>
+      url.startsWith('/pkg/')
+        ? {ok: true, status: 200, arrayBuffer: async () => bytes}
+        : {ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0)}) as never);
+    const {container} = render(<MushafLine line={justified} fontFallback={pkg} />);
+    const root = container.querySelector<HTMLElement>('.mushaf-line')!;
+    await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
+    expect(root.dataset.fontOrigin).toBe('package');
+    // Its own family, so a CDN-only line of the same page elsewhere keeps its own face.
+    expect(rowOf(container).style.fontFamily).toMatch(/^"mushaf-qpc-v4-p2-[0-9a-z]+"$/);
+    expect(remotion.hook.cancelRender).not.toHaveBeenCalled();
+  });
+
+  it('reports a fallback for the wrong font set while rendering, not during an outage', () => {
+    const onError = vi.fn();
+    const pkg = {
+      kind: 'remotion-mushaf-fonts',
+      schema: 1,
+      name: 'remotion-mushaf-fonts-qpc-v4-tajweed',
+      version: '1.20260912.0',
+      mushaf: 'qpc-v4',
+      fontSet: 'qpc-v4-tajweed',
+      snapshot: '2026-09-12',
+      files: {},
+    } as const;
+    render(
+      <Boundary onError={onError}>
+        <MushafLine line={justified} fontFallback={pkg} />
+      </Boundary>,
+    );
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'BAD_FONT_FALLBACK',
+        message: expect.stringContaining('remotion-mushaf-fonts-qpc-v4.'),
+      }),
+    );
+    expect(fakes.fetchMock).not.toHaveBeenCalled();
   });
 
   it('centres centred lines and honours fontSize/lineHeight overrides', () => {
@@ -138,7 +195,7 @@ describe('<MushafLine>', () => {
     await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
     expect(remotion.hook.continueRender).toHaveBeenCalledTimes(1);
     expect(remotion.hook.continueRender).toHaveBeenCalledWith(remotion.hook.delayRender.mock.results[0]?.value);
-    expect(getFontStatus('qpc-v4/1')).toBe('loaded');
+    expect(getFontStatus('qpc-v4/1#cdn')).toBe('loaded');
   });
 
   it('renders visibly on the first paint when the font is already loaded, without a handle', async () => {

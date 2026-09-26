@@ -71,8 +71,8 @@ export type MushafThemeSelection = 'plain' | MushafThemeName | MushafTheme;
 
 /**
  * The two font file sets QUL publishes for the V4 mushaf: `'qpc-v4'` (monochrome outlines) and
- * `'qpc-v4-tajweed'` (COLR/CPAL colour font). Derived from the theme; mirrors and CDN paths are
- * organised by font set (`fonts/<fontSet>/p<page>.woff2`).
+ * `'qpc-v4-tajweed'` (COLR/CPAL colour font). Derived from the theme; each ships as its own fonts
+ * package (`remotion-mushaf-fonts-<fontSet>`), and CDN paths are organised the same way.
  */
 export type MushafFontSet = 'qpc-v4' | 'qpc-v4-tajweed';
 
@@ -132,14 +132,12 @@ export type MushafLineData = {
   readonly type: MushafLineType;
   /** QUL `is_centered`: centred lines are centred, all others fill the measure. */
   readonly centered: boolean;
-  /** "mushaf-<fontSet>-p<page>" — identical to `loadPageFont({...}).fontFamily`. */
-  readonly fontFamily: string;
   /**
-   * Optional font source pin (e.g. `staticFile('fonts/qpc-v4/p10.woff2')` or a mirror URL).
-   * Never set by `getMushafLine()`; set it in `calculateMetadata()` (or through `getMushafLines({fontUrl})`)
-   * so every render tab receives it as plain JSON. Passed to `loadPageFont({url})` as an explicit source.
+   * "mushaf-<fontSet>-p<page>": the family under the default font source (`fontSrc: 'cdn'` with no
+   * fallback), identical to `loadPageFont({...}).fontFamily` for it. Other sources load their own
+   * face under a suffixed family; `<MushafLine>` always paints with the one its source loaded.
    */
-  readonly fontUrl?: string;
+  readonly fontFamily: string;
   /**
    * Which ayahs of the line to show (see `MushafSlice`). Recorded by `getMushafLines({slice: true})`;
    * the words are never trimmed, so the printed line is still all there for the layout.
@@ -277,6 +275,13 @@ export type MushafLineCommonProps = {
   readonly wordClassName?: (word: MushafWord, context: WordContext) => string | undefined;
   /** Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline. */
   readonly name?: string;
+  /** Where the page font comes from; default `'cdn'` (QUL's CDN). See `MushafFontSrc`. */
+  readonly fontSrc?: MushafFontSrc;
+  /**
+   * A fonts package to load the page font from when `fontSrc` fails, e.g.
+   * `import fonts from 'remotion-mushaf-fonts-qpc-v4-tajweed'`. See README → When the CDN fails.
+   */
+  readonly fontFallback?: MushafFontFallback;
 };
 
 export type MushafLineProps = MushafLineCommonProps &
@@ -313,13 +318,9 @@ export type GetMushafLocationOptions = MushafDataOptions & {
   readonly ayah?: number;
 };
 
-/** Pins the font source of every resolved line, so `calculateMetadata()` need not map over them. */
-export type MushafFontUrl = (page: number, fontSet: MushafFontSet) => string;
-
 export type GetMushafLinesOptions = MushafSelection &
-  MushafDataOptions & {
-    readonly fontUrl?: MushafFontUrl;
-  } & (
+  MushafDataOptions &
+  (
     | {
         /** Every line of this page, `surah_name` and `basmallah` lines included. */
         readonly page: number;
@@ -350,14 +351,86 @@ export type LoadPageFontOptions = {
   /** Decides the font set: `'plain'` loads the monochrome font, any theme the colour font. */
   readonly theme?: MushafThemeSelection | undefined;
   readonly page: number;
-  /** Explicit font source: a mirror URL or `staticFile('fonts/<fontSet>/p<N>.woff2')`. */
-  readonly url?: string | undefined;
+  /** Where the font comes from; default `'cdn'`. Pass the same value as the `<MushafLine fontSrc>` you warm up. */
+  readonly fontSrc?: MushafFontSrc | undefined;
+  /** Used when `fontSrc` fails; pass the same value as the `<MushafLine fontFallback>` you warm up. */
+  readonly fallback?: MushafFontFallback | undefined;
 };
 
+/** Which kind of source a loaded page font came from. */
+export type MushafFontOrigin = 'cdn' | 'package' | 'custom';
+
 export type LoadedPageFont = {
+  /** The family the font is registered under for this source (see `MushafLineData.fontFamily`). */
   readonly fontFamily: string;
   readonly waitUntilDone: () => Promise<void>;
+  /** Where the font was loaded from: `null` until it has loaded, and always on the server. */
+  readonly origin: () => MushafFontOrigin | null;
 };
+
+export type MushafFontFormat = 'woff2' | 'woff';
+
+/** One page font file of a mushaf: what a `MushafFontResolver` receives. */
+export type MushafFontFile = {
+  /** Discriminant, so fonts that are not per page (surah names) can join later. */
+  readonly kind: 'page';
+  readonly mushaf: MushafId;
+  readonly fontSet: MushafFontSet;
+  readonly page: number;
+  /** `'woff2'`, or `'woff'` where QUL publishes no woff2 (qpc-v4-tajweed page 328). */
+  readonly format: MushafFontFormat;
+  /** `'p328'`. */
+  readonly id: string;
+  /** `'p328.woff'`: the file's name on the CDN and in the fonts packages. */
+  readonly fileName: string;
+  /** QUL's CDN URL for the file. */
+  readonly cdnUrl: string;
+};
+
+export type GetMushafFontFileOptions = MushafSelection & {readonly page: number};
+
+/**
+ * What a fonts package (`remotion-mushaf-fonts-qpc-v4`, `remotion-mushaf-fonts-qpc-v4-tajweed`)
+ * exports by default: the page fonts of one font set, as URLs your bundler serves. Importing it is
+ * what puts the files in your bundle; nothing is downloaded unless a line needs it.
+ */
+export type MushafFontPackage = {
+  readonly kind: 'remotion-mushaf-fonts';
+  readonly schema: 1;
+  /** The npm package name, for messages. */
+  readonly name: string;
+  readonly version: string;
+  readonly mushaf: MushafId;
+  readonly fontSet: MushafFontSet;
+  /** The date of QUL's fonts this package holds (YYYY-MM-DD). */
+  readonly snapshot: string;
+  /** By page: the URL the bundler gave the file, its size and its SHA-256 (hex). */
+  readonly files: Readonly<Record<number, {readonly url: string; readonly bytes: number; readonly sha256: string}>>;
+};
+
+/**
+ * Your own URL(s) for a page font. One URL is used as it is; an array is tried in order, each
+ * failure falling through to the next (then to `fontFallback`). Called while rendering: must be
+ * pure. Build the URL from `file.fileName` (page 328 of the colour set is `.woff`), e.g.
+ * `(f) => staticFile('fonts/' + f.fontSet + '/' + f.fileName)`.
+ */
+export type MushafFontResolver = (file: MushafFontFile) => string | readonly string[];
+
+/**
+ * Where page fonts come from.
+ *
+ * - `'cdn'` (default): QUL's CDN.
+ * - a fonts package (`import fonts from 'remotion-mushaf-fonts-qpc-v4-tajweed'`): the package only;
+ *   the CDN is never contacted. For offline and byte-reproducible renders.
+ * - a `MushafFontResolver`: your own URLs.
+ */
+export type MushafFontSrc = 'cdn' | MushafFontPackage | MushafFontResolver;
+
+/**
+ * Used when `fontSrc` fails (an outage, a firewall, a timeout): one fonts package, or both — the one
+ * whose `fontSet` matches the line's theme is used.
+ */
+export type MushafFontFallback = MushafFontPackage | readonly MushafFontPackage[];
 
 /** The mushaf's font metrics; `referenceLineWidth` is what `fontSizeForWidth()` divides by. */
 export type MushafMetrics = {

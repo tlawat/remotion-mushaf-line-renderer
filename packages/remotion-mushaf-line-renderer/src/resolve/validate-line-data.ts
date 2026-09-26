@@ -49,8 +49,12 @@ export const assertLineData = (value: unknown): MushafLineData => {
   if (typeof data.centered !== 'boolean') fail('centered', 'expected a boolean', data.centered);
   if (data.fontFamily !== fontSet.fontFamily(page))
     fail('fontFamily', `expected "${fontSet.fontFamily(page)}"`, data.fontFamily);
-  if (data.fontUrl !== undefined && (typeof data.fontUrl !== 'string' || data.fontUrl === ''))
-    fail('fontUrl', 'expected a non-empty string when present', data.fontUrl);
+  if (data.fontUrl !== undefined)
+    fail(
+      'fontUrl',
+      'it was removed in 0.4: pass fontSrc (your own URLs) or fontFallback (a fonts package) to <MushafLine> instead, and resolve the line again',
+      data.fontUrl,
+    );
   if (data.slice !== undefined) assertSlice('MushafLineData.slice', data.slice);
   if (data.surahNumber !== undefined && (!isPositiveInteger(data.surahNumber) || data.surahNumber > 114))
     fail('surahNumber', 'expected an integer from 1 to 114 when present', data.surahNumber);

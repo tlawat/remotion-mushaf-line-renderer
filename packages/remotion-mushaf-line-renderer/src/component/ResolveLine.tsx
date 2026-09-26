@@ -42,9 +42,18 @@ export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, theme, page, li
       handle: delayRender(`<MushafLine> resolving ${selection.def.id} page ${page} line ${line}`),
     };
   }
+  const {fontSrc, fontFallback} = common;
+  useEffect(() => {
+    // Start the font while the line resolves, from the same sources the line will use. Idempotent;
+    // a bad source is reported by the line itself once it renders.
+    try {
+      loadPageFont({mushaf, theme, page, fontSrc, fallback: fontFallback});
+    } catch {
+      // reported by <LineRenderer>
+    }
+  }, [mushaf, theme, page, fontSrc, fontFallback]);
   useEffect(() => {
     let alive = true;
-    loadPageFont({mushaf, theme, page}); // start the font early; idempotent; adopts any registered override
     const source =
       words === undefined && layoutUrl === undefined
         ? {}

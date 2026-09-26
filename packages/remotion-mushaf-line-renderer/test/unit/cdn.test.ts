@@ -26,7 +26,7 @@ describe.skipIf(!existsSync(file))('CDN survey (scripts/cdn-etags.json)', () => 
       const def = getMushafDefinition(id);
       for (const set of [def.fontSets.plain, def.fontSets.color]) {
         for (let page = 1; page <= def.pages; page++) {
-          const url = set.fontUrl(page);
+          const url = set.cdnUrl(page);
           const entry = survey.entries[url];
           const gap = gaps.find((g) => g.available.includes(url));
           if (!entry && !gap) missing.push(url);
@@ -58,7 +58,7 @@ describe.skipIf(!existsSync(file))('CDN survey (scripts/cdn-etags.json)', () => 
       const m = gap.url.match(/quran_fonts\/(v4|v4-tajweed)\/woff2\/p(\d+)\.woff2/);
       expect(m, gap.url).not.toBeNull();
       const id = m![1] === 'v4' ? 'qpc-v4' : 'qpc-v4-tajweed';
-      const chosen = fontSetById(getMushafDefinition('qpc-v4'), id)!.fontUrl(Number(m![2]));
+      const chosen = fontSetById(getMushafDefinition('qpc-v4'), id)!.cdnUrl(Number(m![2]));
       expect(chosen).not.toBe(gap.url);
       expect(gap.available, `${id} page ${m![2]}: ${chosen} is not among the URLs the survey found`).toContain(chosen);
     }

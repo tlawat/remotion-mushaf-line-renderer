@@ -1,14 +1,16 @@
 import type {MushafError} from '../errors';
+import type {MushafFontOrigin} from '../types';
+import type {FontSourcePlan} from './font-source';
 
 export type FontStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
 export type FontEntry = {
   readonly key: string;
   readonly fontFamily: string;
-  /** Resolved source URL. */
-  url: string;
-  /** `true` when the URL came from a caller (`loadPageFont({url})` / `line.fontUrl`), `false` for the registry CDN URL. */
-  explicit: boolean;
+  /** The steps the load runs, in order (the source, then any fallback). */
+  plan: FontSourcePlan;
+  /** Which step the loaded face came from; `null` until loaded. */
+  origin: MushafFontOrigin | null;
   status: FontStatus;
   /** Bumped on every (re)start; in-flight loads check it before applying their result. */
   generation: number;
@@ -28,8 +30,9 @@ type Store = {
 };
 
 // Keyed on globalThis so Studio fast-refresh and duplicate package copies share one registry:
-// one font family must map to exactly one FontFace in document.fonts.
-const STORE_KEY = Symbol.for('remotion-mushaf-line-renderer/font-store@1');
+// one font family must map to exactly one FontFace in document.fonts. One entry per page and source
+// (`plan.key`); `@2` because the entry shape changed.
+const STORE_KEY = Symbol.for('remotion-mushaf-line-renderer/font-store@2');
 
 const getStore = (): Store => {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
@@ -40,8 +43,6 @@ const getStore = (): Store => {
   }
   return store;
 };
-
-export const fontKey = (mushaf: string, page: number): string => `${mushaf}/${page}`;
 
 export const getFontEntry = (key: string): FontEntry | null => getStore().entries.get(key) ?? null;
 

@@ -42,6 +42,8 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    fontSrc,
+    fontFallback,
   } = props;
   if (slice !== undefined && slice !== null) assertSlice('<MushafLine slice>', slice);
   const common = {
@@ -57,6 +59,8 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    fontSrc,
+    fontFallback,
   };
   let body: React.ReactElement;
   if (typeof props.line === 'number') {

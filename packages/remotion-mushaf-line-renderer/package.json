@@ -58,7 +58,17 @@
   "peerDependencies": {
     "@remotion/transitions": ">=4.0.374",
     "react": ">=18.0.0",
-    "remotion": ">=4.0.374"
+    "remotion": ">=4.0.374",
+    "remotion-mushaf-fonts-qpc-v4": "^1.20260912.0",
+    "remotion-mushaf-fonts-qpc-v4-tajweed": "^1.20260912.0"
+  },
+  "peerDependenciesMeta": {
+    "remotion-mushaf-fonts-qpc-v4": {
+      "optional": true
+    },
+    "remotion-mushaf-fonts-qpc-v4-tajweed": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@remotion/bundler": "4.0.521",

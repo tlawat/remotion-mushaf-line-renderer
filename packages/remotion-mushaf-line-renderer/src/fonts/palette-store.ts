@@ -8,18 +8,13 @@
  * keeps the row hidden until then, so a frame is never captured with the wrong palette.
  */
 
+import {fnv1a32} from '../hash';
+
 /** An entry of `override-colors`: which CPAL entry, and the CSS colour to paint it with. */
 export type PaletteEntry = readonly [entry: number, color: string];
 
-/** FNV-1a, so the same colours always give the same ident and different ones practically never do. */
-const hash = (text: string): string => {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
-};
+/** Hex FNV-1a, so the same colours always give the same ident and different ones practically never do. */
+const hash = (text: string): string => fnv1a32(text).toString(16).padStart(8, '0');
 
 const overrideText = (entries: readonly PaletteEntry[]): string =>
   entries.map(([entry, color]) => `${entry} ${color}`).join(',');

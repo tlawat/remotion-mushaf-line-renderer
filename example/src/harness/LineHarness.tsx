@@ -8,11 +8,14 @@ import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
 import type * as React from 'react';
 import {AbsoluteFill, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
+import plainFonts from 'remotion-mushaf-fonts-qpc-v4';
+import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
 import {
   fontSizeForWidth,
   lineHeightForFontSize,
-  loadPageFont,
   type MushafDataSource,
+  type MushafFontFallback,
+  type MushafFontSrc,
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
@@ -43,10 +46,15 @@ export type LineHarnessProps = {
   slot: 'stack' | 'same';
   /** 'line' (the package default) fits the line to its box; 'mushaf' keeps one fixed type size. */
   fit: 'line' | 'mushaf';
-  /** Font from the public folder (render tests), pinned via staticFile() in calculateMetadata. */
+  /** Font from the public folder (render tests), turned into `fontUrl` via staticFile() in calculateMetadata. */
   fontFile: string | null;
-  /** Font URL pinned as-is (Player page, failure scenarios). Wins over fontFile. */
+  /**
+   * One font URL for every line, as-is (Player page, failure scenarios): `fontSrc={() => fontUrl}`.
+   * Wins over fontFile. Null: QUL's CDN.
+   */
   fontUrl: string | null;
+  /** The fonts packages: 'fallback' passes them as `fontFallback`, 'source' as `fontSrc` (wins over fontUrl). */
+  fontPackages: 'none' | 'fallback' | 'source';
   fontSize: number | null;
   lineHeight: number | null;
   /** Word to mark as current (`word.id` or `word.wordId`), for the highlighting scenarios. */
@@ -86,6 +94,7 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   fit: 'line',
   fontFile: null,
   fontUrl: null,
+  fontPackages: 'none',
   fontSize: null,
   lineHeight: null,
   activeWordId: null,
@@ -144,6 +153,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   slot,
   fit,
   fontUrl,
+  fontPackages,
   fontSize,
   lineHeight,
   activeWordId,
@@ -166,9 +176,15 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
     enter === 'plain' ? undefined : presentation(enter, linearTiming({durationInFrames: enterFrames}), 'enter');
   const exitAnimation =
     exit === 'plain' ? undefined : presentation(exit, linearTiming({durationInFrames: exitFrames}), 'exit');
-  // The convenience form has no line data to pin a font on: register the source for the page once
-  // (idempotent), so the line adopts the fixture font like the resolved lines do.
-  if (resolve && fontUrl) loadPageFont({theme: resolve.theme, page: resolve.page, url: fontUrl});
+  // The font props every line gets: the same source for the resolved lines and the convenience form.
+  const fonts = (fontSet: string): {fontSrc?: MushafFontSrc; fontFallback?: MushafFontFallback} => {
+    const pkg = fontSet === 'qpc-v4' ? plainFonts : tajweedFonts;
+    if (fontPackages === 'source') return {fontSrc: pkg};
+    return {
+      ...(fontUrl ? {fontSrc: () => fontUrl} : {}),
+      ...(fontPackages === 'fallback' ? {fontFallback: [plainFonts, tajweedFonts]} : {}),
+    };
+  };
   return (
     <AbsoluteFill style={{backgroundColor: background, color}}>
       {resolve ? (
@@ -193,12 +209,12 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
             activeWordId={activeWordId}
             activeWordStyle={{color: '#b30000'}}
             wordStyle={wordStyle}
+            {...fonts(resolve.theme === 'plain' ? 'qpc-v4' : 'qpc-v4-tajweed')}
           />
         </Sequence>
       ) : null}
       {lines.map((line, i) => {
-        const pinned = fontUrl ? {...line, fontUrl} : line;
-        const lineData = sliceOnData && slice ? {...pinned, slice} : pinned;
+        const lineData = sliceOnData && slice ? {...line, slice} : line;
         return (
           <Sequence
             key={`${line.mushaf}/${line.page}/${line.line}`}
@@ -219,6 +235,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
               activeWordId={activeWordId}
               activeWordStyle={{color: '#b30000'}}
               wordStyle={wordStyle}
+              {...fonts(line.fontSet)}
             />
           </Sequence>
         );

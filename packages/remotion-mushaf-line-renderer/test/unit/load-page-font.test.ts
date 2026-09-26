@@ -26,8 +26,11 @@ const remotionMock = {
 };
 vi.mock('remotion', () => remotionMock);
 
-const {loadPageFont, getFontLoadBudget, assertFontMagic} = await import('../../src/fonts/load-page-font');
-const {getFontEntry, getFontStatus, resetFontStore, subscribeFontStore} = await import('../../src/fonts/font-store');
+const {loadPageFont, resetFallbackWarnings} = await import('../../src/fonts/load-page-font');
+const {assertFontMagic} = await import('../../src/fonts/font-magic');
+const {getFontStepBudget} = await import('../../src/fetch-budget');
+const {resetFontSourceWarnings} = await import('../../src/fonts/font-source');
+const {getFontEntry, getFontStatus, resetFontStore} = await import('../../src/fonts/font-store');
 const {MushafError} = await import('../../src/errors');
 
 const WOFF2 = new Uint8Array([0x77, 0x4f, 0x46, 0x32, 1, 2, 3, 4, 5, 6, 7, 8]).buffer;
@@ -82,6 +85,8 @@ const flush = async (n = 5) => {
 
 beforeEach(() => {
   resetFontStore();
+  resetFallbackWarnings();
+  resetFontSourceWarnings();
   faces = [];
   loadBehaviour = async () => undefined;
   fontSet.clear();
@@ -105,6 +110,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -123,12 +129,12 @@ describe('loadPageFont', () => {
     expect(faces).toHaveLength(1);
     expect(remotionMock.delayRender).toHaveBeenCalledTimes(1);
     expect(remotionMock.delayRender.mock.calls[0]?.[0]).toBe(
-      'Loading mushaf font mushaf-qpc-v4-p10 from https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2',
+      "Loading mushaf font mushaf-qpc-v4-p10 from QUL's CDN (https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2)",
     );
     expect(remotionMock.delayRender.mock.calls[0]?.[1]).toEqual({retries: 1});
     expect(remotionMock.continueRender).toHaveBeenCalledTimes(1);
     expect(remotionMock.continueRender).toHaveBeenCalledWith(1);
-    expect(getFontStatus('qpc-v4/10')).toBe('loaded');
+    expect(getFontStatus('qpc-v4/10#cdn')).toBe('loaded');
     expect(fontSet.size).toBe(1);
     // A later call after completion creates no new work either.
     const c = loadPageFont({mushaf: 'qpc-v4', page: 10});
@@ -150,78 +156,64 @@ describe('loadPageFont', () => {
     });
   });
 
-  it('adopts a registered override when url is omitted and when the same url is passed', async () => {
-    const first = loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/fonts/qpc-v4/p10.woff2?v=3.1'});
-    await first.waitUntilDone();
-    const implicit = loadPageFont({mushaf: 'qpc-v4', page: 10});
-    const same = loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/fonts/qpc-v4/p10.woff2?v=3.1'});
-    await Promise.all([implicit.waitUntilDone(), same.waitUntilDone()]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/fonts/qpc-v4/p10.woff2?v=3.1');
-    expect(getFontEntry('qpc-v4/10')).toMatchObject({
-      explicit: true,
-      url: '/fonts/qpc-v4/p10.woff2?v=3.1',
-      status: 'loaded',
-    });
-  });
-
-  it('accepts extension-less and query-string urls (no format inference)', async () => {
-    fetchMock.mockResolvedValueOnce(response(200, TTF));
-    await loadPageFont({mushaf: 'qpc-v4', page: 1, url: 'https://cdn.example.com/signed/abc123?sig=x'}).waitUntilDone();
-    expect(faces[0]?.source).toBe(TTF);
-  });
-
-  it('lets an explicit url replace the implicit CDN source, aborting the pending fetch', async () => {
-    let resolveFirst!: (r: unknown) => void;
-    fetchMock.mockImplementationOnce(
-      (_url: string, init: {signal: AbortSignal}) =>
-        new Promise((resolve, reject) => {
-          resolveFirst = resolve;
-          init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-        }),
+  it('loads your own URLs through a resolver, in order, under a family of their own', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/a/p10.woff2' ? response(404, new ArrayBuffer(0)) : response(200, TTF),
     );
-    const events: string[] = [];
-    subscribeFontStore(() => events.push(getFontStatus('qpc-v4/10')));
-    const implicit = loadPageFont({mushaf: 'qpc-v4', page: 10});
-    expect(getFontStatus('qpc-v4/10')).toBe('loading');
-    const explicit = loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/local/p10.woff2'});
-    await explicit.waitUntilDone();
-    await implicit.waitUntilDone(); // the original promise settles with the replacement's result
+    const seen: unknown[] = [];
+    const font = loadPageFont({
+      mushaf: 'qpc-v4',
+      page: 10,
+      fontSrc: (file) => {
+        seen.push(file);
+        return ['/a/p10.woff2', `https://cdn.example.com/signed/${file.id}?sig=x`];
+      },
+    });
+    expect(font.fontFamily).toMatch(/^mushaf-qpc-v4-p10-[0-9a-z]+$/);
+    await font.waitUntilDone();
+    expect(seen[0]).toEqual({
+      kind: 'page',
+      mushaf: 'qpc-v4',
+      fontSet: 'qpc-v4',
+      page: 10,
+      format: 'woff2',
+      id: 'p10',
+      fileName: 'p10.woff2',
+      cdnUrl: 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2',
+    });
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/a/p10.woff2', 'https://cdn.example.com/signed/p10?sig=x']);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({credentials: 'same-origin'});
+    expect(faces[0]?.source).toBe(TTF);
+    expect(font.origin()).toBe('custom');
+  });
+
+  it('keeps one face per source: the CDN line and a custom line of the same page never share one', async () => {
+    const cdn = loadPageFont({mushaf: 'qpc-v4', page: 10});
+    const custom = loadPageFont({mushaf: 'qpc-v4', page: 10, fontSrc: () => '/local/p10.woff2'});
+    await Promise.all([cdn.waitUntilDone(), custom.waitUntilDone()]);
+    expect(cdn.fontFamily).not.toBe(custom.fontFamily);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/local/p10.woff2');
-    expect(getFontEntry('qpc-v4/10')).toMatchObject({explicit: true, url: '/local/p10.woff2', status: 'loaded'});
-    expect(remotionMock.delayRender).toHaveBeenCalledTimes(1); // one handle per loading period
-    expect(remotionMock.continueRender).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(['loading', 'loading', 'loaded']);
-    resolveFirst(okResponse()); // late result of the aborted fetch must be ignored
-    await flush();
-    expect(faces).toHaveLength(1);
+    expect(fontSet.size).toBe(2);
+    // The same resolver answer is the same source, whatever the function's identity.
+    await loadPageFont({mushaf: 'qpc-v4', page: 10, fontSrc: () => '/local/p10.woff2'}).waitUntilDone();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('lets an explicit url replace an already loaded implicit face and hides it meanwhile', async () => {
-    await loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone();
-    expect(fontSet.size).toBe(1);
-    const replaced = loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/local/p10.woff2'});
-    expect(getFontStatus('qpc-v4/10')).toBe('loading');
-    expect(fontSet.size).toBe(0);
-    await replaced.waitUntilDone();
-    expect(fontSet.size).toBe(1);
-    expect(remotionMock.delayRender).toHaveBeenCalledTimes(2);
-    expect(remotionMock.continueRender).toHaveBeenCalledTimes(2);
-  });
-
-  it('throws FONT_URL_CONFLICT for two different explicit urls', async () => {
-    await loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/a/p10.woff2'}).waitUntilDone();
-    expect(() => loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/b/p10.woff2'})).toThrow(MushafError);
-    try {
-      loadPageFont({mushaf: 'qpc-v4', page: 10, url: '/b/p10.woff2'});
-    } catch (e) {
-      expect(e).toMatchObject({code: 'FONT_URL_CONFLICT'});
-      expect((e as Error).message).toContain(
-        'already loaded from /a/p10.woff2; refusing to load it again from /b/p10.woff2',
-      );
-    }
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+  it('rejects the removed url option and bad sources before doing anything', () => {
+    expect(() => loadPageFont({mushaf: 'qpc-v4', page: 1, url: '/x.woff2'} as never)).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_SRC', message: expect.stringContaining('`url` was removed in 0.4')}),
+    );
+    expect(() => loadPageFont({mushaf: 'qpc-v4', page: 1, fontSrc: '/x.woff2' as never})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_SRC', message: expect.stringContaining('pass () => url')}),
+    );
+    expect(() => loadPageFont({mushaf: 'qpc-v4', page: 1, fontSrc: () => ''})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_SRC'}),
+    );
+    expect(() => loadPageFont({mushaf: 'qpc-v4', page: 1, fallback: {} as never})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_FALLBACK'}),
+    );
+    expect(remotionMock.delayRender).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('fails immediately on 404 with cancelRender and a rejecting waitUntilDone', async () => {
@@ -234,12 +226,12 @@ describe('loadPageFont', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(remotionMock.cancelRender).toHaveBeenCalledTimes(1);
     expect(remotionMock.continueRender).not.toHaveBeenCalled();
-    expect(getFontStatus('qpc-v4/10')).toBe('error');
-    expect(getFontEntry('qpc-v4/10')?.error?.code).toBe('FONT_HTTP');
+    expect(getFontStatus('qpc-v4/10#cdn')).toBe('error');
+    expect(getFontEntry('qpc-v4/10#cdn')?.error?.code).toBe('FONT_HTTP');
     // A later call retries from scratch.
     fetchMock.mockResolvedValue(okResponse());
     await loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone();
-    expect(getFontStatus('qpc-v4/10')).toBe('loaded');
+    expect(getFontStatus('qpc-v4/10#cdn')).toBe('loaded');
   });
 
   it('retries 5xx with backoff, then fails; retries network errors too', async () => {
@@ -262,7 +254,7 @@ describe('loadPageFont', () => {
     const p = recovered.waitUntilDone();
     await vi.advanceTimersByTimeAsync(5_000);
     await p;
-    expect(getFontStatus('qpc-v4/11')).toBe('loaded');
+    expect(getFontStatus('qpc-v4/11#cdn')).toBe('loaded');
   });
 
   it('classifies per-attempt timeouts, non-font bodies and parse failures', async () => {
@@ -310,7 +302,7 @@ describe('loadPageFont', () => {
     await new Promise((r) => setTimeout(r, 0));
     process.off('unhandledRejection', unhandled);
     expect(unhandled).not.toHaveBeenCalled();
-    expect(getFontStatus('qpc-v4/10')).toBe('error');
+    expect(getFontStatus('qpc-v4/10#cdn')).toBe('error');
   });
 
   it('is a no-op without FontFace (server) and never touches delayRender there', async () => {
@@ -320,13 +312,12 @@ describe('loadPageFont', () => {
     await expect(font.waitUntilDone()).resolves.toBeUndefined();
     expect(remotionMock.delayRender).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(getFontStatus('qpc-v4/10')).toBe('idle');
+    expect(getFontStatus('qpc-v4/10#cdn')).toBe('idle');
   });
 
   it('validates its arguments before doing anything', () => {
     expect(() => loadPageFont({mushaf: 'nope' as never, page: 1})).toThrow(/Unknown mushaf "nope"/);
     expect(() => loadPageFont({mushaf: 'qpc-v4', page: 0})).toThrow(/page must be an integer/);
-    expect(() => loadPageFont({mushaf: 'qpc-v4', page: 1, url: ''})).toThrow(/url must be a non-empty string/);
     expect(remotionMock.delayRender).not.toHaveBeenCalled();
   });
 
@@ -334,21 +325,45 @@ describe('loadPageFont', () => {
     await loadPageFont({mushaf: 'qpc-v4', page: 10}).waitUntilDone();
     vi.resetModules();
     const fresh = await import('../../src/fonts/font-store');
-    expect(fresh.getFontStatus('qpc-v4/10')).toBe('loaded');
+    expect(fresh.getFontStatus('qpc-v4/10#cdn')).toBe('loaded');
   });
 });
 
-describe('getFontLoadBudget', () => {
-  it('fits two attempts inside the delayRender timeout while rendering', () => {
-    expect(getFontLoadBudget(true, 30_000)).toEqual({attempts: 2, perAttemptMs: 12_750, backoffMs: 500});
-    expect(getFontLoadBudget(true, 60_000)).toEqual({attempts: 2, perAttemptMs: 27_750, backoffMs: 500});
-    expect(getFontLoadBudget(true, undefined)).toEqual({attempts: 2, perAttemptMs: 12_750, backoffMs: 500});
-    expect(getFontLoadBudget(true, 8_000)).toEqual({attempts: 2, perAttemptMs: 4_000, backoffMs: 500});
-    for (const timeout of [30_000, 60_000, 120_000]) {
-      const b = getFontLoadBudget(true, timeout);
-      expect(b.attempts * b.perAttemptMs + (b.attempts - 1) * b.backoffMs).toBeLessThan(timeout - 2_000);
+describe('getFontStepBudget', () => {
+  it('fits two attempts inside the delayRender timeout while rendering, keeping time for a fallback', () => {
+    expect(getFontStepBudget('primary', true, 30_000, 0)).toEqual({attempts: 2, perAttemptMs: 12_750, backoffMs: 500});
+    expect(getFontStepBudget('primary', true, 60_000, 0)).toEqual({attempts: 2, perAttemptMs: 27_750, backoffMs: 500});
+    expect(getFontStepBudget('primary', true, undefined, 0)).toEqual({
+      attempts: 2,
+      perAttemptMs: 12_750,
+      backoffMs: 500,
+    });
+    expect(getFontStepBudget('primary', true, 8_000, 0)).toEqual({attempts: 2, perAttemptMs: 4_000, backoffMs: 500});
+    expect(getFontStepBudget('primary', true, 30_000, 6_000)).toEqual({
+      attempts: 2,
+      perAttemptMs: 9_750,
+      backoffMs: 500,
+    });
+    for (const timeout of [20_000, 30_000, 60_000, 120_000]) {
+      const primary = getFontStepBudget('primary', true, timeout, 6_000);
+      const pkg = getFontStepBudget('package', true, timeout, 0);
+      const total =
+        primary.attempts * primary.perAttemptMs +
+        (primary.attempts - 1) * primary.backoffMs +
+        pkg.attempts * pkg.perAttemptMs +
+        (pkg.attempts - 1) * pkg.backoffMs;
+      expect(total, `timeout ${timeout}`).toBeLessThan(timeout - 2_000);
     }
-    expect(getFontLoadBudget(false, undefined)).toEqual({attempts: 3, perAttemptMs: 15_000, backoffMs: 500});
+    expect(getFontStepBudget('primary', false, undefined, 6_000)).toEqual({
+      attempts: 3,
+      perAttemptMs: 15_000,
+      backoffMs: 500,
+    });
+    expect(getFontStepBudget('package', false, undefined, 0)).toEqual({
+      attempts: 2,
+      perAttemptMs: 10_000,
+      backoffMs: 250,
+    });
   });
 
   it('uses the rendering budget when Remotion reports a render', async () => {
@@ -374,8 +389,187 @@ describe('assertFontMagic', () => {
       expect(() => assertFontMagic(new TextEncoder().encode(`${tag}xxxx`).buffer, 'u', 'm', 1)).not.toThrow();
     expect(() => assertFontMagic(TTF, 'u', 'm', 1)).not.toThrow();
     expect(() => assertFontMagic(HTML, 'https://x/p1.woff2', 'qpc-v4', 1)).toThrow(
-      /not a font file \(33 bytes, starts with "<!DOCTYPE html><"\)/,
+      /not a font file \(33 bytes, starts with "<!DOCTYPE html><"\)\. It looks like an HTML page/,
     );
     expect(() => assertFontMagic(new ArrayBuffer(2), 'u', 'm', 1)).toThrow(/2 bytes/);
+  });
+});
+
+describe('fonts packages: fontSrc and fallback', () => {
+  const hex = (buffer: ArrayBuffer) =>
+    Array.from(new Uint8Array(buffer), (b) => b.toString(16).padStart(2, '0')).join('');
+  const sha256 = async (buffer: ArrayBuffer) => hex(await crypto.subtle.digest('SHA-256', buffer));
+
+  const makePackage = async (fontSet: 'qpc-v4' | 'qpc-v4-tajweed', bytes: ArrayBuffer = WOFF2) => {
+    const hash = await sha256(bytes);
+    const files: Record<number, {url: string; bytes: number; sha256: string}> = {};
+    for (const page of [1, 10, 328]) {
+      const format = fontSet === 'qpc-v4-tajweed' && page === 328 ? 'woff' : 'woff2';
+      files[page] = {url: `/pkg/${fontSet}/p${page}.${format}`, bytes: bytes.byteLength, sha256: hash};
+    }
+    return {
+      kind: 'remotion-mushaf-fonts' as const,
+      schema: 1 as const,
+      name: `remotion-mushaf-fonts-${fontSet}`,
+      version: '1.20260912.0',
+      mushaf: 'qpc-v4' as const,
+      fontSet,
+      snapshot: '2026-09-12',
+      files,
+    };
+  };
+
+  const cdnDown = (status = 503) =>
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith('/pkg/') ? response(200, WOFF2) : response(status, new ArrayBuffer(0)),
+    );
+
+  it('never touches the package while the CDN works', async () => {
+    const pkg = await makePackage('qpc-v4');
+    const font = loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg});
+    await font.waitUntilDone();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/^https:\/\/static-cdn\.tarteel\.ai\//);
+    expect(font.origin()).toBe('cdn');
+    // A source with a fallback is its own source: its own family, next to the CDN-only one.
+    expect(font.fontFamily).toMatch(/^mushaf-qpc-v4-p10-[0-9a-z]+$/);
+    expect(remotionMock.delayRender.mock.calls[0]?.[0]).toContain(
+      "from QUL's CDN (https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2), then remotion-mushaf-fonts-qpc-v4@1.20260912.0",
+    );
+  });
+
+  it('loads from the package when the CDN answers 404, and warns once per set', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const pkg = await makePackage('qpc-v4');
+    cdnDown(404);
+    const font = loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg});
+    await font.waitUntilDone();
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2',
+      '/pkg/qpc-v4/p10.woff2',
+    ]);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({credentials: 'same-origin'});
+    expect(font.origin()).toBe('package');
+    expect(remotionMock.cancelRender).not.toHaveBeenCalled();
+    expect(remotionMock.continueRender).toHaveBeenCalledTimes(1);
+    await loadPageFont({mushaf: 'qpc-v4', page: 1, fallback: pkg}).waitUntilDone();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toMatch(
+      /page 10 loaded from remotion-mushaf-fonts-qpc-v4@1\.20260912\.0 because QUL's CDN failed \(FONT_HTTP: HTTP 404/,
+    );
+    warn.mockRestore();
+  });
+
+  it('falls back after the CDN keeps failing (5xx, network, HTML)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const pkg = await makePackage('qpc-v4');
+    cdnDown(503);
+    const font = loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg});
+    const done = font.waitUntilDone();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await done;
+    expect(fetchMock).toHaveBeenCalledTimes(4); // three CDN attempts outside rendering, then the package
+    expect(font.origin()).toBe('package');
+    vi.useRealTimers();
+
+    resetFontStore();
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/pkg/')) return response(200, WOFF2);
+      return response(200, HTML);
+    });
+    const html = loadPageFont({mushaf: 'qpc-v4', page: 1, fallback: [pkg]});
+    await html.waitUntilDone();
+    expect(html.origin()).toBe('package');
+  });
+
+  it('picks the package that matches the line from an array, and says which one is missing', async () => {
+    const plain = await makePackage('qpc-v4');
+    const tajweed = await makePackage('qpc-v4-tajweed');
+    cdnDown(404);
+    const font = loadPageFont({theme: 'light', page: 328, fallback: [plain, tajweed]});
+    await font.waitUntilDone();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/pkg/qpc-v4-tajweed/p328.woff');
+    expect(() => loadPageFont({theme: 'light', page: 10, fallback: plain})).toThrow(
+      expect.objectContaining({
+        code: 'BAD_FONT_FALLBACK',
+        message: expect.stringContaining('Install and pass remotion-mushaf-fonts-qpc-v4-tajweed'),
+      }),
+    );
+  });
+
+  it('fails with FONT_UNAVAILABLE naming every source when the package is missing too', async () => {
+    const pkg = await makePackage('qpc-v4');
+    fetchMock.mockResolvedValue(response(404, new ArrayBuffer(0)));
+    const font = loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg});
+    await expect(font.waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_UNAVAILABLE',
+      message: expect.stringMatching(
+        /QUL's CDN: HTTP 404[\s\S]*remotion-mushaf-fonts-qpc-v4@1\.20260912\.0: HTTP 404[\s\S]*Is remotion-mushaf-fonts-qpc-v4@1\.20260912\.0 bundled\?/,
+      ),
+    });
+    expect(remotionMock.cancelRender).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses package bytes that differ from what the package declares', async () => {
+    const pkg = await makePackage('qpc-v4');
+    const other = new Uint8Array([0x77, 0x4f, 0x46, 0x32, 9, 9, 9, 9, 9, 9, 9, 9]).buffer; // same size, other bytes
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith('/pkg/') ? response(200, other) : response(404, new ArrayBuffer(0)),
+    );
+    await expect(loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg}).waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_FALLBACK_INVALID',
+      message: expect.stringContaining('sha256'),
+    });
+    resetFontStore();
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith('/pkg/') ? response(200, TTF) : response(404, new ArrayBuffer(0)),
+    );
+    await expect(loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg}).waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_FALLBACK_INVALID',
+      message: expect.stringContaining('8 bytes, expected 12'),
+    });
+  });
+
+  it('uses a package as the only source when it is fontSrc, and ignores a fallback next to it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const pkg = await makePackage('qpc-v4');
+    const font = loadPageFont({mushaf: 'qpc-v4', page: 10, fontSrc: pkg, fallback: pkg});
+    await font.waitUntilDone();
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/pkg/qpc-v4/p10.woff2']);
+    expect(font.origin()).toBe('package');
+    expect(warn.mock.calls[0]?.[0]).toContain('fontFallback is ignored');
+    expect(() => loadPageFont({theme: 'light', page: 10, fontSrc: pkg})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_SRC', message: expect.stringContaining('holds the qpc-v4 fonts')}),
+    );
+    warn.mockRestore();
+  });
+
+  it('keeps the fallback within the render deadline when the CDN hangs', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    env.isRendering = true;
+    (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout = 30_000;
+    vi.useFakeTimers();
+    const pkg = await makePackage('qpc-v4');
+    const t0 = Date.now();
+    let packageAt = -1;
+    fetchMock.mockImplementation((url: string, init: {signal: AbortSignal}) => {
+      if (url.startsWith('/pkg/')) {
+        packageAt = Date.now() - t0;
+        return Promise.resolve(response(200, WOFF2));
+      }
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+    const font = loadPageFont({mushaf: 'qpc-v4', page: 10, fallback: pkg});
+    const done = font.waitUntilDone();
+    await vi.advanceTimersByTimeAsync(28_000);
+    await done;
+    expect(font.origin()).toBe('package');
+    // Two CDN attempts of 9.75 s and a backoff, then the package: well inside the 28 s handle timeout.
+    expect(packageAt).toBe(20_000);
+    delete (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout;
   });
 });

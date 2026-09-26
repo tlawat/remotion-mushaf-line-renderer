@@ -42,6 +42,8 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   activeWordStyle,
   wordStyle,
   wordClassName,
+  fontSrc,
+  fontFallback,
 }) => {
   const enter = normaliseAnimation('enter', enterProp);
   const exit = normaliseAnimation('exit', exitProp);
@@ -55,7 +57,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
 
-  const font = useFontGate(line, fontSet);
+  const font = useFontGate({line, fontSet, fontSrc, fontFallback});
   const canvas = useCanvasGuard({hasPresentation: Boolean(enter || exit), rootRef, rowRef});
   const baseFontSize = fontSize ?? fontSizeForWidth(width, line.mushaf);
   const resolvedLineHeight = lineHeight ?? lineHeightForFontSize(baseFontSize);
@@ -63,10 +65,10 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   const fitScale = useLineFit({
     enabled: fit === 'line' && !line.centered,
     fontLoaded: font.loaded,
-    fitKey: `${line.fontFamily}/${baseFontSize}/${Math.round(width)}`,
+    fitKey: `${font.fontFamily}/${baseFontSize}/${Math.round(width)}`,
     rowRef,
   });
-  const palettes = usePaletteRule(line.fontFamily, theme, rowRef);
+  const palettes = usePaletteRule(font.fontFamily, theme, rowRef);
 
   const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
 
@@ -131,7 +133,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       ref={rowRef}
       className="mushaf-line__row"
       style={buildRowStyle({
-        fontFamily: line.fontFamily,
+        fontFamily: font.fontFamily,
         fontSize: resolvedFontSize,
         lineHeight: resolvedLineHeight,
         centered: line.centered,
@@ -188,6 +190,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
         data-line={line.line}
         data-line-type={line.type}
         data-centered={line.centered ? 'true' : 'false'}
+        data-font-origin={font.origin ?? undefined}
         data-sliced={
           resolvedSlice === null
             ? undefined

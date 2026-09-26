@@ -216,6 +216,9 @@ describe('assertLineData', () => {
     expect(bad({slice: {fromAyah: 3, toAyah: 1}})).toThrow(/toAyah \(1\) is before fromAyah \(3\)/);
     expect(assertLineData({...good, slice: {ayah: 1}})).toBeTruthy();
     expect(() => assertLineData('nope')).toThrow(/must be the object returned by getMushafLine/);
-    expect(assertLineData({...good, fontUrl: 'https://cdn.example/p1.woff2'})).toBeTruthy();
+    // Data from 0.3 that pinned a font URL is refused with the way forward.
+    expect(() => assertLineData({...good, fontUrl: 'https://cdn.example/p1.woff2'})).toThrow(
+      /fontUrl is invalid: it was removed in 0\.4: pass fontSrc/,
+    );
   });
 });
