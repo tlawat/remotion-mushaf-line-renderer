@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 (2026-09-28)
+
+- No code changes. First version published by the Release workflow, with provenance.
+
 ## 0.4.0 (2026-09-28)
 
 - **Fonts packages as the fallback when QUL's CDN fails.** The page fonts still load from QUL's CDN

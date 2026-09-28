@@ -1,6 +1,6 @@
 {
   "name": "@tlawat/remotion-mushaf-line",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Render lines of the KFGQPC V4 (1441H) mushaf in Remotion, exactly as printed, with @remotion/transitions entrances and exits.",
   "license": "MIT",
   "repository": {
