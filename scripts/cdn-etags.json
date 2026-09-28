@@ -1,11 +1,11 @@
 {
- "generatedAt": "2026-09-28T19:35:59.151Z",
+ "generatedAt": "2026-09-28T19:47:00.133Z",
  "base": "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2",
  "entries": {
   "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.ttf": {
    "etag": "W/\"b66936bf3f1a08975ad74136188b85cd\"",
    "contentType": "font/ttf",
-   "contentLength": null,
+   "contentLength": 125444,
    "cors": "*"
   },
   "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2": {
@@ -7307,7 +7307,7 @@
   "https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.ttf": {
    "etag": "W/\"813d562d88d524cc4a9c1bcd47aa6c0f\"",
    "contentType": "font/ttf",
-   "contentLength": null,
+   "contentLength": 1125252,
    "cors": "*"
   },
   "https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.woff2": {
