@@ -51,6 +51,8 @@ exactly where the next line's entrance starts.
 | `leadInSeconds`   | `0.4`                        | Seconds a line is on screen before its first word is heard.                      |
 | `slice`           | `true`                       | Show only the recited ayahs on the first and last lines (`getMushafLines({slice: true})`). |
 | `occurrence`      | `'first'`                    | When the reciter repeats a word after a pause: change lines when it is first heard, or (`'last'`) at its final recitation. |
+| `visibleLines`    | `3`                          | Lines on screen at once through one `<MushafLineWindow>`, the current line in the middle and the whole stack scrolling by a line as the recitation moves on; `null` shows one line at a time, replaced in place. |
+| `neighbourOpacity`| `0.45`                       | In the window: opacity of the lines around the current one.                      |
 
 ```bash
 cd example && bunx remotion render Recitation out/recitation.mp4 \

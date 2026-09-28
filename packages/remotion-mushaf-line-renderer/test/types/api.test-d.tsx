@@ -17,6 +17,7 @@ import {
   getMushafLines,
   getMushafLocation,
   type LineSchedule,
+  type LineWindowContext,
   lineAyahs,
   lineHeightForFontSize,
   loadPageFont,
@@ -34,6 +35,9 @@ import {
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
+  MushafLineWindow,
+  type MushafLineWindowProps,
+  type MushafScrollAnchor,
   type MushafSharedFont,
   MushafSurahName,
   type MushafTheme,
@@ -44,10 +48,13 @@ import {
   type RecitationTimings,
   recitedRange,
   revealRtl,
+  type ScrollPositionOptions,
   scheduleLines,
+  scrollPosition,
   sliceWords,
   slideFade,
   springyTiming,
+  windowLineOpacity,
   wordAt,
   wordTiming,
 } from '../../src';
@@ -343,3 +350,53 @@ export const current: string | null = wordAt(recitation, 1.5);
 export const first = wordTiming(recitation, '9:1:1');
 export const last = wordTiming(recitation, '9:1:1', 'last');
 export const follow = <MushafLine line={data} activeWordId={wordAt(recitation, 1.5)} />;
+
+// A window of lines: driven by steps (one frame per line) or by a position, never both.
+export const windows = (
+  <>
+    <MushafLineWindow lines={[data, data]} steps={[0, 30]} />
+    <MushafLineWindow lines={[data, data]} steps={[0, 30]} scrollTiming={timing} anchor="start" visibleLines={5} />
+    <MushafLineWindow
+      lines={[data]}
+      position={0.5}
+      neighbourOpacity={0.3}
+      preloadLines={1}
+      lineStyle={(line: MushafLineData, ctx: LineWindowContext) =>
+        ctx.current
+          ? {color: 'crimson'}
+          : {opacity: ctx.distance > 1 ? 0.2 : 0.5, color: line.theme === 'plain' ? 'grey' : undefined}
+      }
+      lineClassName={(_line, ctx) => `line-${ctx.index}`}
+      enter={slideFade()}
+      exit={{presentation: fade(), timing}}
+      fontSize={112}
+      lineHeight={246}
+      fit="mushaf"
+      framed={false}
+      style={{top: 10}}
+      className="x"
+      name="window"
+      activeWordId="9:1:3"
+      activeWordStyle={{color: 'crimson'}}
+      wordStyle={(word: MushafWord, ctx) => (ctx.active ? {opacity: 1} : {opacity: word.ayah === 1 ? 1 : 0.4})}
+      wordClassName={(word) => `w-${word.wordId}`}
+      fontSrc={fontsPackage}
+      fontFallback={fontsPackage}
+    />
+  </>
+);
+// @ts-expect-error steps or position, not both
+export const bothDrivers = <MushafLineWindow lines={[data]} steps={[0]} position={0} />;
+// @ts-expect-error one of them is needed
+export const noDriver = <MushafLineWindow lines={[data]} />;
+// @ts-expect-error steps are frames
+export const stringSteps = <MushafLineWindow lines={[data]} steps={['0']} />;
+// @ts-expect-error a slice rides on the line data, not on the window
+export const windowSlice = <MushafLineWindow lines={[data]} steps={[0]} slice={{ayah: 1}} />;
+// @ts-expect-error scrollTiming belongs to the steps form
+export const positionTiming = <MushafLineWindow lines={[data]} position={0} scrollTiming={timing} />;
+export const windowProps: MushafLineWindowProps = {lines: [data], steps: [0]};
+export const anchors: MushafScrollAnchor[] = ['end', 'start'];
+export const options: ScrollPositionOptions = {frame: 10, fps: 30, steps: [0, 30], timing, anchor: 'end'};
+export const position: number = scrollPosition({frame: 10, fps: 30, steps: [0, 30]});
+export const opacity: number = windowLineOpacity({index: 1, position: 0.5, visibleLines: 3, neighbourOpacity: 0.4});

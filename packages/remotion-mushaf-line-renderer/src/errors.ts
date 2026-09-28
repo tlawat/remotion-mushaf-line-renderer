@@ -16,6 +16,8 @@ export type MushafErrorCode =
   | 'BAD_ENTER'
   | 'BAD_EXIT'
   | 'BAD_SIZE'
+  | 'BAD_STEPS'
+  | 'BAD_WINDOW_PROP'
   | 'BAD_DATA_URL'
   | 'DATA_HTTP'
   | 'DATA_NETWORK'

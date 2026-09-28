@@ -383,6 +383,109 @@ export type MushafJuzNameProps = MushafGlyphCommonProps & {
   readonly juz: number;
 };
 
+/**
+ * Where a scroll step sits relative to its frame: `'end'` (default) finishes the scroll at
+ * `steps[j]`, so line `j` is centred the moment it becomes current; `'start'` begins it there.
+ */
+export type MushafScrollAnchor = 'end' | 'start';
+
+/** What `scrollPosition()` takes; see it for the model. */
+export type ScrollPositionOptions = {
+  /** Local frame of the enclosing `<Sequence>`. */
+  readonly frame: number;
+  readonly fps: number;
+  /** The local frame at which each line becomes current: one entry per line, never decreasing. */
+  readonly steps: readonly number[];
+  /** The curve and length of one scroll. Default `enterTiming()`: 0.5 s, decelerating into place. */
+  readonly timing?: TransitionTiming | undefined;
+  /** Default `'end'`. */
+  readonly anchor?: MushafScrollAnchor | undefined;
+};
+
+/** Passed to `lineStyle` / `lineClassName` of `<MushafLineWindow>` alongside the line. */
+export type LineWindowContext = {
+  readonly line: MushafLineData;
+  /** Index of the line in `lines`. */
+  readonly index: number;
+  /** The window's position, a fractional line index (see `scrollPosition()`). */
+  readonly position: number;
+  /** `|index - position|`: 0 in the centre slot, 1 one slot away, fractional while scrolling. */
+  readonly distance: number;
+  /** `true` for the line nearest the centre (`index === round(position)`). */
+  readonly current: boolean;
+  /** Local frame of the enclosing `<Sequence>`. */
+  readonly frame: number;
+  readonly fps: number;
+};
+
+export type MushafLineWindowCommonProps = Pick<
+  MushafLineCommonProps,
+  | 'enter'
+  | 'exit'
+  | 'fit'
+  | 'fontSize'
+  | 'lineHeight'
+  | 'style'
+  | 'className'
+  | 'name'
+  | 'framed'
+  | 'activeWordId'
+  | 'activeWordStyle'
+  | 'wordStyle'
+  | 'wordClassName'
+  | 'fontSrc'
+  | 'fontFallback'
+> & {
+  /** The lines, in reading order, e.g. from `getMushafLines()`. Slices ride on `line.slice`. */
+  readonly lines: readonly MushafLineData[];
+  /** How many line slots the window shows; the current line is in the middle one. Default 3. */
+  readonly visibleLines?: number;
+  /**
+   * Opacity of the lines that are not current, 0-1. Default 0.45. The current line is at 1 and the
+   * value blends with the scroll, so emphasis travels with it. It is the default `lineStyle`; a
+   * `lineStyle` that sets `opacity` wins over it.
+   */
+  readonly neighbourOpacity?: number;
+  /**
+   * Per-line style, called for every mounted line on every frame with its `LineWindowContext`.
+   * Paint only, like `wordStyle`: `color`, `opacity`, `filter`, `background`, `textShadow` are safe;
+   * nothing that changes glyph metrics. Applied to the line's root, so `color` reaches the glyphs.
+   * Must be a pure function of its arguments.
+   */
+  readonly lineStyle?: (line: MushafLineData, context: LineWindowContext) => React.CSSProperties | undefined;
+  /** Per-line class name, appended to `mushaf-line`. Same purity rule. */
+  readonly lineClassName?: (line: MushafLineData, context: LineWindowContext) => string | undefined;
+  /**
+   * Lines mounted below the window before they scroll into it, so their page fonts load early.
+   * Default 2. Lines above the window are unmounted as soon as they have left it.
+   */
+  readonly preloadLines?: number;
+};
+
+/**
+ * `<MushafLineWindow>` is driven either by `steps` (the frame at which each line becomes current,
+ * turned into a position by `scrollPosition()` with `scrollTiming` / `anchor`) or by a `position`
+ * you compute yourself (a spring, an `interpolate()`), never both.
+ */
+export type MushafLineWindowProps = MushafLineWindowCommonProps &
+  (
+    | {
+        readonly steps: readonly number[];
+        /** The curve and length of one scroll. Default `enterTiming()`. */
+        readonly scrollTiming?: TransitionTiming;
+        /** Default `'end'`: the scroll to line `j` finishes at `steps[j]`. */
+        readonly anchor?: MushafScrollAnchor;
+        readonly position?: never;
+      }
+    | {
+        /** A fractional line index: `1` centres line 1, `1.5` is halfway to line 2. */
+        readonly position: number;
+        readonly steps?: never;
+        readonly scrollTiming?: never;
+        readonly anchor?: never;
+      }
+  );
+
 export type MushafLineProps = MushafLineCommonProps &
   // Resolved data decides its own mushaf and theme, and is already loaded (pass `theme` / `data` to
   // getMushafLine() instead).

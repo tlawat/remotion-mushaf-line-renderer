@@ -4,14 +4,16 @@ export type {RevealRtlProps} from './animation/presentations/reveal-rtl';
 export {revealRtl, revealRtlStyle} from './animation/presentations/reveal-rtl';
 export type {SlideFadeProps} from './animation/presentations/slide-fade';
 export {slideFade, slideFadeStyle} from './animation/presentations/slide-fade';
+export {scrollPosition} from './animation/scroll-position';
 export type {MushafSpringTimingOptions, MushafTimingOptions} from './animation/timings';
 // Animation
 export {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from './animation/timings';
 export {MushafJuzName} from './component/JuzName';
 export {MushafLine} from './component/MushafLine';
+export {MushafLineWindow} from './component/MushafLineWindow';
 export {MushafSurahName} from './component/SurahName';
 // Sizing
-export {fontSizeForWidth, lineHeightForFontSize} from './component/styles';
+export {fontSizeForWidth, lineHeightForFontSize, windowLineOpacity} from './component/styles';
 // Data
 export {loadMushafData} from './data/load-mushaf-data';
 export type {MushafErrorCode} from './errors';
@@ -38,6 +40,7 @@ export type {
   GetMushafLinesOptions,
   GetMushafLocationOptions,
   LineSchedule,
+  LineWindowContext,
   LoadedMushafFont,
   LoadedPageFont,
   LoadMushafDataOptions,
@@ -62,9 +65,12 @@ export type {
   MushafLineData,
   MushafLineProps,
   MushafLineType,
+  MushafLineWindowCommonProps,
+  MushafLineWindowProps,
   MushafLocation,
   MushafMetrics,
   MushafPageFontFile,
+  MushafScrollAnchor,
   MushafSelection,
   MushafSharedFont,
   MushafSharedFontFile,
@@ -79,6 +85,7 @@ export type {
   RecitationTimings,
   RecitedRange,
   ScheduleLinesOptions,
+  ScrollPositionOptions,
   WordContext,
   WordOccurrence,
   WordTiming,
