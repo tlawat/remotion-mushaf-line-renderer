@@ -57,7 +57,22 @@ describe('getMushafLines({page})', () => {
     const c = 'currentColor';
     expect(lines[0]!.theme).toEqual({
       base: 3,
-      colors: {0: c, 1: c, 2: c, 3: c, 4: c, 5: c, 6: c, 7: c, 8: c, 9: c, 11: '#c8a45c', 13: c, 14: c, 15: c},
+      colors: {
+        0: c,
+        1: c,
+        2: c,
+        3: c,
+        4: c,
+        5: c,
+        6: c,
+        7: c,
+        8: c,
+        9: c,
+        11: '#c8a45c',
+        13: c,
+        14: 'transparent',
+        15: c,
+      },
     });
     // The ayah-range form resolves the same way.
     const range = await getMushafLines({surah: 2, fromAyah: 2, toAyah: 3, theme: 'normal'});

@@ -1,6 +1,10 @@
 import {describeValue, MushafError} from '../errors';
 import type {MushafColorPart, MushafTheme, MushafThemeColors, MushafThemeName, MushafThemeSelection} from '../types';
 import {assertCssColor, CURRENT_COLOR} from './colors';
+
+/** The rings around the small connective letters (entry 14) are hidden in every preset: the printed page has none. */
+const TRANSPARENT = 'transparent';
+
 import type {FontSetDefinition} from './registry';
 
 /** One `override-colors` entry: which CPAL entry, and the CSS colour to paint it with. */
@@ -22,6 +26,7 @@ export const MUSHAF_THEME_NAMES: readonly MushafThemeName[] = [
 export const COLOR_PARTS: readonly MushafColorPart[] = [
   'ink',
   'silent',
+  'outline',
   'rules',
   'frame',
   'accent',
@@ -58,7 +63,7 @@ export const MUSHAF_THEMES: Readonly<Record<MushafThemeName, MushafTheme>> = {
       '#ff0080',
       '#d8e9d8',
       '#000000',
-      '#000000',
+      TRANSPARENT,
       '#a5a5a5',
     ]),
   },
@@ -79,7 +84,7 @@ export const MUSHAF_THEMES: Readonly<Record<MushafThemeName, MushafTheme>> = {
       '#ff80ab',
       '#343a40',
       '#e8e8e8',
-      '#e8e8e8',
+      TRANSPARENT,
       '#b0b0b0',
     ]),
   },
@@ -100,17 +105,26 @@ export const MUSHAF_THEMES: Readonly<Record<MushafThemeName, MushafTheme>> = {
       '#2d6a4f',
       '#fff7ea',
       '#8b0000',
-      '#3d2914',
+      TRANSPARENT,
       '#5c4033',
     ]),
   },
   black: {
     base: 5,
-    colors: byEntry(Array.from({length: 16}, () => '#ffffff')),
+    colors: byEntry(Array.from({length: 16}, (_, entry) => (entry === 14 ? TRANSPARENT : '#ffffff'))),
     // QUL's `.theme-black .char-end` rule: the ayah number black on the white marker.
     marker: {frame: '#000000'},
   },
-  normal: {base: 3, colors: {ink: CURRENT_COLOR, silent: CURRENT_COLOR, rules: CURRENT_COLOR, frame: CURRENT_COLOR}},
+  normal: {
+    base: 3,
+    colors: {
+      ink: CURRENT_COLOR,
+      silent: CURRENT_COLOR,
+      outline: TRANSPARENT,
+      rules: CURRENT_COLOR,
+      frame: CURRENT_COLOR,
+    },
+  },
   p1: {base: 1},
   p2: {base: 2},
   p3: {base: 3},

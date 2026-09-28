@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The rings around the small connective letters are gone from the presets.** The colour font draws
+  a thin box around each small connective letter and an ellipse around its vowel (CPAL entry 14:
+  3,065 layers over the 604 page fonts, every one a stroked ring and never a letter), which the
+  printed page does not show. Entry 14 is now its own part, `outline`, and `light`, `dark`, `sepia`,
+  `black` and `normal` paint it `'transparent'`; `ink` is entry 0 alone. `{colors: {outline: 'currentColor'}}`
+  brings the rings back, and `p1`–`p5` still show the font untouched.
 - **Recitation timings.** A neutral, versioned JSON input for following a recording
   (`RecitationTimings`: `{version: 1, surah, ayat: [{ayah, start, end, complete?, words?: [{id, start, end}]}]}`,
   seconds, word ids as `MushafWord.id`) and pure helpers over it: `parseRecitationTimings()`

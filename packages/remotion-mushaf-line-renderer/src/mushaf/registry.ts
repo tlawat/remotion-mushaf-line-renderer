@@ -176,16 +176,19 @@ export const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<numb
 
 /**
  * The V4 colour font's sixteen CPAL entries (read from its CPAL table; the COLR layer counts of the
- * fixture fonts and QUL's own palette rules say what each paints): 0 and 14 the letters, 1, 2 and 15
- * the greys of silent letters, 3-9 the seven tajweed rule colours, and 10-13 the ayah rosette: 10
- * the jewel, 11 the petals, 12 the disc, 13 the frame, curls and the number inside it.
+ * fixture fonts and QUL's own palette rules say what each paints): 0 the letters, 1, 2 and 15 the
+ * greys of silent letters, 3-9 the seven tajweed rule colours, 10-13 the ayah rosette (10 the
+ * jewel, 11 the petals, 12 the disc, 13 the frame, curls and the number inside it), and 14 the thin
+ * rings drawn around the small connective letters and their vowel: over all 604 page fonts, its
+ * 3,065 layers are every one a stroked ring and never a letter, so it is its own part.
  *
  * 13 is its own part because the font paints it in the letter colour (black in palettes 0 and 3,
  * white in 4) yet QUL's black theme needs it apart from the letters.
  */
 const V4_COLOR_PARTS: Readonly<Record<MushafColorPart, readonly number[]>> = {
-  ink: [0, 14],
+  ink: [0],
   silent: [1, 2, 15],
+  outline: [14],
   rules: [3, 4, 5, 6, 7, 8, 9],
   frame: [13],
   accent: [11],
@@ -196,6 +199,7 @@ const V4_COLOR_PARTS: Readonly<Record<MushafColorPart, readonly number[]>> = {
 const NO_COLOR_PARTS: Readonly<Record<MushafColorPart, readonly number[]>> = {
   ink: [],
   silent: [],
+  outline: [],
   rules: [],
   frame: [],
   accent: [],
