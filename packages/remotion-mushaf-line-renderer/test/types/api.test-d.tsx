@@ -16,6 +16,7 @@ import {
   getMushafLine,
   getMushafLines,
   getMushafLocation,
+  type LineSchedule,
   lineAyahs,
   lineHeightForFontSize,
   loadPageFont,
@@ -39,10 +40,16 @@ import {
   type MushafThemeName,
   type MushafThemeSelection,
   type MushafWord,
+  parseRecitationTimings,
+  type RecitationTimings,
+  recitedRange,
   revealRtl,
+  scheduleLines,
   sliceWords,
   slideFade,
   springyTiming,
+  wordAt,
+  wordTiming,
 } from '../../src';
 
 declare const data: MushafLineData;
@@ -311,3 +318,28 @@ export const fontSets: MushafFontSet[] = ['qpc-v4', 'qpc-v4-tajweed'];
 type Json = string | number | boolean | null | readonly Json[] | {readonly [k: string]: Json | undefined};
 type IsJson<T> = T extends Json ? true : false;
 export const jsonCheck: IsJson<MushafLineData> = true;
+export const timingsJson: IsJson<RecitationTimings> = true;
+export const scheduleJson: IsJson<LineSchedule> = true;
+
+// Recitation timings: a versioned JSON input, and pure helpers over it.
+export const recitation: RecitationTimings = {
+  version: 1,
+  surah: 9,
+  ayat: [
+    {ayah: 1, start: 0.1, end: 9.4, words: [{id: '9:1:1', start: 0.1, end: 2.4}]},
+    {ayah: 2, start: 9.9, end: 22.7, complete: false},
+  ],
+};
+// @ts-expect-error only version 1 exists
+export const futureTimings: RecitationTimings = {version: 2, surah: 9, ayat: []};
+export const parsed: RecitationTimings = parseRecitationTimings(JSON.parse('{}'));
+export const range: {surah: number; fromAyah: number; toAyah: number} = recitedRange(recitation);
+export const rangeLines = getMushafLines({...recitedRange(recitation), slice: true});
+export const schedule: LineSchedule[] = scheduleLines([data], recitation, {occurrence: 'last'});
+export const defaulted: LineSchedule[] = scheduleLines([data], recitation);
+// @ts-expect-error an occurrence is 'first' or 'last'
+export const badOccurrence = scheduleLines([data], recitation, {occurrence: 'second'});
+export const current: string | null = wordAt(recitation, 1.5);
+export const first = wordTiming(recitation, '9:1:1');
+export const last = wordTiming(recitation, '9:1:1', 'last');
+export const follow = <MushafLine line={data} activeWordId={wordAt(recitation, 1.5)} />;

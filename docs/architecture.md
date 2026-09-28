@@ -60,7 +60,19 @@ keeps (or `'empty'`, or `null` when it keeps everything), `sliceWords()` is the 
 `assertLineData()` validates data coming back in through props, field by field, because it may have
 been persisted by an older version.
 
-## 4. Fonts (`src/fonts/`)
+## 4. Recitation timings (`src/recitation/`)
+
+Following a recording is the resolvers' job seen from the audio's side. `RecitationTimings` is the
+package's one input for it: a versioned JSON of ayah spans with optional per-word times, keyed by
+`MushafWord.id`, so a producer never touches text and the package never depends on a speech model.
+`parseRecitationTimings()` validates a file field by field, as `assertLineData()` does for line data.
+`recitedRange()` gives `getMushafLines()` its range; `scheduleLines()` turns the lines and the
+timings into `{index, start, end}` slots (a line starts at its first timed word, by `occurrence`
+for repeated words, interpolated by position when the file has no time for it, and the words a
+line's `slice` hides are skipped through `resolveSlice()`); `wordAt()` answers `activeWordId`. The
+aligners that write the file are examples in `example/tools/`, not part of the package.
+
+## 5. Fonts (`src/fonts/`)
 
 A load is described by a `FontTarget` (`font-file.ts`): a page font (a set and a page) or a shared
 font, with the file a resolver receives, the family and store key under the default source, the
@@ -94,7 +106,7 @@ needs: CSS has no inline way to say "palette 3, ink green", so the rule is writt
 `<style>` element, named by a hash of its colours, before the line is painted. A theme with `marker`
 colours gets a second rule that only the ayah-number glyph names (QUL's `.char-end` trick).
 
-## 5. The component (`src/component/`)
+## 6. The component (`src/component/`)
 
 `<MushafLine>` validates its props and picks a path: `line={data}` renders `LineRenderer` directly;
 `page` + `line` goes through `ResolveLine`, which resolves the data behind a `delayRender()` handle
@@ -123,7 +135,7 @@ the commits where the fit is already known, which are exactly the commits the fi
 measure on: the measured width is always the whole line's, a slice never changes the type size, and
 the hidden words (`display: none`) let the row centre the ones that remain.
 
-## 6. Animation (`src/animation/`)
+## 7. Animation (`src/animation/`)
 
 `enter` and `exit` are rendered exactly as `<TransitionSeries>` renders the entering and exiting side
 of a scene (`Presented.tsx`): the exiting presentation wraps the entering one, and each receives its
@@ -132,7 +144,7 @@ progress over its last frames. `timings.ts` provides the eased defaults and the 
 `presentations/` the package's own `slideFade` and `revealRtl`, plain functions of progress so they
 are unit-tested frame by frame.
 
-## 7. Packaging
+## 8. Packaging
 
 `tsup` emits ESM (`dist/esm/index.mjs`) and CJS (`dist/cjs/index.js`) with bundled declarations.
 `scripts/check-package.mjs` verifies the exports map, that the entries stay small and embed no data,

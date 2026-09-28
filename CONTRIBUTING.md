@@ -151,13 +151,14 @@ packages/remotion-mushaf-line-renderer/
     mushaf/               the registry (mushaf definition, dataset, font sets), themes and colour validation
     data/                 the runtime loader: zip and SQLite readers, the export join, the compiler, the layout format
     resolve/              getMushafLine, getMushafLines, getMushafLocation, slicing, line data validation
+    recitation/           recitation timings: validation, the line schedule, the current word
     fonts/                font loading (page fonts and the shared fonts), the font store, the @font-palette-values store
     animation/            timings, entrance/exit progress, the slideFade and revealRtl presentations
     component/            <MushafLine>, its hooks (font gate, fit, palette rule, canvas guard), the row and words;
                           the glyph renderer behind header lines, <MushafSurahName> and <MushafJuzName>
   test/                   unit, types, browser and render suites, fixtures
   scripts/check-package.mjs
-example/                  Remotion project, <Player> harness, recitation tool
+example/                  Remotion project, <Player> harness, the recitation timing tools (QUD API client, Whisper)
 scripts/                  the qul CLI and its library (mirror, compiler, readers), their tests
 docs/                     architecture and font notes
 ```

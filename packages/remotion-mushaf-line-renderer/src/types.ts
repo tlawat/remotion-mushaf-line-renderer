@@ -197,6 +197,63 @@ export type MushafSlice =
   | {readonly ayah: number; readonly fromAyah?: never; readonly toAyah?: never}
   | {readonly fromAyah: number; readonly toAyah?: number; readonly ayah?: never};
 
+/** When one word of the mushaf is heard: `id` is `MushafWord.id` ("surah:ayah:position"); seconds from the start of the audio. */
+export type WordTiming = {readonly id: string; readonly start: number; readonly end: number};
+
+/** One ayah of a recording, in seconds from the start of the audio. */
+export type AyahTiming = {
+  readonly ayah: number;
+  readonly start: number;
+  /** Not before `start`. */
+  readonly end: number;
+  /**
+   * `false` when the recording does not carry the whole ayah (the reciter stopped, or words were not
+   * recognised). Default `true`. Informational: the app decides what to do with such an ayah.
+   */
+  readonly complete?: boolean;
+  /**
+   * Per-word times in audio order (a `start` never before the previous one). Optional: without them a
+   * word's time is interpolated inside the ayah by position. A word the reciter repeats appears once
+   * per occurrence.
+   */
+  readonly words?: readonly WordTiming[];
+};
+
+/**
+ * When a recording recites each ayah and word: the input of `scheduleLines()` and `wordAt()`, and
+ * what an aligner's output is converted to. Plain JSON; keys the format does not define (`audio`,
+ * `source`, ...) may travel with it. `parseRecitationTimings()` validates one read from a file.
+ *
+ * ```json
+ * {"version": 1, "surah": 9, "ayat": [
+ *   {"ayah": 1, "start": 0.1, "end": 9.4, "words": [{"id": "9:1:1", "start": 0.1, "end": 2.4}, ...]},
+ *   {"ayah": 2, "start": 9.9, "end": 22.7}
+ * ]}
+ * ```
+ */
+export type RecitationTimings = {
+  /** Format version. `parseRecitationTimings()` throws BAD_RECITATION_TIMINGS on a mismatch. */
+  readonly version: 1;
+  /** 1..114 */
+  readonly surah: number;
+  /** Ascending by `ayah`, at least one. */
+  readonly ayat: readonly AyahTiming[];
+};
+
+/** The ayah range of a recording, as `getMushafLines()` takes it. */
+export type RecitedRange = {readonly surah: number; readonly fromAyah: number; readonly toAyah: number};
+
+/** Which recitation of a repeated word counts: `'first'` when it is first heard, `'last'` its final one. */
+export type WordOccurrence = 'first' | 'last';
+
+/** One line of a passage and when it is on screen, in seconds; `index` into the `lines` given to `scheduleLines()`. */
+export type LineSchedule = {readonly index: number; readonly start: number; readonly end: number};
+
+export type ScheduleLinesOptions = {
+  /** Which occurrence of a repeated word starts its line. Default `'first'`. */
+  readonly occurrence?: WordOccurrence | undefined;
+};
+
 /**
  * Where the mushaf data comes from: QUL's two raw exports  -  the words of the script (JSON) and the
  * line layout (SQLite)  -  each as the CDN's zip or unzipped. Absolute URLs, `staticFile()` results

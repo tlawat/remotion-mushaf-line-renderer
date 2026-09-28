@@ -35,6 +35,7 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 - [Themes](#themes)
 - [Sizing](#sizing)
 - [Slicing a line](#slicing-a-line)
+- [Following a recording](#following-a-recording)
 - [Entrances and exits](#entrances-and-exits)
 - [Surah names and juz names](#surah-names-and-juz-names)
 - [Fonts](#fonts)
@@ -389,6 +390,83 @@ side by side that the mushaf never printed together.
 lines it cuts (the first and/or last of the passage, when they carry words of other ayahs), so a
 resolved passage carries its own slicing through `inputProps`; the lines in between carry no slice.
 The `slice` prop wins over it, and `slice={null}` cancels it.
+
+## Following a recording
+
+A recited passage needs two things: the lines that carry it, and when each is on screen. The package
+takes the second from **recitation timings**, a small versioned JSON that says when each ayah, and
+optionally each word, is heard. It is deliberately neutral: the package ships no aligner and no speech
+model, and any tool that can say "word 9:1:3 starts at 2.59 s" can write it. Two example producers
+live in the repository's [`example/tools`](https://github.com/tlawat/remotion-mushaf-line-renderer/tree/main/example/tools):
+a client for the QUD Universal Aligner's HTTP API, and a Whisper script.
+
+```json
+{
+  "version": 1,
+  "surah": 9,
+  "ayat": [
+    {"ayah": 1, "start": 0.1, "end": 9.39, "words": [
+      {"id": "9:1:1", "start": 0.1, "end": 2.38}, {"id": "9:1:2", "start": 2.38, "end": 2.59}, ...
+    ]},
+    {"ayah": 2, "start": 9.85, "end": 22.71, "complete": false}
+  ]
+}
+```
+
+- Times are seconds from the start of the audio; `end` is never before `start`.
+- `ayat` is ascending. `complete: false` marks an ayah the recording does not carry whole; the
+  package only reports it, the app decides (the example skips such ayahs).
+- `words`, when present, are in audio order, and `id` is the word's `MushafWord.id`
+  (`"surah:ayah:position"`), the same key the rendered words carry, so no text is matched anywhere.
+  A word the reciter repeats after a pause appears once per occurrence. The ayah-end marker is a word
+  of the mushaf too (`position` one past the last word); a producer that times it puts it at the
+  ayah's end, and one that does not is fine, the package places it there itself.
+- Other keys (`audio`, `durationSeconds`, `source`) pass through untouched.
+
+```tsx
+const timings = parseRecitationTimings(await (await fetch(staticFile('audio/tawbah-timings.json'))).json());
+const lines = await getMushafLines({...recitedRange(timings), slice: true});
+const schedule = scheduleLines(lines, timings); // [{index, start, end}, ...] in seconds
+// composition: one <Sequence> per scheduled line
+{schedule.map(({index, start, end}) => (
+  <Sequence key={index} from={Math.round(start * fps)} durationInFrames={Math.round((end - start) * fps)}>
+    <MushafLine line={lines[index]} activeWordId={wordAt(timings, frame / fps)} />
+  </Sequence>
+))}
+```
+
+### `parseRecitationTimings(value): RecitationTimings`
+
+Validates timings read from a file or `inputProps` and returns them typed. Every field is checked and
+the message names the one at fault; a `version` other than 1 is refused with a message naming the
+version this package understands. `BAD_RECITATION_TIMINGS` on any failure.
+
+### `recitedRange(timings): {surah, fromAyah, toAyah}`
+
+The first and last ayah of the recording, spreadable into `getMushafLines()`.
+
+### `scheduleLines(lines, timings, {occurrence?}): LineSchedule[]`
+
+When each line is on screen, one `{index, start, end}` (seconds, `index` into `lines`) per line that
+carries a timed word, in the order the lines were given. A line starts when its first timed word is
+heard: the word's own time when the file has one, else a time interpolated inside its ayah by
+position (the marker at the ayah's end); the words a line's own `slice` hides never start it. It ends
+when the next scheduled line starts, and the last line at the end of the last timed ayah. Lines with
+no timed word (headers, lines outside the recording) are left out.
+
+`occurrence` decides which recitation of a repeated word starts its line: `'first'` (default) when it
+is first heard, `'last'` its final one. Nothing is reordered, so under `'last'` a line whose first
+word was repeated after the next line began collapses to nothing rather than jumping back.
+
+### `wordAt(timings, seconds): string | null`
+
+The id of the word being recited at that moment, for `activeWordId`: the last word whose `start` is at
+or before `seconds`. `null` before the first word, and always for a file without per-word times. A
+pause keeps the previous word current until the next starts.
+
+### `wordTiming(timings, id, occurrence?): WordTiming | null`
+
+One word's `{id, start, end}` from the file, or `null` when it has none for it.
 
 ## Entrances and exits
 
@@ -778,6 +856,7 @@ across package copies.
 | `BAD_THEME`                              | `theme` must be `'plain'`, a preset name or `{base, colors?, marker?}`; a base the font lacks, an entry outside 0–15 or an unknown part. |
 | `BAD_COLOR`                              | A theme colour is not a CSS colour.                                                                                                            |
 | `BAD_SLICE`                              | `slice` must be `{ayah}` or `{fromAyah, toAyah?}` with positive integers (`toAyah` not before `fromAyah`); `slice: true` only on the ayah form of `getMushafLines()`. |
+| `BAD_RECITATION_TIMINGS`                 | `parseRecitationTimings()` was given something other than `{version: 1, surah, ayat: [{ayah, start, end, complete?, words?}]}` (the message names the field), or timings of a version this package does not understand. |
 | `AYAH_NOT_FOUND`                         | `getMushafLines({surah, ...})` / `getMushafLocation()` was asked for a surah or ayah the mushaf does not have; the message names the last ayah. |
 | `PAGE_OUT_OF_RANGE`, `LINE_OUT_OF_RANGE` | Pages are `1..604`; lines `1..15` (`1..8` on pages 1 and 2). The message names the page's line count.                                          |
 | `BAD_LINE_PROP`                          | Pass `line={MushafLineData}` or `page` + `line={number}`, and `theme` / `mushaf` / `data` only with the second form.                           |

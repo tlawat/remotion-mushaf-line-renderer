@@ -273,6 +273,7 @@ def main():
         ayat.append({"ayah": ayah, "start": round(start, 3), "end": round(marker_end if complete else end, 3), "complete": complete, "matchRatio": round(ratio[ayah], 2), "words": words})
 
     out = {
+        "version": 1,
         "surah": surah,
         "audio": os.path.basename(args.audio),
         "durationSeconds": round(len(x) / sr, 3),
