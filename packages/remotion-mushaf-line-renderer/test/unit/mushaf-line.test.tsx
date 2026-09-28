@@ -445,7 +445,7 @@ describe('<MushafLine>', () => {
     expect(explicitRule).toContain('10 #0aa');
     expect(explicitRule).toContain('11 #c8a45c');
     expect(explicitRule).toContain('12 transparent');
-    expect(explicitRule).toContain('14 #1b6f3f');
+    expect(explicitRule).toContain('14 transparent'); // the outline rings are their own part, hidden
     expect(explicitRule).not.toContain('13 #1b6f3f'); // the frame is its own part
   });
 

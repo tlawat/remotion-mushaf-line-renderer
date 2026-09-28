@@ -246,7 +246,9 @@ share the location of the word it precedes, so key elements by `wordId`. Never n
 The `theme` decides how a line is coloured. It is an option of every resolver and of the convenience
 form of `<MushafLine>`, and it is recorded on the data, so a line carries its own appearance through
 `inputProps` and every render worker. The presets are the ten options QUL offers on its own preview
-page (minus `p6`, which the font has no palette for), reproduced colour for colour:
+page (minus `p6`, which the font has no palette for), reproduced colour for colour with one exception:
+the thin rings the colour font draws around the small connective letters (the `outline` part, entry
+14) are hidden, because the printed page has none; `p1`–`p5` show the font as it is:
 
 | Theme               | QUL's button | What you get                                                                                              | Background it was made for |
 | ------------------- | ------------ | -------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -295,8 +297,9 @@ preset (its colours come first), then recolour by **part** or by **CPAL entry**:
 
 | Part         | CPAL entries        | Paints                                                                                            |
 | ------------ | ------------------- | ------------------------------------------------------------------------------------------------- |
-| `ink`        | 0, 14               | The letters                                                                                       |
+| `ink`        | 0                   | The letters                                                                                       |
 | `silent`     | 1, 2, 15            | The greyed letters that are written but not pronounced                                            |
+| `outline`    | 14                  | The thin rings the colour font draws around the small connective letters and their vowel; every preset hides them (`'transparent'`), `'currentColor'` shows them as QUL's preview does |
 | `rules`      | 3, 4, 5, 6, 7, 8, 9 | The seven tajweed rule colours (prolongations, ghunnah, qalqalah, ...); 7 is the 2-vowel prolongation |
 | `frame`      | 13                  | The ayah-end rosette's frame and curls, and the ayah number inside it                             |
 | `accent`     | 11                  | The petal flourishes above and below the rosette                                                  |

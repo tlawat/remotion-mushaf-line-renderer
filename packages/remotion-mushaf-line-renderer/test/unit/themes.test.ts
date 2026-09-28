@@ -33,13 +33,16 @@ describe('themes', () => {
     // Black: everything white, and the ayah number black on the marker only.
     const black = resolveTheme(font, 'black');
     expect(black.base).toBe(5);
-    expect(black.entries.every(([, color]) => color === '#ffffff')).toBe(true);
+    expect(black.entries.every(([entry, color]) => color === (entry === 14 ? 'transparent' : '#ffffff'))).toBe(true);
     expect(black.marker).toEqual([[13, '#000000']]);
     // Normal: the font's palette 3, everything written following the inherited CSS colour.
     const normal = resolveTheme(font, 'normal');
     expect(normal.base).toBe(3);
     expect(normal.entries.map(([e]) => e)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14, 15]);
-    expect(normal.entries.every(([, color]) => color === 'currentColor')).toBe(true);
+    // ... except the outline rings, hidden.
+    expect(normal.entries.every(([entry, color]) => color === (entry === 14 ? 'transparent' : 'currentColor'))).toBe(
+      true,
+    );
     // P1-P5: the raw palettes.
     for (const n of [1, 2, 3, 4, 5])
       expect(resolveTheme(font, `p${n}`)).toEqual({name: `p${n}`, base: n, entries: [], marker: [], data: `p${n}`});
@@ -80,7 +83,7 @@ describe('themes', () => {
     );
     expect(() => resolveTheme(font, {base: 'mandala' as never})).toThrow(/theme.base must be/);
     expect(() => resolveTheme(font, {base: 0, colors: {'16': 'red'}})).toThrow(
-      /theme.colors.16 is neither a part \(ink, silent, rules, frame, accent, detail, background\) nor a CPAL entry of the font \(0–15\)/,
+      /theme.colors.16 is neither a part \(ink, silent, outline, rules, frame, accent, detail, background\) nor a CPAL entry of the font \(0–15\)/,
     );
     expect(() => resolveTheme(font, {base: 0, colors: {glow: 'red'} as never})).toThrow(
       /theme.colors.glow is neither a part/,

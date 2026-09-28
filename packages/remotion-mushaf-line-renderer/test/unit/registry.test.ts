@@ -93,8 +93,9 @@ describe('mushaf registry', () => {
   it('knows which CPAL entries paint which part of the colour font', () => {
     // Read from the font's CPAL table, the COLR layer counts and QUL's own palette rules.
     expect(v4.fontSets.color.colorParts).toEqual({
-      ink: [0, 14],
+      ink: [0],
       silent: [1, 2, 15],
+      outline: [14],
       rules: [3, 4, 5, 6, 7, 8, 9],
       frame: [13],
       accent: [11],

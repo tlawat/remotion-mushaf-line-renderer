@@ -90,7 +90,7 @@ describe('getMushafLine', () => {
     const green = await getMushafLine({page: 1, line: 2, theme: {base: 'normal', colors: {ink: 'rgb(27 111 63)'}}});
     expect((green.theme as {colors: Record<string, string>}).colors).toMatchObject({
       0: 'rgb(27 111 63)',
-      14: 'rgb(27 111 63)',
+      14: 'transparent', // the outline rings stay hidden: they are not ink
       1: 'currentColor',
     });
     // A bare base records only the base; a preset's marker rides along.

@@ -15,15 +15,18 @@ export type MushafThemeName = 'light' | 'dark' | 'sepia' | 'black' | 'normal' | 
 /**
  * The parts of a colour-font line that can be recoloured, each a group of CPAL entries:
  *
- * - `ink`: the letters (entries 0 and 14).
+ * - `ink`: the letters (entry 0).
  * - `silent`: the greyed letters that are written but not pronounced (1, 2, 15).
+ * - `outline`: the thin rings the colour font draws around the small connective letters and their
+ *   vowel (14). The printed page and the plain font have none, so the presets paint them
+ *   `'transparent'`; `'currentColor'` shows them the way QUL's preview page does.
  * - `rules`: the seven tajweed rule colours (3-9: prolongations, ghunnah, qalqalah, ...).
  * - `frame`: the ayah-end rosette's frame, curls and the ayah number inside it (13).
  * - `accent`: the petal flourishes above and below the rosette (11).
  * - `detail`: the small jewel at the top of the rosette (10).
  * - `background`: the disc behind the ayah number (12).
  */
-export type MushafColorPart = 'ink' | 'silent' | 'rules' | 'frame' | 'accent' | 'detail' | 'background';
+export type MushafColorPart = 'ink' | 'silent' | 'outline' | 'rules' | 'frame' | 'accent' | 'detail' | 'background';
 
 /**
  * Colours by part name or by CPAL entry index (`'0'`-`'15'`). Every value is an ordinary CSS colour

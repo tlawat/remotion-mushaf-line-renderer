@@ -141,8 +141,9 @@ Rules learned the hard way:
   The 16 CPAL entries, from the CPAL/COLR tables and QUL's own palette rules (`app/views/shared/_page_font.html.erb`):
   | entry | paints | palette 0 |
   |---|---|---|
-  | 0, 14 | letters | `#000000` |
+  | 0 | letters | `#000000` |
   | 1, 2, 15 | silent letters (grey) | `#a5a5a5` |
+  | 14 | thin rings around the small connective letters and their vowel (3,065 layers over the 604 fonts, all stroked rings, no letters); not on the printed page | `#000000` |
   | 3–9 | the tajweed rule colours (7, the 2-vowel prolongation, is by far the most used) | `#b50000 #ff7b00 #ce9e00 #09b000 #3f48e6 #2fadff #f40000` |
   | 10 | rosette jewel | `#2ca4ab` |
   | 11 | rosette petals | `#ff0080` |
