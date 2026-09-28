@@ -60,6 +60,11 @@ jobs:
       - name: Packaging checks
         run: bun run check:package
 
+      # Trusted publishing (OIDC, configured on each package's npm settings) needs npm 11.5 or
+      # newer; the Node runner ships an older one. No token is involved.
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@latest
+
       - name: Check the tag against the package version
         if: github.event_name == 'push' && github.ref_type == 'tag'
         run: |
@@ -72,5 +77,3 @@ jobs:
       - name: Publish
         working-directory: packages/remotion-mushaf-line-renderer
         run: npm publish --provenance --access public ${{ (inputs.dry_run || github.event_name != 'push' || github.ref_type != 'tag') && '--dry-run' || '' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

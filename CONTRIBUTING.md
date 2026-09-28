@@ -194,4 +194,4 @@ changed (see [Fonts: licence and packaging](#fonts-licence-and-packaging)).
 3. For a dry run, run the *Release* workflow by hand (*Run workflow*): it runs every check and
    `npm publish --dry-run`.
 4. Tag the commit (`git tag v0.4.0`) and push the tag: the workflow runs every check, refuses a tag
-   that is not `v` + the package's version, and publishes with provenance (`NPM_TOKEN` secret).
+   that is not `v` + the package's version, and publishes with provenance through npm trusted publishing (no token; the publisher is configured on each package on npmjs.com).

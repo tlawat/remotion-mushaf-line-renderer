@@ -116,6 +116,11 @@ jobs:
 
       # From the committed mirror when it holds the snapshot, else from QUL's CDN; every file is
       # checked against manifest.json either way.
+      # Trusted publishing (OIDC, configured on each package's npm settings) needs npm 11.5 or
+      # newer; the Node runner ships an older one. No token is involved.
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@latest
+
       - name: Fill and check the package
         run: |
           node scripts/fonts-package.mjs fill ${{ matrix.set }} --cdn
@@ -124,5 +129,3 @@ jobs:
       - name: Publish
         working-directory: packages/fonts-${{ matrix.set }}
         run: npm publish --provenance --access public --tag ${{ inputs.tag }} ${{ inputs.dry_run && '--dry-run' || '' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
