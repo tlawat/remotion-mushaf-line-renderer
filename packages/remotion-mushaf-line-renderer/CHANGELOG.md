@@ -9,9 +9,8 @@
     `UNSUPPORTED_LINE_TYPE`: the surah's name inside its printed ornamental frame (spanning the
     widest line of the mushaf at the line's type size), and the basmalah on the page baseline. The
     new `framed` prop (default `true`) sets the name alone. Both take the CSS `color`.
-  - New components `<MushafSurahName surah framed?>` and `<MushafJuzName juz variant?>`: the same
-    glyphs standalone, in a block of the line grid, with the line's sizing, animation and font props.
-    `variant` is `'ordinal'` ("the first juz", the default) or `'opening'` (the juz's first words).
+  - New components `<MushafSurahName surah framed?>` and `<MushafJuzName juz>`: the same glyphs
+    standalone, in a block of the line grid, with the line's sizing, animation and font props.
   - The fonts load like page fonts, behind `delayRender()`, from QUL's CDN by default; `fontSrc`
     resolvers receive them as `MushafFontFile` with `kind: 'shared'` (`font`, `fileName`, `cdnUrl`),
     and `getMushafFontFile({font})`, `loadSharedFont({font})` describe and warm them. The fonts
@@ -21,7 +20,7 @@
     from your own URLs.
   - New errors `UNKNOWN_FONT`, `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE`; new types
     `MushafSharedFont`, `MushafPageFontFile`, `MushafSharedFontFile`, `MushafSurahNameProps`,
-    `MushafJuzNameProps`, `MushafJuzNameVariant`, `LoadSharedFontOptions`, `LoadedMushafFont`.
+    `MushafJuzNameProps`, `LoadSharedFontOptions`, `LoadedMushafFont`.
   - `MushafLineData.fontFamily` of a `surah_name` or `basmallah` line is now the surah-name font's
     family (`mushaf-surah-names-v4`); persisted header lines from 0.4 (which could not render) are
     refused with `BAD_LINE_DATA` and must be resolved again. `surahNumber` is required on

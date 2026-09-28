@@ -16,7 +16,6 @@ import {
   type MushafFontFile,
   type MushafFontSrc,
   MushafJuzName,
-  type MushafJuzNameVariant,
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
@@ -72,7 +71,6 @@ export type LineHarnessProps = {
   framed: boolean;
   /** A standalone <MushafJuzName> in the first slot (1-30), or null. */
   juz: number | null;
-  juzVariant: MushafJuzNameVariant;
   fontSize: number | null;
   lineHeight: number | null;
   /** Word to mark as current (`word.id` or `word.wordId`), for the highlighting scenarios. */
@@ -118,7 +116,6 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   surahName: null,
   framed: true,
   juz: null,
-  juzVariant: 'ordinal',
   fontSize: null,
   lineHeight: null,
   activeWordId: null,
@@ -183,7 +180,6 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   surahName,
   framed,
   juz,
-  juzVariant,
   fontSize,
   lineHeight,
   activeWordId,
@@ -249,7 +245,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
           name={`juz ${juz}`}
           style={{top: 0, height: resolvedLineHeight}}
         >
-          <MushafJuzName juz={juz} variant={juzVariant} {...glyphProps} />
+          <MushafJuzName juz={juz} {...glyphProps} />
         </Sequence>
       ) : null}
       {resolve ? (

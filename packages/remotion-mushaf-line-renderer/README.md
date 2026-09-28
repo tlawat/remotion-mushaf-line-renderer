@@ -469,7 +469,7 @@ them, and the package draws from both:
 | Font                                                              | Holds                                                                                        | Size (woff2) |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------ |
 | `surah-names-v4` ([QUL resource 237](https://qul.tarteel.ai/resources/font/237), the V4 surah-name font) | The 114 surah names as written above their first ayah, and the basmalah.       | 830 KB       |
-| `quran-common` ([QUL resource 459](https://qul.tarteel.ai/resources/font/459), the juz-name font)      | The 30 juz names, in two forms, and the ornamental frame a surah name is printed in. | 67 KB      |
+| `quran-common` ([QUL resource 459](https://qul.tarteel.ai/resources/font/459), the juz-name font)      | The 30 juz names and the ornamental frame a surah name is printed in.                | 67 KB      |
 
 They are fetched from QUL's CDN by default, like the page fonts, behind `delayRender()`, and nothing
 is painted before they are in. Their glyphs are plain outlines in Chromium (so in every Remotion
@@ -506,7 +506,6 @@ line's sizing, animation and font props (`fontSize`, `lineHeight`, `style`, `cla
 <MushafSurahName surah={36} />                       {/* Ya-Sin, in its frame, spanning the width */}
 <MushafSurahName surah={36} framed={false} fontSize={160} lineHeight={300} enter={slideFade()} />
 <MushafJuzName juz={22} />                           {/* "the twenty-second juz", written out */}
-<MushafJuzName juz={1} variant="opening" />          {/* the juz by its first words: "Alif Lam Mim" */}
 ```
 
 `surah` is 1–114 (`SURAH_OUT_OF_RANGE` otherwise) and `juz` 1–30 (`JUZ_OUT_OF_RANGE`). The layout
@@ -543,7 +542,7 @@ data carries no juz boundaries, so which juz a line belongs to is yours to say.
 </div>
 <div class="mushaf-line" data-line-type="basmallah" ...><div class="mushaf-line__row"><span class="mushaf-glyph mushaf-glyph--basmalah" ...>...</span></div></div>
 <div class="mushaf-surah-name" data-surah="9" data-framed="true" ...><div class="mushaf-surah-name__row">...</div></div>
-<div class="mushaf-juz-name" data-juz="22" data-variant="ordinal" ...><div class="mushaf-juz-name__row"><span class="mushaf-glyph mushaf-glyph--juz-name" ...>&#xE016;</span></div></div>
+<div class="mushaf-juz-name" data-juz="22" ...><div class="mushaf-juz-name__row"><span class="mushaf-glyph mushaf-glyph--juz-name" ...>&#xE016;</span></div></div>
 ```
 
 Each glyph fills its row and is centred in it by `text-align` and a single line box; a `transform`
@@ -775,7 +774,7 @@ across package copies.
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UNKNOWN_MUSHAF`                         | `mushaf` is not `'qpc-v4'`.                                                                                                                    |
 | `UNKNOWN_FONT`                           | `font` is not `'surah-names-v4'` or `'quran-common'`.                                                                                          |
-| `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE` | `surah` must be `1..114`, `juz` `1..30` (and `variant` `'ordinal'` or `'opening'`).                                                            |
+| `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE` | `surah` must be `1..114`, `juz` `1..30`.                                                                                                        |
 | `BAD_THEME`                              | `theme` must be `'plain'`, a preset name or `{base, colors?, marker?}`; a base the font lacks, an entry outside 0–15 or an unknown part. |
 | `BAD_COLOR`                              | A theme colour is not a CSS colour.                                                                                                            |
 | `BAD_SLICE`                              | `slice` must be `{ayah}` or `{fromAyah, toAyah?}` with positive integers (`toAyah` not before `fromAyah`); `slice: true` only on the ayah form of `getMushafLines()`. |

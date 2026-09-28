@@ -72,7 +72,6 @@ name in its printed frame), its basmalah when it has one and its first ayah line
 | `surah`      | `36`         | The surah, 1–114.                                                                         |
 | `ayahLines`  | `2`          | How many ayah lines follow the header and the basmalah.                                   |
 | `juz`        | `22`         | The juz shown above the header (the data carries no juz boundaries); `null` shows none.   |
-| `juzVariant` | `'ordinal'`  | `'ordinal'` ("the twenty-second juz") or `'opening'` (the juz's first words).             |
 | `framed`     | `true`       | The surah name in its frame, or alone.                                                    |
 | `fonts`, `dataFiles` | as above | In `'package'` mode the shared fonts come from `public/fonts/<id>/` (`bun run qul fonts`). |
 

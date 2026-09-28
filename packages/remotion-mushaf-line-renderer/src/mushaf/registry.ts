@@ -3,7 +3,6 @@ import type {
   MushafColorPart,
   MushafFontSet,
   MushafId,
-  MushafJuzNameVariant,
   MushafMetrics,
   MushafSelection,
   MushafSharedFont,
@@ -125,8 +124,8 @@ export type MushafGlyphs = {
   readonly surahName: (surah: number) => MushafGlyph;
   /** The basmalah as printed under a surah header (set on the page baseline like a line of text). */
   readonly basmalah: MushafGlyph;
-  /** The name of juz 1-30: `'ordinal'` is "the first juz", `'opening'` its first words ("Alif Lam Mim" for juz 1). */
-  readonly juzName: (juz: number, variant: MushafJuzNameVariant) => MushafGlyph;
+  /** The name of juz 1-30, written out ("the first juz"). */
+  readonly juzName: (juz: number) => MushafGlyph;
   /** The ornamental frame a surah name is printed in; `advance` is its width in font units. */
   readonly headerFrame: MushafGlyph & {readonly advance: number};
 };
@@ -295,7 +294,7 @@ export const assertJuzNumber = (juz: unknown): number => {
 /**
  * Where each kind of glyph sits: the middle of its vertical extent, in font units above the baseline,
  * as the median over its family of glyphs in the fonts as published (surah names -987..1843, juz
- * names -334..725, their opening words -290..1098, the frame -188..828). The basmalah is set on the
+ * names -334..725, the frame -188..828). The basmalah is set on the
  * page baseline like a line of text, so its band is not used.
  */
 const V4_GLYPHS: MushafGlyphs = {
@@ -307,12 +306,14 @@ const V4_GLYPHS: MushafGlyphs = {
   }),
   // The four glyphs QUL sets the basmalah with (bismi llahi r-rahmani r-rahim with its long kashida), in visual order.
   basmalah: {font: 'surahNames', kind: 'basmalah', text: '\uFCAA\uFCAB\uFCAE\uFCB4', bandCenter: 1418},
-  // quran-common reaches them through `liga` ("juz001", "j001"); the ligature glyphs are addressed
-  // directly so the text never depends on a shaping feature being on.
-  juzName: (juz, variant) =>
-    variant === 'opening'
-      ? {font: 'common', kind: 'juz-name', text: String.fromCodePoint(0xe8ff + assertJuzNumber(juz)), bandCenter: 397}
-      : {font: 'common', kind: 'juz-name', text: String.fromCodePoint(0xe000 + assertJuzNumber(juz)), bandCenter: 192},
+  // quran-common reaches them through `liga` ("juz001"); the ligature glyphs are addressed directly
+  // so the text never depends on a shaping feature being on.
+  juzName: (juz) => ({
+    font: 'common',
+    kind: 'juz-name',
+    text: String.fromCodePoint(0xe000 + assertJuzNumber(juz)),
+    bandCenter: 192,
+  }),
   // The `header` ligature: an ornamental frame 8,240 units wide with the name's box in the middle.
   headerFrame: {font: 'common', kind: 'frame', text: '\uE000', bandCenter: 320, advance: 8240},
 };

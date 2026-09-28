@@ -84,9 +84,6 @@ export type MushafFontSet = 'qpc-v4' | 'qpc-v4-tajweed';
  */
 export type MushafSharedFont = 'surah-names-v4' | 'quran-common';
 
-/** How a juz is named: `'ordinal'` is "the first juz" written out, `'opening'` its first words ("Alif Lam Mim" for juz 1). */
-export type MushafJuzNameVariant = 'ordinal' | 'opening';
-
 /** QUL's line vocabulary (see lib/exporter/export_mushaf_layout.rb in QUL). */
 export type MushafLineType = 'ayah' | 'surah_name' | 'basmallah';
 
@@ -324,8 +321,6 @@ export type MushafSurahNameProps = MushafGlyphCommonProps & {
 export type MushafJuzNameProps = MushafGlyphCommonProps & {
   /** 1-30. */
   readonly juz: number;
-  /** Default `'ordinal'`. See `MushafJuzNameVariant`. */
-  readonly variant?: MushafJuzNameVariant;
 };
 
 export type MushafLineProps = MushafLineCommonProps &

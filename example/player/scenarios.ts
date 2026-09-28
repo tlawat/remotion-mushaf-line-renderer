@@ -125,10 +125,9 @@ export const scenarios: Record<string, LineHarnessProps> = {
   basmalah: {...base, lines: [basmalah()], sharedFontsUrl: SHARED_FONTS_URL},
   /** The whole synthetic page 2, stacked: header, basmalah, two ayah lines. */
   'page-2': {...base, lines: [header(), basmalah(), justified(), justifiedShort()], sharedFontsUrl: SHARED_FONTS_URL},
-  /** A standalone surah name (At-Tawbah), framed, and the juz names in both variants. */
+  /** A standalone surah name (At-Tawbah), framed, and a juz name. */
   'surah-name': {...base, lines: [], surahName: 9, sharedFontsUrl: SHARED_FONTS_URL},
   juz: {...base, lines: [], juz: 1, sharedFontsUrl: SHARED_FONTS_URL},
-  'juz-opening': {...base, lines: [], juz: 30, juzVariant: 'opening', sharedFontsUrl: SHARED_FONTS_URL},
   /** A header entering with the package's slide+fade, like a line. */
   'header-enter': {...base, lines: [header()], sharedFontsUrl: SHARED_FONTS_URL, enter: 'slide-fade', enterFrames: 20},
   /** The shared fonts from QUL's CDN (needs network). */

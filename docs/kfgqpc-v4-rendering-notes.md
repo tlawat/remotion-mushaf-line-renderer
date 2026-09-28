@@ -215,9 +215,10 @@ fonts below are on the CDN with CORS `*` (verified 2026-09-28), and the package'
   Firefox and Safari paint the SVG (black letters, coloured marks).
 - **`common/quran-common.{ttf,woff2,woff}`** (QUL resource 459, "Juz name font"; upem 1024,
   ascent 819, descent −205; GSUB `liga` only): the header frame `uniE000` (advance 8240, ink
-  −188..828: exactly one 15-line slot when it spans the measure), the 30 juz names in two forms,
-  `uniE001–uniE01E` ("الجزء الأول"…, ligatures `juz001`…`juz030`) and `uniE900–uniE91D` (the juz's
-  opening words "الٓمٓ", "سيقول"…, ligatures `j001`…`j030`), the Makkah/Madinah icons (`uniE073`,
+  −188..828: exactly one 15-line slot when it spans the measure), the 30 juz names written out,
+  `uniE001–uniE01E` ("الجزء الأول"…, ligatures `juz001`…`juz030`; the font also carries each juz's
+  opening words at `uniE900–uniE91D`, ligatures `j001`…`j030`, which the package does not use), the
+  Makkah/Madinah icons (`uniE073`,
   `uniE074`), a basmalah (`uniFDFD`) and markers (`marker-half`, `marker-full`, `s1open`…). The
   package addresses the ligature glyphs by code point, so nothing depends on `liga`.
 - The header on a real page occupies one 15-line slot; the basmalah another; both flagged

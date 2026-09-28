@@ -155,16 +155,14 @@ describe('mushaf registry', () => {
       text: '\uFCAA\uFCAB\uFCAE\uFCB4',
       bandCenter: 1418,
     });
-    expect(glyphs.juzName(1, 'ordinal')).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 192});
-    expect(glyphs.juzName(30, 'ordinal').text).toBe('\uE01E');
-    expect(glyphs.juzName(1, 'opening')).toEqual({font: 'common', kind: 'juz-name', text: '\uE900', bandCenter: 397});
-    expect(glyphs.juzName(30, 'opening').text).toBe('\uE91D');
+    expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 192});
+    expect(glyphs.juzName(30).text).toBe('\uE01E');
     expect(glyphs.headerFrame).toEqual({font: 'common', kind: 'frame', text: '\uE000', bandCenter: 320, advance: 8240});
     expect(assertSurahNumber(114)).toBe(114);
     expect(() => assertSurahNumber(115)).toThrow(/surah must be an integer from 1 to 114, got 115/);
     expect(() => glyphs.surahName('9' as never)).toThrow(expect.objectContaining({code: 'SURAH_OUT_OF_RANGE'}));
     expect(assertJuzNumber(30)).toBe(30);
-    expect(() => glyphs.juzName(0, 'ordinal')).toThrow(expect.objectContaining({code: 'JUZ_OUT_OF_RANGE'}));
+    expect(() => glyphs.juzName(0)).toThrow(expect.objectContaining({code: 'JUZ_OUT_OF_RANGE'}));
   });
 
   // The mirrored shared fonts (`bun run qul fonts`), when present: the tables above against the files.
@@ -196,10 +194,8 @@ describe('mushaf registry', () => {
       expect(font.ascender).toBe(v4.sharedFonts.common.metrics.ascent);
       expect(font.descender).toBe(v4.sharedFonts.common.metrics.descent);
       expect(font.advances.get(v4.glyphs.headerFrame.text.codePointAt(0))).toBe(v4.glyphs.headerFrame.advance);
-      for (let juz = 1; juz <= 30; juz++) {
-        for (const variant of ['ordinal', 'opening'] as const)
-          expect(font.advances.get(v4.glyphs.juzName(juz, variant).text.codePointAt(0))).toBeGreaterThan(0);
-      }
+      for (let juz = 1; juz <= 30; juz++)
+        expect(font.advances.get(v4.glyphs.juzName(juz).text.codePointAt(0))).toBeGreaterThan(0);
     },
   );
 
