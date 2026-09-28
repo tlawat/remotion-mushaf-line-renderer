@@ -1,9 +1,11 @@
 name: Release
 
-# Publishes the main package, @tlawat/remotion-mushaf-line, to npm with provenance.
-#   - Pushing a tag v<version> publishes it; the tag must match the version in
+# Stages the main package, @tlawat/remotion-mushaf-line, on npm with provenance. A staged version is
+# not installable until a maintainer approves it with 2FA (`npm stage approve <id>` or on npmjs.com),
+# so no workflow can put code in front of users on its own.
+#   - Pushing a tag v<version> stages it; the tag must match the version in
 #     packages/remotion-mushaf-line-renderer/package.json.
-#   - Run workflow publishes with --dry-run by default, and always when it does not run on a tag.
+#   - Run workflow stages with --dry-run by default, and always when it does not run on a tag.
 # Publish the fonts packages (the "Fonts packages" workflow) first when they changed.
 
 on:
@@ -88,7 +90,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish
+      - name: Stage the version for approval
         if: steps.published.outputs.exists != 'true'
         working-directory: packages/remotion-mushaf-line-renderer
-        run: npm publish --provenance --access public ${{ (inputs.dry_run || github.event_name != 'push' || github.ref_type != 'tag') && '--dry-run' || '' }}
+        run: npm stage publish --provenance --access public ${{ (inputs.dry_run || github.event_name != 'push' || github.ref_type != 'tag') && '--dry-run' || '' }}

@@ -4,8 +4,9 @@ name: Fonts packages
 # fonts as of a snapshot date. This workflow
 #   - checks every week whether QUL's CDN still serves the snapshot's files (drift), and on drift
 #     downloads the current files, takes a new snapshot and opens a pull request with it;
-#   - publishes a package on demand (dry run by default; a real publish also needs the repository
-#     variable FONTS_PUBLISH_ENABLED set to "true").
+#   - stages a package on npm on demand (dry run by default; a real run also needs the repository
+#     variable FONTS_PUBLISH_ENABLED set to "true"). A staged version is not installable until a
+#     maintainer approves it with 2FA (`npm stage approve <id>` or on npmjs.com).
 
 on:
   schedule:
@@ -126,6 +127,6 @@ jobs:
           node scripts/fonts-package.mjs fill ${{ matrix.set }} --cdn
           node scripts/fonts-package.mjs check ${{ matrix.set }}
 
-      - name: Publish
+      - name: Stage the version for approval
         working-directory: packages/fonts-${{ matrix.set }}
-        run: npm publish --provenance --access public --tag ${{ inputs.tag }} ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: npm stage publish --provenance --access public --tag ${{ inputs.tag }} ${{ inputs.dry_run && '--dry-run' || '' }}

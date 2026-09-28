@@ -126,8 +126,10 @@ redistribute them unmodified and carry the notice the files themselves carry.
   Change `patch` only for packaging fixes.
 - **Publishing** the fonts packages is the same workflow's `publish` action. It runs as a dry run
   unless you untick it, and a real publish also needs the repository variable
-  `FONTS_PUBLISH_ENABLED=true`. The main package is published after the fonts packages, by the
-  *Release* workflow when a `v<version>` tag is pushed (*Run workflow* on it does a dry run).
+  `FONTS_PUBLISH_ENABLED=true`. Both workflows only *stage* versions; a maintainer
+  approves each one with 2FA (`npm stage approve <id>`, see Publishing below). The main package
+  follows the fonts packages, by the *Release* workflow when a `v<version>` tag is pushed
+  (*Run workflow* on it does a dry run).
 
 No font file is committed: `.gitignore` covers `*.ttf`, `*.woff` and `*.woff2` everywhere.
 `bun run qul fonts 1,10,187,604` downloads the fixture pages the suites use into the example's mirror
@@ -192,6 +194,11 @@ changed (see [Fonts: licence and packaging](#fonts-licence-and-packaging)).
    *Unreleased* section of its `CHANGELOG.md` under the new version.
 2. `bun run build && bun run check:package` from the root; `prepublishOnly` runs the same.
 3. For a dry run, run the *Release* workflow by hand (*Run workflow*): it runs every check and
-   `npm publish --dry-run`.
+   `npm stage publish --dry-run`.
 4. Tag the commit (`git tag v0.4.0`) and push the tag: the workflow runs every check, refuses a tag
-   that is not `v` + the package's version, and publishes with provenance through npm trusted publishing (no token; the publisher is configured on each package on npmjs.com).
+   that is not `v` + the package's version, and *stages* the version on npm with provenance through
+   trusted publishing (no token; the publisher is configured on each package on npmjs.com and is
+   allowed to stage only).
+5. Approve the staged version with 2FA: `npm stage list @tlawat/remotion-mushaf-line`, inspect it
+   (`npm stage download <id>` gives the tarball), then `npm stage approve <id>`, or approve it on the
+   package's page on npmjs.com. Nothing is installable until then; `npm stage reject <id>` drops it.
