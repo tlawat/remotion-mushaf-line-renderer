@@ -2,7 +2,8 @@
 // The TypeScript registry in packages/remotion-mushaf-line-renderer/src/mushafs.ts mirrors the
 // numbers below; a unit test asserts they agree.
 
-export const CDN_BASE = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts';
+export const QUL_FONTS = 'https://static-cdn.tarteel.ai/qul/fonts';
+export const CDN_BASE = `${QUL_FONTS}/quran_fonts`;
 
 /** QUL's raw exports on Tarteel's CDN; the path prefix changes on every re-export, so a URL pins one publication. */
 export const QUL_EXPORTS = 'https://s3.us-east-1.wasabisys.com/static-cdn.tarteel.ai/qul-exports';
@@ -39,6 +40,21 @@ export const QPC_V4 = {
     const spec = QPC_V4.fontSets[set];
     if (!spec) throw new Error(`Unknown font set ${set}`);
     return `${CDN_BASE}/${spec.dir}/${format}/p${page}.${format}${spec.query}`;
+  },
+  /**
+   * The two fonts that are not per page, as QUL publishes them (the package's registry pins the
+   * same URLs): the surah-name font (QUL resource 237, the 114 names and the basmalah) and
+   * quran-common (QUL resource 459, the juz names and the surah-header frame). Mirrored by
+   * `qul fonts` into example/public/fonts/<id>/<file>, the layout a `fontSrc` resolver serves.
+   */
+  sharedFonts: {
+    'surah-names-v4': {dir: 'surah_names_v4', file: 'surah_names', fileName: 'surah_names.woff2', resource: 237},
+    'quran-common': {dir: 'common', file: 'quran-common', fileName: 'quran-common.woff2', resource: 459},
+  },
+  sharedFontUrl: (id, format) => {
+    const spec = QPC_V4.sharedFonts[id];
+    if (!spec) throw new Error(`Unknown shared font ${id}`);
+    return `${QUL_FONTS}/${spec.dir}/${spec.file}.${format}`;
   },
   invariants: {
     lines: 9046,

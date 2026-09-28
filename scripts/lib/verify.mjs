@@ -59,7 +59,8 @@ export const verifyCdn = async (def, pages, {data = false} = {}) => {
     }
   };
   const check = async (set, page, format) => {
-    const url = def.fontUrl(set, page, format);
+    const url = page === null ? def.sharedFontUrl(set, format) : def.fontUrl(set, page, format);
+    const what = page === null ? `${set} ${def.sharedFonts[set].file}.${format}` : `${set} p${page}.${format}`;
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 30_000);
@@ -69,33 +70,29 @@ export const verifyCdn = async (def, pages, {data = false} = {}) => {
       });
       clearTimeout(t);
       if (!res.ok) {
-        problems.push(`${set} p${page}.${format}: HTTP ${res.status}`);
+        problems.push(`${what}: HTTP ${res.status}`);
         return;
       }
       const cors = res.headers.get('access-control-allow-origin');
       if (cors !== '*' && cors !== 'https://example.com') {
-        problems.push(
-          `${set} p${page}.${format}: access-control-allow-origin is ${JSON.stringify(cors)}, expected "*"`,
-        );
+        problems.push(`${what}: access-control-allow-origin is ${JSON.stringify(cors)}, expected "*"`);
       }
       const bytes = new Uint8Array(await res.arrayBuffer());
       const magic = detectFontMagic(bytes);
       if (magic !== format && !(format === 'ttf' && magic === 'otf')) {
-        problems.push(
-          `${set} p${page}.${format}: body is not a ${format} (magic ${magic ?? 'unknown'}, ${bytes.length} bytes)`,
-        );
+        problems.push(`${what}: body is not a ${format} (magic ${magic ?? 'unknown'}, ${bytes.length} bytes)`);
       }
       const etag = res.headers.get('etag');
       if (recorded?.[url]?.etag && etag !== recorded[url].etag) {
         problems.push(
-          `${set} p${page}.${format}: ETag changed since scripts/cdn-etags.json (${recorded[url].etag} → ${etag}); the font may have been republished — re-run \`qul fonts\` and re-check the rendering`,
+          `${what}: ETag changed since scripts/cdn-etags.json (${recorded[url].etag} → ${etag}); the font may have been republished — re-run \`qul fonts\` and re-check the rendering`,
         );
       }
       ok.push(
-        `${set} p${page}.${format}: ${bytes.length} bytes, CORS ${cors}, cache-control ${res.headers.get('cache-control')}, etag ${etag}`,
+        `${what}: ${bytes.length} bytes, CORS ${cors}, cache-control ${res.headers.get('cache-control')}, etag ${etag}`,
       );
     } catch (e) {
-      problems.push(`${set} p${page}.${format}: ${e.message}`);
+      problems.push(`${what}: ${e.message}`);
     }
   };
   if (data) for (const part of ['words', 'layout']) await checkExport(part);
@@ -104,5 +101,7 @@ export const verifyCdn = async (def, pages, {data = false} = {}) => {
       for (const format of ['woff2', 'ttf']) await check(set, page, format);
     }
   }
+  // The shared fonts, which every render with a surah name or juz name fetches.
+  for (const id of Object.keys(def.sharedFonts)) await check(id, null, 'woff2');
   return {ok, problems};
 };

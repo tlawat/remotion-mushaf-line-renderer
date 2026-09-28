@@ -2,6 +2,7 @@ import type * as React from 'react';
 import {Composition} from 'remotion';
 import {calculateLineHarnessMetadata, defaultLineHarnessProps, LineHarness} from './harness/LineHarness';
 import {calculateRecitationMetadata, defaultRecitationProps, Recitation} from './Recitation';
+import {calculateSurahOpeningMetadata, defaultSurahOpeningProps, SurahOpening} from './SurahOpening';
 import {calculateThreeLinesMetadata, defaultThreeLinesProps, ThreeLines} from './ThreeLines';
 
 export const RemotionRoot: React.FC = () => {
@@ -29,6 +30,17 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         durationInFrames={30}
         defaultProps={defaultRecitationProps}
+      />
+      {/* The opening of a surah: its juz name, its header (the name in its frame), its basmalah and its first lines. */}
+      <Composition
+        id="SurahOpening"
+        component={SurahOpening}
+        calculateMetadata={calculateSurahOpeningMetadata}
+        width={1920}
+        height={1080}
+        fps={30}
+        durationInFrames={150}
+        defaultProps={defaultSurahOpeningProps}
       />
       {/* Test harness used by the browser and render suites: explicit lines, one entrance for all. */}
       <Composition

@@ -1,11 +1,12 @@
-import type * as React from 'react';
+import * as React from 'react';
 import {useEffect, useRef, useState} from 'react';
 import {useDelayRender} from 'remotion';
 import {loadPageFont} from '../fonts/load-page-font';
 import {assertLine, assertPage, resolveSelection} from '../mushaf/registry';
 import {getMushafLine} from '../resolve/get-mushaf-line';
 import type {MushafDataOptions, MushafLineData, MushafSelection} from '../types';
-import {LineRenderer, type LineRendererProps} from './LineRenderer';
+import type {LineRendererProps} from './LineRenderer';
+import {renderLine} from './MushafLine';
 
 type ResolveLineProps = Omit<LineRendererProps, 'line'> &
   MushafSelection &
@@ -88,5 +89,5 @@ export const ResolveLine: React.FC<ResolveLineProps> = ({mushaf, theme, page, li
   );
   if (resolved?.error) throw resolved.error;
   if (!resolved?.data) return null;
-  return <LineRenderer key={key} line={resolved.data} {...common} />;
+  return <React.Fragment key={key}>{renderLine(resolved.data, common)}</React.Fragment>;
 };

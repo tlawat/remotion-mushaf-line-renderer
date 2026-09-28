@@ -3,8 +3,9 @@ import {Sequence} from 'remotion';
 import {describeValue, MushafError} from '../errors';
 import {assertSlice} from '../resolve/slice';
 import {assertLineData} from '../resolve/validate-line-data';
-import type {MushafDataOptions, MushafLineProps, MushafSelection} from '../types';
-import {LineRenderer} from './LineRenderer';
+import type {MushafDataOptions, MushafLineData, MushafLineProps, MushafSelection} from '../types';
+import {HeaderLine} from './HeaderLine';
+import {LineRenderer, type LineRendererProps} from './LineRenderer';
 import {ResolveLine} from './ResolveLine';
 
 /** Options that only mean something while a line is being resolved, so they are refused next to resolved data. */
@@ -26,6 +27,8 @@ const RESOLVE_ONLY: Readonly<Record<'theme' | 'mushaf' | 'data', string>> = {
  * - The root is a normal-flow block of height `lineHeight` (default 2.2 × fontSize); stack fifteen
  *   of them for a page, or position one with `style` / the enclosing `<Sequence style>`.
  * - Nothing is painted until the page font is loaded (a fallback font would show wrong words).
+ * - `surah_name` lines set the surah's name in its printed frame and `basmallah` lines the basmalah,
+ *   from QUL's surah-name and quran-common fonts (see `renderLine`).
  */
 export const MushafLine: React.FC<MushafLineProps> = (props) => {
   const {
@@ -42,6 +45,7 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    framed,
     fontSrc,
     fontFallback,
   } = props;
@@ -59,6 +63,7 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    framed,
     fontSrc,
     fontFallback,
   };
@@ -72,8 +77,7 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
       const value = (props as Record<string, unknown>)[key];
       if (value !== undefined) throw new MushafError('BAD_LINE_PROP', RESOLVE_ONLY[key], {[key]: value});
     }
-    const line = assertLineData(props.line);
-    body = <LineRenderer key={`${line.mushaf}/${line.fontSet}/${line.page}/${line.line}`} line={line} {...common} />;
+    body = renderLine(assertLineData(props.line), common);
   } else {
     throw new MushafError(
       'BAD_LINE_PROP',
@@ -87,5 +91,19 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     <Sequence layout="none" name={name}>
       {body}
     </Sequence>
+  );
+};
+
+/**
+ * The renderer for a resolved line: words for an `ayah` line, the shared-font glyphs for a
+ * `surah_name` or `basmallah` line. Keyed by what decides the fonts, so a line that changes page or
+ * type remounts with fresh hooks.
+ */
+export const renderLine = (line: MushafLineData, common: Omit<LineRendererProps, 'line'>): React.ReactElement => {
+  const key = `${line.mushaf}/${line.fontSet}/${line.page}/${line.line}/${line.type}`;
+  return line.type === 'ayah' ? (
+    <LineRenderer key={key} line={line} {...common} />
+  ) : (
+    <HeaderLine key={key} line={line} {...common} />
   );
 };

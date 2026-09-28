@@ -37,7 +37,13 @@ describe('getMushafLines({page})', () => {
     expect(lines.every((l) => l.mushaf === 'qpc-v4' && l.theme === 'light' && l.fontSet === 'qpc-v4-tajweed')).toBe(
       true,
     );
-    expect(lines[0]!.fontFamily).toBe('mushaf-qpc-v4-tajweed-p1');
+    expect(lines[1]!.fontFamily).toBe('mushaf-qpc-v4-tajweed-p1');
+    // A header line is drawn from the surah-name font, whatever the theme (its fontSet is still the theme's).
+    expect(lines[0]).toMatchObject({
+      type: 'surah_name',
+      fontSet: 'qpc-v4-tajweed',
+      fontFamily: 'mushaf-surah-names-v4',
+    });
     expect(lines[0]).not.toHaveProperty('fontUrl');
     await expect(
       getMushafLines({page: 1, fontUrl: (page: number) => `/fonts/p${page}.woff2`} as never),

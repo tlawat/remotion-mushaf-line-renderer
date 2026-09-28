@@ -1,7 +1,19 @@
 {
- "generatedAt": "2026-09-12T19:36:41.088Z",
+ "generatedAt": "2026-09-28T19:35:59.151Z",
  "base": "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2",
  "entries": {
+  "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.ttf": {
+   "etag": "W/\"b66936bf3f1a08975ad74136188b85cd\"",
+   "contentType": "font/ttf",
+   "contentLength": null,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2": {
+   "etag": "\"68b3a24eb3ab5c85b50e218431013a61\"",
+   "contentType": "font/woff2",
+   "contentLength": 66840,
+   "cors": "*"
+  },
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p1.ttf?v=3.1": {
    "etag": "W/\"44ef92110cfb795f1e49e5d57db71cd6\"",
    "contentType": "font/ttf",
@@ -7290,6 +7302,18 @@
    "etag": "\"a6860ad0b5ee42eae8110c0188afaebd\"",
    "contentType": "font/woff2",
    "contentLength": 68212,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.ttf": {
+   "etag": "W/\"813d562d88d524cc4a9c1bcd47aa6c0f\"",
+   "contentType": "font/ttf",
+   "contentLength": null,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.woff2": {
+   "etag": "\"46bcd70647b0e4162aac594fe7364f20\"",
+   "contentType": "font/woff2",
+   "contentLength": 829572,
    "cors": "*"
   }
  },

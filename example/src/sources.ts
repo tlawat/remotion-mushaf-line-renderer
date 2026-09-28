@@ -16,13 +16,20 @@ export type FontMode = 'fallback' | 'cdn' | 'package';
 /** Both sets: `<MushafLine>` picks the one the line's theme uses. */
 export const fontFallback: MushafFontFallback = [plainFonts, tajweedFonts];
 
-/** The `<MushafLine>` font props for a mode and the line's font set. */
+/**
+ * The `<MushafLine>` font props for a mode and the line's font set. The packages hold page fonts
+ * only: in 'package' mode the shared fonts (surah names, juz names) come from the example's mirror
+ * of them in the public folder (`bun run qul fonts` puts them there), through the resolver form.
+ */
 export const fontProps = (
   mode: FontMode,
   fontSet: MushafFontSet,
 ): {fontSrc?: MushafFontSrc; fontFallback?: MushafFontFallback} => {
   if (mode === 'cdn') return {};
-  if (mode === 'package') return {fontSrc: fontSet === 'qpc-v4' ? plainFonts : tajweedFonts};
+  if (mode === 'package') {
+    const pkg = fontSet === 'qpc-v4' ? plainFonts : tajweedFonts;
+    return {fontSrc: (f) => (f.kind === 'page' ? pkg : staticFile(`fonts/${f.font}/${f.fileName}`))};
+  }
   return {fontFallback};
 };
 

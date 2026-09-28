@@ -1,6 +1,7 @@
 import {useEffect, useRef, useSyncExternalStore} from 'react';
 import {useDelayRender} from 'remotion';
 import type {MushafError} from '../../errors';
+import {pageFontTarget} from '../../fonts/font-file';
 import {planFontSource} from '../../fonts/font-source';
 import {type FontStatus, getFontEntry, getFontStatus, subscribeFontStore} from '../../fonts/font-store';
 import {loadPageFont} from '../../fonts/load-page-font';
@@ -39,7 +40,8 @@ export type FontGateOptions = {
  */
 export const useFontGate = ({line, fontSet, fontSrc, fontFallback}: FontGateOptions): FontGate => {
   const {delayRender, continueRender} = useDelayRender();
-  const plan = planFontSource(getMushafDefinition(line.mushaf), fontSet, line.page, fontSrc, fontFallback);
+  const def = getMushafDefinition(line.mushaf);
+  const plan = planFontSource(def, pageFontTarget(def, fontSet, line.page), fontSrc, fontFallback);
   const {key} = plan;
   const status = useSyncExternalStore(subscribeFontStore, () => getFontStatus(key), serverSnapshot);
 

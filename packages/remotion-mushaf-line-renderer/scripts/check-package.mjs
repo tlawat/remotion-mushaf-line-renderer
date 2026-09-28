@@ -35,7 +35,7 @@ for (const f of [pkg.main, pkg.module, pkg.types, ...exportFiles]) {
 if (failures.length === 0) ok(`all ${exportFiles.length + 3} files referenced from package.json exist`);
 
 // 2. sizes and charset ----------------------------------------------------------------------------
-const MAX_INDEX_BYTES = 128 * 1024;
+const MAX_INDEX_BYTES = 160 * 1024;
 for (const f of ['dist/esm/index.mjs', 'dist/cjs/index.js']) {
   const size = statSync(path.join(pkgDir, f)).size;
   if (size > MAX_INDEX_BYTES) fail(`${f} is ${size} bytes; the package ships code only (limit ${MAX_INDEX_BYTES})`);
@@ -74,6 +74,8 @@ ok('the fonts packages are optional peers, never imported by the package itself'
 // 3. both builds load in Node and resolve a line through the runtime loader ----------------------
 const expectedApi = [
   'MushafLine',
+  'MushafSurahName',
+  'MushafJuzName',
   'getMushafLine',
   'getMushafLines',
   'getMushafLocation',
@@ -81,6 +83,7 @@ const expectedApi = [
   'sliceWords',
   'loadMushafData',
   'loadPageFont',
+  'loadSharedFont',
   'getMushafFontFile',
   'fontSizeForWidth',
   'lineHeightForFontSize',

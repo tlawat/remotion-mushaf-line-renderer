@@ -27,10 +27,14 @@ test checks against the registry's URLs) and probes the CDN the way a render wou
 ## 2. The registry (`src/mushaf/registry.ts`)
 
 `MUSHAFS` describes each supported mushaf: its QUL layout id, page count, lines per page, font
-metrics, the invariants of its data, and its two font sets (the plain monochrome fonts and the
-COLR/CPAL colour fonts) with their CDN URLs, family names and CPAL palette roles. `DATASETS`
-describes what the lines are built from: the pinned export URLs, the page count and the
-`centeredPages` rule.
+metrics, the invariants of its data, its two font sets (the plain monochrome fonts and the
+COLR/CPAL colour fonts) with their CDN URLs, family names and CPAL palette roles, its two shared
+fonts (QUL's surah-name font, resource 237, and `quran-common`, resource 459: one file each, with
+their CDN URLs, families and metrics) and its glyph tables: the code point of every surah name (read
+from the surah-name font's cmap), the basmalah's four glyphs, the juz names (the `liga` ligatures of
+`quran-common`, addressed by their private-use code points), the header frame and, for each, where
+its ink sits relative to the baseline. `DATASETS` describes what the lines are built from: the pinned
+export URLs, the page count and the `centeredPages` rule.
 
 `resolveSelection({mushaf, theme})` is the one place that turns the public selection into a
 definition, a font set and a resolved theme: `'plain'` uses the monochrome set and needs no palette;
@@ -47,7 +51,8 @@ ayah runs and memoises the result; `indexAyahs()` maps every ayah to the page th
 word.
 
 `getMushafLine()` produces one `MushafLineData`: plain JSON with the page, line, theme, font set,
-family name and the words in reading order. `getMushafLines()` does the same for a whole page or for
+family name (the page font's for an ayah line, the surah-name font's for a header or basmalah line)
+and the words in reading order. `getMushafLines()` does the same for a whole page or for
 an ayah range (locating the first ayah, then walking pages until every word is past the range); with
 `slice: true` it records the range on the lines it cuts. `slice.ts` holds the slicing vocabulary:
 `assertSlice()` validates a selector, `resolveSlice()` turns it into the band of word ids a line
@@ -57,13 +62,19 @@ been persisted by an older version.
 
 ## 4. Fonts (`src/fonts/`)
 
-`planFontSource()` (`font-source.ts`) turns a line's `fontSrc` and `fontFallback` into the steps
-of one load: QUL's CDN (or the fonts package, or the resolver's URLs), then the fallback package
-whose font set matches the line. It validates both (`BAD_FONT_SRC`, `BAD_FONT_FALLBACK`) during
-render, so a mistake shows up before an outage does, and names the load: a store key and a family,
-one per source (`mushaf-<set>-p<page>` for the CDN, a hash suffix for anything else).
+A load is described by a `FontTarget` (`font-file.ts`): a page font (a set and a page) or a shared
+font, with the file a resolver receives, the family and store key under the default source, the
+metrics to pin and, for a page font, the set a fonts package must hold. `planFontSource()`
+(`font-source.ts`) turns a target's `fontSrc` and `fontFallback` into the steps of one load: QUL's
+CDN (or the fonts package, or the resolver's URLs, or the package a resolver returns for a page
+file), then the fallback package whose font set matches the line. It validates both (`BAD_FONT_SRC`,
+`BAD_FONT_FALLBACK`) during render, so a mistake shows up before an outage does, and names the load:
+a store key and a family, one per source (`mushaf-<set>-p<page>` and `mushaf-<shared font>` for the
+CDN, a hash suffix for anything else). The fonts packages hold page fonts only: a package as the
+source of a shared font is refused, and no fallback step is planned for one.
 
-`loadPageFont()` runs the steps in order. Each step fetches the bytes itself (precise HTTP errors,
+`loadPageFont()` and `loadSharedFont()` are `loadFont()` on the two kinds of target; it runs the
+steps in order. Each step fetches the bytes itself (precise HTTP errors,
 magic-byte check, retries), checks a package file against its declared size and SHA-256, and
 registers a `FontFace` with the mushaf's metrics pinned; the first step that succeeds wins, and a
 failed step falls through to the next. While rendering the whole load has a deadline inside the
@@ -96,6 +107,14 @@ paint:
 | `useLineFit`      | Measuring the row once the font is in and scaling the base size so the line fills its box (`fit="line"`).    |
 | `usePaletteRule`  | Resolving `currentColor` from the row's computed colour and registering the palette rule(s), in a layout effect. |
 | `useCanvasGuard`  | Refusing presentations that paint the line into a canvas, before a blank frame could be captured.            |
+
+A `surah_name` or `basmallah` line takes another path (`HeaderLine`, on the `GlyphRenderer` that
+`<MushafSurahName>` and `<MushafJuzName>` share): `useSharedFontGate` holds one `delayRender()`
+handle until every shared font the glyphs need is in `document.fonts`, and each glyph fills the row
+as an absolutely positioned span, centred by `text-align` and one line box the height of the row,
+then shifted by its ink band so the ink, not the em box, is centred; the basmalah is left on the
+page baseline, as a line of text. The frame's type size follows the line's: it spans the widest line
+of the mushaf (`referenceLineWidth`) at that size, so it fills the measure like a justified line.
 
 The row is `visibility: hidden` until all three are ready, then the words are laid out as a flex row
 in `direction: rtl` with every metric-affecting CSS property pinned (`styles.ts`), each word one

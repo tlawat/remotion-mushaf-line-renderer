@@ -34,6 +34,12 @@ describe.skipIf(!existsSync(file))('CDN survey (scripts/cdn-etags.json)', () => 
           if (entry && entry.cors !== null && entry.cors !== '*') missing.push(`${url} (cors ${entry.cors})`);
         }
       }
+      // The shared fonts too: a surah name or a juz name fetches them from the same CDN.
+      for (const font of [def.sharedFonts.surahNames, def.sharedFonts.common]) {
+        const entry = survey.entries[font.cdnUrl];
+        if (!entry) missing.push(font.cdnUrl);
+        else if (entry.cors !== '*') missing.push(`${font.cdnUrl} (cors ${entry.cors})`);
+      }
     }
     expect(missing).toEqual([]);
   });

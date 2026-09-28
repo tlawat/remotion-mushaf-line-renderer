@@ -6,6 +6,8 @@ import {defaultLineHarnessProps, type LineHarnessProps} from '../src/harness/Lin
 export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
 /** QUL's two exports, mirrored by `bun run qul data` into example/public. */
 export const MIRROR_DATA = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
+/** The two shared fonts (surah names, quran-common), copied by `bun run qul fonts` into example/public/fonts/<id>/. */
+export const SHARED_FONTS_URL = '/fonts';
 /** Page 10 line 3 in the colour font: 2:62 ends and 2:63 begins on it (the fixture font's page). */
 const P10_L3 = {theme: 'light', page: 10, line: 3} as const;
 
@@ -16,6 +18,9 @@ const centered = () => syntheticLine(1, 2);
 const twoCodePoints = () => syntheticLine(3, 1);
 // Page 3 line 2 carries the end of 2:3 and the whole of 2:4 — the case slicing is for.
 const twoAyahs = () => syntheticLine(3, 2);
+// Page 2 opens with the header of surah 2 and its basmalah; the synthetic page has two ayah lines after them.
+const header = () => syntheticLine(2, 1);
+const basmalah = () => syntheticLine(2, 2);
 
 // Synthetic lines are not real mushaf lines, so fitting them to the box would say nothing: the
 // scenarios pin the fixed type size and the real-data test covers fitting.
@@ -112,6 +117,24 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'slice-data': {...base, lines: [twoAyahs()], slice: {ayah: 4}, sliceOnData: true},
   /** revealRtl sweeps the whole measure; the centred slice appears as the sweep reaches it. */
   'slice-reveal': {...base, lines: [twoAyahs()], slice: {ayah: 4}, enter: 'reveal', enterFrames: 20},
+  /** A surah_name line: the name of surah 2 in its printed frame, both fonts from the public folder. */
+  header: {...base, lines: [header()], sharedFontsUrl: SHARED_FONTS_URL},
+  /** The same name alone, without the frame. */
+  'header-plain': {...base, lines: [header()], sharedFontsUrl: SHARED_FONTS_URL, framed: false},
+  /** A basmallah line: the four glyphs of the surah-name font on the page baseline. */
+  basmalah: {...base, lines: [basmalah()], sharedFontsUrl: SHARED_FONTS_URL},
+  /** The whole synthetic page 2, stacked: header, basmalah, two ayah lines. */
+  'page-2': {...base, lines: [header(), basmalah(), justified(), justifiedShort()], sharedFontsUrl: SHARED_FONTS_URL},
+  /** A standalone surah name (At-Tawbah), framed, and the juz names in both variants. */
+  'surah-name': {...base, lines: [], surahName: 9, sharedFontsUrl: SHARED_FONTS_URL},
+  juz: {...base, lines: [], juz: 1, sharedFontsUrl: SHARED_FONTS_URL},
+  'juz-opening': {...base, lines: [], juz: 30, juzVariant: 'opening', sharedFontsUrl: SHARED_FONTS_URL},
+  /** A header entering with the package's slide+fade, like a line. */
+  'header-enter': {...base, lines: [header()], sharedFontsUrl: SHARED_FONTS_URL, enter: 'slide-fade', enterFrames: 20},
+  /** The shared fonts from QUL's CDN (needs network). */
+  'header-cdn': {...base, lines: [header()]},
+  /** The shared fonts are missing from the public folder: FONT_HTTP names the surah-name font. */
+  'header-404': {...base, lines: [header()], sharedFontsUrl: '/missing'},
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
   /**

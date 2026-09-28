@@ -60,6 +60,26 @@ The committed timings (`public/audio/tawbah-timings.json`, At-Tawbah 9:1-11) wer
 an alignment of the recognised words to the reference text in `tools/tawbah-9-1-13.json`. It is a
 development tool with the accuracy of that model, not part of the package.
 
+### `SurahOpening`
+
+The opening of a surah as a title card: the juz it starts in (`<MushafJuzName>`), its header (the
+name in its printed frame), its basmalah when it has one and its first ayah lines, all from one
+`getMushafLines({page})` call and one `<MushafLine>`, entering one after the other.
+
+| Prop         | Default      | Meaning                                                                                   |
+| ------------ | ------------ | ----------------------------------------------------------------------------------------- |
+| `theme`      | `'normal'`   | As above.                                                                                 |
+| `surah`      | `36`         | The surah, 1–114.                                                                         |
+| `ayahLines`  | `2`          | How many ayah lines follow the header and the basmalah.                                   |
+| `juz`        | `22`         | The juz shown above the header (the data carries no juz boundaries); `null` shows none.   |
+| `juzVariant` | `'ordinal'`  | `'ordinal'` ("the twenty-second juz") or `'opening'` (the juz's first words).             |
+| `framed`     | `true`       | The surah name in its frame, or alone.                                                    |
+| `fonts`, `dataFiles` | as above | In `'package'` mode the shared fonts come from `public/fonts/<id>/` (`bun run qul fonts`). |
+
+```bash
+cd example && bunx remotion render SurahOpening out/surah-opening.mp4 --props='{"surah":9,"juz":10}'
+```
+
 ### `LineHarness`
 
 The test harness: explicit lines or one line resolved in the tab from a `data` source, one
@@ -69,7 +89,8 @@ package's browser and render suites.
 
 ## Fonts
 
-The page fonts come from QUL's CDN on first use (70–115 KB per page). The example also depends on
+The page fonts come from QUL's CDN on first use (70–115 KB per page), and so do the surah-name and
+juz fonts a header, a basmalah or a juz name needs (830 KB and 67 KB). The example also depends on
 both fonts packages (`@tlawat/mushaf-fonts-qpc-v4` and `-qpc-v4-tajweed`, workspace packages here)
 and passes them as `fontFallback`, so a render still finishes when the CDN is down; the `fonts` prop
 switches to the CDN alone or to the packages alone (offline, reproducible):

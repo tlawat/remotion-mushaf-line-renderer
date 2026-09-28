@@ -119,7 +119,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   if (line.type !== 'ayah') {
     throw new MushafError(
       'UNSUPPORTED_LINE_TYPE',
-      `Page ${line.page} line ${line.line} of "${line.mushaf}" is a "${line.type}" line; this version renders "ayah" lines only. Skip lines where line.type !== 'ayah' or draw your own header.`,
+      `Page ${line.page} line ${line.line} of "${line.mushaf}" is a "${line.type}" line; <LineRenderer> sets ayah lines only (pass it to <MushafLine>, which draws headers and basmalahs).`,
       {mushaf: line.mushaf, page: line.page, line: line.line, type: line.type},
     );
   }

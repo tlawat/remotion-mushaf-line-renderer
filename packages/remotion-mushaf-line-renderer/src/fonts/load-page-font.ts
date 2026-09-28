@@ -9,8 +9,15 @@ import {
   readPuppeteerTimeout,
   sleep,
 } from '../fetch-budget';
-import {assertPage, type FontSetDefinition, type MushafDefinition, resolveSelection} from '../mushaf/registry';
-import type {LoadedPageFont, LoadPageFontOptions} from '../types';
+import {assertPage, getMushafDefinition, getSharedFont, resolveSelection} from '../mushaf/registry';
+import type {
+  LoadedMushafFont,
+  LoadPageFontOptions,
+  LoadSharedFontOptions,
+  MushafFontFallback,
+  MushafFontSrc,
+} from '../types';
+import {type FontTarget, pageFontTarget, sharedFontTarget} from './font-file';
 import {assertFontMagic} from './font-magic';
 import {type FontSourcePlan, type FontStep, planFontSource} from './font-source';
 import {type FontEntry, getFontEntry, notifyFontStore, setFontEntry} from './font-store';
@@ -36,7 +43,7 @@ class FontSuperseded extends Error {
  * registered through `new FontFace(family, bytes, descriptors)` with the mushaf's metrics pinned,
  * so the line box is identical on every platform.
  */
-export const loadPageFont = (options: LoadPageFontOptions): LoadedPageFont => {
+export const loadPageFont = (options: LoadPageFontOptions): LoadedMushafFont => {
   if ((options as {readonly url?: unknown}).url !== undefined) {
     throw new MushafError(
       'BAD_FONT_SRC',
@@ -47,7 +54,30 @@ export const loadPageFont = (options: LoadPageFontOptions): LoadedPageFont => {
   const {mushaf, theme, page, fontSrc, fallback} = options;
   const {def, fontSet} = resolveSelection({mushaf, theme});
   assertPage(def, page);
-  const plan = planFontSource(def, fontSet, page, fontSrc, fallback);
+  return loadFont(pageFontTarget(def, fontSet, page), fontSrc, fallback);
+};
+
+/**
+ * Loads one of the shared fonts (`'surah-names-v4'`: the surah names and the basmalah;
+ * `'quran-common'`: the juz names and the surah-header frame), the way `loadPageFont()` loads a page
+ * font: idempotent, behind `delayRender()`, from `fontSrc` (default QUL's CDN). The fonts packages
+ * hold page fonts only, so `fallback` never applies to these; `<MushafSurahName>`, `<MushafJuzName>`
+ * and `<MushafLine>` on a header line call it for you.
+ */
+export const loadSharedFont = (options: LoadSharedFontOptions): LoadedMushafFont => {
+  const {mushaf, font, fontSrc, fallback} = options;
+  const def = getMushafDefinition(mushaf ?? 'qpc-v4');
+  return loadFont(sharedFontTarget(def, getSharedFont(def, font)), fontSrc, fallback);
+};
+
+/** The loader proper: one entry per (target, source) in the shared store. */
+export const loadFont = (
+  target: FontTarget,
+  fontSrc: MushafFontSrc | undefined,
+  fallback: MushafFontFallback | undefined,
+): LoadedMushafFont => {
+  const def = getMushafDefinition(target.file.mushaf);
+  const plan = planFontSource(def, target, fontSrc, fallback);
   if (typeof FontFace === 'undefined' || typeof document === 'undefined') {
     // Server / Node: nothing to load (same behaviour as @remotion/google-fonts).
     return {fontFamily: plan.fontFamily, waitUntilDone: () => Promise.resolve(), origin: () => null};
@@ -57,7 +87,7 @@ export const loadPageFont = (options: LoadPageFontOptions): LoadedPageFont => {
   if (existing) {
     // A retry after a failure: same key, so the same steps, from the start.
     existing.plan = plan;
-    return start(existing, def, fontSet, page);
+    return start(existing, target);
   }
   const entry: FontEntry = {
     key: plan.key,
@@ -74,10 +104,10 @@ export const loadPageFont = (options: LoadPageFontOptions): LoadedPageFont => {
     abort: null,
   };
   setFontEntry(entry);
-  return start(entry, def, fontSet, page);
+  return start(entry, target);
 };
 
-const handleOf = (entry: FontEntry): LoadedPageFont => ({
+const handleOf = (entry: FontEntry): LoadedMushafFont => ({
   fontFamily: entry.fontFamily,
   waitUntilDone: () => entry.done,
   origin: () => entry.origin,
@@ -93,7 +123,7 @@ const deferred = () => {
   return {promise, resolve, reject};
 };
 
-const start = (entry: FontEntry, def: MushafDefinition, fontSet: FontSetDefinition, page: number): LoadedPageFont => {
+const start = (entry: FontEntry, target: FontTarget): LoadedMushafFont => {
   const generation = ++entry.generation;
   if (entry.status !== 'loading') {
     const d = deferred();
@@ -115,7 +145,7 @@ const start = (entry: FontEntry, def: MushafDefinition, fontSet: FontSetDefiniti
   entry.abort = new AbortController();
   notifyFontStore();
 
-  run(entry, generation, def, fontSet, page)
+  run(entry, generation, target)
     .then(
       ({face, step}) => {
         if (entry.generation !== generation) return;
@@ -131,7 +161,7 @@ const start = (entry: FontEntry, def: MushafDefinition, fontSet: FontSetDefiniti
       },
       (err: unknown) => {
         if (entry.generation !== generation || err instanceof FontSuperseded) return;
-        const error = toMushafError(err, entry, page);
+        const error = toMushafError(err, entry, target);
         entry.status = 'error';
         entry.error = error;
         entry.abort = null;
@@ -147,12 +177,12 @@ const start = (entry: FontEntry, def: MushafDefinition, fontSet: FontSetDefiniti
   return handleOf(entry);
 };
 
-const toMushafError = (err: unknown, entry: FontEntry, page: number): MushafError => {
+const toMushafError = (err: unknown, entry: FontEntry, target: FontTarget): MushafError => {
   if (err instanceof MushafError) return err;
   return new MushafError(
     'FONT_NETWORK',
-    `Could not load mushaf font ${entry.fontFamily} (page ${page}) from ${entry.plan.describe}: ${err instanceof Error ? err.message : String(err)}`,
-    {page, cause: err},
+    `Could not load mushaf font ${entry.fontFamily} (${target.label}) from ${entry.plan.describe}: ${err instanceof Error ? err.message : String(err)}`,
+    {...target.details, cause: err},
   );
 };
 
@@ -161,23 +191,21 @@ type FontAttempt = {readonly source: string; readonly url: string; readonly code
 
 const warnedFallbacks = new Set<string>();
 
-const warnFallback = (plan: FontSourcePlan, used: FontStep, tried: readonly FontAttempt[], page: number) => {
-  const key = `${plan.key.slice(0, plan.key.indexOf('/'))}|${used.source}`;
+const warnFallback = (plan: FontSourcePlan, used: FontStep, tried: readonly FontAttempt[], target: FontTarget) => {
+  const key = `${plan.group}|${used.source}`;
   if (warnedFallbacks.has(key)) return;
   warnedFallbacks.add(key);
   console.warn(
-    `@tlawat/remotion-mushaf-line: page ${page} loaded from ${used.source} because ${tried
+    `@tlawat/remotion-mushaf-line: ${target.label} loaded from ${used.source} because ${tried
       .map((t) => `${t.source} failed (${t.code}: ${t.message})`)
-      .join('; ')}. Later pages that fall back are not reported again.`,
+      .join('; ')}. Later fonts that fall back are not reported again.`,
   );
 };
 
 const run = async (
   entry: FontEntry,
   generation: number,
-  def: MushafDefinition,
-  fontSet: FontSetDefinition,
-  page: number,
+  target: FontTarget,
 ): Promise<{face: FontFace; step: FontStep}> => {
   const rendering = getRemotionEnvironment().isRendering;
   const puppeteerTimeout = readPuppeteerTimeout();
@@ -202,16 +230,16 @@ const run = async (
     const moreOfTheSameKind = later.some((s) => s.origin === step.origin && s.origin !== 'package');
     const stepBudget = moreOfTheSameKind ? {...budget, attempts: 1} : budget;
     try {
-      const face = await loadStep(entry, generation, def, fontSet, page, step, {
+      const face = await loadStep(entry, generation, target, step, {
         ...stepBudget,
         signal,
         deadline: deadline === null ? null : deadline - reserveMs,
       });
-      if (i > 0) warnFallback(entry.plan, step, tried, page);
+      if (i > 0) warnFallback(entry.plan, step, tried, target);
       return {face, step};
     } catch (e) {
       if (e instanceof FontSuperseded) throw e;
-      const error = toMushafError(e, entry, page);
+      const error = toMushafError(e, entry, target);
       // The browser refusing a parsed font, or a fonts package serving other bytes than it
       // declares, is never masked by another source.
       if (error.code === 'FONT_NOT_AVAILABLE' || error.code === 'FONT_FALLBACK_INVALID') throw error;
@@ -223,14 +251,14 @@ const run = async (
   const pkg = steps.find((s) => s.origin === 'package');
   throw new MushafError(
     'FONT_UNAVAILABLE',
-    `Could not load mushaf font ${fontSet.id} page ${page} from any source:\n${tried
+    `Could not load mushaf font ${target.label} from any source:\n${tried
       .map((t) => `- ${t.source}: ${t.message}`)
       .join('\n')}\n${
       pkg
         ? `Is ${pkg.source} bundled? Import it where the composition is defined so the bundler emits its files (README → When the CDN fails).`
         : 'Check the URLs your fontSrc returns, or pass a fonts package as fontFallback (README → When the CDN fails).'
     }`,
-    {fontSet: fontSet.id, page, tried},
+    {...target.details, tried},
   );
 };
 
@@ -239,16 +267,14 @@ type StepOptions = LoadBudget & {readonly signal: AbortSignal; readonly deadline
 const loadStep = async (
   entry: FontEntry,
   generation: number,
-  def: MushafDefinition,
-  fontSet: FontSetDefinition,
-  page: number,
+  target: FontTarget,
   step: FontStep,
   o: StepOptions,
 ): Promise<FontFace> => {
-  const bytes = await fetchFontBytes(step, {...o, fontSet: fontSet.id, page});
-  assertFontMagic(bytes, step.url, fontSet.id, page);
-  if (step.expect) await assertPackageBytes(bytes, step, fontSet.id, page);
-  const m = def.metrics;
+  const bytes = await fetchFontBytes(step, {...o, label: target.label, details: target.details});
+  assertFontMagic(bytes, step.url, target.label);
+  if (step.expect) await assertPackageBytes(bytes, step, target);
+  const m = target.metrics;
   const face = new FontFace(entry.fontFamily, bytes, {
     display: 'block',
     style: 'normal',
@@ -262,8 +288,8 @@ const loadStep = async (
   } catch (e) {
     throw new MushafError(
       'FONT_PARSE',
-      `The browser rejected the font bytes for ${fontSet.id} page ${page} (${step.url}): ${e instanceof Error ? e.message : String(e)}`,
-      {url: step.url, page},
+      `The browser rejected the font bytes for mushaf font ${target.label} (${step.url}): ${e instanceof Error ? e.message : String(e)}`,
+      {url: step.url, ...target.details},
     );
   }
   if (entry.generation !== generation) throw new FontSuperseded();
@@ -273,7 +299,7 @@ const loadStep = async (
     throw new MushafError(
       'FONT_NOT_AVAILABLE',
       `Font ${entry.fontFamily} was not registered in document.fonts (status ${face.status}).`,
-      {url: step.url, page},
+      {url: step.url, ...target.details},
     );
   }
   return face;
@@ -286,13 +312,13 @@ const hex = (buffer: ArrayBuffer): string =>
  * A fonts package declares each file's size and SHA-256: the bytes the bundle serves must be those.
  * The hash needs `crypto.subtle` (secure contexts: https, localhost); the size is always checked.
  */
-const assertPackageBytes = async (bytes: ArrayBuffer, step: FontStep, fontSet: string, page: number) => {
+const assertPackageBytes = async (bytes: ArrayBuffer, step: FontStep, target: FontTarget) => {
   const expect = step.expect!;
   const mismatch = (what: string) =>
     new MushafError(
       'FONT_FALLBACK_INVALID',
-      `${step.source} serves other bytes for ${fontSet} page ${page} than it declares (${what}) at ${step.url}. Reinstall the package, and make sure nothing rewrites font files in your bundle.`,
-      {url: step.url, page, package: step.source},
+      `${step.source} serves other bytes for ${target.label} than it declares (${what}) at ${step.url}. Reinstall the package, and make sure nothing rewrites font files in your bundle.`,
+      {url: step.url, ...target.details, package: step.source},
     );
   if (bytes.byteLength !== expect.bytes) throw mismatch(`${bytes.byteLength} bytes, expected ${expect.bytes}`);
   const subtle = globalThis.crypto?.subtle;
@@ -302,7 +328,7 @@ const assertPackageBytes = async (bytes: ArrayBuffer, step: FontStep, fontSet: s
     throw mismatch(`sha256 ${actual.slice(0, 12)}…, expected ${expect.sha256.slice(0, 12)}…`);
 };
 
-type FetchOptions = StepOptions & {readonly fontSet: string; readonly page: number};
+type FetchOptions = StepOptions & {readonly label: string; readonly details: Readonly<Record<string, unknown>>};
 
 /** Leaves at least this much of the deadline for an attempt; below it, the step gives up as a timeout. */
 const MIN_ATTEMPT_MS = 1_000;
@@ -317,8 +343,8 @@ export const fetchFontBytes = async (step: FontStep, o: FetchOptions): Promise<A
     if (left < MIN_ATTEMPT_MS) {
       last ??= new MushafError(
         'FONT_TIMEOUT',
-        `No time left to fetch mushaf font ${o.fontSet} page ${o.page} from ${url} before the render times out. Raise --timeout.`,
-        {url, page: o.page},
+        `No time left to fetch mushaf font ${o.label} from ${url} before the render times out. Raise --timeout.`,
+        {url, ...o.details},
       );
       break;
     }
@@ -340,8 +366,8 @@ export const fetchFontBytes = async (step: FontStep, o: FetchOptions): Promise<A
         const final = isFinalStatus(res.status);
         last = new MushafError(
           'FONT_HTTP',
-          `HTTP ${res.status} for mushaf font ${o.fontSet} page ${o.page} at ${url}${final ? '.' : ` (attempt ${attempt}/${o.attempts}).`}`,
-          {url, page: o.page, status: res.status, final},
+          `HTTP ${res.status} for mushaf font ${o.label} at ${url}${final ? '.' : ` (attempt ${attempt}/${o.attempts}).`}`,
+          {url, ...o.details, status: res.status, final},
         );
         if (final) throw last;
         continue;
@@ -355,14 +381,14 @@ export const fetchFontBytes = async (step: FontStep, o: FetchOptions): Promise<A
       } else if (ctrl.signal.aborted) {
         last = new MushafError(
           'FONT_TIMEOUT',
-          `Fetching mushaf font ${o.fontSet} page ${o.page} from ${url} timed out after ${perAttemptMs} ms (attempt ${attempt}/${o.attempts}). Cold CDN pages can be slow: raise --timeout, or pass a fonts package as fontFallback.`,
-          {url, page: o.page, attempt},
+          `Fetching mushaf font ${o.label} from ${url} timed out after ${perAttemptMs} ms (attempt ${attempt}/${o.attempts}). Cold CDN pages can be slow: raise --timeout, or pass a fonts package as fontFallback.`,
+          {url, ...o.details, attempt},
         );
       } else {
         last = new MushafError(
           'FONT_NETWORK',
-          `Could not fetch mushaf font ${o.fontSet} page ${o.page} from ${url} (${e instanceof Error ? e.message : String(e)}; attempt ${attempt}/${o.attempts}). A network error, or a server without Access-Control-Allow-Origin.`,
-          {url, page: o.page, attempt, cause: e},
+          `Could not fetch mushaf font ${o.label} from ${url} (${e instanceof Error ? e.message : String(e)}; attempt ${attempt}/${o.attempts}). A network error, or a server without Access-Control-Allow-Origin.`,
+          {url, ...o.details, attempt, cause: e},
         );
       }
     } finally {
@@ -370,7 +396,7 @@ export const fetchFontBytes = async (step: FontStep, o: FetchOptions): Promise<A
       o.signal.removeEventListener('abort', onOuterAbort);
     }
   }
-  throw last ?? new MushafError('FONT_NETWORK', `Could not fetch ${describeValue(url)}.`, {url, page: o.page});
+  throw last ?? new MushafError('FONT_NETWORK', `Could not fetch ${describeValue(url)}.`, {url, ...o.details});
 };
 
 /** Test hook. */

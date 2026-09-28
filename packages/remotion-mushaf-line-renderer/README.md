@@ -20,6 +20,9 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 - **QUL's themes.** Plain glyphs that follow CSS `color`, or the colour font with the ten themes QUL's
   own preview page offers (light, dark, sepia, black, normal, the raw palettes) and custom themes
   down to single palette entries.
+- **Surah names and juz names.** Header lines set the surah's name in its printed ornamental frame
+  and basmalah lines the basmalah, from QUL's surah-name and `quran-common` fonts; `<MushafSurahName>`
+  and `<MushafJuzName>` set them on their own (see [Surah names and juz names](#surah-names-and-juz-names)).
 - **Loud.** Every failure is a `MushafError` with a stable `code` and a message that names the fix.
 
 ## Contents
@@ -33,6 +36,7 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 - [Sizing](#sizing)
 - [Slicing a line](#slicing-a-line)
 - [Entrances and exits](#entrances-and-exits)
+- [Surah names and juz names](#surah-names-and-juz-names)
 - [Fonts](#fonts)
 - [When the CDN fails](#when-the-cdn-fails)
 - [Data](#data)
@@ -144,16 +148,18 @@ Two things flow through your code:
 | `wordStyle`              | `(word, ctx) => CSSProperties`                     | Per-word style, called for every word on every frame with `{line, frame, fps, active, inSlice}`. Paint properties only.                                            |
 | `wordClassName`          | `(word, ctx) => string`                            | Appended to `mushaf-word mushaf-word--<kind>`.                                                                                                                     |
 | `name`                   | `string`                                           | Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline.                                                                       |
-| `fontSrc`                | `'cdn'` (default) \| fonts package \| `(file) => url \| url[]` | Where the page font comes from. See [Fonts](#fonts).                                                                                                 |
+| `framed`                 | `boolean` (default `true`)                         | `surah_name` lines only: the name inside its printed ornamental frame, or alone. See [Surah names and juz names](#surah-names-and-juz-names).                      |
+| `fontSrc`                | `'cdn'` (default) \| fonts package \| `(file) => url \| url[] \| package` | Where the fonts come from. See [Fonts](#fonts).                                                                                                          |
 | `fontFallback`           | fonts package \| fonts package[]                    | Where the page font comes from when `fontSrc` fails. See [When the CDN fails](#when-the-cdn-fails).                                                                 |
 
 There is no start-time prop: place the line in a `<Sequence from>`. There is no `layout` prop: the
 root element is a normal-flow block of `width: 100%` and `height: lineHeight`; position it with
 `style` or with the enclosing `<Sequence style>`.
 
-Only `ayah` lines render in this version. `surah_name` and `basmallah` lines are returned by the
-resolvers with `words: []` and throw `UNSUPPORTED_LINE_TYPE` when passed to the component; skip them
-or draw your own header.
+Every line type renders: `ayah` lines with the page font, `surah_name` lines as the surah's name in
+its printed frame and `basmallah` lines as the basmalah, both from QUL's shared fonts (see
+[Surah names and juz names](#surah-names-and-juz-names)). The word props (`slice`, `activeWordId`,
+`wordStyle`, ...) apply to ayah lines, which are the only ones with words.
 
 ## Resolving lines
 
@@ -217,9 +223,9 @@ type MushafLineData = {
   line: number;
   type: 'ayah' | 'surah_name' | 'basmallah';
   centered: boolean;          // centred as printed (last line of a surah, pages 1-2)
-  fontFamily: string;         // "mushaf-<fontSet>-p<page>", the family under the default font source
+  fontFamily: string;         // "mushaf-<fontSet>-p<page>" (ayah lines) or "mushaf-surah-names-v4" (the others): the family under the default font source
   slice?: {ayah: number} | {fromAyah: number; toAyah?: number};  // the ayahs to show, see Slicing a line
-  surahNumber?: number;       // surah_name and basmallah lines
+  surahNumber?: number;       // surah_name lines (the header's surah) and basmallah lines (carried forward)
   words: Array<{
     id: string;               // "surah:ayah:position", QUL's location key
     wordId: number;           // sequential index in reading order, the ordering key
@@ -455,6 +461,94 @@ gives the cross-fade instead, which suits `slide()`. `<TransitionSeries>` works 
 `<MushafLine>` (without `enter`/`exit`) in a `<TransitionSeries.Sequence>` and let the series drive
 both sides.
 
+## Surah names and juz names
+
+The page fonts hold a page's words only. Two more fonts QUL publishes hold what is printed around
+them, and the package draws from both:
+
+| Font                                                              | Holds                                                                                        | Size (woff2) |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------ |
+| `surah-names-v4` ([QUL resource 237](https://qul.tarteel.ai/resources/font/237), the V4 surah-name font) | The 114 surah names as written above their first ayah, and the basmalah.       | 830 KB       |
+| `quran-common` ([QUL resource 459](https://qul.tarteel.ai/resources/font/459), the juz-name font)      | The 30 juz names, in two forms, and the ornamental frame a surah name is printed in. | 67 KB      |
+
+They are fetched from QUL's CDN by default, like the page fonts, behind `delayRender()`, and nothing
+is painted before they are in. Their glyphs are plain outlines in Chromium (so in every Remotion
+render): they take the inherited CSS `color`, whatever the theme. (The surah-name font also carries
+SVG colour glyphs, which Firefox and Safari paint in the font's own colours.)
+
+### Header and basmalah lines
+
+A `surah_name` line from `getMushafLines({page})` renders as printed: the name of the surah
+(`line.surahNumber`) inside the frame, which spans the widest line of the mushaf at the line's type
+size, so it fills the measure the way a justified line does. A `basmallah` line renders the basmalah
+on the page baseline, centred. Both take the same props as an ayah line; `framed={false}` sets the
+name without its frame:
+
+```tsx
+// Every line of page 187, At-Tawbah's header first.
+const lines = await getMushafLines({page: 187});
+{lines.map((line, i) => (
+  <Sequence key={line.line} from={i * HOLD} durationInFrames={HOLD}>
+    <MushafLine line={line} enter={slideFade()} />   {/* header, then ayah lines: one component */}
+  </Sequence>
+))}
+<MushafLine line={header} framed={false} />          {/* the name alone */}
+```
+
+### `<MushafSurahName surah>` and `<MushafJuzName juz>`
+
+The same glyphs as standalone elements, for a title card or a label: a block of `width: 100%` and
+height `lineHeight` (default `2.2 × fontSize`, the line grid), the glyph centred in it, with the
+line's sizing, animation and font props (`fontSize`, `lineHeight`, `style`, `className`, `enter`,
+`exit`, `name`, `fontSrc`, `fontFallback`; `mushaf` selects the mushaf):
+
+```tsx
+<MushafSurahName surah={36} />                       {/* Ya-Sin, in its frame, spanning the width */}
+<MushafSurahName surah={36} framed={false} fontSize={160} lineHeight={300} enter={slideFade()} />
+<MushafJuzName juz={22} />                           {/* "the twenty-second juz", written out */}
+<MushafJuzName juz={1} variant="opening" />          {/* the juz by its first words: "Alif Lam Mim" */}
+```
+
+`surah` is 1–114 (`SURAH_OUT_OF_RANGE` otherwise) and `juz` 1–30 (`JUZ_OUT_OF_RANGE`). The layout
+data carries no juz boundaries, so which juz a line belongs to is yours to say.
+
+### Loading and mirroring the shared fonts
+
+- **Fonts.** `fontSrc` reaches these fonts too: a resolver receives a `MushafFontFile` with
+  `kind: 'shared'`, `font` (`'surah-names-v4'` or `'quran-common'`), `fileName` (`surah_names.woff2`,
+  `quran-common.woff2`) and `cdnUrl`. The fonts packages hold page fonts only, so a package as
+  `fontSrc` is refused with `BAD_FONT_SRC` by anything that needs a shared font, and `fontFallback`
+  never applies to them. To serve them yourself, put the two files in `public/` (this repository's
+  `bun run qul fonts` downloads them, and the CDN URLs are in `getMushafFontFile({font})`) and
+  resolve them there; a resolver may return a fonts package for the page files, so one resolver
+  covers everything:
+
+  ```tsx
+  <MushafLine line={line} fontSrc={(f) => (f.kind === 'page' ? tajweedFonts : staticFile(`fonts/${f.font}/${f.fileName}`))} />
+  ```
+
+- **`loadSharedFont({font, fontSrc?})`** warms a shared font the way `loadPageFont()` warms a page
+  font, for a `<Player>`: `loadSharedFont({font: 'surah-names-v4'}).waitUntilDone()`.
+- **Sizes.** The surah-name font is 830 KB, a page font's tenfold: warm it, or give the first header
+  a `premountFor` of a second or two.
+
+### DOM contract
+
+```html
+<div class="mushaf-line" data-line-type="surah_name" data-surah="9" data-framed="true" data-centered="true" data-page="187" data-line="1" data-font-origin="cdn|package|custom" ...>
+  <div class="mushaf-line__row" style="position:absolute;inset:0;visibility:hidden|visible">
+    <span class="mushaf-glyph mushaf-glyph--frame" data-glyph="frame" data-font="quran-common">&#xE000;</span>       <!-- unless framed={false} -->
+    <span class="mushaf-glyph mushaf-glyph--surah-name" data-glyph="surah-name" data-font="surah-names-v4">&#xFC52;</span>
+  </div>
+</div>
+<div class="mushaf-line" data-line-type="basmallah" ...><div class="mushaf-line__row"><span class="mushaf-glyph mushaf-glyph--basmalah" ...>...</span></div></div>
+<div class="mushaf-surah-name" data-surah="9" data-framed="true" ...><div class="mushaf-surah-name__row">...</div></div>
+<div class="mushaf-juz-name" data-juz="22" data-variant="ordinal" ...><div class="mushaf-juz-name__row"><span class="mushaf-glyph mushaf-glyph--juz-name" ...>&#xE016;</span></div></div>
+```
+
+Each glyph fills its row and is centred in it by `text-align` and a single line box; a `transform`
+on the span shifts it so the ink, not the em box, is centred. Do not change their font or size.
+
 ## Fonts
 
 Each page has its own font: 71 KB (monochrome) or 85 KB (colour) as woff2 for a typical page, 114 KB
@@ -465,22 +559,23 @@ only then is the line painted. Renders wait for it behind a labelled `delayRende
 
 Where the font comes from is `fontSrc`, a prop of `<MushafLine>` (and an option of `loadPageFont()`):
 
-| `fontSrc`                                   | The page font comes from                                                                                          |
+| `fontSrc`                                   | The font comes from                                                                                               |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `'cdn'` (default)                           | QUL's CDN.                                                                                                        |
-| a fonts package (`import fonts from '…'`)   | The package only, bundled with your code: the CDN is never contacted. See [When the CDN fails](#when-the-cdn-fails). |
-| `(file) => url` or `(file) => [url, …]`     | Your own URLs, tried in order. `file` is a `MushafFontFile`: `{fontSet, page, format, fileName, cdnUrl, …}`.          |
+| a fonts package (`import fonts from '…'`)   | The package only, bundled with your code: the CDN is never contacted. Page fonts only: see [Surah names and juz names](#surah-names-and-juz-names). |
+| `(file) => url` or `(file) => [url, …]`     | Your own URLs, tried in order. `file` is a `MushafFontFile`: `{kind: 'page', fontSet, page, format, fileName, cdnUrl, …}` for a page font, `{kind: 'shared', font, fileName, cdnUrl, …}` for a shared font. For a page file the resolver may return a fonts package instead. |
 
 `fontFallback` adds a fonts package after the source: it is used only when the source fails.
 
 ```tsx
 // Your own mirror in public/ (copy the files there yourself): note page 328 of the colour set is .woff.
-<MushafLine line={line} fontSrc={(f) => staticFile(`fonts/${f.fontSet}/${f.fileName}`)} />
+<MushafLine line={line} fontSrc={(f) => staticFile(`fonts/${f.kind === 'page' ? f.fontSet : f.font}/${f.fileName}`)} />
 // A mirror, then QUL's CDN.
-<MushafLine line={line} fontSrc={(f) => [`https://fonts.example.com/${f.fontSet}/${f.fileName}`, f.cdnUrl]} />
+<MushafLine line={line} fontSrc={(f) => [`https://fonts.example.com/${f.kind === 'page' ? f.fontSet : f.font}/${f.fileName}`, f.cdnUrl]} />
 ```
 
-`getMushafFontFile({page, theme?, mushaf?})` returns the same `MushafFontFile` a resolver receives.
+`getMushafFontFile({page, theme?, mushaf?})` and `getMushafFontFile({font})` return the same
+`MushafFontFile` a resolver receives.
 
 - **One face per source.** Lines with different sources never share a font face: each source loads
   its own, under its own family (`mushaf-<fontSet>-p<page>` for the CDN, with a suffix for anything
@@ -498,6 +593,7 @@ Where the font comes from is `fontSrc`, a prop of `<MushafLine>` (and an option 
   time, both in the Player and in renders.
 
 ### `loadPageFont({page, theme?, mushaf?, fontSrc?, fallback?}): {fontFamily, waitUntilDone, origin}`
+### `loadSharedFont({font, mushaf?, fontSrc?}): {fontFamily, waitUntilDone, origin}`
 
 Google-fonts style loader. Idempotent; wraps `delayRender()` / `cancelRender()` internally; a no-op
 during server rendering. `<MushafLine>` calls it for you. Call it yourself to warm a font in a
@@ -551,6 +647,9 @@ import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
   `fontSrc={tajweedFonts}`: the CDN is never contacted and every frame uses the same files.
 - **A wrong set is caught early.** A fallback that does not hold the line's font set throws
   `BAD_FONT_FALLBACK` the first time the line renders, not during an outage.
+- **Page fonts only.** The surah-name and juz fonts are not in the packages: header lines,
+  `<MushafSurahName>` and `<MushafJuzName>` fetch them from the CDN, or from the URLs a `fontSrc`
+  resolver gives (see [Surah names and juz names](#surah-names-and-juz-names)).
 - **Cost.** Importing a package puts all of its files in every bundle you build (43 or 51 MB of
   assets; the JavaScript only grows by the list of URLs). A Lambda site uploads them once and
   afterwards only when they change.
@@ -675,6 +774,8 @@ across package copies.
 | Code                                     | Meaning and fix                                                                                                                                |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UNKNOWN_MUSHAF`                         | `mushaf` is not `'qpc-v4'`.                                                                                                                    |
+| `UNKNOWN_FONT`                           | `font` is not `'surah-names-v4'` or `'quran-common'`.                                                                                          |
+| `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE` | `surah` must be `1..114`, `juz` `1..30` (and `variant` `'ordinal'` or `'opening'`).                                                            |
 | `BAD_THEME`                              | `theme` must be `'plain'`, a preset name or `{base, colors?, marker?}`; a base the font lacks, an entry outside 0–15 or an unknown part. |
 | `BAD_COLOR`                              | A theme colour is not a CSS colour.                                                                                                            |
 | `BAD_SLICE`                              | `slice` must be `{ayah}` or `{fromAyah, toAyah?}` with positive integers (`toAyah` not before `fromAyah`); `slice: true` only on the ayah form of `getMushafLines()`. |
@@ -682,7 +783,7 @@ across package copies.
 | `PAGE_OUT_OF_RANGE`, `LINE_OUT_OF_RANGE` | Pages are `1..604`; lines `1..15` (`1..8` on pages 1 and 2). The message names the page's line count.                                          |
 | `BAD_LINE_PROP`                          | Pass `line={MushafLineData}` or `page` + `line={number}`, and `theme` / `mushaf` / `data` only with the second form.                           |
 | `BAD_LINE_DATA`                          | `line` is not a `MushafLineData` from this package version (the message names the field). Older data must be re-resolved.                      |
-| `UNSUPPORTED_LINE_TYPE`                  | A `surah_name` or `basmallah` line; only `ayah` lines render in this version.                                                                  |
+| `UNSUPPORTED_LINE_TYPE`                  | An internal renderer was given a line of another type; `<MushafLine>` never raises it.                                                          |
 | `BAD_ENTER`, `BAD_EXIT`                  | `enter` / `exit` must be a presentation or `{presentation, timing?}` with a `TransitionTiming`; `BAD_EXIT` also when the Sequence has no finite length. |
 | `BAD_SIZE`                               | `fontSize` / `lineHeight` must be positive finite numbers.                                                                                     |
 | `BAD_DATA_URL`                           | `data.words` / `data.layout` is not an absolute URL, a `staticFile()` path or a root-relative path, or is root-relative in Node, where only an absolute URL can be fetched. |
@@ -691,7 +792,7 @@ across package copies.
 | `DATA_TIMEOUT`                           | The fetch did not finish within the render budget: raise `--timeout` or mirror the exports.                                                    |
 | `DATA_INVALID`                           | The response is not the export (an HTML page, a truncated zip, another mushaf, a broken reading order). The message names the file and the first problem. |
 | `DATA_LOAD_FAILED`                       | Something unexpected while loading the data (the message carries it), or a page or line the loaded layout does not have.                       |
-| `BAD_FONT_SRC`                           | `fontSrc` is not `'cdn'`, a fonts package or a resolver, a resolver returned no URL, a package holds the other font set, or a removed option (`url`, `fontUrl`) was passed. |
+| `BAD_FONT_SRC`                           | `fontSrc` is not `'cdn'`, a fonts package or a resolver, a resolver returned no URL, a package holds the other font set, a package was given for a shared font (the packages hold page fonts only), or a removed option (`url`, `fontUrl`) was passed. |
 | `BAD_FONT_FALLBACK`                      | `fontFallback` is not a fonts package (or an array of them), or none of them holds the line's font set. Install the package the message names. |
 | `FONT_HTTP`                              | The font URL answered with an HTTP error (404: check the page number and the CDN path or your mirror).                                         |
 | `FONT_NETWORK`                           | The fetch failed (offline, CORS on a mirror, blocked host). Pass a fonts package as `fontFallback`.                                            |
@@ -708,9 +809,9 @@ failed.
 
 ## Roadmap
 
-Additions planned without breaking the API: header (`surah_name`) and basmallah lines (they need
-QUL's `surah-name-v4` and `quran-common` fonts), a Studio-editable wrapper with a Zod schema, further
-mushaf layouts from QUL.
+Additions planned without breaking the API: the shared fonts in the fonts packages (today they come
+from the CDN or your own URLs), a Studio-editable wrapper with a Zod schema, further mushaf layouts
+from QUL.
 
 ## Data and licences
 
@@ -718,8 +819,9 @@ The lines are built at render time from QUL's exports of mushaf layout 19 (KFGQP
 words of the script and the line layout, open data published by [QUL](https://qul.tarteel.ai), and
 checked against the printed page's invariants (9,046 lines, 83,668 words, one ayah marker per ayah)
 both at load time and by the repository's `qul` CLI. The fonts are the King Fahd Complex fonts as
-published by QUL, fetched from QUL's CDN at render time, and redistributed unmodified in the two
-fonts packages (see their `LICENSE.md`). Neither the data nor the fonts are
+published by QUL (the page fonts, the surah-name font and `quran-common`), fetched from QUL's CDN at
+render time, and the page fonts are redistributed unmodified in the two fonts packages (see their
+`LICENSE.md`). Neither the data nor the fonts are
 part of this package. Please respect the terms of the [King Fahd Complex](https://qurancomplex.gov.sa)
 and of QUL when distributing renders, and remember that a bundle you deploy with a fonts package in
 it serves the fonts too.

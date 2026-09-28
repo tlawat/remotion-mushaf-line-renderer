@@ -129,3 +129,62 @@ export const WORD_STYLE: React.CSSProperties = {
   padding: 0,
   whiteSpace: 'nowrap',
 };
+
+/** The row of a glyph element (a surah name, a basmalah, a juz name): the glyphs stack in it, each centred. */
+export const buildGlyphRowStyle = (visible: boolean): React.CSSProperties => ({
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  margin: 0,
+  padding: 0,
+  overflow: 'visible',
+  // Never paint a fallback font: a system font would draw the private code points as other letters.
+  visibility: visible ? 'visible' : 'hidden',
+});
+
+export type GlyphStyleInput = {
+  readonly fontFamily: string;
+  readonly fontSize: number;
+  /** The row's height: the glyph is centred in one line box of this height. */
+  readonly lineHeight: number;
+  /** Vertical correction in em, so the glyph's ink (not its em box) sits in the middle; 0 keeps the baseline. */
+  readonly shiftEm: number;
+};
+
+/**
+ * One glyph of a shared font, filling its row: centred horizontally by `text-align`, vertically by
+ * a single line box as tall as the row, then shifted by the glyph's own band so its ink is centred.
+ * Every metric-affecting property is pinned, as on the word row.
+ */
+export const buildGlyphStyle = ({fontFamily, fontSize, lineHeight, shiftEm}: GlyphStyleInput): React.CSSProperties => ({
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  display: 'block',
+  textAlign: 'center',
+  direction: 'rtl',
+  unicodeBidi: 'isolate',
+  whiteSpace: 'nowrap',
+  fontFamily: `"${fontFamily}"`,
+  fontSize: `${fontSize}px`,
+  lineHeight: `${lineHeight}px`,
+  fontWeight: 400,
+  fontStyle: 'normal',
+  fontVariant: 'normal',
+  fontSynthesis: 'none',
+  fontFeatureSettings: 'normal',
+  fontKerning: 'auto',
+  letterSpacing: 0,
+  wordSpacing: 0,
+  textTransform: 'none',
+  textDecoration: 'none',
+  textIndent: 0,
+  margin: 0,
+  padding: 0,
+  overflow: 'visible',
+  ...(shiftEm === 0 ? {} : {transform: `translateY(${shiftEm}em)`}),
+});

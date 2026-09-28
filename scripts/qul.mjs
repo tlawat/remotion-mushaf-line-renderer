@@ -26,6 +26,8 @@
 //                                example/public/fonts/<set>/ and, for pages 1, 10, 187 and 604,
 //                                packages/…/test/fixtures/fonts/<set>/; checks every word of the
 //                                mirrored layout against them and the plain set against the colour set.
+//                                Also downloads the two shared fonts (surah names, quran-common)
+//                                into example/public/fonts/<id>/ and checks their glyph tables.
 //     --etags                               also refresh scripts/cdn-etags.json
 //     --allow-zero-advance                  do not fail when a standalone word has zero advance
 //     --concurrency <n>                     parallel downloads (default 3)
@@ -63,7 +65,7 @@ import {
 } from './lib/data.mjs';
 import {QPC_V4} from './lib/datasets.mjs';
 import {recordEtags} from './lib/etags.mjs';
-import {downloadFonts} from './lib/fonts.mjs';
+import {downloadFonts, downloadSharedFonts} from './lib/fonts.mjs';
 import {fetchPages} from './lib/pages.mjs';
 import {verifyCdn} from './lib/verify.mjs';
 
@@ -160,11 +162,14 @@ const fonts = async (spec) => {
     allowZeroAdvance: args['allow-zero-advance'],
   });
   for (const line of report) log(' -', line);
-  if (failed) {
+  log('downloading the shared fonts (surah names, quran-common)');
+  const shared = await downloadSharedFonts(def);
+  for (const line of shared.report) log(' -', line);
+  if (failed || shared.failed) {
     process.exitCode = 1;
     log('font checks FAILED (see above)');
   }
-  if (args.etags) await recordEtags(def, etags);
+  if (args.etags) await recordEtags(def, {...etags, ...shared.etags});
 };
 
 const verify = async () => {
