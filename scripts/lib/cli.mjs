@@ -70,10 +70,17 @@ export const fetchWithRetry = async (url, {attempts = 4, timeoutMs = 30_000, acc
 export const runPool = async (items, concurrency, fn) => {
   const results = new Array(items.length);
   let next = 0;
+  let failed = false;
   const workers = Array.from({length: Math.max(1, concurrency)}, async () => {
-    while (next < items.length) {
+    // One failure stops the other workers from starting more items (Promise.all rejects on it).
+    while (!failed && next < items.length) {
       const i = next++;
-      results[i] = await fn(items[i], i);
+      try {
+        results[i] = await fn(items[i], i);
+      } catch (e) {
+        failed = true;
+        throw e;
+      }
     }
   });
   await Promise.all(workers);

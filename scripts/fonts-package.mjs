@@ -201,15 +201,23 @@ const matches = (file, entry) => {
   return bytes.length === entry.bytes && hash('sha256', bytes) === entry.sha256;
 };
 
+const MB = (n) => `${(n / 1e6).toFixed(1)} MB`;
+const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
+const rel = (p) => path.relative(ROOT, p) || '.';
+
 const fill = async (set, {from, cdn}) => {
+  const started = Date.now();
   const manifest = readManifest(set);
+  const entries = Object.values(manifest.files);
   const source = from ?? mirrorDir(set);
-  fs.mkdirSync(fontsDir(set), {recursive: true});
+  const dir = fontsDir(set);
+  fs.mkdirSync(dir, {recursive: true});
   let kept = 0;
   let copied = 0;
+  let stale = 0;
   const needed = [];
-  for (const entry of Object.values(manifest.files)) {
-    const target = path.join(fontsDir(set), entry.file);
+  for (const entry of entries) {
+    const target = path.join(dir, entry.file);
     if (matches(target, entry)) {
       kept++;
       continue;
@@ -222,34 +230,80 @@ const fill = async (set, {from, cdn}) => {
         copied++;
         continue;
       }
-      log(`${set}: ${path.relative(ROOT, candidate)} differs from the snapshot; not used`);
+      stale++;
     }
     needed.push(entry);
   }
+  if (stale)
+    log(
+      `${set}: ${stale} file(s) in ${rel(source)} differ from snapshot ${manifest.snapshot} and were not used (\`bun run qul fonts <pages>\` refreshes the mirror)`,
+    );
+  if (kept === entries.length) {
+    log(
+      `${set}: all ${entries.length} files in place in ${rel(dir)} (${MB(entries.reduce((n, e) => n + e.bytes, 0))})`,
+    );
+    return;
+  }
   let downloaded = 0;
+  let downloadedBytes = 0;
   if (needed.length && cdn) {
-    await runPool(needed, 4, async (entry) => {
-      const url = cdnUrlOf(set, entry.file);
-      const res = await fetchWithRetry(url, {accept: '*/*'});
-      const bytes = Buffer.from(await res.arrayBuffer());
-      if (bytes.length !== entry.bytes || hash('sha256', bytes) !== entry.sha256) {
-        throw new Error(
-          `${url} is no longer the snapshot's file (QUL rebuilt it): run \`fonts drift ${set}\` and take a new snapshot`,
-        );
-      }
-      fs.writeFileSync(path.join(fontsDir(set), entry.file), bytes);
-      downloaded++;
-    });
+    const need = needed.reduce((n, e) => n + e.bytes, 0);
+    log(`${set}: downloading ${needed.length} of ${entries.length} files (${MB(need)}) from QUL's CDN`);
+    const tty = process.stdout.isTTY;
+    const progress = () => {
+      const line = `[fonts] ${set}: ${downloaded}/${needed.length} downloaded (${MB(downloadedBytes)})`;
+      if (tty) process.stdout.write(`\r${line}`);
+      else if (downloaded % 100 === 0 || downloaded === needed.length) console.log(line);
+    };
+    try {
+      await runPool(needed, 4, async (entry) => {
+        const url = cdnUrlOf(set, entry.file);
+        let bytes;
+        try {
+          bytes = Buffer.from(await (await fetchWithRetry(url, {accept: '*/*'})).arrayBuffer());
+        } catch (e) {
+          const reason = String(e.message ?? e).replace(/ Try again later.*$/, '');
+          const hint = /refused the request/.test(reason)
+            ? `QUL's CDN refuses this network. Fill from a mirror instead: run \`bun run qul fonts all\` where the CDN is reachable, then \`fonts fill ${set} --from <dir>\`.`
+            : `Check the network and retry; \`fonts fill\` resumes where it stopped.`;
+          throw new Error(`${set}: could not download ${entry.file}: ${reason}\n[fonts] ${hint}`);
+        }
+        if (bytes.length !== entry.bytes || hash('sha256', bytes) !== entry.sha256) {
+          throw new Error(
+            `${set}: ${url} is no longer the snapshot's file (QUL rebuilt it): run \`fonts drift ${set}\` and take a new snapshot`,
+          );
+        }
+        fs.writeFileSync(path.join(dir, entry.file), bytes);
+        downloaded++;
+        downloadedBytes += bytes.length;
+        progress();
+      });
+    } finally {
+      if (tty && downloaded) process.stdout.write('\n');
+    }
   }
   const left = needed.length - downloaded;
-  log(`${set}: ${kept} in place, ${copied} copied from ${path.relative(ROOT, source)}, ${downloaded} downloaded`);
-  if (left > 0)
+  const parts = [
+    `${kept} in place`,
+    copied ? `${copied} copied from ${rel(source)}` : null,
+    downloaded ? `${downloaded} downloaded (${MB(downloadedBytes)})` : null,
+  ].filter(Boolean);
+  log(
+    `${set}: ${entries.length - left} of ${entries.length} files ready in ${rel(dir)}: ${parts.join(', ')}; ${seconds(Date.now() - started)}`,
+  );
+  if (left > 0) {
+    const sample = needed
+      .filter((e) => !matches(path.join(dir, e.file), e))
+      .slice(0, 5)
+      .map((e) => e.file)
+      .join(', ');
     fail(
-      `${set}: ${left} file(s) missing (${needed
-        .map((e) => e.file)
-        .slice(0, 10)
-        .join(', ')}…); pass --from <dir> or --cdn`,
+      `${set}: ${left} file(s) missing (${sample}${left > 5 ? ', …' : ''}). ` +
+        (cdn
+          ? 'The download did not complete; run the command again.'
+          : `Pass --cdn to download them from QUL's CDN, or --from <dir> with a mirror (\`bun run qul fonts <pages>\` fills ${rel(mirrorDir(set))}).`),
     );
+  }
 };
 
 export const verify = (set, {quiet = false} = {}) => {
@@ -446,5 +500,6 @@ const main = async () => {
 };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((e) => fail(e.stack ?? String(e)));
+  // The message says what to do; the stack is noise unless DEBUG asks for it.
+  main().catch((e) => fail(process.env.DEBUG ? (e.stack ?? String(e)) : String(e.message ?? e)));
 }
