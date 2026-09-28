@@ -12,6 +12,116 @@ const fontDirs = (set, page) => [
 ];
 
 /**
+ * Downloads the shared fonts (surah names, quran-common; woff2 + ttf) into
+ * example/public/fonts/<id>/, and checks the ttf: the surah-name font must map exactly the 114
+ * code points the package's registry lists, quran-common the 30 + 30 juz glyphs and the frame.
+ *
+ * @returns {{etags: object, report: string[], failed: boolean}}
+ */
+export const downloadSharedFonts = async (def) => {
+  const etags = {};
+  const report = [];
+  let failed = false;
+  for (const [id, spec] of Object.entries(def.sharedFonts)) {
+    const dir = path.join(EXAMPLE_FONTS_DIR, id);
+    let parsed = null;
+    for (const format of ['woff2', 'ttf']) {
+      const url = def.sharedFontUrl(id, format);
+      let res;
+      try {
+        res = await fetchWithRetry(url, {accept: '*/*', origin: 'https://example.com'});
+      } catch (e) {
+        report.push(`${id} ${spec.file}.${format}: ${e.message}`);
+        failed = true;
+        continue;
+      }
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const magic = detectFontMagic(bytes);
+      if (magic !== format && !(format === 'ttf' && magic === 'otf')) {
+        report.push(
+          `${id} ${spec.file}.${format}: not a ${format} file (magic ${magic ?? 'unknown'}, ${bytes.length} bytes)`,
+        );
+        failed = true;
+        continue;
+      }
+      etags[url] = {
+        etag: res.headers.get('etag'),
+        contentType: res.headers.get('content-type'),
+        contentLength: bytes.length,
+        cors: res.headers.get('access-control-allow-origin'),
+      };
+      fs.mkdirSync(dir, {recursive: true});
+      fs.writeFileSync(path.join(dir, `${spec.file}.${format}`), bytes);
+      if (format === 'ttf') parsed = parseSfnt(bytes);
+    }
+    if (!parsed) continue;
+    const problems = checkSharedFont(id, parsed);
+    if (problems.length) {
+      report.push(`${id}: ${problems.join('; ')}`);
+      failed = true;
+    } else {
+      report.push(
+        `${id}: ${parsed.family}, upem ${parsed.unitsPerEm}, ${parsed.advances.size} code points mapped as the registry expects`,
+      );
+    }
+  }
+  return {etags, report, failed};
+};
+
+/** The 114 surah-name code points (1–21 in U+FC45–U+FC64, 22–114 in U+FB51–U+FBEB) the package's registry lists. */
+export const SURAH_NAME_CODE_POINTS = [
+  ...[0xfc45, 0xfc46, 0xfc47, 0xfc4a, 0xfc4b, 0xfc4e, 0xfc4f, 0xfc51, 0xfc52, 0xfc53, 0xfc55],
+  ...[0xfc56, 0xfc58, 0xfc5a, 0xfc5b, 0xfc5c, 0xfc5d, 0xfc5e, 0xfc61, 0xfc62, 0xfc64],
+  ...[0xfb51, 0xfb52, 0xfb54, 0xfb55, 0xfb57, 0xfb58, 0xfb5a, 0xfb5b, 0xfb5d, 0xfb5e, 0xfb60, 0xfb61, 0xfb63],
+  ...[0xfb64, 0xfb66, 0xfb67, 0xfb69, 0xfb6a, 0xfb6c, 0xfb6d, 0xfb6f, 0xfb70, 0xfb72, 0xfb73, 0xfb75, 0xfb76],
+  ...[0xfb78, 0xfb79, 0xfb7b, 0xfb7c, 0xfb7e, 0xfb7f, 0xfb81, 0xfb82, 0xfb84, 0xfb85, 0xfb87, 0xfb88, 0xfb8a],
+  ...[0xfb8b, 0xfb8d, 0xfb8e, 0xfb90, 0xfb91, 0xfb93, 0xfb94, 0xfb96, 0xfb97, 0xfb99, 0xfb9a, 0xfb9c, 0xfb9d],
+  ...[0xfb9f, 0xfba0, 0xfba2, 0xfba3, 0xfba5, 0xfba6, 0xfba8, 0xfba9, 0xfbab, 0xfbac, 0xfbae, 0xfbaf, 0xfbb1],
+  ...[0xfbb2, 0xfbb4, 0xfbb5, 0xfbb7, 0xfbb8, 0xfbba, 0xfbbb, 0xfbbd, 0xfbbe, 0xfbc0, 0xfbc1, 0xfbd3, 0xfbd4],
+  ...[0xfbd6, 0xfbd7, 0xfbd9, 0xfbda, 0xfbdc, 0xfbdd, 0xfbdf, 0xfbe0, 0xfbe2, 0xfbe3, 0xfbe5, 0xfbe6, 0xfbe8],
+  ...[0xfbe9, 0xfbeb],
+];
+
+/** The glyphs the package draws from a shared font must be in it, with a positive advance. */
+export const checkSharedFont = (id, font) => {
+  const problems = [];
+  const expectMapped = (cps, what) => {
+    const missing = cps.filter((cp) => !font.advances.has(cp));
+    const zero = cps.filter((cp) => font.advances.get(cp) === 0);
+    if (missing.length)
+      problems.push(
+        `${missing.length} ${what} code point(s) missing: ${missing
+          .slice(0, 5)
+          .map((cp) => `U+${cp.toString(16).toUpperCase()}`)
+          .join(', ')}`,
+      );
+    if (zero.length) problems.push(`${zero.length} ${what} glyph(s) with zero advance`);
+  };
+  if (id === 'surah-names-v4') {
+    if (font.unitsPerEm !== 2500) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 2500`);
+    const inRanges = [...font.advances.keys()].filter(
+      (cp) => (cp >= 0xfb51 && cp <= 0xfbeb) || (cp >= 0xfc45 && cp <= 0xfc64),
+    );
+    if (inRanges.length !== SURAH_NAME_CODE_POINTS.length)
+      problems.push(
+        `${inRanges.length} code points in the surah-name ranges, expected ${SURAH_NAME_CODE_POINTS.length}`,
+      );
+    expectMapped(SURAH_NAME_CODE_POINTS, 'surah-name');
+    expectMapped([0xfcaa, 0xfcab, 0xfcae, 0xfcb4], 'basmalah');
+  } else if (id === 'quran-common') {
+    if (font.unitsPerEm !== 1024) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 1024`);
+    const juz = Array.from({length: 30}, (_, i) => 0xe001 + i);
+    const opening = Array.from({length: 30}, (_, i) => 0xe900 + i);
+    expectMapped(juz, 'juz-name');
+    expectMapped(opening, 'juz-opening');
+    expectMapped([0xe000], 'header-frame');
+    if (font.advances.get(0xe000) !== 8240)
+      problems.push(`header frame advance ${font.advances.get(0xe000)}, expected 8240`);
+  }
+  return problems;
+};
+
+/**
  * @returns {{etags: object, report: string[], failed: boolean}} ETag entries of every downloaded
  * file, one report line per check, and whether anything failed.
  */

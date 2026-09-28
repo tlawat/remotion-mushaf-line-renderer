@@ -37,7 +37,7 @@ Everything runs from the repository root.
 | `bun run test:browser`  | Playwright against the example's `<Player>` harness (needs `bun run build`, the page-10 fixture font and the data mirror). |
 | `bun run test:render`   | `@remotion/bundler` + `@remotion/renderer` renders of the example (same prerequisites).                  |
 | `bun run qul <command>` | The QUL data tools, see below.                                                                          |
-| `bun run fonts`         | Shortcut for `bun run qul fonts 1,10,187,604`: the fixture fonts.                                        |
+| `bun run fonts`         | Shortcut for `bun run qul fonts 1,10,187,604`: the fixture fonts, and the two shared fonts (surah names, juz names). |
 
 Before you push, run what CI runs: `bun run check && bun run test && bun run build && bun run test:types && bun run typecheck && bun run check:package`.
 The browser and render suites take a minute or two each; run them when you touch rendering, fonts,
@@ -78,7 +78,7 @@ its SQLite reader), maintains it:
 bun run qul data                        # download the pinned exports into the mirror, validate, record in cdn-etags.json
 bun run qul check                       # validate the mirror without downloading (--layout-sqlite/--words for other files)
 bun run qul compare                     # compile QUL's 604 preview pages (cached under .cache/qul) and diff them against the mirror
-bun run qul fonts 1,10,604 --etags      # download page fonts (both sets, woff2 + ttf) and record CDN ETags
+bun run qul fonts 1,10,604 --etags      # download page fonts (both sets, woff2 + ttf) and the two shared fonts; record CDN ETags
 bun run qul verify --pages 1,10,604 --data   # fetch fonts and exports cross-origin like a render; check CORS, bytes, ETags
 bun run qul mirror                      # the exports and every page's fonts into the local mirror; commits the exports and ETags
 bun run qul --help
@@ -134,6 +134,11 @@ redistribute them unmodified and carry the notice the files themselves carry.
 No font file is committed: `.gitignore` covers `*.ttf`, `*.woff` and `*.woff2` everywhere.
 `bun run qul fonts 1,10,187,604` downloads the fixture pages the suites use into the example's mirror
 and the package's fixtures (`bun run qul mirror` downloads every page), and CI caches them between runs.
+The same command downloads the two shared fonts, QUL's surah-name font
+([resource 237](https://qul.tarteel.ai/resources/font/237)) and `quran-common`
+([resource 459](https://qul.tarteel.ai/resources/font/459)), into `example/public/fonts/<id>/` and
+checks their glyph tables against the package's registry; they are not part of the fonts packages
+(the package fetches them from QUL's CDN, or from the URLs a `fontSrc` resolver gives).
 
 ## Project layout
 
@@ -146,9 +151,10 @@ packages/remotion-mushaf-line-renderer/
     mushaf/               the registry (mushaf definition, dataset, font sets), themes and colour validation
     data/                 the runtime loader: zip and SQLite readers, the export join, the compiler, the layout format
     resolve/              getMushafLine, getMushafLines, getMushafLocation, slicing, line data validation
-    fonts/                font loading, the font store, the @font-palette-values store
+    fonts/                font loading (page fonts and the shared fonts), the font store, the @font-palette-values store
     animation/            timings, entrance/exit progress, the slideFade and revealRtl presentations
-    component/            <MushafLine>, its hooks (font gate, fit, palette rule, canvas guard), the row and words
+    component/            <MushafLine>, its hooks (font gate, fit, palette rule, canvas guard), the row and words;
+                          the glyph renderer behind header lines, <MushafSurahName> and <MushafJuzName>
   test/                   unit, types, browser and render suites, fixtures
   scripts/check-package.mjs
 example/                  Remotion project, <Player> harness, recitation tool

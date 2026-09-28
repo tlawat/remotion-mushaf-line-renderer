@@ -17,7 +17,7 @@ export type MushafThemeName = 'light' | 'dark' | 'sepia' | 'black' | 'normal' | 
  *
  * - `ink`: the letters (entries 0 and 14).
  * - `silent`: the greyed letters that are written but not pronounced (1, 2, 15).
- * - `rules`: the seven tajweed rule colours (3–9: prolongations, ghunnah, qalqalah, ...).
+ * - `rules`: the seven tajweed rule colours (3-9: prolongations, ghunnah, qalqalah, ...).
  * - `frame`: the ayah-end rosette's frame, curls and the ayah number inside it (13).
  * - `accent`: the petal flourishes above and below the rosette (11).
  * - `detail`: the small jewel at the top of the rosette (10).
@@ -26,7 +26,7 @@ export type MushafThemeName = 'light' | 'dark' | 'sepia' | 'black' | 'normal' | 
 export type MushafColorPart = 'ink' | 'silent' | 'rules' | 'frame' | 'accent' | 'detail' | 'background';
 
 /**
- * Colours by part name or by CPAL entry index (`'0'`–`'15'`). Every value is an ordinary CSS colour
+ * Colours by part name or by CPAL entry index (`'0'`-`'15'`). Every value is an ordinary CSS colour
  * (`'#1b6f3f'`, `'rgb(27 111 63)'`, `'crimson'`, `'transparent'`), plus `'currentColor'`: the
  * inherited CSS `color`, which the package resolves at render time because COLR glyphs ignore
  * `color` themselves. A numeric key wins over a part that contains that entry.
@@ -43,7 +43,7 @@ export type MushafThemeColors = {readonly [key in MushafColorPart | `${number}`]
  * ```
  */
 export type MushafTheme = {
-  /** A CPAL base palette of the font (0–5), or a preset to start from (its colours come first). */
+  /** A CPAL base palette of the font (0-5), or a preset to start from (its colours come first). */
   readonly base: number | MushafThemeName;
   /** Colours over that base. */
   readonly colors?: MushafThemeColors;
@@ -65,7 +65,7 @@ export type MushafTheme = {
  * | `sepia`  | Sepia        | the tajweed colours in sepia tones                                              |
  * | `black`  | Black        | everything white, the ayah number black: for a dark background, no tajweed      |
  * | `normal` | (default)    | the writing in the inherited CSS `color`, the ayah rosette in its own colours   |
- * | `p1`–`p5`| P1–P5        | the font's own CPAL palettes 1–5, untouched                                     |
+ * | `p1`-`p5`| P1-P5        | the font's own CPAL palettes 1-5, untouched                                     |
  */
 export type MushafThemeSelection = 'plain' | MushafThemeName | MushafTheme;
 
@@ -75,6 +75,17 @@ export type MushafThemeSelection = 'plain' | MushafThemeName | MushafTheme;
  * package (`@tlawat/mushaf-fonts-<fontSet>`), and CDN paths are organised the same way.
  */
 export type MushafFontSet = 'qpc-v4' | 'qpc-v4-tajweed';
+
+/**
+ * The two fonts QUL publishes for the V4 mushaf that are not per page: `'surah-names-v4'`
+ * (QUL resource 237: the 114 surah names and the basmalah) and `'quran-common'` (QUL resource 459:
+ * the 30 juz names, the ornamental surah-header frame). Both are fetched from QUL's CDN by default;
+ * neither ships in the fonts packages.
+ */
+export type MushafSharedFont = 'surah-names-v4' | 'quran-common';
+
+/** How a juz is named: `'ordinal'` is "the first juz" written out, `'opening'` its first words ("Alif Lam Mim" for juz 1). */
+export type MushafJuzNameVariant = 'ordinal' | 'opening';
 
 /** QUL's line vocabulary (see lib/exporter/export_mushaf_layout.rb in QUL). */
 export type MushafLineType = 'ayah' | 'surah_name' | 'basmallah';
@@ -87,7 +98,7 @@ export type MushafLineType = 'ayah' | 'surah_name' | 'basmallah';
 export type MushafWordKind = 'word' | 'end' | 'pause' | 'sajdah' | 'rub-el-hizb';
 
 export type MushafWord = {
-  /** "surah:ayah:position" — QUL's `location`. Stable across mushafs; the join key for word timestamps. */
+  /** "surah:ayah:position"  -  QUL's `location`. Stable across mushafs; the join key for word timestamps. */
   readonly id: string;
   /**
    * Sequential index of the glyph in mushaf reading order (1-based, marker glyphs included); the
@@ -99,9 +110,9 @@ export type MushafWord = {
   readonly ayah: number;
   /** Position inside the ayah (1-based). Never used for ordering. */
   readonly position: number;
-  /** `end` is the ayah-number marker glyph — a real word that carries width. */
+  /** `end` is the ayah-number marker glyph  -  a real word that carries width. */
   readonly kind: MushafWordKind;
-  /** 1–4 code points in U+FC41–U+FCFC. Opaque: only meaningful together with `fontFamily`. Never normalise. */
+  /** 1-4 code points in U+FC41-U+FCFC. Opaque: only meaningful together with `fontFamily`. Never normalise. */
   readonly text: string;
 };
 
@@ -127,7 +138,7 @@ export type MushafLineData = {
   readonly fontSet: MushafFontSet;
   /** 1..604 */
   readonly page: number;
-  /** 1..15 (1..8 on pages 1–2) */
+  /** 1..15 (1..8 on pages 1-2) */
   readonly line: number;
   readonly type: MushafLineType;
   /** QUL `is_centered`: centred lines are centred, all others fill the measure. */
@@ -161,7 +172,7 @@ export type MushafLineAnimation = {
 };
 
 /**
- * What `enter` / `exit` accept: `{presentation, timing?}`, or a presentation on its own — which uses
+ * What `enter` / `exit` accept: `{presentation, timing?}`, or a presentation on its own  -  which uses
  * the package's default timing (`enterTiming()` / `exitTiming()`), i.e. `enter={slideFade()}`.
  */
 export type MushafLineAnimationProp = MushafLineAnimation | TransitionPresentation<any>;
@@ -179,7 +190,7 @@ export type WordContext = {
 };
 
 /**
- * Which ayahs of a line to show: `{ayah}` for one, `{fromAyah, toAyah}` for a range — open-ended
+ * Which ayahs of a line to show: `{ayah}` for one, `{fromAyah, toAyah}` for a range  -  open-ended
  * after `fromAyah` when `toAyah` is omitted, so one selector means the same thing on every line of
  * a passage. The rest of the line is hidden and the words that remain are centred in the measure at
  * the line's own type size. The ayah-end rosette belongs to the ayah it closes. A slice that keeps
@@ -190,8 +201,8 @@ export type MushafSlice =
   | {readonly fromAyah: number; readonly toAyah?: number; readonly ayah?: never};
 
 /**
- * Where the mushaf data comes from: QUL's two raw exports — the words of the script (JSON) and the
- * line layout (SQLite) — each as the CDN's zip or unzipped. Absolute URLs, `staticFile()` results
+ * Where the mushaf data comes from: QUL's two raw exports  -  the words of the script (JSON) and the
+ * line layout (SQLite)  -  each as the CDN's zip or unzipped. Absolute URLs, `staticFile()` results
  * or root-relative paths (in a browser); anything left out is fetched from QUL's exports on
  * Tarteel's CDN. Point both at a mirror in `public/` through `staticFile()` for offline, faster or
  * reproducible renders.
@@ -233,14 +244,14 @@ export type MushafLineCommonProps = {
    * - `'mushaf'`: one type size for the whole mushaf (`fontSizeForWidth()`, or your `fontSize`), and a
    *   line that is narrower than the widest one stops short of the margin.
    *
-   * Centred lines (the last line of a surah, pages 1–2) are never stretched: they keep the base size
+   * Centred lines (the last line of a surah, pages 1-2) are never stretched: they keep the base size
    * under either value, as printed.
    */
   readonly fit?: 'line' | 'mushaf';
   /**
    * Show only these ayahs of the line, collapsed and centred in the measure (see `MushafSlice`).
    * Wins over `line.slice`; `null` cancels a slice the data carries. The words that remain keep the
-   * line's own type size and their printed advances — nothing is zoomed or re-spaced.
+   * line's own type size and their printed advances  -  nothing is zoomed or re-spaced.
    */
   readonly slice?: MushafSlice | null;
   /**
@@ -249,18 +260,18 @@ export type MushafLineCommonProps = {
    * size of a justified line); under `fit="mushaf"` it is used as it is.
    */
   readonly fontSize?: number;
-  /** px. Default: `round(2.2 × fontSize)` — the 15-line grid unit; keeps the +1.37 / −0.73 em glyph extremes inside the box. */
+  /** px. Default: `round(2.2 × fontSize)`  -  the 15-line grid unit; keeps the +1.37 / -0.73 em glyph extremes inside the box. */
   readonly lineHeight?: number;
   /** Applied to the root element (same meaning as `<Sequence style>`). Colour is inherited from here. */
   readonly style?: React.CSSProperties;
   readonly className?: string;
   /**
-   * The word to mark as current — `word.id` ("9:1:3") or `word.wordId` (the sequential index). It
+   * The word to mark as current  -  `word.id` ("9:1:3") or `word.wordId` (the sequential index). It
    * gets `data-active="true"` and `.mushaf-word--active`, plus `activeWordStyle` when given. Drive it
    * from your own word timings for a karaoke-style follow.
    */
   readonly activeWordId?: string | number | null;
-  /** Applied to the word named by `activeWordId`. Paint only — see `wordStyle`. */
+  /** Applied to the word named by `activeWordId`. Paint only  -  see `wordStyle`. */
   readonly activeWordStyle?: React.CSSProperties;
   /**
    * Per-word style, called for every word on every frame. Must be a pure function of its arguments
@@ -275,13 +286,46 @@ export type MushafLineCommonProps = {
   readonly wordClassName?: (word: MushafWord, context: WordContext) => string | undefined;
   /** Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline. */
   readonly name?: string;
-  /** Where the page font comes from; default `'cdn'` (QUL's CDN). See `MushafFontSrc`. */
+  /**
+   * Whether a `surah_name` line sets the name inside the ornamental frame it is printed in (QUL's
+   * `quran-common` font). Default `true`; `false` sets the name alone. Ignored by other line types.
+   */
+  readonly framed?: boolean;
+  /** Where the fonts come from; default `'cdn'` (QUL's CDN). See `MushafFontSrc`. */
   readonly fontSrc?: MushafFontSrc;
   /**
    * A fonts package to load the page font from when `fontSrc` fails, e.g.
    * `import fonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed'`. See README → When the CDN fails.
+   * The packages hold page fonts only; the surah-name and juz fonts have no fallback.
    */
   readonly fontFallback?: MushafFontFallback;
+};
+
+/** Props shared by `<MushafSurahName>` and `<MushafJuzName>`. */
+export type MushafGlyphCommonProps = Pick<
+  MushafLineCommonProps,
+  'enter' | 'exit' | 'fontSize' | 'lineHeight' | 'style' | 'className' | 'name' | 'fontSrc' | 'fontFallback'
+> & {
+  /** Default `'qpc-v4'`. */
+  readonly mushaf?: MushafId | undefined;
+};
+
+export type MushafSurahNameProps = MushafGlyphCommonProps & {
+  /** 1-114. */
+  readonly surah: number;
+  /**
+   * `true` (default) sets the name inside the ornamental frame it is printed in, which spans the
+   * width of the widest line of the mushaf at `fontSize` (the composition width by default);
+   * `false` sets the name alone.
+   */
+  readonly framed?: boolean;
+};
+
+export type MushafJuzNameProps = MushafGlyphCommonProps & {
+  /** 1-30. */
+  readonly juz: number;
+  /** Default `'ordinal'`. See `MushafJuzNameVariant`. */
+  readonly variant?: MushafJuzNameVariant;
 };
 
 export type MushafLineProps = MushafLineCommonProps &
@@ -314,7 +358,7 @@ export type MushafLocation = {
 export type GetMushafLocationOptions = MushafDataOptions & {
   readonly mushaf?: MushafId | undefined;
   readonly surah: number;
-  /** Default 1 — the start of the surah. */
+  /** Default 1  -  the start of the surah. */
   readonly ayah?: number;
 };
 
@@ -338,8 +382,8 @@ export type GetMushafLinesOptions = MushafSelection &
         readonly toAyah?: number;
         readonly page?: never;
         /**
-         * Record the range as `line.slice` on the lines it cuts — the first and/or last of the passage,
-         * when they carry words of other ayahs — so `<MushafLine>` collapses them to the words that
+         * Record the range as `line.slice` on the lines it cuts  -  the first and/or last of the passage,
+         * when they carry words of other ayahs  -  so `<MushafLine>` collapses them to the words that
          * belong to it. The lines in between carry no slice and render exactly as printed.
          */
         readonly slice?: boolean;
@@ -357,10 +401,20 @@ export type LoadPageFontOptions = {
   readonly fallback?: MushafFontFallback | undefined;
 };
 
-/** Which kind of source a loaded page font came from. */
+export type LoadSharedFontOptions = {
+  readonly mushaf?: MushafId | undefined;
+  /** `'surah-names-v4'` (surah names, the basmalah) or `'quran-common'` (juz names, the header frame). */
+  readonly font: MushafSharedFont;
+  /** Where the font comes from; default `'cdn'`. Pass the same value as the component you warm up. */
+  readonly fontSrc?: MushafFontSrc | undefined;
+  /** Accepted for symmetry with `loadPageFont()`; the fonts packages hold page fonts only, so it is never used. */
+  readonly fallback?: MushafFontFallback | undefined;
+};
+
+/** Which kind of source a loaded font came from. */
 export type MushafFontOrigin = 'cdn' | 'package' | 'custom';
 
-export type LoadedPageFont = {
+export type LoadedMushafFont = {
   /** The family the font is registered under for this source (see `MushafLineData.fontFamily`). */
   readonly fontFamily: string;
   readonly waitUntilDone: () => Promise<void>;
@@ -368,15 +422,18 @@ export type LoadedPageFont = {
   readonly origin: () => MushafFontOrigin | null;
 };
 
+/** What `loadPageFont()` returns; the same shape as `loadSharedFont()`'s. */
+export type LoadedPageFont = LoadedMushafFont;
+
 export type MushafFontFormat = 'woff2' | 'woff';
 
-/** One page font file of a mushaf: what a `MushafFontResolver` receives. */
-export type MushafFontFile = {
-  /** Discriminant, so fonts that are not per page (surah names) can join later. */
+/** One page font file of a mushaf. */
+export type MushafPageFontFile = {
   readonly kind: 'page';
   readonly mushaf: MushafId;
   readonly fontSet: MushafFontSet;
   readonly page: number;
+  readonly font?: never;
   /** `'woff2'`, or `'woff'` where QUL publishes no woff2 (qpc-v4-tajweed page 328). */
   readonly format: MushafFontFormat;
   /** `'p328'`. */
@@ -387,7 +444,33 @@ export type MushafFontFile = {
   readonly cdnUrl: string;
 };
 
-export type GetMushafFontFileOptions = MushafSelection & {readonly page: number};
+/** One of the shared fonts (see `MushafSharedFont`): one file for the whole mushaf. */
+export type MushafSharedFontFile = {
+  readonly kind: 'shared';
+  readonly mushaf: MushafId;
+  readonly font: MushafSharedFont;
+  readonly fontSet?: never;
+  readonly page?: never;
+  readonly format: 'woff2';
+  /** The font's id, `'surah-names-v4'` or `'quran-common'`. */
+  readonly id: MushafSharedFont;
+  /** `'surah_names.woff2'` or `'quran-common.woff2'`: the file's name on QUL's CDN. */
+  readonly fileName: string;
+  /** QUL's CDN URL for the file. */
+  readonly cdnUrl: string;
+};
+
+/** A font file of a mushaf: what a `MushafFontResolver` receives. `kind` says which. */
+export type MushafFontFile = MushafPageFontFile | MushafSharedFontFile;
+
+export type GetMushafFontFileOptions =
+  | (MushafSelection & {readonly page: number; readonly font?: never})
+  | {
+      readonly mushaf?: MushafId | undefined;
+      readonly font: MushafSharedFont;
+      readonly page?: never;
+      readonly theme?: never;
+    };
 
 /**
  * What a fonts package (`@tlawat/mushaf-fonts-qpc-v4`, `@tlawat/mushaf-fonts-qpc-v4-tajweed`)
@@ -409,25 +492,30 @@ export type MushafFontPackage = {
 };
 
 /**
- * Your own URL(s) for a page font. One URL is used as it is; an array is tried in order, each
- * failure falling through to the next (then to `fontFallback`). Called while rendering: must be
- * pure. Build the URL from `file.fileName` (page 328 of the colour set is `.woff`), e.g.
- * `(f) => staticFile('fonts/' + f.fontSet + '/' + f.fileName)`.
+ * Your own URL(s) for a font file. One URL is used as it is; an array is tried in order, each
+ * failure falling through to the next (then to `fontFallback`). For a page font (`file.kind ===
+ * 'page'`) a fonts package may be returned instead: the page is then loaded from the package and
+ * checked against it, which lets one resolver serve pages from a package and the shared fonts
+ * (surah names, juz names) from your own files. Called while rendering: must be pure. Build the URL
+ * from `file.fileName` (page 328 of the colour set is `.woff`), e.g.
+ * `(f) => staticFile('fonts/' + (f.kind === 'page' ? f.fontSet : f.font) + '/' + f.fileName)`.
  */
-export type MushafFontResolver = (file: MushafFontFile) => string | readonly string[];
+export type MushafFontResolver = (file: MushafFontFile) => string | readonly string[] | MushafFontPackage;
 
 /**
- * Where page fonts come from.
+ * Where fonts come from.
  *
  * - `'cdn'` (default): QUL's CDN.
  * - a fonts package (`import fonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed'`): the package only;
- *   the CDN is never contacted. For offline and byte-reproducible renders.
+ *   the CDN is never contacted. For offline and byte-reproducible renders. Page fonts only: a line
+ *   or component that needs a shared font (a surah name, a juz name) refuses it with `BAD_FONT_SRC`;
+ *   use a resolver that returns the package for page files and your own URL for the shared ones.
  * - a `MushafFontResolver`: your own URLs.
  */
 export type MushafFontSrc = 'cdn' | MushafFontPackage | MushafFontResolver;
 
 /**
- * Used when `fontSrc` fails (an outage, a firewall, a timeout): one fonts package, or both — the one
+ * Used when `fontSrc` fails (an outage, a firewall, a timeout): one fonts package, or both  -  the one
  * whose `fontSet` matches the line's theme is used.
  */
 export type MushafFontFallback = MushafFontPackage | readonly MushafFontPackage[];

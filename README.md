@@ -44,27 +44,29 @@ const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
 | `getMushafLine({page, line})`            | One line.                                                                     |
 | `getMushafLocation({surah, ayah})`       | `{page, line}` where an ayah starts.                                          |
 | `<MushafLine line={data} />`             | Renders a line. Waits for the page font behind `delayRender()`.               |
-| `<MushafLine page={10} line={3} />`      | Same, resolving the line at render time.                                      |
+| `<MushafLine page={10} line={3} />`      | Same, resolving the line at render time. Header and basmalah lines render too. |
+| `<MushafSurahName surah={9} />`          | A surah's name in its printed frame, from QUL's surah-name font.               |
+| `<MushafJuzName juz={1} />`              | A juz's name, from QUL's `quran-common` font.                                  |
 | `slideFade()`, `revealRtl()`             | Presentations for `enter` / `exit`. Any DOM presentation from `@remotion/transitions` works too. |
-| `loadPageFont()`, `loadMushafData()`     | Preload a font or the data, e.g. for a `<Player>`.                            |
-| `getMushafFontFile({page, theme})`       | The page font's file name, format and CDN URL, for a `fontSrc` resolver.      |
+| `loadPageFont()`, `loadSharedFont()`, `loadMushafData()` | Preload a font or the data, e.g. for a `<Player>`.                    |
+| `getMushafFontFile({page, theme})`       | A font's file name, format and CDN URL, for a `fontSrc` resolver (`{font}` for the shared fonts). |
 
 Main `<MushafLine>` props: `theme` (`'plain'` follows CSS `color`; `'light'`, `'dark'`, `'sepia'`,
 `'black'`, `'normal'`, `'p1'`–`'p5'` or a custom palette), `slice`, `fit`, `fontSize`, `enter`,
-`exit`, `activeWordId`, `wordStyle`, `fontSrc` (`'cdn'`, a fonts package or your own URLs) and
-`fontFallback` (a fonts package, used when the CDN fails).
+`exit`, `activeWordId`, `wordStyle`, `framed` (header lines), `fontSrc` (`'cdn'`, a fonts package
+or your own URLs) and `fontFallback` (a fonts package, used when the CDN fails).
 
 Full reference: [package README](packages/remotion-mushaf-line-renderer/README.md).
 
 ## Limitations
 
-- Only `ayah` lines render. Surah-name and basmalah lines come back with no words and throw
-  `UNSUPPORTED_LINE_TYPE` in `<MushafLine>`.
 - Only the KFGQPC V4 15-line mushaf.
-- Data (~1.2 MB, once per tab) and fonts (70–115 KB per page) are fetched from QUL's CDN at render
-  time. Pass `data` to use a mirror of the data in `public/`, and a fonts package as `fontFallback`
-  (or `fontSrc`) for the fonts; see
-  [When the CDN fails](packages/remotion-mushaf-line-renderer/README.md#when-the-cdn-fails).
+- Data (~1.2 MB, once per tab) and fonts (70–115 KB per page; 830 KB for the surah-name font) are
+  fetched from QUL's CDN at render time. Pass `data` to use a mirror of the data in `public/`, and a
+  fonts package as `fontFallback` (or `fontSrc`) for the page fonts; see
+  [When the CDN fails](packages/remotion-mushaf-line-renderer/README.md#when-the-cdn-fails). The
+  surah-name and juz fonts are not in the fonts packages: serve them yourself through `fontSrc`, see
+  [Surah names and juz names](packages/remotion-mushaf-line-renderer/README.md#surah-names-and-juz-names).
 
 ## Development
 
@@ -90,6 +92,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the test suites and checks CI runs.
 ## Licence
 
 Code: [MIT](LICENSE). The package ships no data and no fonts. The data is open data from
-[QUL](https://qul.tarteel.ai); the fonts belong to the [King Fahd Complex](https://qurancomplex.gov.sa)
-and are not open source. The two fonts packages redistribute them unmodified, as QUL publishes them;
-see each package's `LICENSE.md` and `NOTICE.md`.
+[QUL](https://qul.tarteel.ai); the fonts (the page fonts, the surah-name font and `quran-common`)
+belong to the [King Fahd Complex](https://qurancomplex.gov.sa) and are not open source. The two
+fonts packages redistribute the page fonts unmodified, as QUL publishes them; see each package's
+`LICENSE.md` and `NOTICE.md`.

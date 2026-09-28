@@ -19,17 +19,22 @@ import {
   lineAyahs,
   lineHeightForFontSize,
   loadPageFont,
+  loadSharedFont,
   MUSHAF_THEME_NAMES,
   MUSHAF_THEMES,
   type MushafDataSource,
   type MushafFontFallback,
+  type MushafFontFile,
   type MushafFontPackage,
   type MushafFontSet,
   type MushafFontSrc,
   type MushafId,
+  MushafJuzName,
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
+  type MushafSharedFont,
+  MushafSurahName,
   type MushafTheme,
   type MushafThemeName,
   type MushafThemeSelection,
@@ -179,6 +184,15 @@ export const packageOnly = <MushafLine line={data} fontSrc={fontsPackage} />;
 export const ownUrls = (
   <MushafLine page={10} line={3} theme="light" fontSrc={(f) => `/fonts/${f.fontSet}/${f.fileName}`} />
 );
+// A resolver may answer a page file with a fonts package, and the shared fonts with a URL.
+export const mixed = (
+  <MushafLine
+    line={data}
+    fontSrc={(f) => (f.kind === 'page' ? fontsPackage : `/fonts/${f.font}/${f.fileName}`)}
+    framed={false}
+  />
+);
+export const fileKinds = (f: MushafFontFile): string => (f.kind === 'page' ? `${f.fontSet}/${f.page}` : f.font);
 // @ts-expect-error a bare URL is not a source: pass () => url
 export const bareUrl = <MushafLine line={data} fontSrc="/p10.woff2" />;
 // @ts-expect-error a fallback is a fonts package, not a URL
@@ -186,6 +200,26 @@ export const urlFallback = <MushafLine line={data} fontFallback="/p10.woff2" />;
 
 // @ts-expect-error wordStyle must return CSS properties
 export const badWordStyle = <MushafLine line={data} wordStyle={() => 'red'} />;
+
+// Surah names and juz names: standalone elements with the line's sizing, animation and font props.
+export const headers = (
+  <>
+    <MushafSurahName surah={9} />
+    <MushafSurahName surah={9} framed={false} fontSize={80} lineHeight={120} enter={slideFade()} name="At-Tawbah" />
+    <MushafSurahName mushaf="qpc-v4" surah={1} style={{top: 0}} className="x" fontFallback={fontsPackage} />
+    <MushafJuzName juz={1} />
+    <MushafJuzName juz={30} variant="opening" exit={{presentation: fade(), timing}} fontSrc="cdn" />
+  </>
+);
+// @ts-expect-error a surah number is required
+export const noSurah = <MushafSurahName />;
+// @ts-expect-error a juz name has two variants
+export const badVariant = <MushafJuzName juz={1} variant="roman" />;
+// @ts-expect-error there are no words to style on a surah name
+export const wordsOnName = <MushafSurahName surah={1} wordStyle={() => ({})} />;
+export const sharedFonts: MushafSharedFont[] = ['surah-names-v4', 'quran-common'];
+// @ts-expect-error a page font set is not a shared font
+export const badShared: MushafSharedFont = 'qpc-v4';
 
 // Data helpers: the selection is optional everywhere, and the two shapes of getMushafLines are exclusive.
 export const helpers = [
@@ -217,7 +251,14 @@ export const helpers = [
   loadPageFont({theme: 'light', page: 10, fontSrc: (f) => `/fonts/${f.fontSet}/${f.fileName}`}).fontFamily,
   loadPageFont({theme: 'light', page: 10, fallback: fontsPackage}).origin(),
   getMushafFontFile({theme: 'light', page: 328}).fileName,
+  getMushafFontFile({font: 'surah-names-v4'}).cdnUrl,
+  loadSharedFont({font: 'quran-common'}).waitUntilDone(),
+  loadSharedFont({mushaf: 'qpc-v4', font: 'surah-names-v4', fontSrc: (f) => f.cdnUrl}).fontFamily,
 ];
+// @ts-expect-error a page font and a shared font are two different questions
+export const bothFiles = getMushafFontFile({font: 'quran-common', page: 1});
+// @ts-expect-error a shared font is loaded by id, not by page
+export const sharedByPage = loadSharedFont({page: 10});
 // @ts-expect-error `url` was removed: use fontSrc
 export const loadWithUrl = loadPageFont({page: 10, url: '/p10.woff2'});
 // @ts-expect-error `fontUrl` was removed from getMushafLines

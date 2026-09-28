@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- **Surah names, the basmalah and juz names**, from the two fonts QUL publishes next to the page
+  fonts: the V4 surah-name font ([QUL resource 237](https://qul.tarteel.ai/resources/font/237))
+  and `quran-common` ([resource 459](https://qul.tarteel.ai/resources/font/459)).
+  - `surah_name` and `basmallah` lines now render through `<MushafLine>` instead of throwing
+    `UNSUPPORTED_LINE_TYPE`: the surah's name inside its printed ornamental frame (spanning the
+    widest line of the mushaf at the line's type size), and the basmalah on the page baseline. The
+    new `framed` prop (default `true`) sets the name alone. Both take the CSS `color`.
+  - New components `<MushafSurahName surah framed?>` and `<MushafJuzName juz variant?>`: the same
+    glyphs standalone, in a block of the line grid, with the line's sizing, animation and font props.
+    `variant` is `'ordinal'` ("the first juz", the default) or `'opening'` (the juz's first words).
+  - The fonts load like page fonts, behind `delayRender()`, from QUL's CDN by default; `fontSrc`
+    resolvers receive them as `MushafFontFile` with `kind: 'shared'` (`font`, `fileName`, `cdnUrl`),
+    and `getMushafFontFile({font})`, `loadSharedFont({font})` describe and warm them. The fonts
+    packages hold page fonts only: a package as `fontSrc` is refused with `BAD_FONT_SRC` where a
+    shared font is needed, and `fontFallback` does not apply to them. A resolver may now return a
+    fonts package for a page file, so one resolver serves pages from a package and the shared fonts
+    from your own URLs.
+  - New errors `UNKNOWN_FONT`, `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE`; new types
+    `MushafSharedFont`, `MushafPageFontFile`, `MushafSharedFontFile`, `MushafSurahNameProps`,
+    `MushafJuzNameProps`, `MushafJuzNameVariant`, `LoadSharedFontOptions`, `LoadedMushafFont`.
+  - `MushafLineData.fontFamily` of a `surah_name` or `basmallah` line is now the surah-name font's
+    family (`mushaf-surah-names-v4`); persisted header lines from 0.4 (which could not render) are
+    refused with `BAD_LINE_DATA` and must be resolved again. `surahNumber` is required on
+    `surah_name` lines.
+- The example project gains a `SurahOpening` composition, and `bun run qul fonts` downloads and
+  checks the two shared fonts into `example/public/fonts/<id>/`.
+
 ## 0.4.1 (2026-09-28)
 
 - No code changes. First version published by the Release workflow, with provenance.

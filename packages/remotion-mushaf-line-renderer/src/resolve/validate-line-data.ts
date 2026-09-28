@@ -47,8 +47,8 @@ export const assertLineData = (value: unknown): MushafLineData => {
   if (!LINE_TYPES.includes(data.type as MushafLineType))
     fail('type', `expected one of ${LINE_TYPES.join(', ')}`, data.type);
   if (typeof data.centered !== 'boolean') fail('centered', 'expected a boolean', data.centered);
-  if (data.fontFamily !== fontSet.fontFamily(page))
-    fail('fontFamily', `expected "${fontSet.fontFamily(page)}"`, data.fontFamily);
+  const expectedFamily = data.type === 'ayah' ? fontSet.fontFamily(page) : def.sharedFonts.surahNames.fontFamily;
+  if (data.fontFamily !== expectedFamily) fail('fontFamily', `expected "${expectedFamily}"`, data.fontFamily);
   if (data.fontUrl !== undefined)
     fail(
       'fontUrl',
@@ -58,6 +58,8 @@ export const assertLineData = (value: unknown): MushafLineData => {
   if (data.slice !== undefined) assertSlice('MushafLineData.slice', data.slice);
   if (data.surahNumber !== undefined && (!isPositiveInteger(data.surahNumber) || data.surahNumber > 114))
     fail('surahNumber', 'expected an integer from 1 to 114 when present', data.surahNumber);
+  if (data.type === 'surah_name' && data.surahNumber === undefined)
+    fail('surahNumber', 'expected the surah number on a surah_name line');
   if (!Array.isArray(data.words)) fail('words', 'expected an array', data.words);
   const words = data.words as unknown[];
   words.forEach((w, i) => {

@@ -26,7 +26,8 @@ const remotionMock = {
 };
 vi.mock('remotion', () => remotionMock);
 
-const {loadPageFont, resetFallbackWarnings} = await import('../../src/fonts/load-page-font');
+const {loadPageFont, loadSharedFont, resetFallbackWarnings} = await import('../../src/fonts/load-page-font');
+const {getMushafFontFile} = await import('../../src/fonts/font-file');
 const {assertFontMagic} = await import('../../src/fonts/font-magic');
 const {getFontStepBudget} = await import('../../src/fetch-budget');
 const {resetFontSourceWarnings} = await import('../../src/fonts/font-source');
@@ -386,12 +387,12 @@ describe('getFontStepBudget', () => {
 describe('assertFontMagic', () => {
   it('accepts woff2/woff/ttf/otf and rejects anything else with a preview', () => {
     for (const tag of ['wOF2', 'wOFF', 'OTTO', 'true'])
-      expect(() => assertFontMagic(new TextEncoder().encode(`${tag}xxxx`).buffer, 'u', 'm', 1)).not.toThrow();
-    expect(() => assertFontMagic(TTF, 'u', 'm', 1)).not.toThrow();
-    expect(() => assertFontMagic(HTML, 'https://x/p1.woff2', 'qpc-v4', 1)).toThrow(
+      expect(() => assertFontMagic(new TextEncoder().encode(`${tag}xxxx`).buffer, 'u', 'm')).not.toThrow();
+    expect(() => assertFontMagic(TTF, 'u', 'm')).not.toThrow();
+    expect(() => assertFontMagic(HTML, 'https://x/p1.woff2', 'qpc-v4 page 1')).toThrow(
       /not a font file \(33 bytes, starts with "<!DOCTYPE html><"\)\. It looks like an HTML page/,
     );
-    expect(() => assertFontMagic(new ArrayBuffer(2), 'u', 'm', 1)).toThrow(/2 bytes/);
+    expect(() => assertFontMagic(new ArrayBuffer(2), 'u', 'm')).toThrow(/2 bytes/);
   });
 });
 
@@ -571,5 +572,169 @@ describe('fonts packages: fontSrc and fallback', () => {
     // Two CDN attempts of 9.75 s and a backoff, then the package: well inside the 28 s handle timeout.
     expect(packageAt).toBe(20_000);
     delete (window as unknown as {remotion_puppeteerTimeout?: number}).remotion_puppeteerTimeout;
+  });
+});
+
+describe('loadSharedFont', () => {
+  const SURAH_NAMES = 'https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.woff2';
+  const COMMON = 'https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2';
+
+  it("loads each shared font once from QUL's CDN, with its own metrics pinned", async () => {
+    const names = loadSharedFont({font: 'surah-names-v4'});
+    const again = loadSharedFont({mushaf: 'qpc-v4', font: 'surah-names-v4'});
+    const common = loadSharedFont({font: 'quran-common'});
+    expect(names.fontFamily).toBe('mushaf-surah-names-v4');
+    expect(again.fontFamily).toBe(names.fontFamily);
+    expect(common.fontFamily).toBe('mushaf-quran-common');
+    await Promise.all([names.waitUntilDone(), again.waitUntilDone(), common.waitUntilDone()]);
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([SURAH_NAMES, COMMON]);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({mode: 'cors', credentials: 'omit'});
+    expect(faces.map((f) => f.family)).toEqual(['mushaf-surah-names-v4', 'mushaf-quran-common']);
+    // The surah-name font carries the page fonts' metrics; quran-common its own (1024 units per em).
+    expect(faces[0]?.descriptors).toMatchObject({ascentOverride: '157.6%', descentOverride: '100.8%'});
+    expect(faces[1]?.descriptors).toMatchObject({ascentOverride: '79.98046875%', descentOverride: '20.01953125%'});
+    expect(getFontStatus('surah-names-v4#cdn')).toBe('loaded');
+    expect(getFontStatus('quran-common#cdn')).toBe('loaded');
+    expect(names.origin()).toBe('cdn');
+    expect(remotionMock.delayRender.mock.calls[0]?.[0]).toBe(
+      `Loading mushaf font mushaf-surah-names-v4 from QUL's CDN (${SURAH_NAMES})`,
+    );
+  });
+
+  it('names the font in every failure', async () => {
+    fetchMock.mockResolvedValue(response(404, new ArrayBuffer(0)));
+    await expect(loadSharedFont({font: 'quran-common'}).waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_HTTP',
+      message: `HTTP 404 for mushaf font quran-common at ${COMMON}.`,
+      details: {font: 'quran-common', status: 404},
+    });
+    resetFontStore();
+    fetchMock.mockResolvedValue(response(200, HTML));
+    await expect(loadSharedFont({font: 'surah-names-v4'}).waitUntilDone()).rejects.toMatchObject({
+      code: 'FONT_INVALID',
+      message: expect.stringContaining('The response for mushaf font surah-names-v4 at'),
+    });
+  });
+
+  it('takes a resolver, refuses a fonts package as the source, and ignores one as the fallback', async () => {
+    const pkg = {
+      kind: 'remotion-mushaf-fonts' as const,
+      schema: 1 as const,
+      name: '@tlawat/mushaf-fonts-qpc-v4',
+      version: '1.20260912.0',
+      mushaf: 'qpc-v4' as const,
+      fontSet: 'qpc-v4' as const,
+      snapshot: '2026-09-12',
+      files: {},
+    };
+    const seen: unknown[] = [];
+    const font = loadSharedFont({
+      font: 'quran-common',
+      fontSrc: (file) => {
+        seen.push(file);
+        return `/fonts/${file.id}/${file.fileName}`;
+      },
+      fallback: pkg,
+    });
+    expect(font.fontFamily).toMatch(/^mushaf-quran-common-[0-9a-z]+$/);
+    await font.waitUntilDone();
+    expect(seen).toEqual([
+      {
+        kind: 'shared',
+        mushaf: 'qpc-v4',
+        font: 'quran-common',
+        format: 'woff2',
+        id: 'quran-common',
+        fileName: 'quran-common.woff2',
+        cdnUrl: COMMON,
+      },
+    ]);
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/fonts/quran-common/quran-common.woff2']);
+    expect(font.origin()).toBe('custom');
+    expect(() => loadSharedFont({font: 'surah-names-v4', fontSrc: pkg})).toThrow(
+      expect.objectContaining({
+        code: 'BAD_FONT_SRC',
+        message: expect.stringMatching(
+          /fontSrc: @tlawat\/mushaf-fonts-qpc-v4 holds page fonts only, and mushaf font surah-names-v4 \(surah_names\.woff2\) is not a page font\. Use 'cdn', or a resolver/,
+        ),
+      }),
+    );
+    expect(() => loadSharedFont({font: 'surah-names-v4', fontSrc: () => pkg})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_SRC', message: expect.stringContaining('fontSrc (the resolver)')}),
+    );
+    expect(() => loadSharedFont({font: 'nope' as never})).toThrow(
+      expect.objectContaining({
+        code: 'UNKNOWN_FONT',
+        message: 'font must be one of \'surah-names-v4\', \'quran-common\' for "qpc-v4", got "nope".',
+      }),
+    );
+    // A fallback that is not a package is still refused, even though no package applies.
+    expect(() => loadSharedFont({font: 'quran-common', fallback: 'x' as never})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_FALLBACK'}),
+    );
+  });
+
+  it('lets a resolver return a fonts package for a page font, and serve the shared fonts itself', async () => {
+    const bytes = WOFF2;
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join('');
+    const pkg = {
+      kind: 'remotion-mushaf-fonts' as const,
+      schema: 1 as const,
+      name: '@tlawat/mushaf-fonts-qpc-v4',
+      version: '1.20260912.0',
+      mushaf: 'qpc-v4' as const,
+      fontSet: 'qpc-v4' as const,
+      snapshot: '2026-09-12',
+      files: {10: {url: '/pkg/p10.woff2', bytes: bytes.byteLength, sha256: digest}},
+    };
+    const fontSrc = (file: import('../../src/types').MushafFontFile) =>
+      file.kind === 'page' ? pkg : `/fonts/${file.font}/${file.fileName}`;
+    const page = loadPageFont({page: 10, fontSrc});
+    const shared = loadSharedFont({font: 'surah-names-v4', fontSrc});
+    await Promise.all([page.waitUntilDone(), shared.waitUntilDone()]);
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      '/pkg/p10.woff2',
+      '/fonts/surah-names-v4/surah_names.woff2',
+    ]);
+    expect(page.origin()).toBe('package');
+    expect(shared.origin()).toBe('custom');
+    // The same key as the package passed directly: one face for both spellings.
+    expect(page.fontFamily).toBe(loadPageFont({page: 10, fontSrc: pkg}).fontFamily);
+    expect(getFontStatus('qpc-v4/10#pkg:@tlawat/mushaf-fonts-qpc-v4@1.20260912.0')).toBe('loaded');
+    // The wrong set through a resolver is caught the same way.
+    expect(() => loadPageFont({theme: 'light', page: 10, fontSrc: () => pkg})).toThrow(
+      expect.objectContaining({code: 'BAD_FONT_SRC', message: expect.stringContaining('holds the qpc-v4 fonts')}),
+    );
+  });
+});
+
+describe('getMushafFontFile', () => {
+  it('describes page fonts and shared fonts', () => {
+    expect(getMushafFontFile({theme: 'light', page: 328})).toEqual({
+      kind: 'page',
+      mushaf: 'qpc-v4',
+      fontSet: 'qpc-v4-tajweed',
+      page: 328,
+      format: 'woff',
+      id: 'p328',
+      fileName: 'p328.woff',
+      cdnUrl: 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff/p328.woff?v=3.1',
+    });
+    expect(getMushafFontFile({font: 'surah-names-v4'})).toEqual({
+      kind: 'shared',
+      mushaf: 'qpc-v4',
+      font: 'surah-names-v4',
+      format: 'woff2',
+      id: 'surah-names-v4',
+      fileName: 'surah_names.woff2',
+      cdnUrl: 'https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.woff2',
+    });
+    expect(getMushafFontFile({mushaf: 'qpc-v4', font: 'quran-common'}).cdnUrl).toBe(
+      'https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2',
+    );
+    expect(() => getMushafFontFile({font: 'other' as never})).toThrow(expect.objectContaining({code: 'UNKNOWN_FONT'}));
+    expect(() => getMushafFontFile({font: 'quran-common', page: 1} as never)).toThrow(/not both/);
   });
 });

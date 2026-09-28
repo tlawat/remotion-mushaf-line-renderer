@@ -16,8 +16,11 @@ export const sniffFont = (bytes: ArrayBuffer): string | null => {
   return MAGIC.find(([tag]) => tag === head)?.[1] ?? null;
 };
 
-/** Throws FONT_INVALID when a response is not a font file (an HTML error page, an empty body). */
-export const assertFontMagic = (bytes: ArrayBuffer, url: string, fontSet: string, page: number): void => {
+/**
+ * Throws FONT_INVALID when a response is not a font file (an HTML error page, an empty body).
+ * `label` names the font in the message: `qpc-v4 page 10`, `surah-names-v4`.
+ */
+export const assertFontMagic = (bytes: ArrayBuffer, url: string, label: string): void => {
   if (sniffFont(bytes) !== null) return;
   const b = new Uint8Array(bytes);
   const preview = new TextDecoder('utf-8', {fatal: false}).decode(b.slice(0, 16)).replace(/[^\x20-\x7e]/g, '.');
@@ -26,7 +29,7 @@ export const assertFontMagic = (bytes: ArrayBuffer, url: string, fontSet: string
     : '';
   throw new MushafError(
     'FONT_INVALID',
-    `The response for mushaf font ${fontSet} page ${page} at ${url} is not a font file (${b.length} bytes, starts with "${preview}").${html}`,
-    {url, page, bytes: b.length},
+    `The response for mushaf font ${label} at ${url} is not a font file (${b.length} bytes, starts with "${preview}").${html}`,
+    {url, font: label, bytes: b.length},
   );
 };

@@ -3,8 +3,10 @@ import type {
   MushafColorPart,
   MushafFontSet,
   MushafId,
+  MushafJuzNameVariant,
   MushafMetrics,
   MushafSelection,
+  MushafSharedFont,
   MushafThemeSelection,
 } from '../types';
 import {type ResolvedTheme, resolveTheme} from './themes';
@@ -74,6 +76,61 @@ export type FontSetDefinition = {
   readonly cdnUrl: (page: number) => string;
 };
 
+/** Vertical metrics a font face is registered with (`ascentOverride` / `descentOverride`). */
+export type FontMetrics = {
+  readonly unitsPerEm: number;
+  readonly ascent: number;
+  /** Negative, as in the font's hhea table. */
+  readonly descent: number;
+};
+
+/**
+ * A font that is not per page: one file for the whole mushaf. QUL publishes two for the V4 print,
+ * the surah-name font (QUL resource 237: the 114 names and the basmalah) and `quran-common` (QUL
+ * resource 459: the 30 juz names, the ornamental surah-header frame and a few icons). Neither ships
+ * in the fonts packages; they are fetched from QUL's CDN, or from the URLs a `fontSrc` resolver gives.
+ */
+export type SharedFontDefinition = {
+  readonly id: MushafSharedFont;
+  /** QUL's title for the font, for messages. */
+  readonly name: string;
+  /** The QUL resource page the font is published on. */
+  readonly qulResource: string;
+  /** The family under the default source (`fontSrc: 'cdn'`); other sources add a suffix. */
+  readonly fontFamily: string;
+  readonly format: 'woff2';
+  /** The file's name on QUL's CDN (`surah_names.woff2`, `quran-common.woff2`). */
+  readonly fileName: string;
+  readonly cdnUrl: string;
+  /** The face is registered with these pinned, so a glyph sits at the same place on every platform. */
+  readonly metrics: FontMetrics;
+};
+
+/**
+ * One thing drawn from a shared font: the text to set, the font it lives in, and where its ink sits
+ * relative to the baseline, so the renderer can centre it in a box. `bandCenter` is the middle of
+ * the glyph's vertical extent in font units above the baseline (the median over a family of glyphs,
+ * so every surah name, or every juz name, shares one baseline).
+ */
+export type MushafGlyph = {
+  readonly font: 'surahNames' | 'common';
+  readonly text: string;
+  readonly bandCenter: number;
+  /** For messages and DOM hooks: `surah-name`, `basmalah`, `juz-name`, `frame`. */
+  readonly kind: 'surah-name' | 'basmalah' | 'juz-name' | 'frame';
+};
+
+export type MushafGlyphs = {
+  /** The name of surah 1-114, as printed above its first ayah. */
+  readonly surahName: (surah: number) => MushafGlyph;
+  /** The basmalah as printed under a surah header (set on the page baseline like a line of text). */
+  readonly basmalah: MushafGlyph;
+  /** The name of juz 1-30: `'ordinal'` is "the first juz", `'opening'` its first words ("Alif Lam Mim" for juz 1). */
+  readonly juzName: (juz: number, variant: MushafJuzNameVariant) => MushafGlyph;
+  /** The ornamental frame a surah name is printed in; `advance` is its width in font units. */
+  readonly headerFrame: MushafGlyph & {readonly advance: number};
+};
+
 export type MushafDefinition = {
   readonly id: MushafId;
   readonly name: string;
@@ -89,6 +146,13 @@ export type MushafDefinition = {
     /** The COLR/CPAL colour font: every other theme. */
     readonly color: FontSetDefinition;
   };
+  readonly sharedFonts: {
+    /** QUL's V4 surah-name font: the 114 surah names and the basmalah. */
+    readonly surahNames: SharedFontDefinition;
+    /** QUL's `quran-common` font: the juz names and the surah-header frame. */
+    readonly common: SharedFontDefinition;
+  };
+  readonly glyphs: MushafGlyphs;
   readonly metrics: MushafMetrics;
   readonly invariants: {
     readonly lines: number;
@@ -100,7 +164,8 @@ export type MushafDefinition = {
   };
 };
 
-const CDN = 'https://static-cdn.tarteel.ai/qul/fonts/quran_fonts';
+const QUL_FONTS = 'https://static-cdn.tarteel.ai/qul/fonts';
+const CDN = `${QUL_FONTS}/quran_fonts`;
 
 /**
  * Gaps on QUL's CDN found by `scripts/qul.mjs etags` (recorded in scripts/cdn-etags.json):
@@ -113,7 +178,7 @@ export const CDN_FORMAT_EXCEPTIONS: Readonly<Record<string, Readonly<Record<numb
 /**
  * The V4 colour font's sixteen CPAL entries (read from its CPAL table; the COLR layer counts of the
  * fixture fonts and QUL's own palette rules say what each paints): 0 and 14 the letters, 1, 2 and 15
- * the greys of silent letters, 3–9 the seven tajweed rule colours, and 10–13 the ayah rosette: 10
+ * the greys of silent letters, 3-9 the seven tajweed rule colours, and 10-13 the ayah rosette: 10
  * the jewel, 11 the petals, 12 the disc, 13 the frame, curls and the number inside it.
  *
  * 13 is its own part because the font paints it in the letter colour (black in palettes 0 and 3,
@@ -157,6 +222,101 @@ const v4FontSet = (id: MushafFontSet, dir: 'v4' | 'v4-tajweed', colr: boolean): 
   },
 });
 
+/**
+ * The two shared fonts of the V4 print, as QUL publishes them. The surah-name font carries the page
+ * fonts' own vertical metrics (2500 units per em, ascent 3940, descent -2520), so a glyph of it set
+ * at the page's type size sits on the page's baseline; `quran-common` is a 1024-unit font with its
+ * own metrics. It is an OpenType-SVG font with a CPAL table and no COLR table: Chromium (and so every
+ * Remotion render) draws its outlines in the CSS `color`; Firefox and Safari paint the SVG colours.
+ */
+const V4_SHARED_FONTS: MushafDefinition['sharedFonts'] = {
+  surahNames: {
+    id: 'surah-names-v4',
+    name: 'V4 Surah Name Color Font',
+    qulResource: 'https://qul.tarteel.ai/resources/font/237',
+    fontFamily: 'mushaf-surah-names-v4',
+    format: 'woff2',
+    fileName: 'surah_names.woff2',
+    cdnUrl: `${QUL_FONTS}/surah_names_v4/surah_names.woff2`,
+    metrics: {unitsPerEm: 2500, ascent: 3940, descent: -2520},
+  },
+  common: {
+    id: 'quran-common',
+    name: 'Juz name font (quran-common)',
+    qulResource: 'https://qul.tarteel.ai/resources/font/459',
+    fontFamily: 'mushaf-quran-common',
+    format: 'woff2',
+    fileName: 'quran-common.woff2',
+    cdnUrl: `${QUL_FONTS}/common/quran-common.woff2`,
+    metrics: {unitsPerEm: 1024, ascent: 819, descent: -205},
+  },
+};
+
+/**
+ * The surah-name font maps the 114 names to code points in the Arabic Presentation Forms-A block,
+ * with gaps: U+FC45-U+FC64 for surahs 1-21 and U+FB51-U+FBEB for 22-114, in surah order within each
+ * range (read from the font's cmap; a unit test checks the mirrored file against this table).
+ */
+const V4_SURAH_NAME_GLYPHS =
+  '\uFC45\uFC46\uFC47\uFC4A\uFC4B\uFC4E\uFC4F\uFC51\uFC52\uFC53\uFC55\uFC56\uFC58\uFC5A\uFC5B\uFC5C\uFC5D\uFC5E\uFC61\uFC62\uFC64' +
+  '\uFB51\uFB52\uFB54\uFB55\uFB57\uFB58\uFB5A\uFB5B\uFB5D\uFB5E\uFB60\uFB61\uFB63\uFB64\uFB66\uFB67\uFB69\uFB6A\uFB6C\uFB6D' +
+  '\uFB6F\uFB70\uFB72\uFB73\uFB75\uFB76\uFB78\uFB79\uFB7B\uFB7C\uFB7E\uFB7F\uFB81\uFB82\uFB84\uFB85\uFB87\uFB88\uFB8A\uFB8B' +
+  '\uFB8D\uFB8E\uFB90\uFB91\uFB93\uFB94\uFB96\uFB97\uFB99\uFB9A\uFB9C\uFB9D\uFB9F\uFBA0\uFBA2\uFBA3\uFBA5\uFBA6\uFBA8\uFBA9' +
+  '\uFBAB\uFBAC\uFBAE\uFBAF\uFBB1\uFBB2\uFBB4\uFBB5\uFBB7\uFBB8\uFBBA\uFBBB\uFBBD\uFBBE\uFBC0\uFBC1\uFBD3\uFBD4\uFBD6\uFBD7' +
+  '\uFBD9\uFBDA\uFBDC\uFBDD\uFBDF\uFBE0\uFBE2\uFBE3\uFBE5\uFBE6\uFBE8\uFBE9\uFBEB';
+
+export const SURAH_COUNT = 114;
+export const JUZ_COUNT = 30;
+
+export const assertSurahNumber = (surah: unknown): number => {
+  if (typeof surah !== 'number' || !Number.isInteger(surah) || surah < 1 || surah > SURAH_COUNT) {
+    throw new MushafError(
+      'SURAH_OUT_OF_RANGE',
+      `surah must be an integer from 1 to ${SURAH_COUNT}, got ${describeValue(surah)}.`,
+      {surah},
+    );
+  }
+  return surah;
+};
+
+export const assertJuzNumber = (juz: unknown): number => {
+  if (typeof juz !== 'number' || !Number.isInteger(juz) || juz < 1 || juz > JUZ_COUNT) {
+    throw new MushafError(
+      'JUZ_OUT_OF_RANGE',
+      `juz must be an integer from 1 to ${JUZ_COUNT}, got ${describeValue(juz)}.`,
+      {
+        juz,
+      },
+    );
+  }
+  return juz;
+};
+
+/**
+ * Where each kind of glyph sits: the middle of its vertical extent, in font units above the baseline,
+ * as the median over its family of glyphs in the fonts as published (surah names -987..1843, juz
+ * names -334..725, their opening words -290..1098, the frame -188..828). The basmalah is set on the
+ * page baseline like a line of text, so its band is not used.
+ */
+const V4_GLYPHS: MushafGlyphs = {
+  surahName: (surah) => ({
+    font: 'surahNames',
+    kind: 'surah-name',
+    text: V4_SURAH_NAME_GLYPHS[assertSurahNumber(surah) - 1] as string,
+    bandCenter: 449,
+  }),
+  // The four glyphs QUL sets the basmalah with (bismi llahi r-rahmani r-rahim with its long kashida), in visual order.
+  basmalah: {font: 'surahNames', kind: 'basmalah', text: '\uFCAA\uFCAB\uFCAE\uFCB4', bandCenter: 1418},
+  // quran-common reaches them through `liga` ("juz001", "j001"); the ligature glyphs are addressed
+  // directly so the text never depends on a shaping feature being on.
+  juzName: (juz, variant) =>
+    variant === 'opening'
+      ? {font: 'common', kind: 'juz-name', text: String.fromCodePoint(0xe8ff + assertJuzNumber(juz)), bandCenter: 397}
+      : {font: 'common', kind: 'juz-name', text: String.fromCodePoint(0xe000 + assertJuzNumber(juz)), bandCenter: 192},
+  // The `header` ligature: an ornamental frame 8,240 units wide with the name's box in the middle.
+  headerFrame: {font: 'common', kind: 'frame', text: '\uE000', bandCenter: 320, advance: 8240},
+};
+
 /** Internal registry. Adding a mushaf is one row here plus one dataset descriptor. */
 export const MUSHAFS = {
   'qpc-v4': {
@@ -171,6 +331,8 @@ export const MUSHAFS = {
       plain: v4FontSet('qpc-v4', 'v4', false),
       color: v4FontSet('qpc-v4-tajweed', 'v4-tajweed', true),
     },
+    sharedFonts: V4_SHARED_FONTS,
+    glyphs: V4_GLYPHS,
     metrics: {unitsPerEm: 2500, ascent: 3940, descent: -2520, referenceLineWidth: 42501},
     invariants: {
       lines: 9046,
@@ -204,13 +366,32 @@ export const getMushafDefinition = (id: unknown): MushafDefinition => {
   return MUSHAFS[id];
 };
 
-/** The mushaf's font metrics — what `fontSizeForWidth()` divides by. */
+/** The mushaf's font metrics  -  what `fontSizeForWidth()` divides by. */
 export const getMushafMetrics = (mushaf?: MushafId): MushafMetrics =>
   getMushafDefinition(mushaf ?? DEFAULT_MUSHAF).metrics;
 
 /** The font set by its id, for data that names one. */
 export const fontSetById = (def: MushafDefinition, id: unknown): FontSetDefinition | undefined =>
   [def.fontSets.plain, def.fontSets.color].find((set) => set.id === id);
+
+export const SHARED_FONT_IDS: readonly MushafSharedFont[] = ['surah-names-v4', 'quran-common'];
+
+/** A shared font by its public id, or a loud error naming the two there are. */
+export const getSharedFont = (def: MushafDefinition, id: unknown): SharedFontDefinition => {
+  const font = [def.sharedFonts.surahNames, def.sharedFonts.common].find((f) => f.id === id);
+  if (!font) {
+    throw new MushafError(
+      'UNKNOWN_FONT',
+      `font must be one of ${SHARED_FONT_IDS.map((f) => `'${f}'`).join(', ')} for "${def.id}", got ${describeValue(id)}.`,
+      {mushaf: def.id, font: id},
+    );
+  }
+  return font;
+};
+
+/** The shared font a glyph is drawn from. */
+export const fontOfGlyph = (def: MushafDefinition, glyph: MushafGlyph): SharedFontDefinition =>
+  def.sharedFonts[glyph.font];
 
 /** A selection with every default filled in and every value checked. */
 export type ResolvedSelection = {

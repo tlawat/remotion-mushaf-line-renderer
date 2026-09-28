@@ -7,7 +7,9 @@ export {slideFade, slideFadeStyle} from './animation/presentations/slide-fade';
 export type {MushafSpringTimingOptions, MushafTimingOptions} from './animation/timings';
 // Animation
 export {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from './animation/timings';
+export {MushafJuzName} from './component/JuzName';
 export {MushafLine} from './component/MushafLine';
+export {MushafSurahName} from './component/SurahName';
 // Sizing
 export {fontSizeForWidth, lineHeightForFontSize} from './component/styles';
 // Data
@@ -17,7 +19,7 @@ export type {MushafErrorCode} from './errors';
 export {isMushafError, MushafError} from './errors';
 // Fonts
 export {getMushafFontFile} from './fonts/font-file';
-export {loadPageFont} from './fonts/load-page-font';
+export {loadPageFont, loadSharedFont} from './fonts/load-page-font';
 export {getMushafMetrics, MUSHAF_IDS} from './mushaf/registry';
 // Themes
 export {MUSHAF_THEME_NAMES, MUSHAF_THEMES} from './mushaf/themes';
@@ -31,9 +33,11 @@ export type {
   GetMushafLineOptions,
   GetMushafLinesOptions,
   GetMushafLocationOptions,
+  LoadedMushafFont,
   LoadedPageFont,
   LoadMushafDataOptions,
   LoadPageFontOptions,
+  LoadSharedFontOptions,
   MushafColorPart,
   MushafDataSource,
   MushafFontFallback,
@@ -44,7 +48,10 @@ export type {
   MushafFontResolver,
   MushafFontSet,
   MushafFontSrc,
+  MushafGlyphCommonProps,
   MushafId,
+  MushafJuzNameProps,
+  MushafJuzNameVariant,
   MushafLineAnimation,
   MushafLineAnimationProp,
   MushafLineCommonProps,
@@ -53,8 +60,12 @@ export type {
   MushafLineType,
   MushafLocation,
   MushafMetrics,
+  MushafPageFontFile,
   MushafSelection,
+  MushafSharedFont,
+  MushafSharedFontFile,
   MushafSlice,
+  MushafSurahNameProps,
   MushafTheme,
   MushafThemeColors,
   MushafThemeName,

@@ -242,18 +242,7 @@ describe('<MushafLine>', () => {
     expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'FONT_HTTP'});
   });
 
-  it('rejects non-ayah lines and bad props loudly', async () => {
-    const header = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 1});
-    const onError = vi.fn();
-    render(
-      <Boundary onError={onError}>
-        <MushafLine line={header} />
-      </Boundary>,
-    );
-    expect(onError.mock.calls[0]?.[0]).toMatchObject({
-      code: 'UNSUPPORTED_LINE_TYPE',
-      message: expect.stringContaining('is a "surah_name" line'),
-    });
+  it('rejects bad props loudly', async () => {
     const onError2 = vi.fn();
     render(
       <Boundary onError={onError2}>

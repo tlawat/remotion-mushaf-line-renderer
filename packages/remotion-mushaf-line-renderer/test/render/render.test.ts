@@ -20,6 +20,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(here, '../../../../example');
 const FIXTURE_FONT = 'fonts/qpc-v4-tajweed/p10.ttf';
 const hasFixtureFont = existsSync(path.join(exampleDir, 'public', FIXTURE_FONT));
+/** The shared fonts (surah names, quran-common), mirrored by `bun run qul fonts` into public/fonts/<id>/. */
+const SHARED_FONTS_DIR = 'fonts';
+const hasSharedFonts = existsSync(
+  path.join(exampleDir, 'public', SHARED_FONTS_DIR, 'surah-names-v4/surah_names.woff2'),
+);
 /** The example's mirror of QUL's two exports (`bun run qul data`), served like any public file. */
 const MIRROR = {words: 'data/qpc-v4/words.json.zip', layout: 'data/qpc-v4/layout.db.zip'};
 const hasMirror =
@@ -89,6 +94,12 @@ type HarnessProps = {
   fontFile: string | null;
   fontUrl: string | null;
   fontPackages: 'none' | 'fallback' | 'source';
+  sharedFontsUrl: string | null;
+  sharedFontsDir: string | null;
+  surahName: number | null;
+  framed: boolean;
+  juz: number | null;
+  juzVariant: 'ordinal' | 'opening';
   fontSize: number | null;
   lineHeight: number | null;
   activeWordId: string | number | null;
@@ -117,6 +128,12 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   fontFile: FIXTURE_FONT,
   fontUrl: null,
   fontPackages: 'none',
+  sharedFontsUrl: null,
+  sharedFontsDir: null,
+  surahName: null,
+  framed: true,
+  juz: null,
+  juzVariant: 'ordinal',
   fontSize: null,
   lineHeight: null,
   activeWordId: null,
@@ -326,6 +343,79 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     expect(sliced.equals(await still(serveUrl, harnessProps({lines: [line]})))).toBe(false);
     // Carried by the data, the slice paints the same.
     expect(sliced.equals(await still(serveUrl, harnessProps({lines: [{...line, slice: {ayah: 4}}]})))).toBe(true);
+  });
+
+  describe.skipIf(!hasSharedFonts)('surah names and juz names', () => {
+    const shared = {sharedFontsDir: SHARED_FONTS_DIR};
+
+    it('renders a header line, a basmalah and the juz names deterministically, each its own picture', async () => {
+      const header = harnessProps({lines: [syntheticLine(2, 1)], ...shared});
+      const a = await still(serveUrl, header);
+      expect(a.equals(await still(serveUrl, header))).toBe(true);
+      const blank = await still(serveUrl, harnessProps({lines: []}));
+      expect(a.equals(blank)).toBe(false);
+      writeFileSync(path.join(here, 'surah-header.png'), a);
+      // The name alone is another picture; so is the basmalah; so are the two names of a juz.
+      const plain = await still(serveUrl, harnessProps({lines: [syntheticLine(2, 1)], framed: false, ...shared}));
+      expect(plain.equals(a)).toBe(false);
+      expect(plain.equals(blank)).toBe(false);
+      const basmalah = await still(serveUrl, harnessProps({lines: [syntheticLine(2, 2)], ...shared}));
+      expect(basmalah.equals(blank)).toBe(false);
+      expect(basmalah.equals(plain)).toBe(false);
+      const ordinal = await still(serveUrl, harnessProps({lines: [], juz: 1, ...shared}));
+      const opening = await still(serveUrl, harnessProps({lines: [], juz: 1, juzVariant: 'opening', ...shared}));
+      expect(ordinal.equals(blank)).toBe(false);
+      expect(ordinal.equals(opening)).toBe(false);
+      expect(ordinal.equals(await still(serveUrl, harnessProps({lines: [], juz: 1, ...shared})))).toBe(true);
+      writeFileSync(path.join(here, 'juz-1.png'), ordinal);
+      // A standalone surah name paints the same as the header line of that surah.
+      const standalone = await still(serveUrl, harnessProps({lines: [], surahName: 2, ...shared}));
+      expect(standalone.equals(a)).toBe(true);
+    });
+
+    it('a whole page, header and basmalah included, settles after its entrance', async () => {
+      const inputProps = harnessProps({
+        lines: [syntheticLine(2, 1), syntheticLine(2, 2), syntheticLine(2, 3)],
+        enter: 'fade',
+        enterFrames: 10,
+        ...shared,
+      });
+      const composition = await selectComposition({serveUrl, id: 'LineHarness', inputProps, ...renderer});
+      const outputDir = path.join(workDir, 'page');
+      await renderFrames({
+        composition,
+        serveUrl,
+        inputProps,
+        imageFormat: 'png',
+        outputDir,
+        frameRange: [0, 12],
+        concurrency: 2,
+        onStart: () => undefined,
+        onFrameUpdate: () => undefined,
+        ...renderer,
+      });
+      const frames = readdirSync(outputDir)
+        .filter((f) => f.endsWith('.png'))
+        .sort((x, y) => Number(x.match(/\d+/)?.[0]) - Number(y.match(/\d+/)?.[0]))
+        .map((f) => readFileSync(path.join(outputDir, f)));
+      expect(frames).toHaveLength(13);
+      expect(frames[0]!.equals(await still(serveUrl, harnessProps({lines: []})))).toBe(true);
+      expect(frames[5]!.equals(frames[10]!)).toBe(false);
+      const settled = await still(
+        serveUrl,
+        harnessProps({lines: [syntheticLine(2, 1), syntheticLine(2, 2), syntheticLine(2, 3)], ...shared}),
+      );
+      expect(frames[10]!.equals(settled)).toBe(true);
+      expect(frames[12]!.equals(settled)).toBe(true);
+    });
+
+    it('a missing shared font fails the render fast, naming it', async () => {
+      const started = Date.now();
+      await expect(
+        still(serveUrl, harnessProps({lines: [syntheticLine(2, 1)], sharedFontsDir: 'missing'})),
+      ).rejects.toThrow(/FONT_HTTP|404/);
+      expect(Date.now() - started).toBeLessThan(25_000);
+    });
   });
 
   it('a missing font fails the render fast with FONT_HTTP', async () => {

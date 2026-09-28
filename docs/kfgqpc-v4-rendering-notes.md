@@ -36,7 +36,7 @@ Base: `https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/`
 | `v4-tajweed/woff/p{N}.woff` | 200 | fallback |
 | `v4/ttf/p{N}.ttf`, `v4/woff2/p{N}.woff2` | 200 | Plain black variant, no COLR (~half the size). |
 | `v4-tajweed/otf/…` | 404 | |
-| `surah-name-v4.ttf` (any guessed path) | 404 | Surah-name / basmalah / juz fonts are **not on this CDN path** — bundle them (see §6). |
+| `../surah_names_v4/surah_names.woff2`, `../common/quran-common.woff2` | 200 | The surah-name and juz fonts live next to `quran_fonts/`, not under it (see §6). |
 
 Headers observed:
 - `access-control-allow-origin: *` on both ttf and woff2 → cross-origin `@font-face` works.
@@ -200,20 +200,31 @@ Pipeline: `fontTools` → SVG path per word → compose lines by advance width.
 
 ## 6. Headers, basmalah, juz names, ornaments
 
-These are NOT in the page fonts (page fonts only contain that page's words + ayah markers).
+These are NOT in the page fonts (page fonts only contain that page's words + ayah markers). Both
+fonts below are on the CDN with CORS `*` (verified 2026-09-28), and the package's registry pins them:
 
-- **`surah-name-v4.ttf`** (from the QUL download bundle, 1.1 MB, upem 2500): 114 glyphs
-  "سورة …" at **U+FC45–U+FC64 for surahs 1–21** and **U+FB51–U+FBEB for 22–114**, both ranges
-  with gaps — discover them from the cmap (`sorted(cp for cp in cmap if lo <= cp <= hi)`)
-  and assert the count is 114. Basmalah is the 4-glyph sequence
-  `U+FCAA U+FCAB U+FCAE U+FCB4` from the same font. Rendered name bbox is ~9,600×3,100 units.
-- **`quran-common.ttf`** (upem 1024, GSUB only): decorative header border `uniE000`
-  (viewBox `-100 -928 8440 1216`, first subpath is the white box `0..8240 × -828..188` you
-  centre the name into), juz names `uniE900–uniE91D`, plus markers (`marker-half`,
-  `marker-full`, `s1open/s1close`…). Glyphs are reached through GSUB ligature names
-  (`quran_commen_ligatures.json` maps `"juz-1-number" → "juz001"` etc.).
+- **`surah_names_v4/surah_names.{ttf,woff2,woff}`** (QUL resource 237, "V4 Surah Name Color
+  Font", `QCF_FullSurah_HD_COLOR-v1`; 1.1 MB ttf, 830 KB woff2; upem 2500, ascent 3940, descent
+  −2520 — the page fonts' metrics): 114 glyphs "سورة …" at **U+FC45–U+FC64 for surahs 1–21** and
+  **U+FB51–U+FBEB for 22–114**, both ranges with gaps, in surah order within each range (the sorted
+  cmap gives the table; the package's registry hard-codes it and `qul fonts` checks the file
+  against it). Name advances 6,519–10,658 units (~3.6 em), ink −987..1843 units around the baseline
+  (median). Basmalah is the 4-glyph sequence `U+FCAA U+FCAB U+FCAE U+FCB4`, 28,014 units wide
+  (11.2 em), ink up to 3174 above the baseline. The font has a CPAL table and an `SVG ` table but
+  **no COLR table**: Chromium ignores OpenType-SVG and draws the `glyf` outlines in the CSS `color`;
+  Firefox and Safari paint the SVG (black letters, coloured marks).
+- **`common/quran-common.{ttf,woff2,woff}`** (QUL resource 459, "Juz name font"; upem 1024,
+  ascent 819, descent −205; GSUB `liga` only): the header frame `uniE000` (advance 8240, ink
+  −188..828: exactly one 15-line slot when it spans the measure), the 30 juz names in two forms,
+  `uniE001–uniE01E` ("الجزء الأول"…, ligatures `juz001`…`juz030`) and `uniE900–uniE91D` (the juz's
+  opening words "الٓمٓ", "سيقول"…, ligatures `j001`…`j030`), the Makkah/Madinah icons (`uniE073`,
+  `uniE074`), a basmalah (`uniFDFD`) and markers (`marker-half`, `marker-full`, `s1open`…). The
+  package addresses the ligature glyphs by code point, so nothing depends on `liga`.
 - The header on a real page occupies one 15-line slot; the basmalah another; both flagged
-  `is_centered`. Surah 9 has no basmalah; surah 1's basmalah is ayah 1 (a normal word line).
+  `is_centered`. Surah 9 has no basmalah; surah 1's basmalah is ayah 1 (a normal word line). The
+  package sets the frame at `fontSize × 17.0 / 8.047` (the measure of the widest line over the
+  frame's width) and centres the name over it, shifting each glyph by its ink band; QUL's own preview
+  does the same with absolute positioning.
 
 ## 7. An API shape that works for consumers
 

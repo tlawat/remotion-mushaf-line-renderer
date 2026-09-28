@@ -13,11 +13,15 @@ import {
   lineHeightForFontSize,
   type MushafDataSource,
   type MushafFontFallback,
+  type MushafFontFile,
   type MushafFontSrc,
+  MushafJuzName,
+  type MushafJuzNameVariant,
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
   type MushafSlice,
+  MushafSurahName,
   type MushafThemeSelection,
   type MushafWord,
   revealRtl,
@@ -55,6 +59,20 @@ export type LineHarnessProps = {
   fontUrl: string | null;
   /** The fonts packages: 'fallback' passes them as `fontFallback`, 'source' as `fontSrc` (wins over fontUrl). */
   fontPackages: 'none' | 'fallback' | 'source';
+  /**
+   * Where the shared fonts (surah names, quran-common) come from: a URL prefix as-is (Player page),
+   * `<prefix>/<font id>/<file name>`. Null: QUL's CDN.
+   */
+  sharedFontsUrl: string | null;
+  /** The same from the public folder (render tests), turned into `sharedFontsUrl` via staticFile() in calculateMetadata. */
+  sharedFontsDir: string | null;
+  /** A standalone <MushafSurahName> in the first slot (1-114), or null. */
+  surahName: number | null;
+  /** Whether surah names (standalone and on header lines) sit in their printed frame. */
+  framed: boolean;
+  /** A standalone <MushafJuzName> in the first slot (1-30), or null. */
+  juz: number | null;
+  juzVariant: MushafJuzNameVariant;
   fontSize: number | null;
   lineHeight: number | null;
   /** Word to mark as current (`word.id` or `word.wordId`), for the highlighting scenarios. */
@@ -95,6 +113,12 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   fontFile: null,
   fontUrl: null,
   fontPackages: 'none',
+  sharedFontsUrl: null,
+  sharedFontsDir: null,
+  surahName: null,
+  framed: true,
+  juz: null,
+  juzVariant: 'ordinal',
   fontSize: null,
   lineHeight: null,
   activeWordId: null,
@@ -114,7 +138,8 @@ export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarness
     ? {words: staticFile(props.dataFiles.words), layout: staticFile(props.dataFiles.layout)}
     : null;
   const data = pinned || props.data ? {...pinned, ...props.data} : null;
-  return {props: {...props, fontUrl, fontFile: null, data, dataFiles: null}};
+  const sharedFontsUrl = props.sharedFontsUrl ?? (props.sharedFontsDir ? staticFile(props.sharedFontsDir) : null);
+  return {props: {...props, fontUrl, fontFile: null, data, dataFiles: null, sharedFontsUrl, sharedFontsDir: null}};
 };
 
 const presentation = (
@@ -154,6 +179,11 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   fit,
   fontUrl,
   fontPackages,
+  sharedFontsUrl,
+  surahName,
+  framed,
+  juz,
+  juzVariant,
   fontSize,
   lineHeight,
   activeWordId,
@@ -176,17 +206,52 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
     enter === 'plain' ? undefined : presentation(enter, linearTiming({durationInFrames: enterFrames}), 'enter');
   const exitAnimation =
     exit === 'plain' ? undefined : presentation(exit, linearTiming({durationInFrames: exitFrames}), 'exit');
+  // The shared fonts from the prefix given, else from QUL's CDN.
+  const sharedUrl = (f: MushafFontFile & {kind: 'shared'}) =>
+    sharedFontsUrl ? `${sharedFontsUrl}/${f.font}/${f.fileName}` : f.cdnUrl;
   // The font props every line gets: the same source for the resolved lines and the convenience form.
   const fonts = (fontSet: string): {fontSrc?: MushafFontSrc; fontFallback?: MushafFontFallback} => {
     const pkg = fontSet === 'qpc-v4' ? plainFonts : tajweedFonts;
-    if (fontPackages === 'source') return {fontSrc: pkg};
+    // A package as fontSrc covers page fonts; the resolver form lets the shared fonts come from elsewhere.
+    if (fontPackages === 'source') return {fontSrc: (f) => (f.kind === 'page' ? pkg : sharedUrl(f))};
+    const fontSrc: MushafFontSrc | undefined =
+      fontUrl || sharedFontsUrl ? (f) => (f.kind === 'page' ? (fontUrl ?? f.cdnUrl) : sharedUrl(f)) : undefined;
     return {
-      ...(fontUrl ? {fontSrc: () => fontUrl} : {}),
+      ...(fontSrc ? {fontSrc} : {}),
       ...(fontPackages === 'fallback' ? {fontFallback: [plainFonts, tajweedFonts]} : {}),
     };
   };
+  const glyphProps = {
+    fontSize: resolvedFontSize,
+    lineHeight: resolvedLineHeight,
+    enter: enterAnimation,
+    exit: exitAnimation,
+    ...fonts('qpc-v4'),
+  };
   return (
     <AbsoluteFill style={{backgroundColor: background, color}}>
+      {surahName !== null ? (
+        <Sequence
+          from={from}
+          durationInFrames={durationInFrames ?? undefined}
+          premountFor={premountFor}
+          name={`surah ${surahName}`}
+          style={{top: 0, height: resolvedLineHeight}}
+        >
+          <MushafSurahName surah={surahName} framed={framed} {...glyphProps} />
+        </Sequence>
+      ) : null}
+      {juz !== null ? (
+        <Sequence
+          from={from}
+          durationInFrames={durationInFrames ?? undefined}
+          premountFor={premountFor}
+          name={`juz ${juz}`}
+          style={{top: 0, height: resolvedLineHeight}}
+        >
+          <MushafJuzName juz={juz} variant={juzVariant} {...glyphProps} />
+        </Sequence>
+      ) : null}
       {resolve ? (
         <Sequence
           from={from}
@@ -229,6 +294,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
               fontSize={resolvedFontSize}
               lineHeight={resolvedLineHeight}
               fit={fit}
+              framed={framed}
               slice={sliceOnData || slice === null ? undefined : slice}
               enter={enterAnimation}
               exit={exitAnimation}
