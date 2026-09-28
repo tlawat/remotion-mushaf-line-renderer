@@ -14,7 +14,7 @@ const fontDirs = (set, page) => [
 /**
  * Downloads the shared fonts (surah names, quran-common; woff2 + ttf) into
  * example/public/fonts/<id>/, and checks the ttf: the surah-name font must map exactly the 114
- * code points the package's registry lists, quran-common the 30 + 30 juz glyphs and the frame.
+ * code points the package's registry lists, quran-common the 30 juz names and the frame.
  *
  * @returns {{etags: object, report: string[], failed: boolean}}
  */
@@ -111,9 +111,7 @@ export const checkSharedFont = (id, font) => {
   } else if (id === 'quran-common') {
     if (font.unitsPerEm !== 1024) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 1024`);
     const juz = Array.from({length: 30}, (_, i) => 0xe001 + i);
-    const opening = Array.from({length: 30}, (_, i) => 0xe900 + i);
     expectMapped(juz, 'juz-name');
-    expectMapped(opening, 'juz-opening');
     expectMapped([0xe000], 'header-frame');
     if (font.advances.get(0xe000) !== 8240)
       problems.push(`header frame advance ${font.advances.get(0xe000)}, expected 8240`);

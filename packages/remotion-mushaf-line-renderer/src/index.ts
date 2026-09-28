@@ -51,7 +51,6 @@ export type {
   MushafGlyphCommonProps,
   MushafId,
   MushafJuzNameProps,
-  MushafJuzNameVariant,
   MushafLineAnimation,
   MushafLineAnimationProp,
   MushafLineCommonProps,

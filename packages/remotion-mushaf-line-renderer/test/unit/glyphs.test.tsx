@@ -288,10 +288,11 @@ describe('<MushafSurahName> and <MushafJuzName>', () => {
     expect(alone.container.querySelector<HTMLElement>('.mushaf-surah-name')!.style.height).toBe('100px');
   });
 
-  it('renders a juz name in either variant from the quran-common font', async () => {
+  it('renders a juz name from the quran-common font', async () => {
     const {container} = render(<MushafJuzName juz={1} />);
     const root = container.querySelector<HTMLElement>('.mushaf-juz-name')!;
-    expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', juz: '1', variant: 'ordinal'});
+    expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', juz: '1'});
+    expect(root.dataset.variant).toBeUndefined();
     const [glyph] = glyphs(container);
     expect(glyph!.dataset).toMatchObject({glyph: 'juz-name', font: 'quran-common'});
     expect(glyph!.textContent).toBe(''); // الجزء الأول
@@ -299,23 +300,17 @@ describe('<MushafSurahName> and <MushafJuzName>', () => {
     expect(fetched()).toEqual([COMMON_URL]);
     await visible(container, '.mushaf-juz-name');
     cleanup();
-    const opening = render(<MushafJuzName juz={30} variant="opening" className="x" />);
-    expect(opening.container.querySelector<HTMLElement>('.mushaf-juz-name')!.className).toBe('mushaf-juz-name x');
-    expect(glyphs(opening.container)[0]!.textContent).toBe(''); // عم يتساءلون
-    expect(glyphs(opening.container)[0]!.style.transform).toBe('translateY(0.087890625em)');
+    const last = render(<MushafJuzName juz={30} className="x" />);
+    expect(last.container.querySelector<HTMLElement>('.mushaf-juz-name')!.className).toBe('mushaf-juz-name x');
+    expect(glyphs(last.container)[0]!.textContent).toBe('\uE01E'); // the thirtieth juz
   });
 
-  it('refuses surah and juz numbers out of range, and unknown variants', () => {
+  it('refuses surah and juz numbers out of range', () => {
     const cases: Array<[() => React.ReactElement, string, string]> = [
       [() => <MushafSurahName surah={0} />, 'SURAH_OUT_OF_RANGE', 'surah must be an integer from 1 to 114, got 0'],
       [() => <MushafSurahName surah={115} />, 'SURAH_OUT_OF_RANGE', 'got 115'],
       [() => <MushafJuzName juz={31} />, 'JUZ_OUT_OF_RANGE', 'juz must be an integer from 1 to 30, got 31'],
       [() => <MushafJuzName juz={1.5} />, 'JUZ_OUT_OF_RANGE', 'got 1.5'],
-      [
-        () => <MushafJuzName juz={1} variant={'roman' as never} />,
-        'JUZ_OUT_OF_RANGE',
-        "variant must be 'ordinal' or 'opening'",
-      ],
     ];
     for (const [element, code, text] of cases) {
       const onError = vi.fn();

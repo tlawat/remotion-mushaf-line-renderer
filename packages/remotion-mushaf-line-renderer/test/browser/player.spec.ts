@@ -890,7 +890,7 @@ test.describe('surah names and juz names', () => {
     expect(await fontsLoaded(page, ['mushaf-surah-names-v4', 'mushaf-quran-common', 'mushaf-qpc-v4-p2'])).toBe(true);
   });
 
-  test('standalone names: a framed surah name and the juz names in both variants, centred', async ({page}) => {
+  test('standalone names: a framed surah name and a juz name, centred', async ({page}) => {
     test.skip(!hasSharedFonts(), NO_SHARED_FONTS);
     await open(page, 'surah-name');
     const NAME = '.mushaf-surah-name';
@@ -904,7 +904,6 @@ test.describe('surah names and juz names', () => {
     const JUZ = '.mushaf-juz-name';
     await expect(page.locator(`${JUZ}__row`)).toHaveCSS('visibility', 'visible');
     await expect(page.locator(JUZ)).toHaveAttribute('data-juz', '1');
-    await expect(page.locator(JUZ)).toHaveAttribute('data-variant', 'ordinal');
     const [ordinal] = await glyphsOf(page, JUZ);
     expect(ordinal).toMatchObject({glyph: 'juz-name', font: 'quran-common', text: '\uE001'});
     const rootBox = await box(page, JUZ, 0);
@@ -914,13 +913,6 @@ test.describe('surah names and juz names', () => {
     const centred = await inkCentreOffset(page, JUZ, 0, 819, -205, 1024);
     expect(Math.abs(centred.offset)).toBeLessThanOrEqual(centred.size * 0.1);
     expect(await fontsLoaded(page, ['mushaf-surah-names-v4'])).toBe(false);
-
-    await open(page, 'juz-opening');
-    await expect(page.locator(`${JUZ}__row`)).toHaveCSS('visibility', 'visible');
-    await expect(page.locator(JUZ)).toHaveAttribute('data-variant', 'opening');
-    expect((await glyphsOf(page, JUZ))[0]).toMatchObject({text: '\uE91D'});
-    const opening = await inkCentreOffset(page, JUZ, 0, 819, -205, 1024);
-    expect(Math.abs(opening.offset)).toBeLessThanOrEqual(opening.size * 0.1);
   });
 
   test('a header enters like a line, and a missing shared font fails loudly', async ({page}) => {

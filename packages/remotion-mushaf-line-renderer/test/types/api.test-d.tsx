@@ -208,13 +208,13 @@ export const headers = (
     <MushafSurahName surah={9} framed={false} fontSize={80} lineHeight={120} enter={slideFade()} name="At-Tawbah" />
     <MushafSurahName mushaf="qpc-v4" surah={1} style={{top: 0}} className="x" fontFallback={fontsPackage} />
     <MushafJuzName juz={1} />
-    <MushafJuzName juz={30} variant="opening" exit={{presentation: fade(), timing}} fontSrc="cdn" />
+    <MushafJuzName juz={30} exit={{presentation: fade(), timing}} fontSrc="cdn" />
   </>
 );
 // @ts-expect-error a surah number is required
 export const noSurah = <MushafSurahName />;
-// @ts-expect-error a juz name has two variants
-export const badVariant = <MushafJuzName juz={1} variant="roman" />;
+// @ts-expect-error a juz name has one form
+export const badVariant = <MushafJuzName juz={1} variant="opening" />;
 // @ts-expect-error there are no words to style on a surah name
 export const wordsOnName = <MushafSurahName surah={1} wordStyle={() => ({})} />;
 export const sharedFonts: MushafSharedFont[] = ['surah-names-v4', 'quran-common'];

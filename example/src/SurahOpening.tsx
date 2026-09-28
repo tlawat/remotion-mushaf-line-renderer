@@ -8,7 +8,6 @@ import {
   getMushafLocation,
   lineHeightForFontSize,
   MushafJuzName,
-  type MushafJuzNameVariant,
   MushafLine,
   type MushafLineData,
   type MushafThemeSelection,
@@ -27,8 +26,6 @@ export type SurahOpeningProps = {
   ayahLines: number;
   /** The juz the surah starts in (1-30), shown above the header; null shows none. The layout data carries no juz, so say it here. */
   juz: number | null;
-  /** 'ordinal' is "الجزء الأول"; 'opening' the juz's first words. */
-  juzVariant: MushafJuzNameVariant;
   /** Whether the surah name sits in its printed frame. */
   framed: boolean;
   /** Where the fonts come from: 'fallback' (QUL's CDN, then the fonts packages), 'cdn' or 'package' (with the shared fonts from public/fonts). */
@@ -44,7 +41,6 @@ export const defaultSurahOpeningProps: SurahOpeningProps = {
   surah: 36,
   ayahLines: 2,
   juz: 22,
-  juzVariant: 'ordinal',
   framed: true,
   fonts: 'fallback',
   dataFiles: null,
@@ -82,7 +78,7 @@ export const calculateSurahOpeningMetadata: CalculateMetadataFunction<SurahOpeni
   return {props: {...props, lines}, durationInFrames: STAGGER_FRAMES * (elements - 1) + HOLD_FRAMES};
 };
 
-export const SurahOpening: React.FC<SurahOpeningProps> = ({lines, juz, juzVariant, framed, fonts}) => {
+export const SurahOpening: React.FC<SurahOpeningProps> = ({lines, juz, framed, fonts}) => {
   const {width, height, fps} = useVideoConfig();
   if (!lines) {
     throw new Error(
@@ -116,7 +112,6 @@ export const SurahOpening: React.FC<SurahOpeningProps> = ({lines, juz, juzVarian
               >
                 <MushafJuzName
                   juz={juz}
-                  variant={juzVariant}
                   fontSize={juzFontSize}
                   lineHeight={lineHeight}
                   enter={enter}

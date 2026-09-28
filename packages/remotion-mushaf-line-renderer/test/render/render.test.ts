@@ -99,7 +99,6 @@ type HarnessProps = {
   surahName: number | null;
   framed: boolean;
   juz: number | null;
-  juzVariant: 'ordinal' | 'opening';
   fontSize: number | null;
   lineHeight: number | null;
   activeWordId: string | number | null;
@@ -133,7 +132,6 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   surahName: null,
   framed: true,
   juz: null,
-  juzVariant: 'ordinal',
   fontSize: null,
   lineHeight: null,
   activeWordId: null,
@@ -355,19 +353,18 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
       const blank = await still(serveUrl, harnessProps({lines: []}));
       expect(a.equals(blank)).toBe(false);
       writeFileSync(path.join(here, 'surah-header.png'), a);
-      // The name alone is another picture; so is the basmalah; so are the two names of a juz.
+      // The name alone is another picture; so is the basmalah; so is a juz name.
       const plain = await still(serveUrl, harnessProps({lines: [syntheticLine(2, 1)], framed: false, ...shared}));
       expect(plain.equals(a)).toBe(false);
       expect(plain.equals(blank)).toBe(false);
       const basmalah = await still(serveUrl, harnessProps({lines: [syntheticLine(2, 2)], ...shared}));
       expect(basmalah.equals(blank)).toBe(false);
       expect(basmalah.equals(plain)).toBe(false);
-      const ordinal = await still(serveUrl, harnessProps({lines: [], juz: 1, ...shared}));
-      const opening = await still(serveUrl, harnessProps({lines: [], juz: 1, juzVariant: 'opening', ...shared}));
-      expect(ordinal.equals(blank)).toBe(false);
-      expect(ordinal.equals(opening)).toBe(false);
-      expect(ordinal.equals(await still(serveUrl, harnessProps({lines: [], juz: 1, ...shared})))).toBe(true);
-      writeFileSync(path.join(here, 'juz-1.png'), ordinal);
+      const juz = await still(serveUrl, harnessProps({lines: [], juz: 1, ...shared}));
+      expect(juz.equals(blank)).toBe(false);
+      expect(juz.equals(await still(serveUrl, harnessProps({lines: [], juz: 30, ...shared})))).toBe(false);
+      expect(juz.equals(await still(serveUrl, harnessProps({lines: [], juz: 1, ...shared})))).toBe(true);
+      writeFileSync(path.join(here, 'juz-1.png'), juz);
       // A standalone surah name paints the same as the header line of that surah.
       const standalone = await still(serveUrl, harnessProps({lines: [], surahName: 2, ...shared}));
       expect(standalone.equals(a)).toBe(true);
