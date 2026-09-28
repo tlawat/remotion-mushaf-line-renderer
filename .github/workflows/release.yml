@@ -74,6 +74,21 @@ jobs:
             exit 1
           fi
 
+      # A version published by hand (the first release) must not fail the tag's run.
+      - name: Skip when this version is already on npm
+        id: published
+        working-directory: packages/remotion-mushaf-line-renderer
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::notice::$name@$version is already on npm; nothing to publish"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
+        if: steps.published.outputs.exists != 'true'
         working-directory: packages/remotion-mushaf-line-renderer
         run: npm publish --provenance --access public ${{ (inputs.dry_run || github.event_name != 'push' || github.ref_type != 'tag') && '--dry-run' || '' }}
