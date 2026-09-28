@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Recitation timings.** A neutral, versioned JSON input for following a recording
+  (`RecitationTimings`: `{version: 1, surah, ayat: [{ayah, start, end, complete?, words?: [{id, start, end}]}]}`,
+  seconds, word ids as `MushafWord.id`) and pure helpers over it: `parseRecitationTimings()`
+  (validation, `BAD_RECITATION_TIMINGS`), `recitedRange()` (the range for `getMushafLines()`),
+  `scheduleLines()` (one `{index, start, end}` per line, with `occurrence: 'first' | 'last'` for words
+  the reciter repeats), `wordAt()` (the current word, for `activeWordId`) and `wordTiming()`. The
+  package ships no aligner: the example's tools produce the file from the QUD Universal Aligner API
+  or from Whisper.
 - **Surah names, the basmalah and juz names**, from the two fonts QUL publishes next to the page
   fonts: the V4 surah-name font ([QUL resource 237](https://qul.tarteel.ai/resources/font/237))
   and `quran-common` ([resource 459](https://qul.tarteel.ai/resources/font/459)).

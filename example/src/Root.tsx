@@ -20,7 +20,7 @@ export const RemotionRoot: React.FC = () => {
         durationInFrames={180}
         defaultProps={defaultThreeLinesProps}
       />
-      {/* A recited passage: the printed lines follow the audio from a timings JSON (see tools/align-recitation.py). */}
+      {/* A recited passage: the printed lines follow the audio from a recitation timings JSON (see tools/). */}
       <Composition
         id="Recitation"
         component={Recitation}

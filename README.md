@@ -44,6 +44,9 @@ const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
 | `getMushafLine({page, line})`            | One line.                                                                     |
 | `getMushafLocation({surah, ayah})`       | `{page, line}` where an ayah starts.                                          |
 | `<MushafLine line={data} />`             | Renders a line. Waits for the page font behind `delayRender()`.               |
+| `parseRecitationTimings(json)`, `recitedRange()` | Validates a recording's timings JSON (ayah and word times, any aligner); the range to resolve lines for. |
+| `scheduleLines(lines, timings)`          | When each line is on screen, from the timings: `[{index, start, end}]` in seconds.        |
+| `wordAt(timings, seconds)`               | The word being recited at a moment, for `activeWordId`.                       |
 | `<MushafLine page={10} line={3} />`      | Same, resolving the line at render time. Header and basmalah lines render too. |
 | `<MushafSurahName surah={9} />`          | A surah's name in its printed frame, from QUL's surah-name font.               |
 | `<MushafJuzName juz={1} />`              | A juz's name, from QUL's `quran-common` font.                                  |

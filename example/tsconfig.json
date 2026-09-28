@@ -14,6 +14,6 @@
     "resolveJsonModule": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "player", "vite.config.mts"],
+  "include": ["src", "player", "tools", "vite.config.mts"],
   "exclude": ["remotion.config.ts"]
 }

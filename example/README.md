@@ -32,33 +32,52 @@ cd example && bunx remotion render ThreeLines out/three-lines.mp4 --props='{"the
 
 ### `Recitation`
 
-A recited passage: the printed lines follow the audio. A timings JSON lists the ayat of a passage
-with their timeframes (and, optionally, per-word times); `calculateMetadata` asks the package for the
-lines that carry those ayahs (`getMushafLines({surah, fromAyah, toAyah})`, which finds the page
-itself) and schedules one `<Sequence>` per line so that the line is fully in place when its first
-word is heard (`leadInSeconds` early) and its exit finishes exactly where the next line's entrance
-starts.
+A recited passage: the printed lines follow the audio. A recitation timings JSON (the package's
+`RecitationTimings`: the ayat of a passage with their timeframes and, optionally, per-word times) is
+validated with `parseRecitationTimings()`; `calculateMetadata` asks the package for the lines that
+carry those ayahs (`getMushafLines(recitedRange(timings))`, which finds the page itself), lets
+`scheduleLines()` say when each line is on screen, and places one `<Sequence>` per line so that the
+line is fully in place when its first word is heard (`leadInSeconds` early) and its exit finishes
+exactly where the next line's entrance starts.
 
 | Prop              | Default                      | Meaning                                                                          |
 | ----------------- | ---------------------------- | -------------------------------------------------------------------------------- |
 | `theme`           | `'plain'`                    | As above.                                                                        |
-| `timingsFile`     | `'audio/tawbah-timings.json'` | Timings JSON in `public/`; or pass `timings` inline.                            |
+| `timingsFile`     | `'audio/tawbah-timings-qud.json'` | Timings JSON in `public/`; or pass `timings` inline.                        |
 | `audioFile`       | `'audio/tawbah.mp3'`         | Audio in `public/`. Not committed: put your recording there before rendering.    |
 | `fonts`           | `'fallback'`                 | As above.                                                                        |
 | `dataFiles`       | `null`                       | As above.                                                                        |
-| `cutAtSeconds`    | `60`                         | Stop after the last ayah that ends before this; `null` plays everything.         |
+| `cutAtSeconds`    | `null`                       | Stop after the last ayah that ends before this; `null` plays everything.         |
 | `leadInSeconds`   | `0.4`                        | Seconds a line is on screen before its first word is heard.                      |
 | `slice`           | `true`                       | Show only the recited ayahs on the first and last lines (`getMushafLines({slice: true})`). |
+| `occurrence`      | `'first'`                    | When the reciter repeats a word after a pause: change lines when it is first heard, or (`'last'`) at its final recitation. |
 
 ```bash
 cd example && bunx remotion render Recitation out/recitation.mp4 \
   --props='{"fonts":"package","dataFiles":{"words":"data/qpc-v4/words.json.zip","layout":"data/qpc-v4/layout.db.zip"}}'
 ```
 
-The committed timings (`public/audio/tawbah-timings.json`, At-Tawbah 9:1-11) were produced by
-`tools/align-recitation.py`: pause detection, Whisper (medium, via sherpa-onnx) on each segment, and
-an alignment of the recognised words to the reference text in `tools/tawbah-9-1-13.json`. It is a
-development tool with the accuracy of that model, not part of the package.
+The timings file is the package's neutral format; nothing in the package produces it. `tools/` holds
+two example producers, both development tools with the accuracy of their model, neither part of the
+package. The two committed files are the same recording of At-Tawbah through each, kept to 9:1-5
+(about 1:54; the whole recitation is the reciter's). Ayah 5 shares its last printed line with ayah 6,
+so the passage ends on a sliced line: only 9:5's words, centred, the way `slice` is meant to be used.
+
+- `tools/align-with-qud.ts` writes `public/audio/tawbah-timings-qud.json` from the
+  [QUD Universal Aligner](https://aligner.qud.dev) API (`qud-aligner.ts` holds the client and the
+  converter): the recording is uploaded, cut at the reciter's pauses, matched to the Quran text with
+  no reference needed, and timed word by word; a repeated word comes back once per occurrence and
+  each segment carries a confidence. No key; the free daily GPU quota falls back to the CPU. The audio
+  leaves the machine and the output is CC-BY-4.0.
+
+  ```bash
+  bun tools/align-with-qud.ts --audio audio/tawbah.mp3 --out public/audio/tawbah-timings-qud.json --to-ayah 5
+  ```
+
+- `tools/align-recitation.py` writes `public/audio/tawbah-timings.json` offline: pause detection,
+  Whisper (medium, via sherpa-onnx) on each segment, and an alignment of the recognised words to the
+  reference text in `tools/tawbah-9-1-13.json`, which has to name the passage in advance (the
+  committed file was then cut to 9:1-5).
 
 ### `SurahOpening`
 

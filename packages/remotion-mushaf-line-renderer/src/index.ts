@@ -23,16 +23,21 @@ export {loadPageFont, loadSharedFont} from './fonts/load-page-font';
 export {getMushafMetrics, MUSHAF_IDS} from './mushaf/registry';
 // Themes
 export {MUSHAF_THEME_NAMES, MUSHAF_THEMES} from './mushaf/themes';
+// Recitation timings
+export {parseRecitationTimings, recitedRange, wordAt, wordTiming} from './recitation/recitation-timings';
+export {scheduleLines} from './recitation/schedule';
 // Line data
 export {getMushafLine} from './resolve/get-mushaf-line';
 export {getMushafLines, getMushafLocation, lineAyahs} from './resolve/get-mushaf-lines';
 export {sliceWords} from './resolve/slice';
 // Types
 export type {
+  AyahTiming,
   GetMushafFontFileOptions,
   GetMushafLineOptions,
   GetMushafLinesOptions,
   GetMushafLocationOptions,
+  LineSchedule,
   LoadedMushafFont,
   LoadedPageFont,
   LoadMushafDataOptions,
@@ -71,5 +76,10 @@ export type {
   MushafThemeSelection,
   MushafWord,
   MushafWordKind,
+  RecitationTimings,
+  RecitedRange,
+  ScheduleLinesOptions,
   WordContext,
+  WordOccurrence,
+  WordTiming,
 } from './types';

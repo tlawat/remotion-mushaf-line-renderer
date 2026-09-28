@@ -1,39 +1,35 @@
 // A real-life use of the package: a recited passage with the printed lines shown in time with the
-// audio. Input: a timings JSON (one entry per ayah with a start/end and, optionally, per-word times)
-// produced by tools/align-recitation.py. The composition asks the package for the lines that carry
-// those ayahs, schedules one <Sequence> per line from the time of its first word, and animates each
-// line in and out with the package's slide+fade.
+// audio. Input: a recitation timings JSON (the package's `RecitationTimings`: one entry per ayah with
+// a start/end and, optionally, per-word times), produced by either tool in tools/ (the QUD aligner
+// API client or the Whisper script). The composition asks the package for the lines that carry those
+// ayahs, lets `scheduleLines()` say when each line is on screen, schedules one <Sequence> per line and
+// animates each line in and out with the package's slide+fade.
+
 import {
   enterTiming,
   exitTiming,
   fontSizeForWidth,
   getMushafLines,
+  type LineSchedule,
   lineHeightForFontSize,
   MushafLine,
   type MushafLineData,
   type MushafThemeSelection,
+  parseRecitationTimings,
+  type RecitationTimings,
+  recitedRange,
+  scheduleLines,
   slideFade,
+  type WordOccurrence,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Audio, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {type DataFiles, dataFromFiles, type FontMode, fontProps} from './sources';
 
-export type WordTiming = {id: string; start: number; end: number};
-export type AyahTiming = {ayah: number; start: number; end: number; complete?: boolean; words?: WordTiming[]};
-export type RecitationTimings = {surah: number; audio?: string; durationSeconds?: number; ayat: AyahTiming[]};
-
-export type LineSchedule = {
-  /** Index into `lines`. */
-  line: number;
-  /** Seconds at which the line's first word is heard, and at which the next line takes over. */
-  start: number;
-  end: number;
-};
-
 export type RecitationProps = {
   /** 'plain' follows CSS `color`; a preset (light, dark, sepia, black, normal, p1-p5) or a custom theme selects the colour font. */
   theme: MushafThemeSelection;
-  /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings.json'; or pass `timings` inline. */
+  /** Timings JSON in the public folder, e.g. 'audio/tawbah-timings-qud.json'; or pass `timings` inline. */
   timingsFile: string | null;
   timings: RecitationTimings | null;
   /** Audio in the public folder, e.g. 'audio/tawbah.mp3'. */
@@ -48,6 +44,8 @@ export type RecitationProps = {
   leadInSeconds: number;
   /** Show only the recited ayahs on the first and last lines (the neighbours' words are hidden). */
   slice: boolean;
+  /** When the reciter repeats a word after a pause: change lines when it is first heard, or at its last recitation. */
+  occurrence: WordOccurrence;
   /** Filled in by calculateMetadata. */
   lines: MushafLineData[] | null;
   schedule: LineSchedule[] | null;
@@ -55,14 +53,15 @@ export type RecitationProps = {
 
 export const defaultRecitationProps: RecitationProps = {
   theme: 'plain',
-  timingsFile: 'audio/tawbah-timings.json',
+  timingsFile: 'audio/tawbah-timings-qud.json',
   timings: null,
   audioFile: 'audio/tawbah.mp3',
   fonts: 'fallback',
   dataFiles: null,
-  cutAtSeconds: 60,
+  cutAtSeconds: null,
   leadInSeconds: 0.4,
   slice: true,
+  occurrence: 'first',
   lines: null,
   schedule: null,
 };
@@ -75,59 +74,35 @@ const MARGIN_X = 120;
 const ENTER = {presentation: slideFade(), timing: enterTiming()};
 const EXIT = {presentation: slideFade(), timing: exitTiming()};
 
-const parseId = (id: string) => {
-  const [s, a, w] = id.split(':').map(Number);
-  return {surah: s!, ayah: a!, position: w!};
-};
-
-/** Start time of a word: its own timing, else interpolated inside its ayah by position. */
-const wordStart = (timing: AyahTiming, position: number, wordCount: number): number => {
-  const exact = timing.words?.find((w) => parseId(w.id).position === position);
-  if (exact) return exact.start;
-  return timing.start + ((timing.end - timing.start) * (position - 1)) / Math.max(1, wordCount);
+/**
+ * The timings this composition plays: what the file says, minus the ayahs the recording does not
+ * carry whole and, under `cutAtSeconds`, the ayahs ending after the cut. This is the example's own
+ * policy; the package only reports `complete`.
+ */
+const playable = (timings: RecitationTimings, cutAtSeconds: number | null): RecitationTimings => {
+  const usable = timings.ayat.filter((a) => a.complete !== false);
+  const ayat = cutAtSeconds === null ? usable : usable.filter((a, i) => i === 0 || a.end <= cutAtSeconds);
+  if (ayat.length === 0) throw new Error('Recitation: the timings carry no complete ayah.');
+  return {...timings, ayat};
 };
 
 export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationProps> = async ({props}) => {
-  const timings: RecitationTimings | null =
+  const source: unknown =
     props.timings ?? (props.timingsFile ? await (await fetch(staticFile(props.timingsFile))).json() : null);
-  if (!timings || timings.ayat.length === 0)
-    throw new Error('Recitation: pass `timings` or a `timingsFile` with at least one ayah.');
-  const usable = timings.ayat.filter((a) => a.complete !== false);
-  const cut = props.cutAtSeconds;
-  const chosen = cut === null ? usable : usable.filter((a, i) => i === 0 || a.end <= cut);
-  const firstAyah = chosen[0]!.ayah;
-  const lastAyah = chosen[chosen.length - 1]!.ayah;
-  const byAyah = new Map(chosen.map((a) => [a.ayah, a]));
+  if (source === null) throw new Error('Recitation: pass `timings` or a `timingsFile`.');
+  const timings = playable(parseRecitationTimings(source), props.cutAtSeconds);
 
   // One call: the package finds the page itself; `data` points it at a mirror of QUL's exports
   // instead of Tarteel's CDN.
   const lines = await getMushafLines({
+    ...recitedRange(timings),
     theme: props.theme,
-    surah: timings.surah,
-    fromAyah: firstAyah,
-    toAyah: lastAyah,
     slice: props.slice,
     data: dataFromFiles(props.dataFiles),
   });
-
   // A line starts when its first recited word starts and ends when the next line starts.
-  const starts = lines.map((line) => {
-    const word = line.words.find((w) => byAyah.has(w.ayah)) ?? line.words[0]!;
-    const timing = byAyah.get(word.ayah);
-    if (!timing) return null;
-    // Only needed without per-word times: the ayah's word count is then estimated from what is visible.
-    const wordCount =
-      timing.words?.length ?? Math.max(word.position, line.words.filter((w) => w.ayah === word.ayah).length);
-    return Math.max(0, wordStart(timing, word.position, wordCount));
-  });
-  const lastEnd = byAyah.get(lastAyah)!.end;
-  const schedule: LineSchedule[] = [];
-  lines.forEach((_, i) => {
-    const start = starts[i];
-    if (start === null) return;
-    const next = starts.slice(i + 1).find((s): s is number => s !== null);
-    schedule.push({line: i, start, end: next ?? lastEnd});
-  });
+  const schedule = scheduleLines(lines, timings, {occurrence: props.occurrence});
+  const lastEnd = timings.ayat[timings.ayat.length - 1]!.end;
   const fps = 30;
   const durationInFrames = Math.ceil((lastEnd + 1) * fps);
   return {props: {...props, lines, schedule}, durationInFrames};
@@ -146,7 +121,7 @@ export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFil
     <AbsoluteFill style={{backgroundColor: '#fbf7ee', color: '#1b1b1b'}}>
       <Audio src={staticFile(audioFile)} />
       {schedule.map((slot, i) => {
-        const line = lines[slot.line]!;
+        const line = lines[slot.index]!;
         // Fully in place when its first word is heard, `leadInSeconds` earlier.
         const from = Math.max(0, Math.round((slot.start - leadInSeconds) * fps) - enterFrames);
         const nextFrom =

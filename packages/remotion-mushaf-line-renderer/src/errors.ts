@@ -6,6 +6,7 @@ export type MushafErrorCode =
   | 'BAD_THEME'
   | 'BAD_COLOR'
   | 'BAD_SLICE'
+  | 'BAD_RECITATION_TIMINGS'
   | 'PAGE_OUT_OF_RANGE'
   | 'AYAH_NOT_FOUND'
   | 'LINE_OUT_OF_RANGE'
