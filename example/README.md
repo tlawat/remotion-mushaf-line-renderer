@@ -78,9 +78,10 @@ switches to the CDN alone or to the packages alone (offline, reproducible):
 bunx remotion render ThreeLines out/three-lines.mp4 --props='{"fonts":"package"}'
 ```
 
-In this repository the packages' `fonts/` folders are filled from the committed mirror
-(`public/fonts/`) by `bun run fonts-packages:fill`, which `bun run dev` runs first; run it yourself
-before rendering with the CLI. `bun run qul fonts 10` refreshes one page of the mirror from the CDN.
+In this repository the packages' `fonts/` folders are filled by `bun run fonts-packages:fill` (from
+`public/fonts/` when a page is there, else from QUL's CDN), which `bun run dev` runs first; run it
+yourself before rendering with the CLI. `bun run qul fonts 10` downloads one page into `public/fonts/`.
+Nothing under `public/fonts/` is committed.
 
 ## Data
 

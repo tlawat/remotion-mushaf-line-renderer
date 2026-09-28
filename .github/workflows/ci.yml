@@ -45,14 +45,25 @@ jobs:
       - name: Packaging checks (exports, sizes, tarball, arethetypeswrong)
         run: bun run check:package
 
-      # The example imports both fonts packages; their fonts/ folders are filled from the committed
-      # mirror (offline) and checked byte for byte against the manifests.
-      - name: Fonts packages (fill from the mirror, verify, tarball)
+      # No font file is committed: the fonts packages' fonts/ folders are filled from QUL's CDN and
+      # checked byte for byte against the manifests, and the suites' fixture page is downloaded. Both
+      # are cached between runs on the manifests and the ETag survey.
+      - name: Cache the page fonts
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/fonts-qpc-v4/fonts
+            packages/fonts-qpc-v4-tajweed/fonts
+            example/public/fonts
+            packages/remotion-mushaf-line-renderer/test/fixtures/fonts
+          key: qul-fonts-${{ hashFiles('packages/fonts-*/manifest.json', 'scripts/cdn-etags.json') }}
+
+      - name: Fonts packages (fill from the CDN, verify, tarball)
         run: |
           bun run fonts-packages:fill
           bun run check:fonts-packages
 
-      - name: Fixture font for the browser and render suites (when not committed)
+      - name: Fixture font for the browser and render suites (when not cached)
         run: test -f example/public/fonts/qpc-v4-tajweed/p10.ttf || bun run qul fonts 10
 
       - name: Mirror of QUL's exports for the real-data tests (when not committed)

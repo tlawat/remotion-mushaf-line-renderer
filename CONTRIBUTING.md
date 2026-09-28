@@ -80,7 +80,7 @@ bun run qul check                       # validate the mirror without downloadin
 bun run qul compare                     # compile QUL's 604 preview pages (cached under .cache/qul) and diff them against the mirror
 bun run qul fonts 1,10,604 --etags      # download page fonts (both sets, woff2 + ttf) and record CDN ETags
 bun run qul verify --pages 1,10,604 --data   # fetch fonts and exports cross-origin like a render; check CORS, bytes, ETags
-bun run qul mirror                      # development only: the exports and every page's fonts, committed and pushed
+bun run qul mirror                      # the exports and every page's fonts into the local mirror; commits the exports and ETags
 bun run qul --help
 ```
 
@@ -109,10 +109,10 @@ redistribute them unmodified and carry the notice the files themselves carry.
   `packages/fonts-qpc-v4-tajweed` (`remotion-mushaf-fonts-<set>` on npm). Each commits a
   `manifest.json` (every file's name, size, MD5 and SHA-256), the generated `index.js` / `index.d.ts`,
   its licence and notes; its `fonts/` folder is not committed but filled from the example's mirror
-  and checked against the manifest:
+  (`example/public/fonts`, itself a download) or from QUL's CDN, and checked against the manifest:
 
   ```bash
-  bun run fonts-packages:fill         # fill both from example/public/fonts (offline)
+  bun run fonts-packages:fill         # fill both from example/public/fonts, else from the CDN
   bun run check:fonts-packages        # manifest ↔ entry ↔ npm pack, byte for byte
   bun run fonts-packages help         # snapshot, generate, fill, verify, check, drift, download
   ```
@@ -128,9 +128,9 @@ redistribute them unmodified and carry the notice the files themselves carry.
   runs as a dry run unless you untick it, and a real publish also needs the repository variable
   `FONTS_PUBLISH_ENABLED=true`.
 
-The example's mirror of every page (`example/public/fonts`) and the ttf fixtures of pages 1, 10, 187
-and 604 stay committed: the suites and the fill step read them offline. `.gitignore` spells out the
-exceptions.
+No font file is committed: `.gitignore` covers `*.ttf`, `*.woff` and `*.woff2` everywhere.
+`bun run qul fonts 1,10,187,604` downloads the fixture pages the suites use into the example's mirror
+and the package's fixtures (`bun run qul mirror` downloads every page), and CI caches them between runs.
 
 ## Project layout
 

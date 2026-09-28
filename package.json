@@ -30,7 +30,7 @@
     "fonts": "node scripts/qul.mjs fonts 1,10,187,604",
     "verify:cdn": "node scripts/qul.mjs verify",
     "fonts-packages": "node scripts/fonts-package.mjs",
-    "fonts-packages:fill": "node scripts/fonts-package.mjs fill all",
+    "fonts-packages:fill": "node scripts/fonts-package.mjs fill all --cdn",
     "check:fonts-packages": "node scripts/fonts-package.mjs check all"
   },
   "devDependencies": {

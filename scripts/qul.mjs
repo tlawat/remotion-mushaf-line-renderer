@@ -38,9 +38,9 @@
 //                                (default pages 1,10,604).
 //
 //   qul mirror [--pages <list>] [--no-data] [--compare] [--no-push]
-//                                Development only: download the exports and the fonts (default:
-//                                all pages), refresh the ETags, commit what .gitignore admits and
-//                                push the current branch.
+//                                Download the exports and the fonts (default: all pages) into the
+//                                local mirror, refresh the ETags, commit the exports and the ETags
+//                                (font files are never committed) and push the current branch.
 //
 // Page lists: "1,10,604", "1-20,187" or "all".
 
@@ -49,17 +49,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
-import {
-  DEFAULT_CACHE_DIR,
-  ETAGS_FILE,
-  EXAMPLE_FONTS_DIR,
-  FIXTURE_FONTS_DIR,
-  log,
-  parsePageList,
-  ROOT,
-  readSurvey,
-  writeSurvey,
-} from './lib/cli.mjs';
+import {DEFAULT_CACHE_DIR, ETAGS_FILE, log, parsePageList, ROOT, readSurvey, writeSurvey} from './lib/cli.mjs';
 import {LayoutValidationError} from './lib/compile.mjs';
 import {
   compareLayouts,
@@ -197,9 +187,8 @@ const mirror = async () => {
   if (args.compare) await compare();
   args.etags = true;
   await fonts(spec);
-  // Only what .gitignore admits is picked up: the mirrored exports, the ETags, the mirror's
-  // woff2/woff files, and the ttf/woff2 of the fixture pages in both places.
-  git('add', MIRROR_DIR, ETAGS_FILE, EXAMPLE_FONTS_DIR, FIXTURE_FONTS_DIR);
+  // The mirrored exports and the ETags only; the font files stay local (.gitignore).
+  git('add', MIRROR_DIR, ETAGS_FILE);
   if (git('diff', '--cached', '--name-only') === '') {
     log('nothing changed; nothing to commit');
     return;
@@ -209,9 +198,9 @@ const mirror = async () => {
     'commit',
     '-q',
     '-m',
-    `Mirror QUL's exports and page fonts for development (pages: ${spec})`,
+    `Mirror QUL's exports (fonts surveyed: ${spec})`,
     '-m',
-    `Pulled with \`qul mirror\`: ${summary}. The fonts are development only; removed before the public release.`,
+    `Pulled with \`qul mirror\`: ${summary}.`,
   );
   console.log(git('--no-pager', 'log', '-1', '--stat=80', '--format=%h %s'));
   if (!args['no-push']) git('push', '-u', 'origin', branch);

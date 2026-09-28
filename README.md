@@ -75,7 +75,7 @@ Requires Bun ≥ 1.2 and Node ≥ 20.
 ```bash
 bun install
 bun run build   # build the package
-bun run dev     # fill the fonts packages from the mirror, then Remotion Studio on example/
+bun run dev     # fill the fonts packages (from QUL's CDN on first run), then Remotion Studio on example/
 bun run test    # unit tests
 ```
 

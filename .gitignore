@@ -9,30 +9,14 @@ test-results/
 playwright-report/
 .remotion/
 
-# QUL's fonts ship in the two fonts packages (packages/fonts-<set>/, published on npm), never in the
-# main package. Their fonts/ folders are
-# filled from the mirror below (`bun run fonts-packages:fill`) and checked against the committed
-# manifest.json, so the files themselves are not committed twice.
+# No font file is committed. The two fonts packages (packages/fonts-<set>/, published on npm) fill
+# their fonts/ folders from the local mirror or from QUL's CDN (`bun run fonts-packages:fill`) and
+# check them against the committed manifest.json; the example's mirror (`bun run qul fonts`,
+# `bun run qul mirror`) and the test fixtures are downloads too.
 packages/fonts-*/fonts/
-# The example's mirror of every page (woff2, and the woff where QUL has no woff2) and the ttf
-# fixtures of pages 1, 10, 187 and 604 are committed: the suites, CI and the fonts packages' fill
-# step read them offline. Other ttf/woff files under public/ or the fixtures are downloads.
-**/public/fonts/**/*.ttf
-**/public/fonts/**/*.woff
-**/public/fonts/**/*.woff2
-**/test/fixtures/fonts/**/*.ttf
-**/test/fixtures/fonts/**/*.woff
-**/test/fixtures/fonts/**/*.woff2
-!**/public/fonts/**/p1.*
-!**/public/fonts/**/p10.*
-!**/public/fonts/**/p187.*
-!**/public/fonts/**/p604.*
-!**/test/fixtures/fonts/**/p1.*
-!**/test/fixtures/fonts/**/p10.*
-!**/test/fixtures/fonts/**/p187.*
-!**/test/fixtures/fonts/**/p604.*
-!example/public/fonts/**/*.woff2
-!example/public/fonts/**/*.woff
+*.ttf
+*.woff
+*.woff2
 
 # example/public/data/ holds the mirror of QUL's two data exports (open data, about 1.2 MB), written
 # by `bun run qul data` and committed: the suites, CI and offline renders read it,
