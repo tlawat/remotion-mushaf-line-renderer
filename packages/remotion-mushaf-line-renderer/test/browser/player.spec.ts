@@ -633,6 +633,128 @@ test.describe('colour and per-word hooks', () => {
   });
 });
 
+test.describe('line window', () => {
+  const WINDOW = '.mushaf-line-window';
+  const SLOT = '.mushaf-line-window__slot';
+  type Slot = {index: number; y: number; height: number; opacity: string; lineOpacity: string; current: boolean};
+  const slots = (page: Page): Promise<Slot[]> =>
+    page.locator(SLOT).evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        const line = el.querySelector<HTMLElement>('.mushaf-line');
+        return {
+          index: Number(el.getAttribute('data-index')),
+          y: r.y,
+          height: r.height,
+          opacity: getComputedStyle(el).opacity,
+          lineOpacity: line ? getComputedStyle(line).opacity : '',
+          current: el.getAttribute('data-current') === 'true',
+        };
+      }),
+    );
+  const position = async (page: Page) => Number(await page.locator(WINDOW).getAttribute('data-position'));
+
+  test('three slots a line-height apart, the current line centred, only the mounted pages loaded', async ({page}) => {
+    await open(page, 'window');
+    await rowsVisible(page, 3); // lines 0 and 1 in the window, line 2 preloaded below it
+    const win = await box(page, WINDOW);
+    const all = await slots(page);
+    const lineHeight = all[0]!.height;
+    expect(win.height).toBeCloseTo(3 * lineHeight, 0);
+    expect(all.map((s) => s.index)).toEqual([0, 1, 2]);
+    expect(all[0]!.y - win.y).toBeCloseTo(lineHeight, 0); // the middle slot
+    expect(all[1]!.y - all[0]!.y).toBeCloseTo(lineHeight, 0);
+    expect(all[2]!.y - all[1]!.y).toBeCloseTo(lineHeight, 0);
+    expect(all.map((s) => s.current)).toEqual([true, false, false]);
+    expect(all.map((s) => s.opacity)).toEqual(['1', '1', '0']); // the preloaded line is outside the window
+    expect(all.map((s) => s.lineOpacity)).toEqual(['1', '1', '1']); // neighbourOpacity 1: no dimming
+    await expect(page.locator(WINDOW)).toHaveAttribute('data-position', '0.0000');
+    await expect(page.locator(WINDOW)).toHaveCSS('overflow', 'hidden');
+    // The five lines sit on pages 2, 2, 1, 3, 3: page 3 is not mounted yet, so its font is not asked for.
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-p2', 'mushaf-qpc-v4-p1'])).toBe(true);
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-p3'])).toBe(false);
+  });
+
+  test('a step moves every line together by exactly one line-height, fading the edges', async ({page}) => {
+    await open(page, 'window');
+    await rowsVisible(page, 3);
+    const before = await slots(page);
+    const lineHeight = before[0]!.height;
+    const yBefore = new Map(before.map((s) => [s.index, s.y]));
+    await seek(page, 15); // half way through the first step
+    expect(await position(page)).toBeCloseTo(0.5, 5);
+    const mid = await slots(page);
+    expect(mid.map((s) => s.index)).toEqual([0, 1, 2, 3]);
+    for (const s of mid) {
+      const y = yBefore.get(s.index);
+      if (y !== undefined) expect(y - s.y).toBeCloseTo(lineHeight / 2, 0); // the same travel for every line
+    }
+    expect(mid.map((s) => s.current)).toEqual([false, true, false, false]);
+    expect(Number(mid[2]!.opacity)).toBeCloseTo(0.5, 5); // line 2 fading in at the bottom edge
+    expect(mid[3]!.opacity).toBe('0');
+    await seek(page, 20); // the step: line 1 is exactly where line 0 was
+    await expect(page.locator(WINDOW)).toHaveAttribute('data-position', '1.0000');
+    const after = await slots(page);
+    expect(after.find((s) => s.index === 1)!.y).toBeCloseTo(yBefore.get(0)!, 0);
+    expect(after.find((s) => s.index === 0)!.y).toBeCloseTo(yBefore.get(0)! - lineHeight, 0);
+    expect(after.map((s) => s.opacity)).toEqual(['1', '1', '1', '0']);
+    await seek(page, 40); // line 2 centred: line 0 has left the window and is unmounted
+    await expect(page.locator(WINDOW)).toHaveAttribute('data-position', '2.0000');
+    expect((await slots(page)).map((s) => s.index)).toEqual([1, 2, 3, 4]);
+    expect(await fontsLoaded(page, ['mushaf-qpc-v4-p3'])).toBe(true);
+  });
+
+  test('steps closer than the scroll blend into one non-decreasing movement', async ({page}) => {
+    await open(page, 'window-overlap'); // steps 30 and 35 with a 10-frame scroll
+    await rowsVisible(page, 3);
+    let previous = 0;
+    for (let frame = 20; frame <= 40; frame++) {
+      await seek(page, frame);
+      const p = await position(page);
+      expect(p).toBeGreaterThanOrEqual(previous - 1e-9);
+      expect(p - previous).toBeLessThanOrEqual(0.2 + 1e-9);
+      previous = p;
+    }
+    await seek(page, 30);
+    expect(await position(page)).toBeCloseTo(1.5, 5); // ahead of its step by the overlap
+    await seek(page, 35);
+    await expect(page.locator(WINDOW)).toHaveAttribute('data-position', '2.0000');
+  });
+
+  test('a first step in the future lets the first line rise from below into the centre', async ({page}) => {
+    await open(page, 'window-first-scroll');
+    await rowsVisible(page, 2);
+    const win = await box(page, WINDOW);
+    const start = await slots(page);
+    expect(await position(page)).toBe(-1);
+    expect(start.map((s) => s.index)).toEqual([0, 1]);
+    expect(start[0]!.y - win.y).toBeCloseTo(2 * start[0]!.height, 0); // the bottom slot
+    expect(start[0]!.opacity).toBe('1');
+    await seek(page, 20);
+    await expect(page.locator(WINDOW)).toHaveAttribute('data-position', '0.0000');
+    expect((await slots(page))[0]!.y - win.y).toBeCloseTo(start[0]!.height, 0); // centred
+  });
+
+  test('dims the neighbours, takes a position directly, and enters as one', async ({page}) => {
+    await open(page, 'window-dim');
+    await rowsVisible(page, 3);
+    await seek(page, 20);
+    expect((await slots(page)).map((s) => s.lineOpacity)).toEqual(['0.45', '1', '0.45', '0.45']);
+    await open(page, 'window-position'); // 1.25: lines 0-3 are within a line-height of the window, line 4 preloaded
+    await rowsVisible(page, 5);
+    await expect(page.locator(WINDOW)).toHaveAttribute('data-position', '1.2500');
+    expect((await slots(page)).map((s) => s.current)).toEqual([false, true, false, false, false]);
+    await open(page, 'window-enter');
+    await rowsVisible(page, 3);
+    const wrapper = page.locator(`${WINDOW} > [data-absolute-fill], ${WINDOW} > div`).first();
+    await expect(wrapper).toHaveCSS('opacity', '0');
+    await seek(page, 10);
+    expect(Number(await wrapper.evaluate((el) => getComputedStyle(el).opacity))).toBeCloseTo(0.5, 5);
+    await seek(page, 20);
+    await expect(wrapper).toHaveCSS('opacity', '1');
+  });
+});
+
 test.describe('font failures', () => {
   test('404 fails fast with FONT_HTTP', async ({page}) => {
     await open(page, 'font-404');

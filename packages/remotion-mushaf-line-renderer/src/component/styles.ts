@@ -188,3 +188,98 @@ export const buildGlyphStyle = ({fontFamily, fontSize, lineHeight, shiftEm}: Gly
   overflow: 'visible',
   ...(shiftEm === 0 ? {} : {transform: `translateY(${shiftEm}em)`}),
 });
+
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
+/** Four decimals, like the translate: enough for any fade, and free of float noise such as 0.7250000000000001. */
+const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
+
+export type WindowOpacityInput = {
+  /** Index of the line in the window's `lines`. */
+  readonly index: number;
+  /** The window's fractional position (see `scrollPosition()`). */
+  readonly position: number;
+  readonly visibleLines: number;
+  /** Opacity of a line one slot away from the centre; default 1 (no dimming). */
+  readonly neighbourOpacity?: number;
+};
+
+/**
+ * How much of a line the window edge lets through: 1 inside the window, fading to 0 over the last
+ * line-height as the line crosses the edge, so a line slides in and out of the window as a fade,
+ * not a cut. This part is the window's own (it goes on the slot) and never depends on `lineStyle`.
+ */
+export const windowEdgeOpacity = (distance: number, visibleLines: number): number =>
+  round4(1 - clamp01(distance - (visibleLines - 1) / 2));
+
+/**
+ * The emphasis of a line by its distance from the centre: 1 in the centre slot, `neighbourOpacity`
+ * one slot away, blended in between so the emphasis travels with the scroll. The default
+ * `lineStyle` of `<MushafLineWindow>` is `{opacity: windowEmphasisOpacity(...)}`.
+ */
+export const windowEmphasisOpacity = (distance: number, neighbourOpacity: number): number =>
+  round4(neighbourOpacity + (1 - neighbourOpacity) * (1 - clamp01(distance)));
+
+/**
+ * The opacity a line of `<MushafLineWindow>` ends up with under the default `lineStyle`: the edge
+ * fade times the emphasis. Exported so a custom `lineStyle` can build on the same numbers, e.g.
+ * `(line, ctx) => ({opacity: windowLineOpacity({...ctx, visibleLines: 3, neighbourOpacity: 0.3}), color: ...})`.
+ */
+export const windowLineOpacity = ({
+  index,
+  position,
+  visibleLines,
+  neighbourOpacity = 1,
+}: WindowOpacityInput): number => {
+  const distance = Math.abs(index - position);
+  return round4(windowEdgeOpacity(distance, visibleLines) * windowEmphasisOpacity(distance, neighbourOpacity));
+};
+
+/** The window: a clipped block of `visibleLines` line-heights, the same normal-flow root as a line. */
+export const buildWindowStyle = (
+  visibleLines: number,
+  lineHeight: number,
+  user: React.CSSProperties | undefined,
+): React.CSSProperties => ({
+  position: 'relative',
+  display: 'block',
+  boxSizing: 'border-box',
+  width: '100%',
+  height: visibleLines * lineHeight,
+  margin: 0,
+  padding: 0,
+  overflow: 'hidden',
+  ...user,
+});
+
+/**
+ * The track every slot sits on, translated by the position: one transform moves every line, so
+ * they can never drift apart. Left sub-pixel on purpose (see `slideFadeStyle`).
+ */
+export const buildTrackStyle = (position: number, lineHeight: number): React.CSSProperties => ({
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  height: '100%',
+  margin: 0,
+  padding: 0,
+  overflow: 'visible',
+  transform: `translateY(${(-position * lineHeight).toFixed(4)}px)`,
+});
+
+/** The slot of line `index`: one line-height, placed so that line `position` lands in the middle of the window. */
+export const buildSlotStyle = (
+  index: number,
+  visibleLines: number,
+  lineHeight: number,
+  edgeOpacity: number,
+): React.CSSProperties => ({
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  top: ((visibleLines - 1) / 2 + index) * lineHeight,
+  height: lineHeight,
+  margin: 0,
+  padding: 0,
+  opacity: edgeOpacity,
+});

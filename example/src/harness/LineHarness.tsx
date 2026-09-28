@@ -19,6 +19,7 @@ import {
   MushafLine,
   type MushafLineAnimation,
   type MushafLineData,
+  MushafLineWindow,
   type MushafSlice,
   MushafSurahName,
   type MushafThemeSelection,
@@ -94,6 +95,19 @@ export type LineHarnessProps = {
   dataFiles: {words: string; layout: string} | null;
   /** Background of the page, for the dark themes. */
   background: string;
+  /**
+   * When set, `lines` are shown through one `<MushafLineWindow>` in one Sequence (from `from`, for
+   * `durationInFrames`) instead of a Sequence each: `steps` drive it (frames; a linear scroll of
+   * `scrollFrames`), or `position` does. Null: the per-line Sequences.
+   */
+  window: {
+    visibleLines: number;
+    steps: number[] | null;
+    position: number | null;
+    scrollFrames: number;
+    neighbourOpacity: number;
+    preloadLines: number;
+  } | null;
 };
 
 export const defaultLineHarnessProps: LineHarnessProps = {
@@ -127,6 +141,7 @@ export const defaultLineHarnessProps: LineHarnessProps = {
   data: null,
   dataFiles: null,
   background: '#ffffff',
+  window: null,
 };
 
 export const calculateLineHarnessMetadata: CalculateMetadataFunction<LineHarnessProps> = ({props}) => {
@@ -190,6 +205,7 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
   resolve,
   data,
   background,
+  window,
 }) => {
   const {width} = useVideoConfig();
   const resolvedFontSize = fontSize ?? fontSizeForWidth(width);
@@ -274,7 +290,36 @@ export const LineHarness: React.FC<LineHarnessProps> = ({
           />
         </Sequence>
       ) : null}
-      {lines.map((line, i) => {
+      {window ? (
+        <Sequence
+          from={from}
+          durationInFrames={durationInFrames ?? undefined}
+          premountFor={premountFor}
+          name="window"
+          style={{top: 0, height: window.visibleLines * resolvedLineHeight}}
+        >
+          <MushafLineWindow
+            lines={lines}
+            {...(window.steps
+              ? {steps: window.steps, scrollTiming: linearTiming({durationInFrames: window.scrollFrames})}
+              : {position: window.position ?? 0})}
+            visibleLines={window.visibleLines}
+            neighbourOpacity={window.neighbourOpacity}
+            preloadLines={window.preloadLines}
+            fontSize={resolvedFontSize}
+            lineHeight={resolvedLineHeight}
+            fit={fit}
+            framed={framed}
+            enter={enterAnimation}
+            exit={exitAnimation}
+            activeWordId={activeWordId}
+            activeWordStyle={{color: '#b30000'}}
+            wordStyle={wordStyle}
+            {...fonts(lines[0]?.fontSet ?? 'qpc-v4')}
+          />
+        </Sequence>
+      ) : null}
+      {(window ? [] : lines).map((line, i) => {
         const lineData = sliceOnData && slice ? {...line, slice} : line;
         return (
           <Sequence

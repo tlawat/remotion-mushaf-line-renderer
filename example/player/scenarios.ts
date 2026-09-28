@@ -134,6 +134,87 @@ export const scenarios: Record<string, LineHarnessProps> = {
   'header-cdn': {...base, lines: [header()]},
   /** The shared fonts are missing from the public folder: FONT_HTTP names the surah-name font. */
   'header-404': {...base, lines: [header()], sharedFontsUrl: '/missing'},
+  /**
+   * A window of three lines over the five synthetic ayah lines (three pages): a linear 10-frame
+   * scroll finishing at every step, so the position is 0 at frame 0, 0.5 at frame 15, 1 at frame 20.
+   */
+  window: {
+    ...base,
+    lines: [justified(), justifiedShort(), centered(), twoCodePoints(), twoAyahs()],
+    durationInFrames: 200,
+    window: {
+      visibleLines: 3,
+      steps: [0, 20, 40, 60, 80],
+      position: null,
+      scrollFrames: 10,
+      neighbourOpacity: 1,
+      preloadLines: 1,
+    },
+  },
+  /** The same with the neighbours dimmed. */
+  'window-dim': {
+    ...base,
+    lines: [justified(), justifiedShort(), centered(), twoCodePoints(), twoAyahs()],
+    durationInFrames: 200,
+    window: {
+      visibleLines: 3,
+      steps: [0, 20, 40, 60, 80],
+      position: null,
+      scrollFrames: 10,
+      neighbourOpacity: 0.45,
+      preloadLines: 1,
+    },
+  },
+  /** Two steps closer than the scroll (35 after 30): one continuous movement over two lines. */
+  'window-overlap': {
+    ...base,
+    lines: [justified(), justifiedShort(), centered(), twoCodePoints(), twoAyahs()],
+    durationInFrames: 200,
+    window: {
+      visibleLines: 3,
+      steps: [0, 30, 35, 70, 75],
+      position: null,
+      scrollFrames: 10,
+      neighbourOpacity: 1,
+      preloadLines: 1,
+    },
+  },
+  /** The first step in the future: line 0 rises from the slot below into the centre by frame 20. */
+  'window-first-scroll': {
+    ...base,
+    lines: [justified(), justifiedShort(), centered(), twoCodePoints(), twoAyahs()],
+    durationInFrames: 200,
+    window: {
+      visibleLines: 3,
+      steps: [20, 50, 80, 110, 140],
+      position: null,
+      scrollFrames: 10,
+      neighbourOpacity: 1,
+      preloadLines: 1,
+    },
+  },
+  /** A position given directly: a quarter of the way from line 1 to line 2. */
+  'window-position': {
+    ...base,
+    lines: [justified(), justifiedShort(), centered(), twoCodePoints(), twoAyahs()],
+    window: {visibleLines: 3, steps: null, position: 1.25, scrollFrames: 10, neighbourOpacity: 1, preloadLines: 1},
+  },
+  /** The whole window fading in over 20 frames. */
+  'window-enter': {
+    ...base,
+    lines: [justified(), justifiedShort(), centered(), twoCodePoints(), twoAyahs()],
+    enter: 'fade',
+    enterFrames: 20,
+    durationInFrames: 200,
+    window: {
+      visibleLines: 3,
+      steps: [0, 40, 80, 120, 160],
+      position: null,
+      scrollFrames: 10,
+      neighbourOpacity: 1,
+      preloadLines: 1,
+    },
+  },
   'font-404': {...base, fontUrl: '/fonts/qpc-v4-tajweed/missing.woff2'},
   'font-html': {...base, fontUrl: '/player/index.html'},
   /**

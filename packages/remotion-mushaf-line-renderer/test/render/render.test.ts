@@ -110,6 +110,14 @@ type HarnessProps = {
   data: {words?: string; layout?: string} | null;
   dataFiles: {words: string; layout: string} | null;
   background: string;
+  window: {
+    visibleLines: number;
+    steps: number[] | null;
+    position: number | null;
+    scrollFrames: number;
+    neighbourOpacity: number;
+    preloadLines: number;
+  } | null;
 };
 
 const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
@@ -143,6 +151,7 @@ const harnessProps = (overrides: Partial<HarnessProps> = {}): HarnessProps => ({
   data: null,
   dataFiles: null,
   background: '#ffffff',
+  window: null,
   ...overrides,
 });
 
@@ -254,6 +263,51 @@ describe.skipIf(!hasFixtureFont)('rendering the example with @remotion/renderer'
     expect(a.equals(blank)).toBe(false);
     expect(a.length).toBeGreaterThan(blank.length);
     writeFileSync(path.join(here, 'last-still.png'), a);
+  });
+
+  it('scrolls a window of lines as one: settled frames are stills, the scroll in between moves', async () => {
+    // Three lines, a 10-frame linear scroll finishing at frame 20: at rest on line 0 for frames
+    // 0-10, moving over 11-19, at rest on line 1 from 20.
+    const lines = [syntheticLine(2, 3), syntheticLine(2, 4), syntheticLine(1, 2)];
+    const window = {
+      visibleLines: 3,
+      steps: [0, 20, 200],
+      position: null,
+      scrollFrames: 10,
+      neighbourOpacity: 1,
+      preloadLines: 1,
+    };
+    const inputProps = harnessProps({lines, window, durationInFrames: 300});
+    const composition = await selectComposition({serveUrl, id: 'LineHarness', inputProps, ...renderer});
+    const outputDir = path.join(workDir, 'window-frames');
+    await renderFrames({
+      composition,
+      serveUrl,
+      inputProps,
+      imageFormat: 'png',
+      outputDir,
+      frameRange: [0, 25],
+      concurrency: 2,
+      onStart: () => undefined,
+      onFrameUpdate: () => undefined,
+      ...renderer,
+    });
+    const files = readdirSync(outputDir)
+      .filter((f) => f.endsWith('.png'))
+      .sort((x, y) => Number(x.match(/\d+/)?.[0]) - Number(y.match(/\d+/)?.[0]));
+    expect(files).toHaveLength(26);
+    const frames = files.map((f) => readFileSync(path.join(outputDir, f)));
+    // The scroll's local frame is 0 at frame 10 (progress exactly 0), so the first moved frame is 11.
+    for (let i = 1; i <= 10; i++) expect(frames[i]!.equals(frames[0]!)).toBe(true);
+    for (let i = 11; i < 20; i++) expect(frames[i]!.equals(frames[i - 1]!)).toBe(false);
+    for (let i = 21; i <= 25; i++) expect(frames[i]!.equals(frames[20]!)).toBe(true);
+    expect(frames[20]!.equals(frames[0]!)).toBe(false);
+    // The two forms agree at rest: a position given directly is the settled frame of the steps.
+    const atZero = await still(serveUrl, harnessProps({lines, window: {...window, steps: null, position: 0}}));
+    const atOne = await still(serveUrl, harnessProps({lines, window: {...window, steps: null, position: 1}}));
+    expect(atZero.equals(frames[0]!)).toBe(true);
+    expect(atOne.equals(frames[20]!)).toBe(true);
+    expect(atZero.equals(await still(serveUrl, harnessProps({lines: []})))).toBe(false);
   });
 
   it('renders the fade entrance frame by frame, settles, then leaves through the exit', async () => {

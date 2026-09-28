@@ -37,6 +37,7 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 - [Slicing a line](#slicing-a-line)
 - [Following a recording](#following-a-recording)
 - [Entrances and exits](#entrances-and-exits)
+- [Several lines at once](#several-lines-at-once)
 - [Surah names and juz names](#surah-names-and-juz-names)
 - [Fonts](#fonts)
 - [When the CDN fails](#when-the-cdn-fails)
@@ -542,6 +543,98 @@ gives the cross-fade instead, which suits `slide()`. `<TransitionSeries>` works 
 `<MushafLine>` (without `enter`/`exit`) in a `<TransitionSeries.Sequence>` and let the series drive
 both sides.
 
+## Several lines at once
+
+`<MushafLineWindow>` shows a *window* of lines, the way a teleprompter or a lyrics screen does:
+`visibleLines` slots (default 3) stacked a line-height apart, the current line in the middle one
+and its neighbours above and below. When the current line changes, the whole stack scrolls up by
+exactly one line-height in one shared movement: the next line slides in from below, the top line
+slides out, and nothing enters or exits on its own.
+
+```tsx
+import {MushafLineWindow, scheduleLines} from '@tlawat/remotion-mushaf-line';
+
+// calculateMetadata: the lines of the passage and when each is on screen (seconds)
+const schedule = scheduleLines(lines, timings);
+
+// composition
+const {fps} = useVideoConfig();
+const shown = schedule.map((s) => lines[s.index]);
+const steps = schedule.map((s) => Math.round((s.start - leadInSeconds) * fps)); // one frame per line
+<Sequence premountFor={fps} style={{top, height: 3 * lineHeight}}>
+  <MushafLineWindow lines={shown} steps={steps} lineHeight={lineHeight} enter={slideFade()} exit={slideFade()} />
+</Sequence>
+```
+
+### How it is timed
+
+The unit of timing is a **step**: `steps[j]` is the local frame (of the enclosing `<Sequence>`) at
+which line `j` becomes current, one entry per line, never decreasing. `scrollPosition()` turns them
+into a **position**, a fractional line index: `1` means line 1 is in the middle slot, `1.37` means
+every line is 0.37 of a line-height on its way from line 1 to line 2.
+
+Each step contributes the eased progress of one scroll (`scrollTiming`, default `enterTiming()`:
+0.5 s decelerating into place), and the position is the sum of those contributions minus one. Under
+`anchor: 'end'` (the default) the scroll to line `j` *finishes* at `steps[j]`, so the line is centred
+the moment it becomes current, the same convention as a lead-in; `'start'` begins it there instead.
+
+- It is a pure function of the frame: seekable, deterministic, nothing to catch up on.
+- At rest the position is an exact integer (every finished step counts exactly 1, every pending one
+  exactly 0), so a settled frame renders exactly like a static stack.
+- Two steps closer together than the scroll add up into one continuous movement over two lines
+  instead of a jerk. The price is that the position then runs ahead of `steps[j]` by up to a line
+  while they overlap; a shorter `scrollTiming` narrows it. Two equal steps are a two-line glide.
+- A `steps[0]` of `0` or less puts line 0 in the middle from the first frame; a later one lets it
+  rise from the slot below into place (what a schedule with a lead-in gives you for free).
+- Steps are frames, like `<Sequence from>`; `seconds` stays on the timing, so one timing suits every fps.
+
+`scrollPosition({frame, fps, steps, timing?, anchor?})` is exported for anything else that wants the
+same number, and the window also takes a `position` directly (a spring, an `interpolate()`), never both.
+
+### Props
+
+The sizing, font and per-word props of `<MushafLine>` (`fit`, `fontSize`, `lineHeight`, `framed`,
+`activeWordId`, `activeWordStyle`, `wordStyle`, `wordClassName`, `fontSrc`, `fontFallback`), which are
+forwarded to every line, `enter` / `exit` / `style` / `className` / `name` for the window as a whole, and:
+
+| Prop               | Type                                              | Meaning                                                                                                                                              |
+| ------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lines`            | `MushafLineData[]`                                | The lines in reading order. A slice rides on `line.slice` (`getMushafLines({slice: true})`).                                                          |
+| `steps`            | `number[]`                                        | The local frame at which each line becomes current, one per line, never decreasing (`BAD_STEPS` otherwise, `BAD_WINDOW_PROP` on a count mismatch).   |
+| `scrollTiming`     | `TransitionTiming`                                | One scroll's curve and length. Default `enterTiming()`.                                                                                              |
+| `anchor`           | `'end' \| 'start'`                                | The scroll to line `j` finishes (default) or begins at `steps[j]`.                                                                                   |
+| `position`         | `number`                                          | Instead of `steps`: the fractional line index to show.                                                                                               |
+| `visibleLines`     | `number`                                          | Slots in the window; the current line is in the middle. Default 3. Even numbers centre it between two slots.                                          |
+| `neighbourOpacity` | `number`                                          | Opacity of the lines that are not current, 0-1, default 0.45. Blended by distance, so the emphasis travels with the scroll. It is the default `lineStyle`. |
+| `lineStyle`        | `(line, ctx: LineWindowContext) => CSSProperties` | Per-line paint, called for every mounted line on every frame, applied to the line's root. Same rules as `wordStyle`: paint only, pure. An `opacity` it returns wins over `neighbourOpacity`. |
+| `lineClassName`    | `(line, ctx) => string`                           | Per-line class name on the line's root.                                                                                                              |
+| `preloadLines`     | `number`                                          | Lines mounted below the window before they scroll into it, so their page fonts are loaded in time. Default 2.                                        |
+
+`LineWindowContext` is `{line, index, position, distance, current, frame, fps}`: `distance` is
+`|index - position|` (0 in the middle, 1 one slot away, fractional while scrolling) and `current` is
+`index === round(position)`. The word hooks receive the window's local `frame`, so a per-word style
+and a per-line style are the same kind of function at two levels; `windowLineOpacity({index, position,
+visibleLines, neighbourOpacity?})` gives the number the default dimming uses, to build on.
+
+A line fades out over the last line-height before the window edge, so a line slides in and out of
+the window as a fade, never a cut; that part is the window's own and no `lineStyle` needs to redo it.
+Only the lines that can be inside the window (plus `preloadLines` below it) are mounted, so the tree
+is a function of the position alone, and every mounted line still waits for its page font like a line
+of its own. The root is a normal-flow block of `visibleLines × lineHeight` with `overflow: hidden`;
+place it with `style` or the enclosing `<Sequence style>`. `enter` / `exit` animate the whole window
+(`slideFade`'s `distance` is a percentage of the window, so `slideFade({distance: 28 / visibleLines})`
+keeps the line-sized travel).
+
+### DOM contract
+
+```html
+<div class="mushaf-line-window" data-visible-lines="3" data-position="1.3700" data-current="1" style="position:relative;width:100%;height:<3 × lineHeight>px;overflow:hidden">
+  <!-- presentation wrapper when `enter` / `exit` is set -->
+  <div class="mushaf-line-window__track" style="position:absolute;...;transform:translateY(-<position × lineHeight>px)">
+    <div class="mushaf-line-window__slot" data-index="1" data-current="true" data-distance="0.3700" style="position:absolute;top:<(1 + 1) × lineHeight>px;height:<lineHeight>px;opacity:<edge fade>">
+      <div class="mushaf-line" ... style="...;opacity:<lineStyle>">   <!-- unchanged, see the DOM contract below -->
+```
+
 ## Surah names and juz names
 
 The page fonts hold a page's words only. Two more fonts QUL publishes hold what is printed around
@@ -867,6 +960,8 @@ across package copies.
 | `UNSUPPORTED_LINE_TYPE`                  | An internal renderer was given a line of another type; `<MushafLine>` never raises it.                                                          |
 | `BAD_ENTER`, `BAD_EXIT`                  | `enter` / `exit` must be a presentation or `{presentation, timing?}` with a `TransitionTiming`; `BAD_EXIT` also when the Sequence has no finite length. |
 | `BAD_SIZE`                               | `fontSize` / `lineHeight` must be positive finite numbers.                                                                                     |
+| `BAD_STEPS`                              | `steps` / `scrollPosition()`: not an array of finite frames, one that decreases, or a `timing` that is not a `TransitionTiming`.               |
+| `BAD_WINDOW_PROP`                        | `<MushafLineWindow>`: both or neither of `steps` and `position`, a step count that differs from the line count, or a bad `visibleLines`, `neighbourOpacity` or `preloadLines`. |
 | `BAD_DATA_URL`                           | `data.words` / `data.layout` is not an absolute URL, a `staticFile()` path or a root-relative path, or is root-relative in Node, where only an absolute URL can be fetched. |
 | `DATA_HTTP`                              | An export URL answered with an HTTP error (404: QUL re-published under a new prefix, or your mirror path is wrong). The message names the pinned URL. |
 | `DATA_NETWORK`                           | The fetch failed (offline, CORS on a mirror, blocked host). Mirror the exports into `public/` and pass them as `data`.                         |

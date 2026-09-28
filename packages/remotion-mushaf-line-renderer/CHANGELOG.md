@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Several lines at once.** New `<MushafLineWindow lines steps>`: a window of `visibleLines` slots
+  (default 3) onto a stack of lines, the current line in the middle, that scrolls up by exactly one
+  line-height in one shared movement when the current line changes. `steps` is the local frame at
+  which each line becomes current (one per line; from `scheduleLines()` and the fps); the new
+  `scrollPosition({frame, fps, steps, timing?, anchor?})` turns them into a fractional line index
+  (the sum of each step's eased progress, so overlapping steps blend and rest positions are exact
+  integers), `scrollTiming` (default `enterTiming()`) and `anchor: 'end' | 'start'` shape one scroll,
+  and `position` drives the window directly instead. Lines fade over the window edge, the lines that
+  are not current are dimmed to `neighbourOpacity` (default 0.45) through the default of the new
+  per-line paint hooks `lineStyle(line, ctx)` / `lineClassName(line, ctx)` (a `LineWindowContext`
+  with `index`, `position`, `distance`, `current`), and `windowLineOpacity()` exposes that number.
+  Only the lines that can be in the window (plus `preloadLines`) are mounted. The word hooks, sizing
+  and font props are forwarded to every line; `enter` / `exit` animate the whole window. New errors
+  `BAD_STEPS`, `BAD_WINDOW_PROP`. The example's `Recitation` shows the passage through it
+  (`visibleLines`, `neighbourOpacity`; `null` keeps one line at a time).
 - **The rings around the small connective letters are gone from the presets.** The colour font draws
   a thin box around each small connective letter and an ellipse around its vowel (CPAL entry 14:
   3,065 layers over the 604 page fonts, every one a stroked ring and never a letter), which the

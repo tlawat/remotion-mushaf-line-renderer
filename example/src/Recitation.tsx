@@ -14,6 +14,7 @@ import {
   lineHeightForFontSize,
   MushafLine,
   type MushafLineData,
+  MushafLineWindow,
   type MushafThemeSelection,
   parseRecitationTimings,
   type RecitationTimings,
@@ -46,6 +47,10 @@ export type RecitationProps = {
   slice: boolean;
   /** When the reciter repeats a word after a pause: change lines when it is first heard, or at its last recitation. */
   occurrence: WordOccurrence;
+  /** Lines on screen at once, the current one in the middle (a `<MushafLineWindow>`); null shows one line at a time. */
+  visibleLines: number | null;
+  /** Opacity of the lines around the current one in the window, 0-1. */
+  neighbourOpacity: number;
   /** Filled in by calculateMetadata. */
   lines: MushafLineData[] | null;
   schedule: LineSchedule[] | null;
@@ -62,6 +67,8 @@ export const defaultRecitationProps: RecitationProps = {
   leadInSeconds: 0.4,
   slice: true,
   occurrence: 'first',
+  visibleLines: 3,
+  neighbourOpacity: 0.45,
   lines: null,
   schedule: null,
 };
@@ -108,15 +115,62 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   return {props: {...props, lines, schedule}, durationInFrames};
 };
 
-export const Recitation: React.FC<RecitationProps> = ({lines, schedule, audioFile, leadInSeconds, fonts}) => {
-  const {width, height, fps} = useVideoConfig();
+export const Recitation: React.FC<RecitationProps> = ({
+  lines,
+  schedule,
+  audioFile,
+  leadInSeconds,
+  fonts,
+  visibleLines,
+  neighbourOpacity,
+}) => {
+  const {width, height, fps, durationInFrames} = useVideoConfig();
   if (!lines || !schedule) throw new Error('Recitation: `lines`/`schedule` are null; calculateMetadata fills them in.');
   const measure = width - 2 * MARGIN_X;
   const fontSize = fontSizeForWidth(measure);
   const lineHeight = lineHeightForFontSize(fontSize);
-  const top = Math.round((height - lineHeight) / 2);
   const enterFrames = enterTiming().getDurationInFrames({fps});
   const exitFrames = exitTiming().getDurationInFrames({fps});
+  if (visibleLines !== null) {
+    // One window for the whole passage: line j becomes current `leadInSeconds` before its first word
+    // is heard, and the scroll that brings it to the centre finishes exactly then (the default anchor),
+    // so there is no `- enterFrames` here. The window itself fades in before the first step and out
+    // with the composition.
+    const windowLines = schedule.map((slot) => lines[slot.index]!);
+    const steps = schedule.map((slot) => Math.round((slot.start - leadInSeconds) * fps));
+    const from = Math.max(0, (steps[0] ?? 0) - enterFrames);
+    return (
+      <AbsoluteFill style={{backgroundColor: '#fbf7ee', color: '#1b1b1b'}}>
+        <Audio src={staticFile(audioFile)} />
+        <Sequence
+          from={from}
+          durationInFrames={durationInFrames - from}
+          premountFor={fps}
+          name={`${windowLines.length} lines, ${visibleLines} at once`}
+          style={{
+            top: Math.round((height - visibleLines * lineHeight) / 2),
+            height: visibleLines * lineHeight,
+            left: MARGIN_X,
+            width: measure,
+          }}
+        >
+          <MushafLineWindow
+            lines={windowLines}
+            steps={steps.map((step) => step - from)}
+            visibleLines={visibleLines}
+            neighbourOpacity={neighbourOpacity}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            // slideFade's travel is a share of the box; the window is `visibleLines` boxes tall.
+            enter={{presentation: slideFade({distance: 28 / visibleLines}), timing: enterTiming()}}
+            exit={{presentation: slideFade({distance: 28 / visibleLines}), timing: exitTiming()}}
+            {...fontProps(fonts, windowLines[0]?.fontSet ?? 'qpc-v4')}
+          />
+        </Sequence>
+      </AbsoluteFill>
+    );
+  }
+  const top = Math.round((height - lineHeight) / 2);
   return (
     <AbsoluteFill style={{backgroundColor: '#fbf7ee', color: '#1b1b1b'}}>
       <Audio src={staticFile(audioFile)} />
