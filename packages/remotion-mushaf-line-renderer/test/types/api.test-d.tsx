@@ -165,7 +165,7 @@ export const badFit = <MushafLine line={data} fit="stretch" />;
 export const fontsPackage: MushafFontPackage = {
   kind: 'remotion-mushaf-fonts',
   schema: 1,
-  name: 'remotion-mushaf-fonts-qpc-v4-tajweed',
+  name: '@tlawat/mushaf-fonts-qpc-v4-tajweed',
   version: '1.20260912.0',
   mushaf: 'qpc-v4',
   fontSet: 'qpc-v4-tajweed',

@@ -3,8 +3,6 @@
 // stack down the page and stay.
 import {fade} from '@remotion/transitions/fade';
 import {slide} from '@remotion/transitions/slide';
-import type * as React from 'react';
-import {AbsoluteFill, type CalculateMetadataFunction, Sequence, useVideoConfig} from 'remotion';
 import {
   enterTiming,
   exitTiming,
@@ -17,7 +15,9 @@ import {
   type MushafThemeSelection,
   revealRtl,
   slideFade,
-} from 'remotion-mushaf-line-renderer';
+} from '@tlawat/remotion-mushaf-line';
+import type * as React from 'react';
+import {AbsoluteFill, type CalculateMetadataFunction, Sequence, useVideoConfig} from 'remotion';
 import {type DataFiles, dataFromFiles, type FontMode, fontProps} from './sources';
 
 export type ThreeLinesProps = {

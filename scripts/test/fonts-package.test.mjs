@@ -12,7 +12,7 @@ const survey = JSON.parse(fs.readFileSync(ETAGS_FILE, 'utf8'));
 const def = getMushafDefinition('qpc-v4');
 const fontSetOf = (set) => (set === 'qpc-v4' ? def.fontSets.plain : def.fontSets.color);
 
-describe.each(SETS)('remotion-mushaf-fonts-%s', (set) => {
+describe.each(SETS)('@tlawat/mushaf-fonts-%s', (set) => {
   const manifest = readManifest(set);
   const pkg = JSON.parse(fs.readFileSync(path.join(packageDir(set), 'package.json'), 'utf8'));
 
@@ -47,7 +47,7 @@ describe.each(SETS)('remotion-mushaf-fonts-%s', (set) => {
   });
 
   it('is versioned after its snapshot and generated from its manifest', () => {
-    expect(pkg.name).toBe(`remotion-mushaf-fonts-${set}`);
+    expect(pkg.name).toBe(`@tlawat/mushaf-fonts-${set}`);
     expect(manifest.name).toBe(pkg.name);
     expect(pkg.version).toMatch(/^1\.\d{8}\.\d+$/);
     expect(pkg.version.split('.')[1]).toBe(manifest.snapshot.replaceAll('-', ''));

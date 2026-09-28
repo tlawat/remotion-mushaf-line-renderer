@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased (0.4.0)
+## 0.4.0 (2026-09-28)
 
 - **Fonts packages as the fallback when QUL's CDN fails.** The page fonts still load from QUL's CDN
-  by default. Two new npm packages, `remotion-mushaf-fonts-qpc-v4` (the `'plain'` theme, 43 MB) and
-  `remotion-mushaf-fonts-qpc-v4-tajweed` (every other theme, 51 MB), ship all 604 page fonts of a set,
+  by default. Two new npm packages, `@tlawat/mushaf-fonts-qpc-v4` (the `'plain'` theme, 43 MB) and
+  `@tlawat/mushaf-fonts-qpc-v4-tajweed` (every other theme, 51 MB), ship all 604 page fonts of a set,
   unmodified, as a snapshot of QUL's CDN (versioned `1.<YYYYMMDD>.<patch>`). Pass one to
   `<MushafLine fontFallback>` (or `loadPageFont({fallback})`): the CDN is tried first, and the package
   is used only when it fails (an outage, a firewall, a VPC, a timeout); while rendering the CDN's
@@ -77,7 +77,7 @@ depends on the old shapes; data resolved by 0.2 (`version: 1`) must be resolved 
   `inputProps` (the prop wins, `slice={null}` cancels); `sliceWords(line, slice?)` lists the kept
   words; `wordStyle`'s context gains `inSlice`. New error code `BAD_SLICE`.
 - **Presentations from the root entry.** `slideFade`, `revealRtl` and their pure `*Style`
-  functions are exported from `remotion-mushaf-line-renderer`; the `./presentations/*` subpaths
+  functions are exported from `@tlawat/remotion-mushaf-line`; the `./presentations/*` subpaths
   are removed. `isMushafError()` is exported.
 - **Option types accept `undefined`** for every optional field, so props can be forwarded under
   `exactOptionalPropertyTypes`.
@@ -122,7 +122,7 @@ in the 0.3.0 vocabulary):
 - **Smoother animation.** `enterTiming()` (0.5 s, decelerating) and `exitTiming()` (0.32 s,
   accelerating) are the new defaults, `springyTiming()` is there for a physical settle, and `timing`
   is optional: `enter={slideFade()}` is enough. New `slideFade()` presentation (subpath
-  `remotion-mushaf-line-renderer/presentations/slide-fade`) fades before it settles and travels a
+  `@tlawat/remotion-mushaf-line/presentations/slide-fade`) fades before it settles and travels a
   quarter of a line box; `revealRtl({softness})` can fade its edge instead of cutting it. Explicit
   `{presentation, timing}` pairs behave exactly as before.
 - New error codes `BAD_TAJWEED` and `AYAH_NOT_FOUND`.

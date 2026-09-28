@@ -2,7 +2,7 @@
   "name": "remotion-mushaf-line-renderer-example",
   "private": true,
   "version": "0.0.0",
-  "description": "Example Remotion project for remotion-mushaf-line-renderer: three lines of a page with fade, slide and revealRtl entrances, a recited passage driven by a timings JSON, plus a <Player> page used by the browser tests.",
+  "description": "Example Remotion project for @tlawat/remotion-mushaf-line: three lines of a page with fade, slide and revealRtl entrances, a recited passage driven by a timings JSON, plus a <Player> page used by the browser tests.",
   "scripts": {
     "dev": "bun run --cwd .. fonts-packages:fill && remotion studio --no-open",
     "render": "remotion render ThreeLines out/three-lines.mp4",
@@ -15,12 +15,12 @@
     "@remotion/cli": "4.0.521",
     "@remotion/player": "4.0.521",
     "@remotion/transitions": "4.0.521",
+    "@tlawat/mushaf-fonts-qpc-v4": "workspace:*",
+    "@tlawat/mushaf-fonts-qpc-v4-tajweed": "workspace:*",
+    "@tlawat/remotion-mushaf-line": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "remotion": "4.0.521",
-    "remotion-mushaf-fonts-qpc-v4": "workspace:*",
-    "remotion-mushaf-fonts-qpc-v4-tajweed": "workspace:*",
-    "remotion-mushaf-line-renderer": "workspace:*"
+    "remotion": "4.0.521"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

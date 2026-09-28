@@ -8,7 +8,7 @@ import {fontFileFor} from './font-file';
 export type FontStep = {
   readonly origin: MushafFontOrigin;
   readonly url: string;
-  /** For messages: "QUL's CDN", "remotion-mushaf-fonts-qpc-v4@1.20260912.0", "your fontSrc". */
+  /** For messages: "QUL's CDN", "@tlawat/mushaf-fonts-qpc-v4@1.20260912.0", "your fontSrc". */
   readonly source: string;
   readonly expect?: {readonly bytes: number; readonly sha256: string};
 };
@@ -35,7 +35,7 @@ const warnOnce = (key: string, message: string): void => {
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
-const packageName = (fontSet: string): string => `remotion-mushaf-fonts-${fontSet}`;
+const packageName = (fontSet: string): string => `@tlawat/mushaf-fonts-${fontSet}`;
 
 /** Loose check: is this value shaped like a fonts package's default export? */
 export const isFontPackage = (value: unknown): value is MushafFontPackage =>
@@ -58,7 +58,7 @@ const assertPackage = (
     });
   if (pkg.schema !== 1)
     throw problem(
-      `${describeValue(pkg.name)} has package schema ${describeValue(pkg.schema)}; this version of remotion-mushaf-line-renderer reads schema 1 (upgrade one of the two packages)`,
+      `${describeValue(pkg.name)} has package schema ${describeValue(pkg.schema)}; this version of @tlawat/remotion-mushaf-line reads schema 1 (upgrade one of the two packages)`,
     );
   if (typeof pkg.name !== 'string' || typeof pkg.version !== 'string' || typeof pkg.fontSet !== 'string')
     throw problem('name, version and fontSet must be strings');
@@ -173,7 +173,7 @@ export const planFontSource = (
     if (match && isFontPackage(src)) {
       warnOnce(
         `fallback-ignored:${fontSet.id}`,
-        `remotion-mushaf-line-renderer: fontFallback is ignored because fontSrc is already a fonts package (${src.name}).`,
+        `@tlawat/remotion-mushaf-line: fontFallback is ignored because fontSrc is already a fonts package (${src.name}).`,
       );
     } else if (match) {
       steps.push(packageStep(match, page, 'BAD_FONT_FALLBACK', 'fontFallback'));

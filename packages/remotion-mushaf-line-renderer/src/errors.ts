@@ -31,7 +31,7 @@ export type MushafErrorCode =
   | 'CANVAS_PRESENTATION';
 
 /**
- * Every failure raised by remotion-mushaf-line-renderer. `code` is stable and documented; the
+ * Every failure raised by @tlawat/remotion-mushaf-line. `code` is stable and documented; the
  * message always names the offending value and what to do about it.
  */
 export class MushafError extends Error {

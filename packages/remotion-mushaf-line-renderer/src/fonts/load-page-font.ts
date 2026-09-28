@@ -166,7 +166,7 @@ const warnFallback = (plan: FontSourcePlan, used: FontStep, tried: readonly Font
   if (warnedFallbacks.has(key)) return;
   warnedFallbacks.add(key);
   console.warn(
-    `remotion-mushaf-line-renderer: page ${page} loaded from ${used.source} because ${tried
+    `@tlawat/remotion-mushaf-line: page ${page} loaded from ${used.source} because ${tried
       .map((t) => `${t.source} failed (${t.code}: ${t.message})`)
       .join('; ')}. Later pages that fall back are not reported again.`,
   );

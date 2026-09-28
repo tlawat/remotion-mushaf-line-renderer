@@ -1,7 +1,7 @@
 {
-  "name": "remotion-mushaf-fonts-qpc-v4-tajweed",
+  "name": "@tlawat/mushaf-fonts-qpc-v4-tajweed",
   "version": "1.20260912.0",
-  "description": "QUL's KFGQPC V4 colour (COLR/CPAL tajweed) page fonts, used by every theme except 'plain', unmodified. The fallback (or offline) font source of remotion-mushaf-line-renderer; bundled as assets when imported.",
+  "description": "QUL's KFGQPC V4 colour (COLR/CPAL tajweed) page fonts, used by every theme except 'plain', unmodified. The fallback (or offline) font source of @tlawat/remotion-mushaf-line; bundled as assets when imported.",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",

@@ -50,7 +50,7 @@ Headers observed:
 ## 3. Layout data you need alongside the fonts
 
 From QUL (Tarteel) downloads. (The
-`remotion-mushaf-line-renderer` package reads exactly these two files — the layout SQLite and the
+`@tlawat/remotion-mushaf-line` package reads exactly these two files — the layout SQLite and the
 `qpc-v4.json` words — at render time, straight from QUL's exports on Tarteel's CDN; the URLs it pins
 live in `scripts/lib/datasets.mjs` and `src/mushafs.ts`, and `bun run qul data`
 mirrors and validates them.)

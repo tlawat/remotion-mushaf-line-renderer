@@ -885,7 +885,7 @@ test.describe('fonts package fallback', () => {
     await rowsVisible(page, 1);
     await expect(page.locator(ROOT).first()).toHaveAttribute('data-font-origin', 'package');
     expect(await fontsLoaded(page, ['mushaf-qpc-v4-tajweed-p10'])).toBe(true);
-    expect(warnings.some((w) => w.includes('loaded from remotion-mushaf-fonts-qpc-v4-tajweed@'))).toBe(true);
+    expect(warnings.some((w) => w.includes('loaded from @tlawat/mushaf-fonts-qpc-v4-tajweed@'))).toBe(true);
     const fromPackage = await rowShot(page);
 
     // The same line with the CDN up (serving the very file the package holds).
@@ -930,7 +930,7 @@ test.describe('fonts package fallback', () => {
     const err = page.locator('[data-error="FONT_UNAVAILABLE"]');
     await expect(err).toBeVisible();
     await expect(err).toContainText("QUL's CDN");
-    await expect(err).toContainText('remotion-mushaf-fonts-qpc-v4-tajweed@');
+    await expect(err).toContainText('@tlawat/mushaf-fonts-qpc-v4-tajweed@');
   });
 });
 

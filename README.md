@@ -10,21 +10,19 @@ per-page fonts and 15-line layout.
 
 ## Install
 
-Not on npm yet. Until the first release, build it from this repository (see [Development](#development)).
-
 ```bash
-npm install remotion-mushaf-line-renderer
+npm install @tlawat/remotion-mushaf-line
 ```
 
 Peer dependencies: `remotion` and `@remotion/transitions` ≥ 4.0.374, `react` ≥ 18.
 
-Optional, for when QUL's CDN fails: `remotion-mushaf-fonts-qpc-v4-tajweed` (colour themes) or
-`remotion-mushaf-fonts-qpc-v4` (`'plain'`), the page fonts as npm packages.
+Optional, for when QUL's CDN fails: `@tlawat/mushaf-fonts-qpc-v4-tajweed` (colour themes) or
+`@tlawat/mushaf-fonts-qpc-v4` (`'plain'`), the page fonts as npm packages.
 
 ## Usage
 
 ```tsx
-import {MushafLine, getMushafLines, slideFade} from 'remotion-mushaf-line-renderer';
+import {MushafLine, getMushafLines, slideFade} from '@tlawat/remotion-mushaf-line';
 
 // calculateMetadata(): the printed lines that carry At-Tawbah 9:1-11
 const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});

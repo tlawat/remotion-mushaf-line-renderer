@@ -176,7 +176,7 @@ describe('assertLineData', () => {
     const good = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2});
     const bad = (patch: Record<string, unknown>) => () => assertLineData({...good, ...patch});
     expect(bad({version: 2})).toThrow(
-      /version is 2 but this version of remotion-mushaf-line-renderer understands version 3/,
+      /version is 2 but this version of @tlawat\/remotion-mushaf-line understands version 3/,
     );
     expect(bad({mushaf: 'other'})).toThrow(MushafError);
     expect(bad({mushaf: 'qpc-v4-tajweed'})).toThrow(/Unknown mushaf "qpc-v4-tajweed"/);

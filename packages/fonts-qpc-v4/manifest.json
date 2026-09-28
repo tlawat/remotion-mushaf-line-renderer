@@ -1,7 +1,7 @@
 {
   "kind": "remotion-mushaf-fonts/manifest",
   "schema": 1,
-  "name": "remotion-mushaf-fonts-qpc-v4",
+  "name": "@tlawat/mushaf-fonts-qpc-v4",
   "mushaf": "qpc-v4",
   "fontSet": "qpc-v4",
   "snapshot": "2026-09-12",

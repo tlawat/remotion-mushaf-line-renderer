@@ -3,8 +3,6 @@
 // produced by tools/align-recitation.py. The composition asks the package for the lines that carry
 // those ayahs, schedules one <Sequence> per line from the time of its first word, and animates each
 // line in and out with the package's slide+fade.
-import type * as React from 'react';
-import {AbsoluteFill, Audio, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {
   enterTiming,
   exitTiming,
@@ -15,7 +13,9 @@ import {
   type MushafLineData,
   type MushafThemeSelection,
   slideFade,
-} from 'remotion-mushaf-line-renderer';
+} from '@tlawat/remotion-mushaf-line';
+import type * as React from 'react';
+import {AbsoluteFill, Audio, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {type DataFiles, dataFromFiles, type FontMode, fontProps} from './sources';
 
 export type WordTiming = {id: string; start: number; end: number};

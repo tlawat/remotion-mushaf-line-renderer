@@ -1,6 +1,6 @@
 name: Fonts packages
 
-# The two fonts packages (packages/fonts-<set>/, remotion-mushaf-fonts-<set> on npm) hold QUL's page
+# The two fonts packages (packages/fonts-<set>/, @tlawat/mushaf-fonts-<set> on npm) hold QUL's page
 # fonts as of a snapshot date. This workflow
 #   - checks every week whether QUL's CDN still serves the snapshot's files (drift), and on drift
 #     downloads the current files, takes a new snapshot and opens a pull request with it;
@@ -85,7 +85,7 @@ jobs:
           commit-message: Take a new snapshot of QUL's ${{ matrix.set }} fonts
           title: New snapshot of QUL's ${{ matrix.set }} fonts
           body: |
-            QUL's CDN no longer serves the files of the current snapshot of `remotion-mushaf-fonts-${{ matrix.set }}` (or a snapshot was asked for).
+            QUL's CDN no longer serves the files of the current snapshot of `@tlawat/mushaf-fonts-${{ matrix.set }}` (or a snapshot was asked for).
             This updates `manifest.json`, the generated entry, the version and the CHANGELOG. After merging, publish with the "Fonts packages" workflow.
 
   publish:

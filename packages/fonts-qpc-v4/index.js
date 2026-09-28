@@ -6,7 +6,7 @@ const file = (url, bytes, sha256) => ({url: url.href, bytes, sha256});
 export default {
   kind: 'remotion-mushaf-fonts',
   schema: 1,
-  name: 'remotion-mushaf-fonts-qpc-v4',
+  name: '@tlawat/mushaf-fonts-qpc-v4',
   version: '1.20260912.0',
   mushaf: 'qpc-v4',
   fontSet: 'qpc-v4',

@@ -1,6 +1,6 @@
 {
-  "name": "remotion-mushaf-line-renderer",
-  "version": "0.3.0",
+  "name": "@tlawat/remotion-mushaf-line",
+  "version": "0.4.0",
   "description": "Render lines of the KFGQPC V4 (1441H) mushaf in Remotion, exactly as printed, with @remotion/transitions entrances and exits.",
   "license": "MIT",
   "repository": {
@@ -57,16 +57,16 @@
   },
   "peerDependencies": {
     "@remotion/transitions": ">=4.0.374",
+    "@tlawat/mushaf-fonts-qpc-v4": "^1.20260912.0",
+    "@tlawat/mushaf-fonts-qpc-v4-tajweed": "^1.20260912.0",
     "react": ">=18.0.0",
-    "remotion": ">=4.0.374",
-    "remotion-mushaf-fonts-qpc-v4": "^1.20260912.0",
-    "remotion-mushaf-fonts-qpc-v4-tajweed": "^1.20260912.0"
+    "remotion": ">=4.0.374"
   },
   "peerDependenciesMeta": {
-    "remotion-mushaf-fonts-qpc-v4": {
+    "@tlawat/mushaf-fonts-qpc-v4": {
       "optional": true
     },
-    "remotion-mushaf-fonts-qpc-v4-tajweed": {
+    "@tlawat/mushaf-fonts-qpc-v4-tajweed": {
       "optional": true
     }
   },
@@ -76,5 +76,9 @@
     "@remotion/renderer": "4.0.521",
     "@remotion/transitions": "4.0.521",
     "remotion": "4.0.521"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

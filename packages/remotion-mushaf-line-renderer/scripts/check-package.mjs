@@ -62,9 +62,9 @@ for (const f of ['dist/esm/index.d.mts', 'dist/cjs/index.d.ts']) {
 }
 // The fonts live in the two fonts packages, which the user imports and passes in: the package never
 // imports them itself (that would put 43-51 MB in every bundle), and they are optional peers.
-if (/(from|import\(|require\()\s*['"]remotion-mushaf-fonts-/.test(`${esmIndex}\n${cjsIndex}`))
+if (/(from|import\(|require\()\s*['"]@tlawat\/mushaf-fonts-/.test(`${esmIndex}\n${cjsIndex}`))
   fail('dist/esm/index.mjs imports a fonts package; the user passes it in (fontSrc / fontFallback)');
-for (const name of ['remotion-mushaf-fonts-qpc-v4', 'remotion-mushaf-fonts-qpc-v4-tajweed']) {
+for (const name of ['@tlawat/mushaf-fonts-qpc-v4', '@tlawat/mushaf-fonts-qpc-v4-tajweed']) {
   if (!pkg.peerDependencies?.[name] || pkg.peerDependenciesMeta?.[name]?.optional !== true)
     fail(`${name} must be an optional peer dependency`);
   if (pkg.dependencies?.[name]) fail(`${name} must not be a dependency: it would install 43-51 MB for everyone`);

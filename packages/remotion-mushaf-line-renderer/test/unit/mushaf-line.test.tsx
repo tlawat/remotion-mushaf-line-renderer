@@ -127,7 +127,7 @@ describe('<MushafLine>', () => {
     const pkg = {
       kind: 'remotion-mushaf-fonts',
       schema: 1,
-      name: 'remotion-mushaf-fonts-qpc-v4',
+      name: '@tlawat/mushaf-fonts-qpc-v4',
       version: '1.20260912.0',
       mushaf: 'qpc-v4',
       fontSet: 'qpc-v4',
@@ -152,7 +152,7 @@ describe('<MushafLine>', () => {
     const pkg = {
       kind: 'remotion-mushaf-fonts',
       schema: 1,
-      name: 'remotion-mushaf-fonts-qpc-v4-tajweed',
+      name: '@tlawat/mushaf-fonts-qpc-v4-tajweed',
       version: '1.20260912.0',
       mushaf: 'qpc-v4',
       fontSet: 'qpc-v4-tajweed',
@@ -167,7 +167,7 @@ describe('<MushafLine>', () => {
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({
         code: 'BAD_FONT_FALLBACK',
-        message: expect.stringContaining('remotion-mushaf-fonts-qpc-v4.'),
+        message: expect.stringContaining('@tlawat/mushaf-fonts-qpc-v4.'),
       }),
     );
     expect(fakes.fetchMock).not.toHaveBeenCalled();

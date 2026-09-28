@@ -72,7 +72,7 @@ export type MushafThemeSelection = 'plain' | MushafThemeName | MushafTheme;
 /**
  * The two font file sets QUL publishes for the V4 mushaf: `'qpc-v4'` (monochrome outlines) and
  * `'qpc-v4-tajweed'` (COLR/CPAL colour font). Derived from the theme; each ships as its own fonts
- * package (`remotion-mushaf-fonts-<fontSet>`), and CDN paths are organised the same way.
+ * package (`@tlawat/mushaf-fonts-<fontSet>`), and CDN paths are organised the same way.
  */
 export type MushafFontSet = 'qpc-v4' | 'qpc-v4-tajweed';
 
@@ -279,7 +279,7 @@ export type MushafLineCommonProps = {
   readonly fontSrc?: MushafFontSrc;
   /**
    * A fonts package to load the page font from when `fontSrc` fails, e.g.
-   * `import fonts from 'remotion-mushaf-fonts-qpc-v4-tajweed'`. See README → When the CDN fails.
+   * `import fonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed'`. See README → When the CDN fails.
    */
   readonly fontFallback?: MushafFontFallback;
 };
@@ -390,7 +390,7 @@ export type MushafFontFile = {
 export type GetMushafFontFileOptions = MushafSelection & {readonly page: number};
 
 /**
- * What a fonts package (`remotion-mushaf-fonts-qpc-v4`, `remotion-mushaf-fonts-qpc-v4-tajweed`)
+ * What a fonts package (`@tlawat/mushaf-fonts-qpc-v4`, `@tlawat/mushaf-fonts-qpc-v4-tajweed`)
  * exports by default: the page fonts of one font set, as URLs your bundler serves. Importing it is
  * what puts the files in your bundle; nothing is downloaded unless a line needs it.
  */
@@ -420,7 +420,7 @@ export type MushafFontResolver = (file: MushafFontFile) => string | readonly str
  * Where page fonts come from.
  *
  * - `'cdn'` (default): QUL's CDN.
- * - a fonts package (`import fonts from 'remotion-mushaf-fonts-qpc-v4-tajweed'`): the package only;
+ * - a fonts package (`import fonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed'`): the package only;
  *   the CDN is never contacted. For offline and byte-reproducible renders.
  * - a `MushafFontResolver`: your own URLs.
  */

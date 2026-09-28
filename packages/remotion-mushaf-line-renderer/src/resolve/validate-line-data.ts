@@ -32,7 +32,7 @@ export const assertLineData = (value: unknown): MushafLineData => {
   if (data.version !== 3) {
     throw new MushafError(
       'BAD_LINE_DATA',
-      `MushafLineData.version is ${describeValue(data.version)} but this version of remotion-mushaf-line-renderer understands version 3. Resolve the line again with getMushafLine() or upgrade the package.`,
+      `MushafLineData.version is ${describeValue(data.version)} but this version of @tlawat/remotion-mushaf-line understands version 3. Resolve the line again with getMushafLine() or upgrade the package.`,
       {field: 'version'},
     );
   }

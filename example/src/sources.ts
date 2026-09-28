@@ -1,9 +1,9 @@
-import {staticFile} from 'remotion';
 // The fonts packages: importing them is what puts their files in the bundle (as assets); nothing is
 // downloaded unless a line needs a page from them.
-import plainFonts from 'remotion-mushaf-fonts-qpc-v4';
-import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
-import type {MushafDataSource, MushafFontFallback, MushafFontSet, MushafFontSrc} from 'remotion-mushaf-line-renderer';
+import plainFonts from '@tlawat/mushaf-fonts-qpc-v4';
+import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
+import type {MushafDataSource, MushafFontFallback, MushafFontSet, MushafFontSrc} from '@tlawat/remotion-mushaf-line';
+import {staticFile} from 'remotion';
 
 /**
  * Where the compositions' page fonts come from:

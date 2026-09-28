@@ -106,7 +106,7 @@ redistribute them unmodified and carry the notice the files themselves carry.
   the code imports a fonts package, or if the fonts packages stop being optional peers. At runtime
   the package fetches from QUL's CDN, and falls back to a fonts package the user passes in.
 - **The fonts ship only in the two fonts packages,** `packages/fonts-qpc-v4` and
-  `packages/fonts-qpc-v4-tajweed` (`remotion-mushaf-fonts-<set>` on npm). Each commits a
+  `packages/fonts-qpc-v4-tajweed` (`@tlawat/mushaf-fonts-<set>` on npm). Each commits a
   `manifest.json` (every file's name, size, MD5 and SHA-256), the generated `index.js` / `index.d.ts`,
   its licence and notes; its `fonts/` folder is not committed but filled from the example's mirror
   (`example/public/fonts`, itself a download) or from QUL's CDN, and checked against the manifest:
@@ -124,9 +124,10 @@ redistribute them unmodified and carry the notice the files themselves carry.
   rebuilt pages, downloads them, takes a new snapshot and opens a pull request. By hand:
   `fonts-packages download <set> --out <dir>`, then `fonts-packages snapshot <set> --from <dir>`.
   Change `patch` only for packaging fixes.
-- **Publishing** is the same workflow's `publish` action, fonts packages before the main package. It
-  runs as a dry run unless you untick it, and a real publish also needs the repository variable
-  `FONTS_PUBLISH_ENABLED=true`.
+- **Publishing** the fonts packages is the same workflow's `publish` action. It runs as a dry run
+  unless you untick it, and a real publish also needs the repository variable
+  `FONTS_PUBLISH_ENABLED=true`. The main package is published after the fonts packages, by the
+  *Release* workflow when a `v<version>` tag is pushed (*Run workflow* on it does a dry run).
 
 No font file is committed: `.gitignore` covers `*.ttf`, `*.woff` and `*.woff2` everywhere.
 `bun run qul fonts 1,10,187,604` downloads the fixture pages the suites use into the example's mirror
@@ -184,10 +185,13 @@ Write commit messages that say what changed and why; the changelog is written fr
 
 ## Publishing (maintainers)
 
-Publishing is manual for now.
+The main package is published by the *Release* workflow; publish the fonts packages first when they
+changed (see [Fonts: licence and packaging](#fonts-licence-and-packaging)).
 
 1. Update `version` in `packages/remotion-mushaf-line-renderer/package.json` and move the
    *Unreleased* section of its `CHANGELOG.md` under the new version.
 2. `bun run build && bun run check:package` from the root; `prepublishOnly` runs the same.
-3. `cd packages/remotion-mushaf-line-renderer && npm publish --access public` (or `bun publish`).
-4. Tag the commit (`git tag v0.3.0`) and push the tag.
+3. For a dry run, run the *Release* workflow by hand (*Run workflow*): it runs every check and
+   `npm publish --dry-run`.
+4. Tag the commit (`git tag v0.4.0`) and push the tag: the workflow runs every check, refuses a tag
+   that is not `v` + the package's version, and publishes with provenance (`NPM_TOKEN` secret).

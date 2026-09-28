@@ -6,10 +6,8 @@ import {dissolve} from '@remotion/transitions/dissolve';
 import {fade} from '@remotion/transitions/fade';
 import {none} from '@remotion/transitions/none';
 import {slide} from '@remotion/transitions/slide';
-import type * as React from 'react';
-import {AbsoluteFill, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
-import plainFonts from 'remotion-mushaf-fonts-qpc-v4';
-import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
+import plainFonts from '@tlawat/mushaf-fonts-qpc-v4';
+import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
 import {
   fontSizeForWidth,
   lineHeightForFontSize,
@@ -24,7 +22,9 @@ import {
   type MushafWord,
   revealRtl,
   slideFade,
-} from 'remotion-mushaf-line-renderer';
+} from '@tlawat/remotion-mushaf-line';
+import type * as React from 'react';
+import {AbsoluteFill, type CalculateMetadataFunction, Sequence, staticFile, useVideoConfig} from 'remotion';
 
 export type EnterName = 'plain' | 'none' | 'fade' | 'slide' | 'reveal' | 'soft-reveal' | 'slide-fade' | 'dissolve';
 

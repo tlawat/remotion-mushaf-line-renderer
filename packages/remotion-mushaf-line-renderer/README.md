@@ -1,4 +1,4 @@
-# remotion-mushaf-line-renderer
+# @tlawat/remotion-mushaf-line
 
 Render lines of the Quran in [Remotion](https://www.remotion.dev) exactly as they are printed in the
 KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transitions` vocabulary.
@@ -46,17 +46,17 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 ## Install
 
 ```bash
-bun add remotion-mushaf-line-renderer
-# or: npm install remotion-mushaf-line-renderer
+bun add @tlawat/remotion-mushaf-line
+# or: npm install @tlawat/remotion-mushaf-line
 ```
 
 Peer dependencies: `remotion` and `@remotion/transitions` (4.0.374 or newer) and `react` (18 or newer).
 
-Optional: the fonts for when QUL's CDN fails, `remotion-mushaf-fonts-qpc-v4-tajweed` for the colour
-themes or `remotion-mushaf-fonts-qpc-v4` for `'plain'` (see [When the CDN fails](#when-the-cdn-fails)):
+Optional: the fonts for when QUL's CDN fails, `@tlawat/mushaf-fonts-qpc-v4-tajweed` for the colour
+themes or `@tlawat/mushaf-fonts-qpc-v4` for `'plain'` (see [When the CDN fails](#when-the-cdn-fails)):
 
 ```bash
-bun add remotion-mushaf-fonts-qpc-v4-tajweed
+bun add @tlawat/mushaf-fonts-qpc-v4-tajweed
 ```
 
 ## Quick start
@@ -67,9 +67,9 @@ per render instead of once per browser tab, the Studio shows the resolved props,
 
 ```tsx
 import {AbsoluteFill, Composition, Sequence, useVideoConfig, type CalculateMetadataFunction} from 'remotion';
-import {MushafLine, getMushafLines, slideFade, type MushafLineData} from 'remotion-mushaf-line-renderer';
+import {MushafLine, getMushafLines, slideFade, type MushafLineData} from '@tlawat/remotion-mushaf-line';
 // Optional: used only if QUL's CDN fails (see "When the CDN fails").
-import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
+import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
 
 type Props = {lines: MushafLineData[] | null};
 
@@ -518,17 +518,17 @@ unmodified, in two packages:
 
 | Package                                  | For                                                                    | Size  |
 | ---------------------------------------- | ---------------------------------------------------------------------- | ----- |
-| `remotion-mushaf-fonts-qpc-v4`           | the `'plain'` theme (monochrome glyphs that follow CSS `color`)        | 43 MB |
-| `remotion-mushaf-fonts-qpc-v4-tajweed`   | every other theme (the colour font)                                    | 51 MB |
+| `@tlawat/mushaf-fonts-qpc-v4`           | the `'plain'` theme (monochrome glyphs that follow CSS `color`)        | 43 MB |
+| `@tlawat/mushaf-fonts-qpc-v4-tajweed`   | every other theme (the colour font)                                    | 51 MB |
 
 Install the one your theme uses (or both) and pass it as `fontFallback`:
 
 ```bash
-npm i remotion-mushaf-fonts-qpc-v4-tajweed
+npm i @tlawat/mushaf-fonts-qpc-v4-tajweed
 ```
 
 ```tsx
-import tajweedFonts from 'remotion-mushaf-fonts-qpc-v4-tajweed';
+import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
 
 <MushafLine line={line} fontFallback={tajweedFonts} />
 // Both sets, when themes vary: the line picks the one its theme uses.

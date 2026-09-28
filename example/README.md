@@ -1,6 +1,6 @@
 # Example project
 
-A Remotion project that uses `remotion-mushaf-line-renderer` the way an app would, plus the `<Player>`
+A Remotion project that uses `@tlawat/remotion-mushaf-line` the way an app would, plus the `<Player>`
 harness the browser tests drive. Run it from the repository root after `bun install && bun run build`:
 
 ```bash
@@ -70,7 +70,7 @@ package's browser and render suites.
 ## Fonts
 
 The page fonts come from QUL's CDN on first use (70–115 KB per page). The example also depends on
-both fonts packages (`remotion-mushaf-fonts-qpc-v4` and `-qpc-v4-tajweed`, workspace packages here)
+both fonts packages (`@tlawat/mushaf-fonts-qpc-v4` and `-qpc-v4-tajweed`, workspace packages here)
 and passes them as `fontFallback`, so a render still finishes when the CDN is down; the `fonts` prop
 switches to the CDN alone or to the packages alone (offline, reproducible):
 

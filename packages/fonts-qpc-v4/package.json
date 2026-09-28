@@ -1,7 +1,7 @@
 {
-  "name": "remotion-mushaf-fonts-qpc-v4",
+  "name": "@tlawat/mushaf-fonts-qpc-v4",
   "version": "1.20260912.0",
-  "description": "QUL's KFGQPC V4 monochrome (plain) page fonts: glyph outlines that follow CSS color, used by the 'plain' theme, unmodified. The fallback (or offline) font source of remotion-mushaf-line-renderer; bundled as assets when imported.",
+  "description": "QUL's KFGQPC V4 monochrome (plain) page fonts: glyph outlines that follow CSS color, used by the 'plain' theme, unmodified. The fallback (or offline) font source of @tlawat/remotion-mushaf-line; bundled as assets when imported.",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",

@@ -410,7 +410,7 @@ describe('fonts packages: fontSrc and fallback', () => {
     return {
       kind: 'remotion-mushaf-fonts' as const,
       schema: 1 as const,
-      name: `remotion-mushaf-fonts-${fontSet}`,
+      name: `@tlawat/mushaf-fonts-${fontSet}`,
       version: '1.20260912.0',
       mushaf: 'qpc-v4' as const,
       fontSet,
@@ -434,7 +434,7 @@ describe('fonts packages: fontSrc and fallback', () => {
     // A source with a fallback is its own source: its own family, next to the CDN-only one.
     expect(font.fontFamily).toMatch(/^mushaf-qpc-v4-p10-[0-9a-z]+$/);
     expect(remotionMock.delayRender.mock.calls[0]?.[0]).toContain(
-      "from QUL's CDN (https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2), then remotion-mushaf-fonts-qpc-v4@1.20260912.0",
+      "from QUL's CDN (https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4/woff2/p10.woff2), then @tlawat/mushaf-fonts-qpc-v4@1.20260912.0",
     );
   });
 
@@ -455,7 +455,7 @@ describe('fonts packages: fontSrc and fallback', () => {
     await loadPageFont({mushaf: 'qpc-v4', page: 1, fallback: pkg}).waitUntilDone();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toMatch(
-      /page 10 loaded from remotion-mushaf-fonts-qpc-v4@1\.20260912\.0 because QUL's CDN failed \(FONT_HTTP: HTTP 404/,
+      /page 10 loaded from @tlawat\/mushaf-fonts-qpc-v4@1\.20260912\.0 because QUL's CDN failed \(FONT_HTTP: HTTP 404/,
     );
     warn.mockRestore();
   });
@@ -494,7 +494,7 @@ describe('fonts packages: fontSrc and fallback', () => {
     expect(() => loadPageFont({theme: 'light', page: 10, fallback: plain})).toThrow(
       expect.objectContaining({
         code: 'BAD_FONT_FALLBACK',
-        message: expect.stringContaining('Install and pass remotion-mushaf-fonts-qpc-v4-tajweed'),
+        message: expect.stringContaining('Install and pass @tlawat/mushaf-fonts-qpc-v4-tajweed'),
       }),
     );
   });
@@ -506,7 +506,7 @@ describe('fonts packages: fontSrc and fallback', () => {
     await expect(font.waitUntilDone()).rejects.toMatchObject({
       code: 'FONT_UNAVAILABLE',
       message: expect.stringMatching(
-        /QUL's CDN: HTTP 404[\s\S]*remotion-mushaf-fonts-qpc-v4@1\.20260912\.0: HTTP 404[\s\S]*Is remotion-mushaf-fonts-qpc-v4@1\.20260912\.0 bundled\?/,
+        /QUL's CDN: HTTP 404[\s\S]*@tlawat\/mushaf-fonts-qpc-v4@1\.20260912\.0: HTTP 404[\s\S]*Is @tlawat\/mushaf-fonts-qpc-v4@1\.20260912\.0 bundled\?/,
       ),
     });
     expect(remotionMock.cancelRender).toHaveBeenCalledTimes(1);

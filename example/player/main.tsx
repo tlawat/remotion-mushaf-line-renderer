@@ -3,9 +3,9 @@
 // manual check: `bun run --cwd example player`, then open
 // http://localhost:4173/player/?scenario=fade
 import {Player, type PlayerRef} from '@remotion/player';
+import {getMushafLine} from '@tlawat/remotion-mushaf-line';
 import * as React from 'react';
 import {createRoot} from 'react-dom/client';
-import {getMushafLine} from 'remotion-mushaf-line-renderer';
 import {LineHarness, type LineHarnessProps} from '../src/harness/LineHarness';
 import {scenarioNames, scenarios} from './scenarios';
 
