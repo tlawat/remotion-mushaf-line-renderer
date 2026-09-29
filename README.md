@@ -10,30 +10,177 @@ per-page fonts and 15-line layout.
 
 ## Install
 
+The package is published on npm as
+[`@tlawat/remotion-mushaf-line`](https://www.npmjs.com/package/@tlawat/remotion-mushaf-line). Install
+it in an existing Remotion project (or one created with `npx create-video@latest`):
+
 ```bash
 npm install @tlawat/remotion-mushaf-line
+# or
+bun add @tlawat/remotion-mushaf-line
+pnpm add @tlawat/remotion-mushaf-line
+yarn add @tlawat/remotion-mushaf-line
 ```
 
-Peer dependencies: `remotion` and `@remotion/transitions` ≥ 4.0.374, `react` ≥ 18.
+It needs three peer dependencies, which a Remotion project usually has already:
 
-Optional, for when QUL's CDN fails: `@tlawat/mushaf-fonts-qpc-v4-tajweed` (colour themes) or
-`@tlawat/mushaf-fonts-qpc-v4` (`'plain'`), the page fonts as npm packages.
+| Peer dependency         | Version          | Notes                                                        |
+| ----------------------- | ---------------- | ------------------------------------------------------------ |
+| `remotion`              | ≥ 4.0.374        |                                                              |
+| `@remotion/transitions` | ≥ 4.0.374        | Must be the **same version** as `remotion`.                  |
+| `react`                 | ≥ 18             |                                                              |
+
+If your project does not have `@remotion/transitions` yet, add it at the version of `remotion` in your
+`package.json`:
+
+```bash
+npm install @remotion/transitions@"$(npm pkg get dependencies.remotion | tr -d '"')"
+```
+
+Optional, for when QUL's CDN is unreachable (an outage, a firewall, a cloud render with no outbound
+access): the page fonts as npm packages. Install the one your theme uses and pass it as
+`fontFallback` (see [Usage](#usage) below):
+
+```bash
+npm install @tlawat/mushaf-fonts-qpc-v4-tajweed   # colour themes: 'light', 'dark', 'sepia', 'black', 'normal', 'p1'–'p5'
+npm install @tlawat/mushaf-fonts-qpc-v4           # the 'plain' theme (monochrome, follows CSS `color`)
+```
+
+They are large (43 MB and 51 MB) and go into every bundle you build, so skip them until you need
+them. The package itself ships no data and no fonts.
+
+Requirements: Node ≥ 20. The package ships ESM and CommonJS builds with TypeScript types.
 
 ## Usage
 
+### 1. Resolve the lines in `calculateMetadata()`
+
+The mushaf is 604 pages of 15 lines. A line is described by plain JSON (`MushafLineData`), which you
+get from `getMushafLines()`. Call it in the composition's `calculateMetadata()` so the data is fetched
+once per render, the Studio shows the resolved props, and a `<Player>` can receive the same JSON.
+
 ```tsx
-import {MushafLine, getMushafLines, slideFade} from '@tlawat/remotion-mushaf-line';
+import type {CalculateMetadataFunction} from 'remotion';
+import {getMushafLines, type MushafLineData} from '@tlawat/remotion-mushaf-line';
 
-// calculateMetadata(): the printed lines that carry At-Tawbah 9:1-11
-const lines = await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11});
+type Props = {lines: MushafLineData[] | null};
 
-// composition: one <Sequence> per line
-{lines.map((line, i) => (
-  <Sequence key={line.line} from={i * 60} durationInFrames={60} premountFor={fps}>
-    <MushafLine line={line} enter={slideFade()} exit={slideFade()} />
-  </Sequence>
-))}
+const HOLD = 60; // frames each line stays on screen
+
+export const calculateMetadata: CalculateMetadataFunction<Props> = async ({props}) => {
+  // Every printed line that carries At-Tawbah 9:1-11; the package finds the page itself.
+  const lines = props.lines ?? (await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, theme: 'normal'}));
+  return {props: {lines}, durationInFrames: HOLD * lines.length};
+};
 ```
+
+Other ways to pick lines:
+
+```ts
+await getMushafLines({page: 187});                                   // every line of a page
+await getMushafLine({page: 10, line: 3});                            // one line
+await getMushafLines({surah: 2, theme: 'light'});                    // a whole surah, in the tajweed theme
+await getMushafLines({surah: 9, fromAyah: 1, toAyah: 11, slice: true}); // trim the first/last line to the range
+await getMushafLocation({surah: 9, ayah: 1});                        // {page, line} where an ayah starts
+```
+
+### 2. Render each line inside a `<Sequence>`
+
+`<MushafLine>` renders one line. It has no start-time prop: its timing comes from the enclosing
+`<Sequence>`, and the page font loads behind `delayRender()` so no frame is ever painted with a
+fallback font. `enter` and `exit` take any DOM presentation from `@remotion/transitions` or the
+package's own `slideFade()` / `revealRtl()`.
+
+```tsx
+import {AbsoluteFill, Sequence, useVideoConfig} from 'remotion';
+import {MushafLine, slideFade} from '@tlawat/remotion-mushaf-line';
+
+export const Passage: React.FC<Props> = ({lines}) => {
+  const {fps} = useVideoConfig();
+  return (
+    <AbsoluteFill style={{backgroundColor: '#fbf7ee', color: '#1b1b1b', justifyContent: 'center'}}>
+      {lines!.map((line, i) => (
+        <Sequence key={line.line} from={i * HOLD} durationInFrames={HOLD} premountFor={fps} layout="none">
+          <MushafLine line={line} enter={slideFade()} exit={slideFade()} />
+        </Sequence>
+      ))}
+    </AbsoluteFill>
+  );
+};
+```
+
+### 3. Register the composition
+
+```tsx
+import {Composition} from 'remotion';
+
+export const Root = () => (
+  <Composition
+    id="Passage"
+    component={Passage}
+    calculateMetadata={calculateMetadata}
+    width={1920}
+    height={1080}
+    fps={30}
+    durationInFrames={1} // replaced by calculateMetadata
+    defaultProps={{lines: null}}
+  />
+);
+```
+
+Then preview and render as with any Remotion composition:
+
+```bash
+npx remotion studio
+npx remotion render Passage out/passage.mp4
+```
+
+### 4. Pick a theme
+
+`theme` is an option of every resolver (and of the `<MushafLine page line>` form) and is recorded on
+the line data. `'plain'` (the default) follows CSS `color`; the others use QUL's colour font:
+
+```tsx
+<MushafLine page={10} line={3} />                  {/* plain: follows CSS `color` */}
+<MushafLine page={10} line={3} theme="light" />    {/* QUL's tajweed colours, for a white page */}
+<MushafLine page={10} line={3} theme="normal" />   {/* CSS-coloured writing, coloured ayah rosettes */}
+<MushafLine page={10} line={3} theme="dark" />     {/* tajweed for a dark page */}
+<MushafLine page={10} line={3} theme={{base: 'normal', colors: {accent: '#c8a45c'}}} />  {/* custom */}
+```
+
+### 5. Highlight the word being recited
+
+`activeWordId` marks one word (ids look like `"9:1:3"`, surah:ayah:position) and `wordStyle` styles
+every word per frame, for karaoke-style recitation videos:
+
+```tsx
+<MushafLine
+  line={line}
+  activeWordId={currentWordId}
+  activeWordStyle={{color: '#c8a45c'}}
+/>
+```
+
+### 6. Survive a CDN outage (optional)
+
+Fonts and data are fetched from QUL's CDN at render time. Pass a fonts package as `fontFallback` and
+the line falls back to it when the CDN fails; pass it as `fontSrc` to never contact the CDN:
+
+```tsx
+import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
+
+<MushafLine line={line} fontFallback={tajweedFonts} />   // CDN first, package on failure
+<MushafLine line={line} fontSrc={tajweedFonts} />        // package only: offline, reproducible
+```
+
+### Using it in a `<Player>`
+
+The `<Player>` never runs `calculateMetadata`, so resolve the lines yourself and pass them as
+`inputProps`, or call `loadMushafData()` and `loadPageFont()` when the page loads so the first line
+resolves without a round trip.
+
+A complete project with three compositions, a `<Player>` page and a recitation synced to audio lives
+in [`example/`](example).
 
 ## API
 
