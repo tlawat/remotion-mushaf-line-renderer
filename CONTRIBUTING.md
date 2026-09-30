@@ -158,7 +158,7 @@ packages/remotion-mushaf-line-renderer/
                           the glyph renderer behind header lines, <MushafSurahName> and <MushafJuzName>
   test/                   unit, types, browser and render suites, fixtures
   scripts/check-package.mjs
-example/                  Remotion project, <Player> harness, the recitation timing tools (QUD API client, Whisper)
+example/                  Remotion project, <Player> harness, the recitation timing tools (QUD API client, Whisper, MFA)
 scripts/                  the qul CLI and its library (mirror, compiler, readers), their tests
 docs/                     architecture and font notes
 ```

@@ -60,7 +60,7 @@ cd example && bunx remotion render Recitation out/recitation.mp4 \
 ```
 
 The timings file is the package's neutral format; nothing in the package produces it. `tools/` holds
-two example producers, both development tools with the accuracy of their model, neither part of the
+three example producers, all development tools with the accuracy of their model, none part of the
 package. The two committed files are the same recording of At-Tawbah through each, kept to 9:1-5
 (about 1:54; the whole recitation is the reciter's). Ayah 5 shares its last printed line with ayah 6,
 so the passage ends on a sliced line: only 9:5's words, centred, the way `slice` is meant to be used.
@@ -75,6 +75,47 @@ so the passage ends on a sliced line: only 9:5's words, centred, the way `slice`
   ```bash
   bun tools/align-with-qud.ts --audio audio/tawbah.mp3 --out public/audio/tawbah-timings-qud.json --to-ayah 5
   ```
+
+- `tools/align-with-mfa.py` writes the same format offline with the
+  [Montreal Forced Aligner](https://montreal-forced-aligner.readthedocs.io) and Quran-Lab's
+  [Hafs acoustic model](https://huggingface.co/Quran-Lab/mfa-quran-hafs) (Apache-2.0, trained on
+  recitation: long madd, ghunna, mosque reverb). The audio never leaves the machine. MFA only times a
+  text it is given, and a reciter who pauses and repeats says words the text does not have, so the
+  tool works in two passes. It cuts the recording in the middle of the reciter's pauses, finds which
+  words each phrase holds by aligning it (through kalpy, MFA's Kaldi bindings) against a graph of the
+  passage that may start at any word, so a phrase that starts before the previous one ended is a
+  repeat, and verifies every repeat against a continuous reading of the same audio (a quiet ghunna
+  can split one word into two phrases that both claim it). Then `mfa align`, with the model card's
+  beams (40/160), times the words of each stretch of continuous reading. A repeated word comes back
+  once per occurrence; a complete ayah gets its ayah-end marker, as with the QUD tool. The Uthmani text
+  comes from [quran-transcript](https://github.com/obadx/quran-transcript), the text the model's
+  dictionary was built from (every word of the Quran is in it); its words match QUL's word ids in every
+  ayah but 37:130. The model (62 MB) is downloaded from Hugging Face on first use, pinned to a revision
+  and checked against its SHA-256.
+
+  MFA needs Kaldi, OpenFst and OpenGrm from conda-forge (about 2 GB), so the tool runs in its own
+  environment, described in `tools/mfa-environment.yml`:
+
+  ```bash
+  micromamba create -n mfa-quran -f tools/mfa-environment.yml
+  micromamba run -n mfa-quran python tools/align-with-mfa.py \
+      --audio audio/tawbah.mp3 --surah 9 --out public/audio/tawbah-timings-mfa.json --to-ayah 5
+  # --from-ayah N        the first ayah recited (default 1; the recording must start there)
+  # --report r.json      phrases, repeats and warnings, for a check before rendering
+  # --intro none         no isti'adha/basmala expected (by default an optional one is allowed and dropped)
+  # --model-dir DIR      where the model is cached (default ~/.cache/mfa-quran-hafs)
+  ```
+
+  Unlike the QUD tool it has to be told the surah and the first ayah; it does not find the passage
+  itself. Hafs only. A repeat without a pause in front of it is not detected (the phrase is forced
+  onto the text). Warnings (a skipped word, a phrase that fits the text poorly, an ayah only partly
+  heard) go to stderr and to `--report`; read them before trusting a file. On a 3:39 recording of
+  At-Tawbah 9:1-11 it ran in about 45 s on 4 CPU cores, found the same four repeats as the QUD tool,
+  and its line changes were within 0.41 s of the QUD tool's (median 0.05 s). The larger differences
+  are a convention, not an error: where a ghunna joins two words (`بَرَآءَةٌۭ مِّنَ`), the model's
+  dictionary gives the merged sound to the second word, which then starts up to half a second
+  earlier. MFA 3.4's `align` skips its speaker-adaptation pass, so the timing pass is not
+  speaker-adapted.
 
 - `tools/align-recitation.py` writes `public/audio/tawbah-timings.json` offline: pause detection,
   Whisper (medium, via sherpa-onnx) on each segment, and an alignment of the recognised words to the

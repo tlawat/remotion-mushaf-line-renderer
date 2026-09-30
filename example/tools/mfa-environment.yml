@@ -1,0 +1,13 @@
+# Environment for tools/align-with-mfa.py: MFA 3.4 (Kaldi, OpenFst and OpenGrm come from conda-forge),
+# ffmpeg, and quran-transcript for the Uthmani text the model's dictionary was built from.
+#   micromamba create -n mfa-quran -f tools/mfa-environment.yml
+name: mfa-quran
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - montreal-forced-aligner>=3.4,<3.5
+  - ffmpeg
+  - pip
+  - pip:
+      - quran-transcript==0.6.4
