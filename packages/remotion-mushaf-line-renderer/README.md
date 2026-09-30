@@ -400,9 +400,10 @@ The `slice` prop wins over it, and `slice={null}` cancels it.
 A recited passage needs two things: the lines that carry it, and when each is on screen. The package
 takes the second from **recitation timings**, a small versioned JSON that says when each ayah, and
 optionally each word, is heard. It is deliberately neutral: the package ships no aligner and no speech
-model, and any tool that can say "word 9:1:3 starts at 2.59 s" can write it. Two example producers
+model, and any tool that can say "word 9:1:3 starts at 2.59 s" can write it. Three example producers
 live in the repository's [`example/tools`](https://github.com/tlawat/remotion-mushaf-line-renderer/tree/main/example/tools):
-a client for the QUD Universal Aligner's HTTP API, and a Whisper script.
+a client for the QUD Universal Aligner's HTTP API, a Whisper script, and an offline forced aligner
+(the Montreal Forced Aligner with Quran-Lab's Hafs model).
 
 ```json
 {
