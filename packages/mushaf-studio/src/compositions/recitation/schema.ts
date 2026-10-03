@@ -47,11 +47,13 @@ export const mushafRecitationSchema = z.object({
 export type MushafRecitationProps = z.infer<typeof mushafRecitationSchema>;
 
 /**
- * Defaults that work out of the box: Al-Fatihah from the aligner's catalogue (audio streamed from
- * its clip URL, timings committed in the app's `public/`), plain theme, a three-line window.
+ * Defaults that work out of the box: Al-Fatihah (ayahs 2-7) by Abdul Hamid Ghraio from the
+ * aligner's catalogue, the audio streamed from the catalogue's clip URL and the timings committed
+ * in the app's `public/`; plain theme, a three-line window.
  */
 export const defaultMushafRecitationProps: MushafRecitationProps = {
-  audioFile: 'mushaf-studio/fatiha/audio.mp3',
+  audioFile:
+    'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
   timingsFile: 'mushaf-studio/fatiha/timings.json',
   fromAyah: 0,
   toAyah: 0,
