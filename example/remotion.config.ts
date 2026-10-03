@@ -11,3 +11,13 @@ import {Config} from '@remotion/cli/config';
 
 Config.setVideoImageFormat('jpeg');
 Config.setOverwriteOutput(true);
+
+// The fonts packages reference their files as `new URL('./fonts/p1.woff2', import.meta.url)`, which
+// webpack emits as assets. In development Remotion names an asset by its path, which for a package
+// outside the project root (a workspace link, as here) starts with `../`, a path the Studio cannot
+// serve, so the fallback never worked in the Studio while the CDN was down. A content hash keeps
+// every asset under the bundle, in the Studio and in renders.
+Config.overrideWebpackConfig((config) => ({
+  ...config,
+  output: {...config.output, assetModuleFilename: 'assets/[name].[contenthash:8][ext]'},
+}));
