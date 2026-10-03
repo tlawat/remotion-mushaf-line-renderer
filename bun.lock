@@ -20,6 +20,29 @@
         "vitest": "^4.1.11",
       },
     },
+    "apps/mushaf-studio": {
+      "name": "mushaf-studio-app",
+      "version": "0.0.0",
+      "dependencies": {
+        "@remotion/cli": "4.0.521",
+        "@remotion/studio": "4.0.521",
+        "@remotion/transitions": "4.0.521",
+        "@remotion/zod-types": "4.0.521",
+        "@tlawat/mushaf-fonts-qpc-v4": "workspace:*",
+        "@tlawat/mushaf-fonts-qpc-v4-tajweed": "workspace:*",
+        "@tlawat/mushaf-studio": "workspace:*",
+        "@tlawat/remotion-mushaf-line": "workspace:*",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "remotion": "4.0.521",
+        "zod": "4.5.4",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.7",
+        "typescript": "~5.9.3",
+      },
+    },
     "example": {
       "name": "remotion-mushaf-line-renderer-example",
       "version": "0.0.0",
@@ -850,6 +873,8 @@
     "mlly": ["mlly@1.8.2", "", { "dependencies": { "acorn": "8.18.0", "pathe": "2.0.3", "pkg-types": "1.3.1", "ufo": "1.6.4" } }, "sha512-d+ObxMQFmbt10sretNDytwt85VrbkhhUA/JBGm1MPaWJ65Cl4wOgLaB1NYvJSZ0Ef03MMEU/0xpPMXUIQ29UfA=="],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
+
+    "mushaf-studio-app": ["mushaf-studio-app@workspace:apps/mushaf-studio"],
 
     "mz": ["mz@2.7.0", "", { "dependencies": { "any-promise": "1.3.0", "object-assign": "4.1.1", "thenify-all": "1.6.0" } }, "sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q=="],
 

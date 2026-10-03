@@ -1,0 +1,11 @@
+# A recording the Mushaf panel copies into a project folder is the reciter's: keep it out of the
+# repository. The timings and translation files next to it are small JSON and can be committed.
+# (out/ and .remotion/ are ignored at the repository root.)
+public/mushaf-studio/**/*.mp3
+public/mushaf-studio/**/*.m4a
+public/mushaf-studio/**/*.aac
+public/mushaf-studio/**/*.wav
+public/mushaf-studio/**/*.flac
+public/mushaf-studio/**/*.ogg
+public/mushaf-studio/**/*.opus
+public/mushaf-studio/**/*.webm
