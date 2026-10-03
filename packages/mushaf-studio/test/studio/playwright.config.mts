@@ -25,6 +25,11 @@ export default defineConfig({
     browserName: 'chromium',
     viewport: {width: 1600, height: 1000},
     launchOptions: {args: ['--enable-features=CanvasDrawElement', '--font-render-hinting=none']},
+    // A sandbox that reaches the internet through a proxy (HTTPS_PROXY) hands it to Chromium too,
+    // so the fonts, the catalogue and quran.com are reachable from the page as they are from a shell.
+    ...(process.env.HTTPS_PROXY
+      ? {proxy: {server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1'}, ignoreHTTPSErrors: true}
+      : {}),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
