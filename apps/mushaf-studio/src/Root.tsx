@@ -77,6 +77,7 @@ export const RemotionRoot: React.FC = () => {
             color: '#1b1b1b',
             backgroundImage: '',
             verticalAlign: 0.5,
+            offsetY: 0,
           },
           animation: {
             enter: 'slide-fade',
@@ -99,6 +100,7 @@ export const RemotionRoot: React.FC = () => {
             translationSize: 40,
             translationColor: '#4a4a4a',
             translationDirection: 'ltr',
+            translationOffsetY: 0,
             glossFile: '',
             transliterationFile: '',
             glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
@@ -160,6 +162,7 @@ export const RemotionRoot: React.FC = () => {
             color: '#1b1b1b',
             backgroundImage: '',
             verticalAlign: 0.5,
+            offsetY: 0,
           },
           animation: {
             enter: 'slide-fade',
@@ -174,6 +177,7 @@ export const RemotionRoot: React.FC = () => {
             translationSize: 40,
             translationColor: '#4a4a4a',
             translationDirection: 'ltr',
+            translationOffsetY: 0,
             glossFile: '',
             transliterationFile: '',
             glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',

@@ -1,49 +1,21 @@
-import {
-  exitTiming,
-  fontSizeForWidth,
-  lineHeightForFontSize,
-  MushafLine,
-  MushafLineWindow,
-} from '@tlawat/remotion-mushaf-line';
+import {exitTiming, MushafLine, MushafLineWindow} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
-import {
-  AbsoluteFill,
-  getRemotionEnvironment,
-  Img,
-  Interactive,
-  Sequence,
-  staticFile,
-  useCurrentFrame,
-  useVideoConfig,
-} from 'remotion';
+import {AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {MushafStudioError} from '../../errors';
 import {animationFrom, fontPropsFrom, scrollTimingFrom} from '../../schema';
+import {useInStudio} from '../../studio/environment';
 import {TranslationBlock} from '../../translations';
-import {fileUrl, firstAyahKey} from '../shared';
+import {
+  BACKGROUND_IMAGE_STYLE,
+  blockGeometry,
+  fileUrl,
+  firstAyahKey,
+  linesBlockStyle,
+  translationBlockStyle,
+  WARNING_STYLE,
+} from '../shared';
 import type {ResolvedPassage} from './resolve';
 import type {MushafPassageProps} from './schema';
-
-const BACKGROUND_IMAGE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
-};
-
-const WARNING_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  padding: '0.4em 1em',
-  fontFamily: 'system-ui, sans-serif',
-  fontSize: 22,
-  lineHeight: 1.3,
-  color: '#7a2e0e',
-  background: 'rgba(255, 232, 204, 0.92)',
-};
 
 /**
  * A text-only passage, no audio: each line holds `holdSeconds`, through a window (the window
@@ -54,7 +26,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const {fonts, layout, animation, text, holdSeconds} = props;
   const {width, height, fps, durationInFrames} = useVideoConfig();
   const frame = useCurrentFrame();
-  const {isStudio} = getRemotionEnvironment();
+  const isStudio = useInStudio();
   const resolved = props.resolved as ResolvedPassage | null;
   if (!resolved) {
     throw new MushafStudioError(
@@ -67,12 +39,8 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const holdFrames = Math.max(1, Math.round(holdSeconds * fps));
   const current = Math.max(0, Math.min(lines.length - 1, Math.floor(frame / holdFrames)));
 
-  const measure = width - 2 * layout.marginX;
-  const fontSize = fontSizeForWidth(measure);
-  const lineHeight = lineHeightForFontSize(fontSize);
-  const slots = layout.visibleLines === 0 ? 1 : layout.visibleLines;
-  const blockHeight = slots * lineHeight;
-  const top = Math.round((height - blockHeight) * layout.verticalAlign);
+  const geometry = blockGeometry(layout, {width, height});
+  const {fontSize, lineHeight, slots} = geometry;
   const exitFrames = exitTiming().getDurationInFrames({fps});
 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
@@ -116,28 +84,17 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
     );
   }
 
-  const translationGap = Math.round(text.translationSize * 0.6);
   const showTranslation = resolved.translation !== null && text.translationPosition !== 'none';
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color}}>
       {layout.backgroundImage !== '' && (
         <Img src={fileUrl(layout.backgroundImage, staticFile)} style={BACKGROUND_IMAGE_STYLE} />
       )}
-      <Interactive.Div
-        name="Mushaf lines"
-        style={{position: 'absolute', top, left: layout.marginX, width: measure, height: blockHeight}}
-      >
+      <div data-mushaf-block="Mushaf lines" style={linesBlockStyle(geometry, layout)}>
         {linesBlock}
-      </Interactive.Div>
+      </div>
       {showTranslation && (
-        <Interactive.Div
-          name="Translation"
-          style={
-            text.translationPosition === 'above'
-              ? {position: 'absolute', left: layout.marginX, width: measure, bottom: height - top + translationGap}
-              : {position: 'absolute', left: layout.marginX, width: measure, top: top + blockHeight + translationGap}
-          }
-        >
+        <div data-mushaf-block="Translation" style={translationBlockStyle(geometry, layout, text, height)}>
           <TranslationBlock
             translation={resolved.translation!}
             ayahKey={firstAyahKey(lines[current])}
@@ -146,7 +103,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
             color={text.translationColor}
             direction={text.translationDirection}
           />
-        </Interactive.Div>
+        </div>
       )}
       {isStudio && fontSetup.warning !== null && <div style={WARNING_STYLE}>Mushaf Studio: {fontSetup.warning}</div>}
     </AbsoluteFill>

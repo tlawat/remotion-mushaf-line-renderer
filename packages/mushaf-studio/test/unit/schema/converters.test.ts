@@ -18,21 +18,24 @@ import {
   recitationDuration,
 } from '../../../src/compositions/recitation';
 import {registerMushafFonts} from '../../../src/fonts';
+import * as schema from '../../../src/schema';
 import {
   activeWordStyleFrom,
   animationFrom,
   dataSchema,
   dataSourceFrom,
   defaultHighlight,
+  defaultLayout,
   defaultReview,
+  defaultText,
   fontPropsFrom,
   type Highlight,
   scrollTimingFrom,
   sizeForAspect,
   themeSelectionFrom,
-  withAlpha,
   wordStyleFrom,
 } from '../../../src/schema';
+import {withAlpha} from '../../../src/schema/highlight';
 
 const staticFile = (path: string) => `/static/${path}`;
 const fps = 30;
@@ -195,6 +198,10 @@ describe('withAlpha / activeWordStyleFrom', () => {
     expect(withAlpha('var(--ink)', 0.35)).toBe('color-mix(in srgb, var(--ink) 35%, transparent)');
   });
 
+  it("is the schema module's own, not part of its index", () => {
+    expect('withAlpha' in schema).toBe(false);
+  });
+
   it('paints the ink, a glow, a marker, or nothing', () => {
     const color = '#c8a45c';
     expect(activeWordStyleFrom({style: 'color', color})).toEqual({color});
@@ -256,6 +263,38 @@ describe('wordStyleFrom', () => {
     expect(untimed(w1, ctx(0))).toBeUndefined();
   });
 
+  it("falls back to the ayah's time for a word without one of its own under dimUpcomingOnly", () => {
+    const timings = {
+      version: 1 as const,
+      surah: 1,
+      ayat: [
+        {ayah: 1, start: 0, end: 3},
+        {ayah: 2, start: 4, end: 6},
+      ],
+    };
+    const dim = highlight({dimOthers: 0.4, dimUpcomingOnly: true});
+    // Nothing timed by word: a word is upcoming until its ayah starts, the marker until its ayah ends.
+    const byAyah = wordStyleFrom({...base, timingsIndex: {}, timings, highlight: dim});
+    expect(byAyah(w1, ctx(30))).toBeUndefined();
+    expect(byAyah(w2, ctx(30))).toBeUndefined();
+    expect(byAyah(w3, ctx(30))).toEqual({opacity: 0.4});
+    expect(byAyah(w3, ctx(90))).toBeUndefined();
+    expect(byAyah(w4, ctx(30))).toEqual({opacity: 0.4});
+    expect(byAyah(w4, ctx(120))).toBeUndefined();
+    // A word's own time wins over its ayah's.
+    const own = wordStyleFrom({...base, timingsIndex: {'1:1:2': 2}, timings, highlight: dim});
+    expect(own(w2, ctx(30))).toEqual({opacity: 0.4});
+    expect(own(w1, ctx(30))).toBeUndefined();
+    // An ayah the timings do not carry stays unknown, so it is not dimmed.
+    const other = wordStyleFrom({
+      ...base,
+      timingsIndex: {},
+      timings: {...timings, ayat: [timings.ayat[0]!]},
+      highlight: dim,
+    });
+    expect(other(w4, ctx(30))).toBeUndefined();
+  });
+
   it('paints the active style on the whole ayah under mode: ayah', () => {
     const style = wordStyleFrom({...base, highlight: highlight({mode: 'ayah', dimOthers: 0.4}), activeWordId: '1:1:2'});
     expect(style(w1, ctx(0))).toEqual({color: '#c8a45c'});
@@ -295,6 +334,27 @@ describe('wordStyleFrom', () => {
       review: {...defaultReview, doubtColor: 'red'},
     });
     expect(red(w2, ctx(0))?.textDecoration).toBe('underline dotted red');
+  });
+});
+
+describe('layout.offsetY / text.translationOffsetY', () => {
+  it('default to 0 in both compositions and take whole tens of px within 800', () => {
+    expect(defaultLayout.offsetY).toBe(0);
+    expect(defaultText.translationOffsetY).toBe(0);
+    expect(mushafRecitationSchema.parse(defaultMushafRecitationProps).layout.offsetY).toBe(0);
+    expect(mushafPassageSchema.parse(defaultMushafPassageProps).text.translationOffsetY).toBe(0);
+    const layout = (offsetY: number) => ({...defaultMushafRecitationProps, layout: {...defaultLayout, offsetY}});
+    expect(mushafRecitationSchema.parse(layout(-800)).layout.offsetY).toBe(-800);
+    expect(mushafRecitationSchema.parse(layout(800)).layout.offsetY).toBe(800);
+    expect(() => mushafRecitationSchema.parse(layout(810))).toThrow();
+    expect(() => mushafRecitationSchema.parse(layout(15))).toThrow();
+    const text = (translationOffsetY: number) => ({
+      ...defaultMushafPassageProps,
+      text: {...defaultText, translationOffsetY},
+    });
+    expect(mushafPassageSchema.parse(text(-120)).text.translationOffsetY).toBe(-120);
+    expect(() => mushafPassageSchema.parse(text(-801))).toThrow();
+    expect(() => mushafPassageSchema.parse(text(2.5))).toThrow();
   });
 });
 

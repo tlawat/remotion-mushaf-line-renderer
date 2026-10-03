@@ -122,6 +122,7 @@ export const RemotionRoot: React.FC = () => (
         color: '#1b1b1b',
         backgroundImage: '',
         verticalAlign: 0.5,
+        offsetY: 0,
       },
       animation: {enter: 'slide-fade', exit: 'slide-fade', leadInSeconds: 0.4, scroll: 'ease'},
       highlight: {
@@ -139,6 +140,7 @@ export const RemotionRoot: React.FC = () => (
         translationSize: 40,
         translationColor: '#4a4a4a',
         translationDirection: 'ltr',
+        translationOffsetY: 0,
         glossFile: '',
         transliterationFile: '',
         glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
@@ -267,6 +269,7 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `color`            | colour                               | `'#1b1b1b'` | Ink colour (the plain theme, and every part a theme paints in `currentColor`). |
 | `backgroundImage`  | string                               | `''`        | Background image in `public/` (empty: none).                        |
 | `verticalAlign`    | 0–1                                  | `0.5`       | Vertical position of the lines (0 top, 1 bottom).                   |
+| `offsetY`          | −800–800 px                          | `0`         | Move the lines up (negative) or down from there.                    |
 
 ### `animation`
 
@@ -298,6 +301,7 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `translationSize`      | 12–120 px                     | `40`          | Translation size.                                            |
 | `translationColor`     | colour                        | `'#4a4a4a'`   | Translation colour.                                          |
 | `translationDirection` | `'ltr'`, `'rtl'`              | `'ltr'`       | Writing direction of the translation.                        |
+| `translationOffsetY`   | −800–800 px                   | `0`           | Move the translation up (negative) or down from its place.   |
 | `glossFile`            | string                        | `''`          | Word-by-word translation file in `public/` (empty: none).    |
 | `transliterationFile`  | string                        | `''`          | Word-by-word transliteration file in `public/` (empty: none). |
 | `glossFont`            | CSS font family               | `'"Noto Sans", "Helvetica Neue", Arial, sans-serif'` | Font of the gloss strip.     |

@@ -1,12 +1,17 @@
 // The recitation composition (workstream 4): the Zod schema and defaults (schema.ts), the content
 // resolver (resolve.ts), `calculateMetadata` (calculate-metadata.ts) and the component.
-export {calculateMushafRecitationMetadata, recitationDuration, STUDIO_FPS} from './calculate-metadata';
+export type {ResolvedRecitation} from '../../types';
+export {STUDIO_FPS} from '../shared';
+export {calculateMushafRecitationMetadata, recitationDuration} from './calculate-metadata';
 export {MushafRecitation} from './MushafRecitation';
 export {
+  audioOffsetFor,
+  playableTimings,
   type ResolveRecitationOptions,
   readTimings,
   resolveRecitation,
-  type StudioResolvedRecitation,
+  shiftTimings,
+  timingsInRange,
   trimTimings,
 } from './resolve';
 export type {MushafRecitationProps} from './schema';

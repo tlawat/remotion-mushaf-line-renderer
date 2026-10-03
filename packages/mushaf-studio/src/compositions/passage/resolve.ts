@@ -4,8 +4,7 @@ import {staticFile as remotionStaticFile} from 'remotion';
 import {MushafStudioError} from '../../errors';
 import {dataSourceFrom, sizeForAspect, themeSelectionFrom} from '../../schema';
 import type {AyahTranslation} from '../../types';
-import {STUDIO_FPS} from '../recitation/calculate-metadata';
-import {loadTextFile} from '../shared';
+import {loadTextFile, STUDIO_FPS} from '../shared';
 import type {MushafPassageProps} from './schema';
 
 /** What `calculateMetadata()` of `<MushafPassage>` resolves once per render from the content props. */
@@ -18,6 +17,8 @@ export type ResolvedPassage = {
 export type ResolvePassageOptions = {
   readonly fetch?: typeof fetch | undefined;
   readonly staticFile?: ((path: string) => string) | undefined;
+  /** `calculateMetadata()`'s `abortSignal`: the Studio aborts a resolution it no longer needs. */
+  readonly signal?: AbortSignal | undefined;
 };
 
 /** Frames for a passage: every line holds `holdSeconds`, and the last one leaves after its hold. */
@@ -34,6 +35,7 @@ export const resolvePassage = async (
   const io = {
     fetch: options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
     staticFile: options.staticFile ?? remotionStaticFile,
+    ...(options.signal ? {signal: options.signal} : {}),
   };
   if (props.toAyah !== 0 && props.toAyah < props.fromAyah) {
     throw new MushafStudioError(
@@ -55,9 +57,12 @@ export const resolvePassage = async (
   return {lines, translation};
 };
 
-/** `calculateMetadata` for `<Composition id="MushafPassage">`: `resolved`, width and height from the aspect, duration from the line count. */
-export const calculateMushafPassageMetadata: CalculateMetadataFunction<MushafPassageProps> = async ({props}) => {
-  const resolved = await resolvePassage(props);
+/** `calculateMetadata` for `<Composition id="MushafPassage">`: `resolved`, width and height from the aspect, duration from the line count. `abortSignal` reaches the fetches. */
+export const calculateMushafPassageMetadata: CalculateMetadataFunction<MushafPassageProps> = async ({
+  props,
+  abortSignal,
+}) => {
+  const resolved = await resolvePassage(props, {signal: abortSignal});
   return {
     props: {...props, resolved},
     ...sizeForAspect(props.layout.aspect),

@@ -129,7 +129,19 @@ export type Translation = AyahTranslation | WordGloss;
 
 /** What `calculateMetadata()` of `<MushafRecitation>` resolves once per render from the content props. */
 export type ResolvedRecitation = {
+  /**
+   * The file's timings cut to `fromAyah`..`toAyah` and to the ayahs the recording carries whole,
+   * every time `audioOffsetSeconds` earlier than in the file (the sidecar's words and segments too).
+   */
   readonly timings: StudioTimings;
+  /**
+   * Seconds of the recording skipped before frame 0 (`<Audio trimBefore>`, in frames), so a
+   * `fromAyah` or a leading `complete: false` ayah does not open on a blank screen with the audio
+   * playing: 0 when the first ayah played is the file's first, else just enough before the first
+   * played ayah for its line to enter and sit `animation.leadInSeconds`. Already subtracted from
+   * `timings`; add it back before writing those into the file.
+   */
+  readonly audioOffsetSeconds: number;
   /** The passage's lines, splits applied, in reading order. */
   readonly lines: readonly MushafLineData[];
   readonly schedule: readonly LineSchedule[];

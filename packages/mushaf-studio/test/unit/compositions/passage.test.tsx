@@ -67,7 +67,7 @@ const props = (
 const layout = (changes: Partial<MushafPassageProps['layout']>) => ({...defaultMushafPassageProps.layout, ...changes});
 const mount = (p: MushafPassageProps) => render(<MushafPassage {...p} />).container;
 const sequences = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>('[data-sequence]'));
-const block = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-interactive="${name}"]`);
+const block = (c: HTMLElement, name: string) => c.querySelector<HTMLElement>(`[data-mushaf-block="${name}"]`);
 const translationOf = (c: HTMLElement) =>
   c.querySelector<HTMLElement>('[data-translation-block]')?.dataset.translationBlock;
 const metadataArgs = (p: MushafPassageProps) => ({
@@ -107,6 +107,19 @@ describe('calculateMushafPassageMetadata', () => {
     expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 4 * 4 * 30 + 10});
     expect((metadata.props as MushafPassageProps).resolved).toEqual({lines: passage, translation: null});
     expect(mocks.loadTranslation).not.toHaveBeenCalled();
+  });
+
+  it('hands its abortSignal to the translation fetch', async () => {
+    mocks.loadTranslation.mockResolvedValue(ayahText);
+    const args = metadataArgs({
+      ...defaultMushafPassageProps,
+      text: {...defaultMushafPassageProps.text, translationFile: 't.json'},
+    });
+    await calculateMushafPassageMetadata(args);
+    expect(mocks.loadTranslation.mock.calls[0]![1]).toMatchObject({signal: args.abortSignal});
+    mocks.loadTranslation.mockClear();
+    await resolvePassage(args.props, {fetch: vi.fn() as unknown as typeof fetch});
+    expect((mocks.loadTranslation.mock.calls[0]![1] as {signal?: unknown}).signal).toBeUndefined();
   });
 
   it('leaves toAyah out for 0, loads the translation, refuses a reversed range', async () => {
@@ -152,6 +165,43 @@ describe('<MushafPassage>', () => {
     expect(JSON.parse(w.dataset.steps!)).toEqual([0, 120, 240, 360]);
     expect(block(c, 'Mushaf lines')!.contains(w)).toBe(true);
     expect(block(c, 'Translation')).toBeNull();
+  });
+
+  it('places the lines and the translation between the margins, as plain absolute boxes, moved by the offsets', () => {
+    const c = mount(props({}, {translation: ayahText}));
+    for (const name of ['Mushaf lines', 'Translation']) {
+      const box = block(c, name)!;
+      expect(box.tagName).toBe('DIV');
+      expect(box.style.position).toBe('absolute');
+      expect(box.style.left).toBe('120px');
+      expect(box.style.width).toBe(`${1920 - 2 * 120}px`);
+      expect(box.style.transform).toBe('');
+    }
+    cleanup();
+    const moved = mount(
+      props(
+        {
+          layout: layout({marginX: 200, offsetY: 80}),
+          text: {...defaultMushafPassageProps.text, translationOffsetY: -40},
+        },
+        {translation: ayahText},
+      ),
+    );
+    const linesBox = block(moved, 'Mushaf lines')!;
+    expect(linesBox.style.left).toBe('200px');
+    expect(linesBox.style.width).toBe('1520px');
+    expect(linesBox.style.transform).toBe('translateY(80px)');
+    expect(block(moved, 'Translation')!.style.transform).toBe('translateY(-40px)');
+  });
+
+  it('shows the fonts warning in the Studio preview only', () => {
+    expect(mount(props({fonts: 'package'})).textContent).not.toContain('Mushaf Studio');
+    cleanup();
+    remotion.state.env.isStudio = true;
+    expect(mount(props({fonts: 'package'})).textContent).toContain('Mushaf Studio: fonts is "package"');
+    cleanup();
+    remotion.state.env.isClientSideRendering = true;
+    expect(mount(props({fonts: 'package'})).textContent).not.toContain('Mushaf Studio');
   });
 
   it('shows one line at a time, each leaving as the next enters', () => {

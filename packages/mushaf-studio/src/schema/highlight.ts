@@ -1,4 +1,4 @@
-import type {MushafWord, WordContext} from '@tlawat/remotion-mushaf-line';
+import type {AyahTiming, MushafWord, RecitationTimings, WordContext} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {interpolateColors} from 'remotion';
 import type {DoubtReason} from '../types';
@@ -11,7 +11,8 @@ const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
  * `color` at `alpha` (0-1) of its own opacity, as `rgba()`. Remotion's `interpolateColors()`
  * normalises every colour `zColor()` accepts (hex with or without alpha, `rgb()` / `rgba()`,
  * names) to `rgba(r, g, b, a)`, so the marker behind a word is a plain colour the renderer paints
- * the same way on every frame. Anything it cannot read is left to CSS `color-mix()`.
+ * the same way on every frame. Anything it cannot read is left to CSS `color-mix()`. Internal to
+ * the schema module (not in its index): the compositions see colours through `activeWordStyleFrom()`.
  */
 export const withAlpha = (color: string, alpha: number): string => {
   let normalised: string;
@@ -56,9 +57,18 @@ export type WordStyleOptions = {
   readonly doubtful: Readonly<Record<string, readonly DoubtReason[]>>;
   /** `wordStarts(timings)`, for `dimUpcomingOnly`. */
   readonly timingsIndex: WordStartIndex;
+  /**
+   * The timings themselves, for `dimUpcomingOnly` on a word `timingsIndex` does not know (a file
+   * without per-word times, a word the aligner missed, the ayah-end marker): such a word is upcoming
+   * until its ayah starts, the marker until its ayah ends. Without them an unknown word is never dimmed.
+   */
+  readonly timings?: RecitationTimings | undefined;
   /** The word `wordAt()` names on this frame, for `mode: 'ayah'`; `null` between words. */
   readonly activeWordId: string | null;
-  /** `getRemotionEnvironment().isStudio`: the doubt marks are for the Studio only, never a render. */
+  /**
+   * `useInStudio()`: the doubt marks are for the Studio's preview only, never a render (the Render
+   * button's, or the Studio's own in-browser one).
+   */
   readonly isStudio: boolean;
   /**
    * `from` of the `<Sequence>` the line sits in: `WordContext.frame` is local to it, and adding
@@ -85,7 +95,8 @@ const ayahOf = (wordId: string | null): string | null => {
  *
  * - `dimOthers` under 1 dims every word that is not current (the active word, or under
  *   `mode: 'ayah'` every word of its ayah); with `dimUpcomingOnly` only the words whose first
- *   recitation starts after the current time, so what was heard stays readable.
+ *   recitation starts after the current time (a word without a time of its own: its ayah's start,
+ *   the marker its ayah's end), so what was heard stays readable.
  * - `mode: 'ayah'` paints the active style on every word of the active word's ayah (the composition
  *   then passes no `activeWordStyle`, so one word is not painted twice).
  * - In the Studio, with `review.showDoubtful`, a doubtful word gets a dotted underline in
@@ -95,7 +106,17 @@ const ayahOf = (wordId: string | null): string | null => {
 export const wordStyleFrom = (
   options: WordStyleOptions,
 ): ((word: MushafWord, context: WordContext) => React.CSSProperties | undefined) => {
-  const {highlight, review, doubtful, timingsIndex, activeWordId, isStudio, sequenceFrom = 0} = options;
+  const {highlight, review, doubtful, timingsIndex, timings, activeWordId, isStudio, sequenceFrom = 0} = options;
+  const ayahTimings = new Map<string, AyahTiming>();
+  for (const ayah of timings?.ayat ?? []) ayahTimings.set(`${timings!.surah}:${ayah.ayah}`, ayah);
+  /** When a word is first heard: its own time, else its ayah's start (the marker: its ayah's end), else unknown. */
+  const startOf = (word: MushafWord): number | undefined => {
+    const own = timingsIndex[word.id];
+    if (own !== undefined) return own;
+    const ayah = ayahTimings.get(ayahKey(word));
+    if (ayah === undefined) return undefined;
+    return word.kind === 'end' ? ayah.end : ayah.start;
+  };
   const ayahStyle = highlight.mode === 'ayah' ? activeWordStyleFrom(highlight) : undefined;
   const activeAyah = highlight.mode === 'ayah' ? ayahOf(activeWordId) : null;
   const dims = highlight.mode !== 'none' && highlight.dimOthers < 1;
@@ -109,7 +130,7 @@ export const wordStyleFrom = (
     const inActiveAyah = activeAyah !== null && ayahKey(word) === activeAyah;
     if (inActiveAyah && ayahStyle) style = {...ayahStyle};
     if (dims && !context.active && !inActiveAyah) {
-      const start = timingsIndex[word.id];
+      const start = startOf(word);
       const now = (context.frame + sequenceFrom) / context.fps;
       const dim = !highlight.dimUpcomingOnly || (start !== undefined && start > now);
       if (dim) style = {...style, opacity: highlight.dimOthers};

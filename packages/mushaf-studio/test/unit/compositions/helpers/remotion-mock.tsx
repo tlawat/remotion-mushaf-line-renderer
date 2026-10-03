@@ -1,8 +1,11 @@
 // A controllable stand-in for `remotion` for the composition tests, after the main package's own
 // helper: `vi.mock('remotion', ...)` must be called in the test file itself (it is hoisted); this
 // module provides the pieces. Every element the compositions use renders as a plain element that
-// carries its props as data attributes, so a test reads the tree the composition built.
+// carries its props as data attributes, so a test reads the tree the composition built, and a
+// `<Sequence>` tells its children where it starts (`SequenceFrom`), so a mocked line can give
+// `wordStyle` the local frame a real one would.
 import type React from 'react';
+import {createContext, useContext} from 'react';
 
 export type MockEnv = {
   isRendering: boolean;
@@ -19,6 +22,9 @@ const freshEnv = (): MockEnv => ({
   isClientSideRendering: false,
   isReadOnlyStudio: false,
 });
+
+/** `from` of the nearest mocked `<Sequence>`: 0 outside one. */
+export const SequenceFrom = createContext(0);
 
 export const createRemotionMock = () => {
   const state = {
@@ -43,21 +49,14 @@ export const createRemotionMock = () => {
     children?: React.ReactNode;
   }> = ({from, durationInFrames, name, children}) => (
     <div data-sequence={name} data-from={from} data-duration={durationInFrames}>
-      {children}
+      <SequenceFrom.Provider value={from ?? 0}>{children}</SequenceFrom.Provider>
     </div>
   );
-  const Audio: React.FC<{src: string}> = ({src}) => <div data-audio={src} />;
+  const Audio: React.FC<{src: string; trimBefore?: number}> = ({src, trimBefore}) => (
+    <div data-audio={src} data-trim-before={trimBefore} />
+  );
   const Img: React.FC<{src: string; style?: React.CSSProperties}> = ({src, style}) => (
     <img data-src={src} style={style} alt="" />
-  );
-  const Div: React.FC<{name?: string; style?: React.CSSProperties; children?: React.ReactNode}> = ({
-    name,
-    style,
-    children,
-  }) => (
-    <div data-interactive={name} style={style}>
-      {children}
-    </div>
   );
   const module = {
     useCurrentFrame: () => state.frame,
@@ -75,13 +74,15 @@ export const createRemotionMock = () => {
       defaultPixelFormat: null,
     }),
     getRemotionEnvironment: () => state.env,
+    useRemotionEnvironment: () => state.env,
     staticFile: (path: string) => `/static/${path}`,
     AbsoluteFill,
     Sequence,
     Audio,
     Img,
-    Interactive: {Div},
   };
+  /** The local frame of the enclosing mocked `<Sequence>` at the mock's current frame. */
+  const useLocalFrame = (): number => state.frame - useContext(SequenceFrom);
   const reset = () => {
     state.frame = 0;
     state.width = 1920;
@@ -90,5 +91,5 @@ export const createRemotionMock = () => {
     state.durationInFrames = 900;
     state.env = freshEnv();
   };
-  return {state, module, reset};
+  return {state, module, reset, useLocalFrame};
 };

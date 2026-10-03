@@ -34,8 +34,12 @@ the same way every time. The lead holds the contracts; a workstream owns its dir
 - No new runtime dependencies without the lead's agreement. `zod` and `@remotion/zod-types` are
   the only additions the studio package makes; the panel uses no UI library.
 - Nothing in `src/` of the studio package may import from `apps/` or `example/`.
-- Studio-only code is guarded by `getRemotionEnvironment().isStudio` and never runs in a render,
-  a `<Player>` or on the server. It must not call `delayRender()`.
+- Studio-only code is guarded by `useRemotionEnvironment()` (the studio package's `useInStudio()`
+  hook; `isInStudio()` outside a component) with all three flags, `isStudio && !isRendering &&
+  !isClientSideRendering`, and never runs in a render, the Studio's own in-browser render, a
+  `<Player>` or on the server. `getRemotionEnvironment()` reads the page's globals only, and the
+  Studio's in-browser render (`@remotion/web-renderer`) announces `isClientSideRendering` through
+  the context the hook reads, not through them. Studio-only code must not call `delayRender()`.
 
 ## 3. Tests
 

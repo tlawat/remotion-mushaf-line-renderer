@@ -10,13 +10,7 @@ import {z} from 'zod';
 export {animationFrom, type LineAnimationProps, scrollTimingFrom} from './animation';
 export {type DataSource, dataSchema, dataSourceFrom, MIRROR_FILES} from './data';
 export {type FontProps, type FontSetup, fontPropsFrom} from './fonts';
-export {
-  activeWordStyleFrom,
-  type WordStartIndex,
-  type WordStyleOptions,
-  withAlpha,
-  wordStyleFrom,
-} from './highlight';
+export {activeWordStyleFrom, type WordStartIndex, type WordStyleOptions, wordStyleFrom} from './highlight';
 
 /** The ten presets of the colour font plus `plain` (the monochrome font) and `custom` (see `customThemeSchema`). */
 export const THEME_NAMES = [
@@ -80,6 +74,8 @@ export const layoutSchema = z.object({
   backgroundImage: z.string().describe('Background image in public/ (empty: none)'),
   /** Vertical position of the lines' block, 0 top, 0.5 middle, 1 bottom. */
   verticalAlign: z.number().min(0).max(1).step(0.05).describe('Vertical position of the lines (0 top, 1 bottom)'),
+  /** px, added to the block's position from `verticalAlign`: a nudge the canvas cannot write into the props itself. */
+  offsetY: z.number().int().min(-800).max(800).step(10).describe('Move the lines up (negative) or down, in px'),
 });
 
 export const ENTRANCES = ['slide-fade', 'fade', 'reveal-rtl', 'none'] as const;
@@ -114,6 +110,14 @@ export const textSchema = z.object({
   translationSize: z.number().int().min(12).max(120).describe('Translation size in px'),
   translationColor: zColor().describe('Translation colour'),
   translationDirection: z.enum(['ltr', 'rtl']).describe('Writing direction of the translation'),
+  /** px, added to the translation block's position under or over the lines. */
+  translationOffsetY: z
+    .number()
+    .int()
+    .min(-800)
+    .max(800)
+    .step(10)
+    .describe('Move the translation up (negative) or down, in px'),
   /** A `public/` path to a word-by-word translation, or empty. */
   glossFile: z.string().describe('Word-by-word translation file in public/ (empty: none)'),
   /** A `public/` path to a word-by-word transliteration, or empty. */
@@ -167,6 +171,7 @@ export const defaultLayout: Layout = {
   color: '#1b1b1b',
   backgroundImage: '',
   verticalAlign: 0.5,
+  offsetY: 0,
 };
 
 export const defaultAnimation: Animation = {
@@ -192,6 +197,7 @@ export const defaultText: Text = {
   translationSize: 40,
   translationColor: '#4a4a4a',
   translationDirection: 'ltr',
+  translationOffsetY: 0,
   glossFile: '',
   transliterationFile: '',
   glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
