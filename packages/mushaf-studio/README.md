@@ -243,6 +243,24 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `theme`, `customTheme`, `fonts`, `data`, `layout`, `animation`, `text` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above. |
 | `resolved`    |           | `null`     | Filled by `calculateMetadata()`.               |
 
+### `MushafAyahText`
+
+One ayah at a time as Unicode text in QUL's Uthmani Hafs font (the framing of reels and short
+clips), with `MushafRecitation`'s audio, timings, range, highlighting and translation block. The
+defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark page).
+
+| Prop          | Type                | Default                              | Description                                                                 |
+| ------------- | ------------------- | ------------------------------------ | --------------------------------------------------------------------------- |
+| `audioFile`, `timingsFile`, `fromAyah`, `toAyah` | | as for `MushafRecitation` | The recording, its timings and the ayah range.                              |
+| `textFile`    | string              | `'mushaf-studio/fatiha/text-uthmani.json'` | The Quran text in `public/`: an `AyahWords` file (`serialiseAyahWords()`), fetched once from quran.com by `fetchQuranComText()` or the panel's Text tab, never during a render. |
+| `font`        | `'uthmani-hafs'`    | `'uthmani-hafs'`                     | The Unicode Quran font, from QUL's CDN (`UNICODE_FONTS`).                   |
+| `fontSize`    | 40–200              | `96`                                 | Size of the Arabic text in px.                                              |
+| `lineHeight`  | 1–2.5               | `1.9`                                | Line height in multiples of the size.                                       |
+| `layout`      | object              | `aspect: '9:16'`, dark page          | As for `MushafRecitation`; `visibleLines` and `neighbourOpacity` do not apply. |
+| `animation`   | `{enter, exit, leadInSeconds}` | slide-fade, 0.4 s         | How each ayah comes in and goes out.                                        |
+| `highlight`, `text` | objects       | as for `MushafRecitation`            | The word-by-word fields of `text` do not apply.                             |
+| `resolved`    |                     | `null`                               | Filled by `calculateMetadata()`.                                            |
+
 ### `customTheme`
 
 | Field        | Type    | Default        | Description                                          |

@@ -3,10 +3,13 @@
 import plainFonts from '@tlawat/mushaf-fonts-qpc-v4';
 import tajweedFonts from '@tlawat/mushaf-fonts-qpc-v4-tajweed';
 import {
+  calculateMushafAyahTextMetadata,
   calculateMushafPassageMetadata,
   calculateMushafRecitationMetadata,
+  MushafAyahText,
   MushafPassage,
   MushafRecitation,
+  mushafAyahTextSchema,
   mushafPassageSchema,
   mushafRecitationSchema,
   registerMushafFonts,
@@ -176,6 +179,68 @@ export const RemotionRoot: React.FC = () => {
             translationFont: 'Georgia, "Noto Serif", serif',
             translationSize: 40,
             translationColor: '#4a4a4a',
+            translationDirection: 'ltr',
+            translationOffsetY: 0,
+            glossFile: '',
+            transliterationFile: '',
+            glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
+            glossSize: 34,
+            glossColor: '#6a6a6a',
+          },
+          resolved: null,
+        }}
+      />
+      {/* One ayah at a time as Unicode text in QUL's Uthmani Hafs font: the framing of reels and short clips.
+          Same timings and highlighting as MushafRecitation; the text comes from the panel's Text tab. */}
+      <Composition
+        id="MushafAyahText"
+        component={MushafAyahText}
+        schema={mushafAyahTextSchema}
+        calculateMetadata={calculateMushafAyahTextMetadata}
+        width={1080}
+        height={1920}
+        fps={30}
+        durationInFrames={300}
+        defaultProps={{
+          audioFile:
+            'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+          timingsFile: 'mushaf-studio/fatiha/timings.json',
+          fromAyah: 0,
+          toAyah: 0,
+          textFile: 'mushaf-studio/fatiha/text-uthmani.json',
+          font: 'uthmani-hafs',
+          fontSize: 96,
+          lineHeight: 1.9,
+          layout: {
+            aspect: '9:16',
+            visibleLines: 3,
+            neighbourOpacity: 0.45,
+            marginX: 120,
+            background: '#101418',
+            color: '#f4efe6',
+            backgroundImage: '',
+            verticalAlign: 0.5,
+            offsetY: 0,
+          },
+          animation: {
+            enter: 'slide-fade',
+            exit: 'slide-fade',
+            leadInSeconds: 0.4,
+          },
+          highlight: {
+            mode: 'word',
+            style: 'color',
+            color: '#c8a45c',
+            dimOthers: 1,
+            dimUpcomingOnly: false,
+            occurrence: 'first',
+          },
+          text: {
+            translationFile: '',
+            translationPosition: 'below',
+            translationFont: 'Georgia, "Noto Serif", serif',
+            translationSize: 40,
+            translationColor: '#c9c1b2',
             translationDirection: 'ltr',
             translationOffsetY: 0,
             glossFile: '',

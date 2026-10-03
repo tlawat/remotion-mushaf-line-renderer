@@ -6,6 +6,11 @@ aligner's catalogue, or your own recording), and the printed lines of the mushaf
 word by word, the current word highlighted, with a translation under the lines if you want one.
 The video is rendered from the Studio's Render button or from the command line.
 
+Three compositions come ready: `MushafRecitation` (the printed lines of the mushaf follow the
+audio, one line at a time or through a window of lines), `MushafAyahText` (one ayah at a time as
+Unicode text in QUL's Uthmani Hafs font, a 9:16 reel by default, same audio, timings and
+highlighting) and `MushafPassage` (printed lines without audio, each held for a few seconds).
+
 It is Remotion Studio as it comes (the preview, the timeline, the Props sidebar, the Render button)
 plus a **Mushaf panel** docked over the preview, which does what the Props sidebar cannot: it
 fetches a recitation, aligns it with the [QUD Universal Aligner](https://aligner.qud.dev), shows
@@ -159,6 +164,7 @@ The CLI renders the props saved in `src/Root.tsx`, so save in the Studio first:
 cd apps/mushaf-studio
 bun run render            # MushafRecitation -> out/recitation.mp4
 bun run render:passage    # MushafPassage -> out/passage.mp4
+bun run render:ayah       # MushafAyahText -> out/ayah-text.mp4
 bunx remotion render MushafRecitation out/fatiha-light.mp4 --props='{"theme":"light"}'
 bunx remotion render MushafRecitation out/offline.mp4 --props='{"fonts":"package","data":"mirror"}'
 bunx remotion render MushafRecitation out/reel.mp4 --props=./reel.json
