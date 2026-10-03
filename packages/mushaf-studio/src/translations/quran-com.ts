@@ -279,3 +279,63 @@ export const fetchQuranComWordGloss = async (
     words,
   };
 };
+
+/**
+ * `GET /verses/by_chapter/{chapter}?words=true` for a chapter or an ayah range, every page, as the
+ * raw word records quran.com answers with (in reading order, ayah-end markers included), keeping
+ * only the words of the range: the paging `fetchQuranComWordGloss()` does, for fetchers that read
+ * other word fields (`fetchQuranComText()` reads `text_uthmani` / `text_indopak`). Asks for
+ * `wordFields` plus `location` and `char_type_name`, which the paging needs. Checks the chapter and
+ * the range first (`BAD_STUDIO_PROP`); a failed request or a verse without `words` is
+ * `TRANSLATION_FETCH_FAILED`. An empty result is not an error here: the caller names what it missed.
+ */
+export const fetchQuranComVerseWords = async (
+  query: {
+    readonly chapter: number;
+    /** quran.com's `word_fields`, e.g. `['text_uthmani']`. */
+    readonly wordFields: readonly string[];
+    readonly fromAyah?: number | undefined;
+    readonly toAyah?: number | undefined;
+  },
+  options: QuranComOptions = {},
+): Promise<readonly Readonly<Record<string, unknown>>[]> => {
+  const {chapter, fromAyah, toAyah} = query;
+  assertRange(chapter, fromAyah, toAyah);
+  const fields = [...new Set([...query.wordFields, 'location', 'char_type_name'])].join(',');
+  const words: Readonly<Record<string, unknown>>[] = [];
+  for (let page = 1; page <= MAX_PAGES; ) {
+    const url = endpoint(options, `/verses/by_chapter/${chapter}`, {
+      words: 'true',
+      word_fields: fields,
+      per_page: PER_PAGE,
+      page,
+      from: fromAyah,
+      to: toAyah,
+    });
+    const body = await fetchJson(url, HINT, options);
+    const verses = arrayField(body, 'verses', url);
+    let lastAyah = 0;
+    for (const verse of verses) {
+      if (!isRecord(verse) || !Array.isArray(verse.words)) {
+        badResponse(url, '{verses: [{verse_number, words: [...]}]}', verse);
+        continue;
+      }
+      for (const word of verse.words as unknown[]) {
+        if (!isRecord(word) || typeof word.location !== 'string') continue;
+        const [surah, ayah] = word.location.split(':').map(Number);
+        if (surah !== chapter || ayah === undefined) continue;
+        lastAyah = Math.max(lastAyah, ayah);
+        if (inRange(ayah, fromAyah, toAyah)) words.push(word);
+      }
+    }
+    const next = isRecord(body) && isRecord(body.pagination) ? body.pagination.next_page : null;
+    const done = verses.length === 0 || (toAyah !== undefined && lastAyah >= toAyah);
+    if (done || typeof next !== 'number' || next <= page) break;
+    page = next;
+  }
+  return words;
+};
+
+/** "1:2-7", or "chapter 1" for a whole chapter: how the fetchers name a range in their messages. */
+export const quranComRangeLabel = (chapter: number, fromAyah: number | undefined, toAyah: number | undefined): string =>
+  rangeLabel(chapter, fromAyah, toAyah);

@@ -1,0 +1,20 @@
+import type {CalculateMetadataFunction} from 'remotion';
+import {recitationDuration, STUDIO_FPS} from '../compositions/recitation/calculate-metadata';
+import {sizeForAspect} from '../schema';
+import {resolveAyahText} from './resolve';
+import type {MushafAyahTextProps} from './schema';
+
+/**
+ * `calculateMetadata` for `<Composition id="MushafAyahText">`: `resolved`, width and height from
+ * the aspect, 30 fps, and the duration from the timings (the last ayah's end plus one second, for
+ * it to leave).
+ */
+export const calculateMushafAyahTextMetadata: CalculateMetadataFunction<MushafAyahTextProps> = async ({props}) => {
+  const resolved = await resolveAyahText(props);
+  return {
+    props: {...props, resolved},
+    ...sizeForAspect(props.layout.aspect),
+    fps: STUDIO_FPS,
+    durationInFrames: recitationDuration(resolved.timings, STUDIO_FPS),
+  };
+};
