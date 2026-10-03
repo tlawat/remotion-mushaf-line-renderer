@@ -83,8 +83,18 @@ export type AlignmentSidecar = {
   readonly edits: readonly AlignmentEdit[];
 };
 
-/** The timings file the studio reads and writes: the package's format plus the sidecar. */
-export type StudioTimings = RecitationTimings & {readonly alignment?: AlignmentSidecar};
+/**
+ * The timings file the studio reads and writes: the package's format, the three informational keys
+ * the example's producers write (`audio`, `durationSeconds`, `source`), and the sidecar.
+ */
+export type StudioTimings = RecitationTimings & {
+  /** The recording the times refer to: a `public/` path or a URL. */
+  readonly audio?: string;
+  readonly durationSeconds?: number;
+  /** Which tool wrote the file and how. */
+  readonly source?: string;
+  readonly alignment?: AlignmentSidecar;
+};
 
 /** Why a word is doubtful, for the Review tab and the in-preview marks. */
 export type DoubtReason = 'low-confidence' | 'missing-words' | 'segment-error' | 'incomplete-ayah' | 'repeated';
