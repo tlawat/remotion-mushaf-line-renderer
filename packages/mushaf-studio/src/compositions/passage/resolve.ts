@@ -29,7 +29,12 @@ export const resolvePassage = async (
   props: MushafPassageProps,
   options: ResolvePassageOptions = {},
 ): Promise<ResolvedPassage> => {
-  const io = {fetch: options.fetch ?? globalThis.fetch, staticFile: options.staticFile ?? remotionStaticFile};
+  // `globalThis.fetch` is wrapped, not referenced: calling the native fetch as a method of another
+  // object ("io.fetch(url)") throws "Illegal invocation" in browsers.
+  const io = {
+    fetch: options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
+    staticFile: options.staticFile ?? remotionStaticFile,
+  };
   if (props.toAyah !== 0 && props.toAyah < props.fromAyah) {
     throw new MushafStudioError(
       'BAD_STUDIO_PROP',

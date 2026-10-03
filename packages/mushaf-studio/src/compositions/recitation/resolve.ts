@@ -3,7 +3,7 @@ import {staticFile as remotionStaticFile} from 'remotion';
 import {describeValue, MushafStudioError} from '../../errors';
 import {applySplits, doubtfulWords} from '../../lines';
 import {dataSourceFrom, themeSelectionFrom} from '../../schema';
-import type {ResolvedRecitation, StudioTimings, WordGloss} from '../../types';
+import type {ResolvedRecitation, StudioTimings} from '../../types';
 import {fileUrl, loadTextFile} from '../shared';
 import type {MushafRecitationProps} from './schema';
 
@@ -58,7 +58,8 @@ export const readTimings = async (
   let response: Response;
   try {
     // The panel rewrites the same file in place (a nudge, a split): never serve a cached copy.
-    response = await options.fetch(url, {cache: 'no-store'});
+    const request = options.fetch;
+    response = await request(url, {cache: 'no-store'});
   } catch (cause) {
     throw bad(
       `timingsFile ${describeValue(file)} could not be fetched from ${url}: ${cause instanceof Error ? cause.message : String(cause)}. Check the path (under public/) or the URL.`,
@@ -128,7 +129,12 @@ export const resolveRecitation = async (
   props: MushafRecitationProps,
   options: ResolveRecitationOptions = {},
 ): Promise<StudioResolvedRecitation> => {
-  const io = {fetch: options.fetch ?? globalThis.fetch, staticFile: options.staticFile ?? remotionStaticFile};
+  // `globalThis.fetch` is wrapped, not referenced: calling the native fetch as a method of another
+  // object ("io.fetch(url)") throws "Illegal invocation" in browsers.
+  const io = {
+    fetch: options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
+    staticFile: options.staticFile ?? remotionStaticFile,
+  };
   const timings = trimTimings(await readTimings(props.timingsFile, io), props.fromAyah, props.toAyah);
   const lines = await getMushafLines({
     ...recitedRange(timings),
