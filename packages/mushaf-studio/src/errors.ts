@@ -49,5 +49,5 @@ export const describeValue = (value: unknown): string => {
   if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean')
     return String(value);
   if (Array.isArray(value)) return `an array of ${value.length}`;
-  return `a ${typeof value}`;
+  return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
 };
