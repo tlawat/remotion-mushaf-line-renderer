@@ -39,6 +39,7 @@ import {
   type MushafLineWindowProps,
   type MushafScrollAnchor,
   type MushafSharedFont,
+  type MushafSlice,
   MushafSurahName,
   type MushafTheme,
   type MushafThemeName,
@@ -131,11 +132,14 @@ export const ok = (
       wordClassName={(word) => `w-${word.wordId}`}
     />
     <MushafLine line={data} activeWordId={42} />
-    {/* slice: one ayah, a range, open-ended, on either form, and null to cancel the data's slice */}
+    {/* slice: one ayah, a range, open-ended, a band of words, on either form, and null to cancel the data's slice */}
     <MushafLine line={data} slice={{ayah: 5}} />
     <MushafLine line={data} slice={{fromAyah: 5, toAyah: 7}} />
     <MushafLine line={data} slice={{fromAyah: 5}} />
+    <MushafLine line={data} slice={{fromWordId: 120, toWordId: 124}} />
+    <MushafLine line={data} slice={{fromWordId: 120}} />
     <MushafLine page={187} line={2} slice={{ayah: 1}} />
+    <MushafLine page={187} line={2} slice={{fromWordId: 13_000}} />
     <MushafLine line={data} slice={null} />
     {/* fit */}
     <MushafLine line={data} fit="line" />
@@ -167,6 +171,23 @@ export const openStart = <MushafLine line={data} slice={{toAyah: 7}} />;
 export const ayahList = <MushafLine line={data} slice={{ayahs: [5, 6]}} />;
 export const sliced: readonly MushafWord[] = sliceWords(data, {ayah: 5});
 export const ownSlice: readonly MushafWord[] = sliceWords(data);
+// @ts-expect-error a slice is ayahs or a band of words, not both
+export const ayahAndWords = <MushafLine line={data} slice={{ayah: 1, fromWordId: 3}} />;
+// @ts-expect-error ... whichever keys are mixed
+export const rangeAndWords = <MushafLine line={data} slice={{fromAyah: 1, toWordId: 3}} />;
+// @ts-expect-error a band starts somewhere
+export const openBandStart = <MushafLine line={data} slice={{toWordId: 7}} />;
+// @ts-expect-error a band is of `MushafWord.wordId`s, not of locations
+export const locationBand = <MushafLine line={data} slice={{fromWordId: '2:3:1'}} />;
+export const wordBand: MushafSlice = {fromWordId: 120, toWordId: 124};
+export const bandWords: readonly MushafWord[] = sliceWords(data, {fromWordId: 120});
+// A line split at a word is two copies of it, each with a band; persisted data takes the same shapes.
+export const splitHalves: readonly MushafLineData[] = [
+  {...data, slice: {fromWordId: 120, toWordId: 121}},
+  {...data, slice: {fromWordId: 122}},
+];
+// @ts-expect-error ... and refuses the same mixes
+export const mixedData: MushafLineData = {...data, slice: {fromAyah: 2, fromWordId: 9}};
 
 // @ts-expect-error resolved data carries its own theme
 export const themeWithData = <MushafLine line={data} theme="light" />;

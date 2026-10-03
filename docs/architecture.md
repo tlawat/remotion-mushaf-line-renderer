@@ -56,7 +56,8 @@ and the words in reading order. `getMushafLines()` does the same for a whole pag
 an ayah range (locating the first ayah, then walking pages until every word is past the range); with
 `slice: true` it records the range on the lines it cuts. `slice.ts` holds the slicing vocabulary:
 `assertSlice()` validates a selector, `resolveSlice()` turns it into the band of word ids a line
-keeps (or `'empty'`, or `null` when it keeps everything), `sliceWords()` is the public helper.
+keeps (or `'empty'`, or `null` when it keeps everything; a word band, `{fromWordId, toWordId}`,
+resolves to itself clipped to the line), `sliceWords()` is the public helper.
 `assertLineData()` validates data coming back in through props, field by field, because it may have
 been persisted by an older version.
 

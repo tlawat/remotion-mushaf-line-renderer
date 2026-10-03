@@ -210,6 +210,29 @@ describe('<MushafLineWindow>', () => {
     expect(active[0]!.style.color).toBe('red');
   });
 
+  it("shows each line's own slice, so a line split by word bands takes two slots", async () => {
+    // p2 l3 (wordIds 6-9) split at 8: once up to 7, once from 8.
+    const split = lines[2]!;
+    const halves = [
+      {...split, slice: {fromWordId: 6, toWordId: 7}},
+      {...split, slice: {fromWordId: 8}},
+    ];
+    const {container} = render(<Window lines={[lines[1]!, ...halves]} steps={[0, 30, 60]} />);
+    const slots = slotsOf(container);
+    expect(indices(container)).toEqual([0, 1, 2]);
+    await waitFor(() => {
+      for (const slot of slots)
+        expect(lineRoot(slot).querySelector<HTMLElement>('.mushaf-line__row')!.style.visibility).toBe('visible');
+    });
+    expect(slots.map((s) => lineRoot(s).dataset.sliced)).toEqual([undefined, '6-7', '8-9']);
+    const shown = (slot: HTMLElement) =>
+      Array.from(slot.querySelectorAll<HTMLElement>('.mushaf-word:not([data-hidden])')).map((w) => w.dataset.wordId);
+    expect(slots.slice(1).map(shown)).toEqual([
+      ['6', '7'],
+      ['8', '9'],
+    ]);
+  });
+
   it('animates the whole window with enter / exit, wrapping the track like a line', () => {
     const {container, rerender} = render(<Window enter={{presentation: fade(), timing}} />);
     const root = rootOf(container);

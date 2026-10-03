@@ -172,6 +172,20 @@ describe('getMushafLine', () => {
 });
 
 describe('assertLineData', () => {
+  it('takes a band of words back from persisted data, byte for byte', async () => {
+    const good = await getMushafLine({mushaf: 'qpc-v4', page: 2, line: 3});
+    for (const slice of [{fromWordId: 7, toWordId: 8}, {fromWordId: 7}, {fromWordId: 7, toWordId: 7}] as const) {
+      const json = JSON.stringify({...good, slice});
+      const back = assertLineData(JSON.parse(json));
+      expect(back.slice).toEqual(slice);
+      expect(JSON.stringify(back)).toBe(json);
+    }
+    // An open band carries no toWordId key at all.
+    expect(Object.keys(assertLineData(JSON.parse(JSON.stringify({...good, slice: {fromWordId: 7}}))).slice!)).toEqual([
+      'fromWordId',
+    ]);
+  });
+
   it('rejects tampered or foreign data field by field', async () => {
     const good = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 2});
     const bad = (patch: Record<string, unknown>) => () => assertLineData({...good, ...patch});
@@ -215,6 +229,10 @@ describe('assertLineData', () => {
     expect(bad({slice: {ayah: 0}})).toThrow(/MushafLineData.slice.ayah must be a positive integer/);
     expect(bad({slice: {fromAyah: 3, toAyah: 1}})).toThrow(/toAyah \(1\) is before fromAyah \(3\)/);
     expect(assertLineData({...good, slice: {ayah: 1}})).toBeTruthy();
+    expect(bad({slice: {fromWordId: 0}})).toThrow(/MushafLineData.slice.fromWordId must be a positive integer, got 0/);
+    expect(bad({slice: {fromWordId: 3, toWordId: 2}})).toThrow(/toWordId \(2\) is before fromWordId \(3\)/);
+    expect(bad({slice: {ayah: 1, fromWordId: 2}})).toThrow(/takes either ayahs .* or words .*, not both/);
+    expect(bad({slice: {toWordId: 2}})).toThrow(expect.objectContaining({code: 'BAD_SLICE'}));
     expect(() => assertLineData('nope')).toThrow(/must be the object returned by getMushafLine/);
     // Data from 0.3 that pinned a font URL is refused with the way forward.
     expect(() => assertLineData({...good, fontUrl: 'https://cdn.example/p1.woff2'})).toThrow(

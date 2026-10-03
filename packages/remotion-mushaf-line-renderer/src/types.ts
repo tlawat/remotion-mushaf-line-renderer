@@ -150,8 +150,9 @@ export type MushafLineData = {
    */
   readonly fontFamily: string;
   /**
-   * Which ayahs of the line to show (see `MushafSlice`). Recorded by `getMushafLines({slice: true})`;
-   * the words are never trimmed, so the printed line is still all there for the layout.
+   * Which words of the line to show: some of its ayahs or a band of its words (see `MushafSlice`).
+   * Recorded by `getMushafLines({slice: true})`; the words are never trimmed, so the printed line is
+   * still all there for the layout.
    */
   readonly slice?: MushafSlice;
   /** Present on surah_name lines (the header's surah) and basmallah lines (carried forward). */
@@ -190,15 +191,37 @@ export type WordContext = {
 };
 
 /**
- * Which ayahs of a line to show: `{ayah}` for one, `{fromAyah, toAyah}` for a range  -  open-ended
- * after `fromAyah` when `toAyah` is omitted, so one selector means the same thing on every line of
- * a passage. The rest of the line is hidden and the words that remain are centred in the measure at
- * the line's own type size. The ayah-end rosette belongs to the ayah it closes. A slice that keeps
- * every word of a line changes nothing; one that keeps none paints nothing and throws nothing.
+ * Which words of a line to show: `{ayah}` for one ayah, `{fromAyah, toAyah}` for a range of ayahs,
+ * or `{fromWordId, toWordId}` for a band of `MushafWord.wordId`s, inclusive  -  each range open-ended
+ * when its end is omitted, so one selector means the same thing on every line of a passage. The rest
+ * of the line is hidden and the words that remain are centred in the measure at the line's own type
+ * size. Under the ayah forms the ayah-end rosette belongs to the ayah it closes; a word band keeps
+ * exactly the words it names, so a line split at word `w` is two copies of it, one sliced
+ * `{fromWordId: line.words[0].wordId, toWordId: w - 1}` and one `{fromWordId: w}`. A slice that
+ * keeps every word of a line changes nothing; one that keeps none paints nothing and throws nothing.
  */
 export type MushafSlice =
-  | {readonly ayah: number; readonly fromAyah?: never; readonly toAyah?: never}
-  | {readonly fromAyah: number; readonly toAyah?: number; readonly ayah?: never};
+  | {
+      readonly ayah: number;
+      readonly fromAyah?: never;
+      readonly toAyah?: never;
+      readonly fromWordId?: never;
+      readonly toWordId?: never;
+    }
+  | {
+      readonly fromAyah: number;
+      readonly toAyah?: number;
+      readonly ayah?: never;
+      readonly fromWordId?: never;
+      readonly toWordId?: never;
+    }
+  | {
+      readonly fromWordId: number;
+      readonly toWordId?: number;
+      readonly ayah?: never;
+      readonly fromAyah?: never;
+      readonly toAyah?: never;
+    };
 
 /** When one word of the mushaf is heard: `id` is `MushafWord.id` ("surah:ayah:position"); seconds from the start of the audio. */
 export type WordTiming = {readonly id: string; readonly start: number; readonly end: number};
@@ -306,9 +329,10 @@ export type MushafLineCommonProps = {
    */
   readonly fit?: 'line' | 'mushaf';
   /**
-   * Show only these ayahs of the line, collapsed and centred in the measure (see `MushafSlice`).
-   * Wins over `line.slice`; `null` cancels a slice the data carries. The words that remain keep the
-   * line's own type size and their printed advances  -  nothing is zoomed or re-spaced.
+   * Show only these ayahs (or this band of words) of the line, collapsed and centred in the measure
+   * (see `MushafSlice`). Wins over `line.slice`; `null` cancels a slice the data carries. The words
+   * that remain keep the line's own type size and their printed advances  -  nothing is zoomed or
+   * re-spaced.
    */
   readonly slice?: MushafSlice | null;
   /**

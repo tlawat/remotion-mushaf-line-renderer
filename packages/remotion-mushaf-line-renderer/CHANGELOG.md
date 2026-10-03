@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Slices by word.** `slice` (the prop and `line.slice`) takes a third form, `{fromWordId, toWordId?}`:
+  a band of `MushafWord.wordId`, inclusive, open-ended without `toWordId`, clipped to each line like
+  the ayah forms (a band that keeps every word changes nothing, one that keeps none paints nothing).
+  It can cut inside an ayah, so a line splits into two slots by appearing twice in `lines` with two
+  bands; `sliceWords()`, `assertLineData()`, `<MushafLineWindow>` and `scheduleLines()` take it as
+  they take the others. The forms do not mix; `BAD_SLICE` names the field and the value.
 - **Several lines at once.** New `<MushafLineWindow lines steps>`: a window of `visibleLines` slots
   (default 3) onto a stack of lines, the current line in the middle, that scrolls up by exactly one
   line-height in one shared movement when the current line changes. `steps` is the local frame at

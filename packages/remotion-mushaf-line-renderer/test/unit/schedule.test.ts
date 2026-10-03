@@ -60,6 +60,51 @@ describe('scheduleLines', () => {
     expect(scheduleLines([syntheticLine(3, 1, {slice: {ayah: 9}})], timings)).toEqual([]);
   });
 
+  it('starts a line whose band of words hides its first words at the first word it keeps', () => {
+    // p3l2: 2:3:2 (17) at 21, 2:3:3 rosette (18) at 22, 2:4:1 (19) at 30, 2:4:2 rosette (20) at 31.
+    const timings = t(2, [ayah(2, 10, 5), ayah(3, 20, 3), ayah(4, 30, 2)]);
+    const tail = syntheticLine(3, 2, {slice: {fromWordId: 19}});
+    expect(scheduleLines([p3l1, p3l2], timings)).toEqual([
+      {index: 0, start: 13, end: 21},
+      {index: 1, start: 21, end: 32},
+    ]);
+    expect(scheduleLines([p3l1, tail], timings)).toEqual([
+      {index: 0, start: 13, end: 30},
+      {index: 1, start: 30, end: 32},
+    ]);
+    // A band that hides the line's last words ends it where the next line starts, as before.
+    const head = syntheticLine(3, 2, {slice: {fromWordId: 17, toWordId: 18}});
+    expect(scheduleLines([p3l1, head], timings)).toEqual([
+      {index: 0, start: 13, end: 21},
+      {index: 1, start: 21, end: 23}, // the last timed ayah the kept words carry is 2:3
+    ]);
+    // A band that keeps every word changes nothing; one that keeps none leaves the line out.
+    expect(scheduleLines([p3l1, syntheticLine(3, 2, {slice: {fromWordId: 1}})], timings)).toEqual(
+      scheduleLines([p3l1, p3l2], timings),
+    );
+    expect(scheduleLines([syntheticLine(3, 2, {slice: {fromWordId: 21}})], timings)).toEqual([]);
+  });
+
+  it('gives each half of a line split by word bands a slot of its own, in order', () => {
+    const timings = t(2, [ayah(2, 10, 5), ayah(3, 20, 3), ayah(4, 30, 2)]);
+    const first = syntheticLine(3, 2, {slice: {fromWordId: p3l2.words[0]!.wordId, toWordId: 18}});
+    const second = syntheticLine(3, 2, {slice: {fromWordId: 19}});
+    expect(scheduleLines([p3l1, first, second], timings)).toEqual([
+      {index: 0, start: 13, end: 21},
+      {index: 1, start: 21, end: 30},
+      {index: 2, start: 30, end: 32},
+    ]);
+    // Without per-word times the halves start by position: 2:3:2 is the second of 3 positions over 20-23.
+    const untimed = t(2, [
+      {ayah: 3, start: 20, end: 23},
+      {ayah: 4, start: 30, end: 32},
+    ]);
+    expect(scheduleLines([first, second], untimed)).toEqual([
+      {index: 0, start: 21, end: 30},
+      {index: 1, start: 30, end: 32},
+    ]);
+  });
+
   it('takes the first recitation of a repeated word by default, the last on request', () => {
     const repeat: AyahTiming = {
       ayah: 3,

@@ -141,7 +141,7 @@ Two things flow through your code:
 | `enter`                  | `{presentation, timing?}` or a bare presentation   | Entrance animation. Runs over the local frame of the enclosing `<Sequence>`. `timing` defaults to `enterTiming()`.                                                 |
 | `exit`                   | same shape as `enter`                              | Exit animation: the presentation's exiting side over the last `timing.getDurationInFrames()` frames of the enclosing `<Sequence>`. Defaults to `exitTiming()`.      |
 | `fit`                    | `'line'` (default) \| `'mushaf'`                   | `'line'` scales the line so it fills its box at the font's own word gaps; `'mushaf'` keeps one type size for every line. See [Sizing](#sizing).                     |
-| `slice`                  | `{ayah}` \| `{fromAyah, toAyah?}` \| `null`        | Show only these ayahs of the line, collapsed and centred, at the line's own size. Wins over `line.slice`; `null` cancels it. See [Slicing a line](#slicing-a-line). |
+| `slice`                  | `{ayah}` \| `{fromAyah, toAyah?}` \| `{fromWordId, toWordId?}` \| `null` | Show only these ayahs (or this band of words) of the line, collapsed and centred, at the line's own size. Wins over `line.slice`; `null` cancels it. See [Slicing a line](#slicing-a-line). |
 | `fontSize`               | `number` (px)                                      | The base size; default `fontSizeForWidth(useVideoConfig().width)`.                                                                                                 |
 | `lineHeight`             | `number` (px)                                      | Default `lineHeightForFontSize(fontSize)`, the height of the root element.                                                                                         |
 | `style`, `className`     |                                                    | Applied to the root element. The line inherits its CSS `color` from here.                                                                                          |
@@ -226,7 +226,7 @@ type MushafLineData = {
   type: 'ayah' | 'surah_name' | 'basmallah';
   centered: boolean;          // centred as printed (last line of a surah, pages 1-2)
   fontFamily: string;         // "mushaf-<fontSet>-p<page>" (ayah lines) or "mushaf-surah-names-v4" (the others): the family under the default font source
-  slice?: {ayah: number} | {fromAyah: number; toAyah?: number};  // the ayahs to show, see Slicing a line
+  slice?: {ayah: number} | {fromAyah: number; toAyah?: number} | {fromWordId: number; toWordId?: number};  // the ayahs or words to show, see Slicing a line
   surahNumber?: number;       // surah_name lines (the header's surah) and basmallah lines (carried forward)
   words: Array<{
     id: string;               // "surah:ayah:position", QUL's location key
@@ -389,6 +389,23 @@ whole measure, so a centred slice appears as the sweep reaches it.
 The range is `{ayah}` or `{fromAyah, toAyah?}`, never a list: a line's ayahs are contiguous, so a
 list would only mean its outer range, and hiding an ayah *between* two kept ones would put words
 side by side that the mushaf never printed together.
+
+`{fromWordId, toWordId?}` slices by word instead: a band of `MushafWord.wordId`, the sequential
+index, inclusive at both ends and open-ended without `toWordId`. It keeps exactly the words whose
+`wordId` it spans, so it can cut inside an ayah. That is how a line is split in two: the line
+appears twice in `lines`, once up to the word before the cut and once from it, each half is centred
+at the line's type size, and `scheduleLines()` gives each its own slot, from its first kept word.
+
+```tsx
+const at = line.words[3]!.wordId; // cut before the fourth word
+const halves = [
+  {...line, slice: {fromWordId: line.words[0]!.wordId, toWordId: at - 1}},
+  {...line, slice: {fromWordId: at}},
+];
+```
+
+A band is clipped to the line it is applied to, so one band can ride on every line of a passage like
+an ayah range: the lines it covers whole render as printed, the lines it misses paint nothing.
 
 `getMushafLines({surah, fromAyah, toAyah, slice: true})` records the range as `line.slice` on the
 lines it cuts (the first and/or last of the passage, when they carry words of other ayahs), so a
@@ -952,7 +969,7 @@ across package copies.
 | `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE` | `surah` must be `1..114`, `juz` `1..30`.                                                                                                        |
 | `BAD_THEME`                              | `theme` must be `'plain'`, a preset name or `{base, colors?, marker?}`; a base the font lacks, an entry outside 0–15 or an unknown part. |
 | `BAD_COLOR`                              | A theme colour is not a CSS colour.                                                                                                            |
-| `BAD_SLICE`                              | `slice` must be `{ayah}` or `{fromAyah, toAyah?}` with positive integers (`toAyah` not before `fromAyah`); `slice: true` only on the ayah form of `getMushafLines()`. |
+| `BAD_SLICE`                              | `slice` must be `{ayah}`, `{fromAyah, toAyah?}` or `{fromWordId, toWordId?}` with positive integers (the end not before the start), never a mix; `slice: true` only on the ayah form of `getMushafLines()`. |
 | `BAD_RECITATION_TIMINGS`                 | `parseRecitationTimings()` was given something other than `{version: 1, surah, ayat: [{ayah, start, end, complete?, words?}]}` (the message names the field), or timings of a version this package does not understand. |
 | `AYAH_NOT_FOUND`                         | `getMushafLines({surah, ...})` / `getMushafLocation()` was asked for a surah or ayah the mushaf does not have; the message names the last ayah. |
 | `PAGE_OUT_OF_RANGE`, `LINE_OUT_OF_RANGE` | Pages are `1..604`; lines `1..15` (`1..8` on pages 1 and 2). The message names the page's line count.                                          |

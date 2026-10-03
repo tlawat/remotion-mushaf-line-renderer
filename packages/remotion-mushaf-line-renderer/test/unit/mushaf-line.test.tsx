@@ -733,6 +733,47 @@ describe('<MushafLine slice>', () => {
     expect(spans(cancelled.container).every((s) => s.dataset.hidden === undefined)).toBe(true);
   });
 
+  it('takes a band of words: inside the line, the whole line, none of it, from the data or the prop', async () => {
+    const line = await twoAyahs();
+    // Across the ayah boundary: the words named and nothing else, the rest centred.
+    const band = render(<MushafLine line={line} slice={{fromWordId: 18, toWordId: 19}} />);
+    await visible(band.container);
+    expect(spans(band.container).map((s) => s.style.display)).toEqual(['none', 'block', 'block', 'none']);
+    expect(rowOf(band.container).style.justifyContent).toBe('center');
+    expect(rootOf(band.container).dataset.sliced).toBe('18-19');
+    cleanup();
+    const whole = render(<MushafLine line={line} slice={{fromWordId: 1}} />);
+    await visible(whole.container);
+    expect(spans(whole.container).every((s) => s.dataset.hidden === undefined)).toBe(true);
+    expect(rowOf(whole.container).style.justifyContent).toBe('flex-start');
+    expect(rootOf(whole.container).dataset.sliced).toBeUndefined();
+    cleanup();
+    const none = render(<MushafLine line={line} slice={{fromWordId: 21}} />);
+    await visible(none.container);
+    expect(spans(none.container).every((s) => s.dataset.hidden === 'true')).toBe(true);
+    expect(rootOf(none.container).dataset.sliced).toBe('empty');
+    cleanup();
+    const data = {...line, slice: {fromWordId: 19}} as const;
+    const fromData = render(<MushafLine line={data} />);
+    await visible(fromData.container);
+    expect(rootOf(fromData.container).dataset.sliced).toBe('19-20');
+    cleanup();
+    const prop = render(<MushafLine line={data} slice={{ayah: 3}} />);
+    await visible(prop.container);
+    expect(rootOf(prop.container).dataset.sliced).toBe('17-18');
+  });
+
+  it('refuses a malformed band of words loudly', () => {
+    const onError = vi.fn();
+    render(
+      <Boundary onError={onError}>
+        <MushafLine line={justified} slice={{fromWordId: 9, toWordId: 4}} />
+      </Boundary>,
+    );
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({code: 'BAD_SLICE'});
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/<MushafLine slice>\.toWordId \(4\) is before fromWordId \(9\)/);
+  });
+
   it('refuses a malformed slice loudly', async () => {
     const onError = vi.fn();
     render(
