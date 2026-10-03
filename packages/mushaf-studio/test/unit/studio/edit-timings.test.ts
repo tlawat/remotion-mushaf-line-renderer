@@ -1,7 +1,7 @@
 import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {describe, expect, it} from 'vitest';
 import {isMushafStudioError} from '../../../src/errors';
-import {nudgeWord, roundMs, withEdit} from '../../../src/studio/edit-timings';
+import {nudgeWord, nudgeWords, roundMs, withEdit} from '../../../src/studio/edit-timings';
 import type {AlignmentWord, StudioTimings} from '../../../src/types';
 
 const AT = '2026-10-03T12:00:00.000Z';
@@ -202,5 +202,139 @@ describe('nudgeWord', () => {
     const twice = withEdit(once, {kind: 'split-segment', at: AT, note: 'max 1 verse'});
     expect(twice.alignment!.edits.map((e) => e.kind)).toEqual(['realign', 'split-segment']);
     expect(once.alignment!.edits).toHaveLength(1);
+  });
+});
+
+/** Ayah 3 recited with its first word twice, no marker, no `complete` flag. */
+const repeated = (): StudioTimings => {
+  const base = timings();
+  return {
+    ...base,
+    ayat: [
+      base.ayat[0]!,
+      {
+        ayah: 3,
+        start: 3.49,
+        end: 7,
+        words: [
+          {id: '1:3:1', start: 3.49, end: 4.56},
+          {id: '1:3:1', start: 5, end: 6},
+          {id: '1:3:2', start: 6, end: 7},
+        ],
+      },
+    ],
+    alignment: {
+      ...base.alignment!,
+      words: [...base.alignment!.words.slice(0, 5), word('1:3:1', 'ٱلرَّحْمَٰنِ', 2, 5, 6), word('1:3:2', 'ٱلرَّحِيمِ', 2, 6, 7)],
+    },
+  };
+};
+
+/** Ayah 3 complete, with the end marker `timingsFromQud()` emits (1:3:3, held 0.8 s after the last word). */
+const withMarker = (): StudioTimings => {
+  const base = timings();
+  return {
+    ...base,
+    ayat: [
+      base.ayat[0]!,
+      {
+        ayah: 3,
+        start: 3.49,
+        end: 6.49,
+        complete: true,
+        words: [
+          {id: '1:3:1', start: 3.49, end: 4.56},
+          {id: '1:3:2', start: 4.56, end: 5.69},
+          {id: '1:3:3', start: 5.69, end: 6.49},
+        ],
+      },
+    ],
+  };
+};
+
+const wordsOf = (t: StudioTimings, ayah: number) => t.ayat.find((a) => a.ayah === ayah)!.words!;
+
+describe('nudgeWords', () => {
+  it('resolves every occurrence against the file as it is, so a batch lands where the user pointed', () => {
+    const before = repeated();
+    const nudges = [
+      {id: '1:3:1', occurrenceIndex: 0, start: 5.5, end: 5.9, at: AT},
+      {id: '1:3:1', occurrenceIndex: 1, start: 3, end: 3.4, at: AT},
+    ];
+    // One after the other, the first move re-sorts the words and the second one lands on it instead.
+    const oneByOne = nudges.reduce(nudgeWord, before);
+    expect(wordsOf(oneByOne, 3).map((w) => w.start)).toEqual([3, 5, 6]);
+    const together = nudgeWords(before, nudges);
+    expect(wordsOf(together, 3)).toEqual([
+      {id: '1:3:1', start: 3, end: 3.4},
+      {id: '1:3:1', start: 5.5, end: 5.9},
+      {id: '1:3:2', start: 6, end: 7},
+    ]);
+    expect(together.alignment!.words.slice(4).map((w) => [w.id, w.start, w.end])).toEqual([
+      ['1:3:1', 3, 3.4],
+      ['1:3:1', 5.5, 5.9],
+      ['1:3:2', 6, 7],
+    ]);
+    expect(together.ayat[1]!.start).toBe(3);
+    expect(together.ayat[1]!.end).toBe(7);
+    expect(together.alignment!.edits).toEqual([
+      {kind: 'nudge', at: AT, note: '1:3:1#0: 3.49-4.56s to 5.5-5.9s; 1:3:1#1: 5-6s to 3-3.4s'},
+    ]);
+    expect(() => parseRecitationTimings(together)).not.toThrow();
+    expect(JSON.stringify(before)).toBe(JSON.stringify(repeated()));
+  });
+
+  it("moves a complete ayah's end marker with its last recited word", () => {
+    const later = nudgeWords(withMarker(), [{id: '1:3:2', occurrenceIndex: 0, start: 5.8, end: 6, at: AT}]);
+    expect(wordsOf(later, 3)).toEqual([
+      {id: '1:3:1', start: 3.49, end: 4.56},
+      {id: '1:3:2', start: 5.8, end: 6},
+      {id: '1:3:3', start: 6, end: 6.49},
+    ]);
+    // Past the marker's own end: the marker shrinks to nothing rather than sort before the word.
+    const past = nudgeWords(withMarker(), [{id: '1:3:2', occurrenceIndex: 0, start: 5.8, end: 6.6, at: AT}]);
+    expect(wordsOf(past, 3)[2]).toEqual({id: '1:3:3', start: 6.6, end: 6.6});
+    expect(past.ayat[1]!.end).toBe(6.6);
+    // The last word moved before its neighbour: the marker follows the word that now ends last.
+    const earlier = nudgeWords(withMarker(), [{id: '1:3:2', occurrenceIndex: 0, start: 3, end: 3.3, at: AT}]);
+    expect(wordsOf(earlier, 3).map((w) => [w.id, w.start, w.end])).toEqual([
+      ['1:3:2', 3, 3.3],
+      ['1:3:1', 3.49, 4.56],
+      ['1:3:3', 4.56, 6.49],
+    ]);
+    for (const t of [later, past, earlier]) expect(() => parseRecitationTimings(t)).not.toThrow();
+    // The marker nudged by hand is left where the user put it.
+    const byHand = nudgeWords(withMarker(), [{id: '1:3:3', occurrenceIndex: 0, start: 5.9, end: 6.2, at: AT}]);
+    expect(wordsOf(byHand, 3)[2]).toEqual({id: '1:3:3', start: 5.9, end: 6.2});
+  });
+
+  it('finds the marker without a sidecar only in the shape the converter gives it', () => {
+    const {alignment: _alignment, ...plain} = withMarker();
+    const moved = nudgeWords(plain, [{id: '1:3:2', occurrenceIndex: 0, start: 4.56, end: 5.8, at: AT}]);
+    expect(wordsOf(moved, 3)[2]).toEqual({id: '1:3:3', start: 5.8, end: 6.49});
+    // A complete ayah that simply ends on its last word (the committed fixtures): that word stays a word.
+    const ending: StudioTimings = {
+      version: 1,
+      surah: 1,
+      ayat: [{...timings().ayat[0]!, complete: true}],
+    };
+    const nudged = nudgeWords(ending, [{id: '1:2:3', occurrenceIndex: 0, start: 1.29, end: 1.8, at: AT}]);
+    expect(wordsOf(nudged, 2)[3]).toEqual({id: '1:2:4', start: 1.72, end: 2.95});
+  });
+
+  it('returns the input for no nudges, checks every nudge before changing anything, and lets the last of two win', () => {
+    const base = timings();
+    expect(nudgeWords(base, [])).toBe(base);
+    expect(() =>
+      nudgeWords(base, [
+        {id: '1:2:2', occurrenceIndex: 0, start: 0.6, end: 1.3, at: AT},
+        {id: '1:9:1', occurrenceIndex: 0, start: 0, end: 1, at: AT},
+      ]),
+    ).toThrow(/ayah 9 is not in this file/);
+    const twice = nudgeWords(base, [
+      {id: '1:2:2', occurrenceIndex: 0, start: 0.6, end: 1.3, at: AT},
+      {id: '1:2:2', occurrenceIndex: 0, start: 0.65, end: 1.3, at: AT},
+    ]);
+    expect(wordsOf(twice, 2)[1]).toEqual({id: '1:2:2', start: 0.65, end: 1.3});
   });
 });

@@ -2,6 +2,7 @@
 // the edit's timestamp in, taken when the user clicks, so a test can pin it.
 import type {AyahTiming, WordTiming} from '@tlawat/remotion-mushaf-line';
 import {MushafStudioError} from '../errors';
+import {MARKER_HOLD_SECONDS} from '../qud/convert';
 import type {AlignmentEdit, AlignmentSidecar, AlignmentWord, StudioTimings} from '../types';
 
 /** One word's new times. `occurrenceIndex` counts the occurrences of `id` in its ayah's words, from 0. */
@@ -60,16 +61,52 @@ const occurrenceAt = <T extends {readonly id: string}>(
   return {index, count};
 };
 
+const positionOf = (id: string): number => Number(id.split(':')[2]);
+
 /**
- * Moves one recited word: its new `start` and `end` replace the old ones in its ayah (the n-th
- * occurrence of `id` when the reciter repeated it) and in the sidecar's words, the words are kept in
- * audio order (sorted by `start`, stable, so a word nudged across its neighbour keeps the file
- * valid for `parseRecitationTimings()`), the ayah's `start` and `end` become the hull of its
- * words, and a `nudge` entry is appended to the edit log. Pure: returns a new object, keeps every
- * other key. Throws `BAD_TIMING_EDIT` for a start after the end, a negative time, an ayah that is
- * not in the file or has no per-word times, or an occurrence it does not have.
+ * The index in `words` of the ayah-end marker `timingsFromQud()` emits for a complete ayah: the
+ * mushaf word after the last recited one, held from that word's end. With the sidecar it is the
+ * word whose position is above every recited (sidecar) word of the ayah. Without one, it is the
+ * last word by position when it has the shape the converter gives it: alone at its position, one
+ * past the others, starting where they end and held at most `MARKER_HOLD_SECONDS`, so a file that
+ * simply ends on its last word (the committed fixtures) keeps that word a word. -1 when there is none.
  */
-export const nudgeWord = (timings: StudioTimings, nudge: WordNudge): StudioTimings => {
+const markerIndex = (words: readonly WordTiming[], recited: readonly AlignmentWord[]): number => {
+  if (recited.length > 0) {
+    const top = Math.max(...recited.map((word) => positionOf(word.id)));
+    const above = words.map((word, index) => (positionOf(word.id) > top ? index : -1)).filter((index) => index >= 0);
+    return above.length === 1 ? above[0]! : -1;
+  }
+  const positions = words.map((word) => positionOf(word.id));
+  const top = Math.max(...positions);
+  const index = positions.indexOf(top);
+  if (index < 0 || positions.lastIndexOf(top) !== index) return -1;
+  const others = words.filter((_, i) => i !== index);
+  if (others.length === 0 || Math.max(...others.map((word) => positionOf(word.id))) !== top - 1) return -1;
+  const candidate = words[index]!;
+  const lastEnd = Math.max(...others.map((word) => word.end));
+  return candidate.start === lastEnd && candidate.end - candidate.start <= MARKER_HOLD_SECONDS ? index : -1;
+};
+
+/** The marker of a complete ayah moved to the end of its recited words (its hold kept when it still fits). */
+const followMarker = (words: readonly WordTiming[], index: number): readonly WordTiming[] => {
+  const marker = words[index]!;
+  const start = roundMs(Math.max(...words.filter((_, i) => i !== index).map((word) => word.end)));
+  return words.map((word, i) => (i === index ? {...marker, start, end: roundMs(Math.max(marker.end, start))} : word));
+};
+
+type Resolved = {
+  readonly nudge: WordNudge;
+  readonly ayahIndex: number;
+  readonly wordIndex: number;
+  /** The index in the sidecar's words, -1 when the sidecar has no such occurrence. */
+  readonly sidecarIndex: number;
+  readonly before: WordTiming;
+  readonly start: number;
+  readonly end: number;
+};
+
+const resolve = (timings: StudioTimings, nudge: WordNudge): Resolved => {
   const {id, occurrenceIndex} = nudge;
   const start = roundMs(nudge.start);
   const end = roundMs(nudge.end);
@@ -94,20 +131,78 @@ export const nudgeWord = (timings: StudioTimings, nudge: WordNudge): StudioTimin
         ? `${id} is not timed in ayah ${ayahNumber}.`
         : `${id} is recited ${count} time${count > 1 ? 's' : ''} in ayah ${ayahNumber}; occurrence ${occurrenceIndex} does not exist.`,
     );
-  const before = words[index]!;
-  const nextWords = sortedByStart(words.map((word, i) => (i === index ? {id, start, end} : word)));
-  const ayat = timings.ayat.map((entry, i) => (i === ayahIndex ? hull(entry, nextWords) : entry));
+  const sidecarIndex = timings.alignment ? occurrenceAt(timings.alignment.words, id, occurrenceIndex).index : -1;
+  return {nudge, ayahIndex, wordIndex: index, sidecarIndex, before: words[index]!, start, end};
+};
+
+/**
+ * Moves several recited words at once: every occurrence is resolved against the file as it is, so
+ * nudging `1:3:1#0` past `1:3:1#1` in the same batch still moves the words the user pointed at (one
+ * after the other, each sort would renumber the occurrences). Each ayah's words are then sorted by
+ * `start` once (stable, so the file stays valid for `parseRecitationTimings()`), a complete ayah's
+ * end marker follows its last recited word unless it was nudged itself, the ayah's `start` and
+ * `end` become the hull of its words, and one `nudge` entry (dated by the first nudge's `at`) is
+ * appended to the edit log. Pure; an empty list returns the input. Throws `BAD_TIMING_EDIT` as
+ * `nudgeWord()` does, before anything is changed; the last of two nudges of the same word wins.
+ */
+export const nudgeWords = (timings: StudioTimings, nudges: readonly WordNudge[]): StudioTimings => {
+  if (nudges.length === 0) return timings;
+  const resolved = nudges.map((nudge) => resolve(timings, nudge));
+  const byAyah = new Map<number, Map<number, Resolved>>();
+  for (const entry of resolved) {
+    const words = byAyah.get(entry.ayahIndex) ?? new Map<number, Resolved>();
+    words.set(entry.wordIndex, entry);
+    byAyah.set(entry.ayahIndex, words);
+  }
+  const ayat = timings.ayat.map((ayah, ayahIndex) => {
+    const moved = byAyah.get(ayahIndex);
+    if (!moved) return ayah;
+    const words = ayah.words!;
+    const replaced: readonly WordTiming[] = words.map((word, i) => {
+      const entry = moved.get(i);
+      return entry ? {id: word.id, start: entry.start, end: entry.end} : word;
+    });
+    const recited =
+      timings.alignment?.words.filter((word) => word.id.startsWith(`${timings.surah}:${ayah.ayah}:`)) ?? [];
+    const marker = ayah.complete === true ? markerIndex(words, recited) : -1;
+    const next = marker >= 0 && !moved.has(marker) ? followMarker(replaced, marker) : replaced;
+    return hull(ayah, sortedByStart(next));
+  });
   const edit: AlignmentEdit = {
     kind: 'nudge',
-    at: nudge.at ?? new Date().toISOString(),
-    note: `${id}#${occurrenceIndex}: ${before.start}-${before.end}s to ${start}-${end}s`,
+    at: resolved.find((entry) => entry.nudge.at !== undefined)?.nudge.at ?? new Date().toISOString(),
+    note: resolved
+      .map(
+        ({nudge, before, start, end}) =>
+          `${nudge.id}#${nudge.occurrenceIndex}: ${before.start}-${before.end}s to ${start}-${end}s`,
+      )
+      .join('; '),
   };
   const sidecar = timings.alignment;
   if (!sidecar) return withEdit({...timings, ayat}, edit);
-  const inSidecar = occurrenceAt(sidecar.words, id, occurrenceIndex).index;
+  const inSidecar = new Map(
+    resolved.filter((entry) => entry.sidecarIndex >= 0).map((entry) => [entry.sidecarIndex, entry]),
+  );
   const sidecarWords: readonly AlignmentWord[] =
-    inSidecar < 0
+    inSidecar.size === 0
       ? sidecar.words
-      : sortedByStart(sidecar.words.map((word, i) => (i === inSidecar ? {...word, start, end} : word)));
+      : sortedByStart(
+          sidecar.words.map((word, i) => {
+            const entry = inSidecar.get(i);
+            return entry ? {...word, start: entry.start, end: entry.end} : word;
+          }),
+        );
   return withEdit({...timings, ayat, alignment: {...sidecar, words: sidecarWords}}, edit);
 };
+
+/**
+ * Moves one recited word: its new `start` and `end` replace the old ones in its ayah (the n-th
+ * occurrence of `id` when the reciter repeated it) and in the sidecar's words, the words are kept in
+ * audio order (sorted by `start`, stable, so a word nudged across its neighbour keeps the file
+ * valid for `parseRecitationTimings()`), a complete ayah's end marker follows its last word, the
+ * ayah's `start` and `end` become the hull of its words, and a `nudge` entry is appended to the
+ * edit log. Pure: returns a new object, keeps every other key. Throws `BAD_TIMING_EDIT` for a start
+ * after the end, a negative time, an ayah that is not in the file or has no per-word times, or an
+ * occurrence it does not have. `nudgeWords()` moves several at once.
+ */
+export const nudgeWord = (timings: StudioTimings, nudge: WordNudge): StudioTimings => nudgeWords(timings, [nudge]);

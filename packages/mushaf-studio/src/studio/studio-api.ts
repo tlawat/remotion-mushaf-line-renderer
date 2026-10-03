@@ -11,10 +11,12 @@ import {
   seek,
   writeStaticFile,
 } from '@remotion/studio';
+import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {staticFile} from 'remotion';
 import {MushafStudioError} from '../errors';
 import type {Review, Text} from '../schema';
-import type {LineSplit} from '../types';
+import type {LineSplit, StudioTimings} from '../types';
+import {getStudioState, setStudioState} from './store';
 
 /** What the panel changes on the composition: the content props, and the file fields of `text` and `review`. */
 export type PropsPatch = {
@@ -96,12 +98,42 @@ export const writeFile = async (path: string, contents: string | ArrayBuffer): P
 export const writeJsonFile = (path: string, value: unknown): Promise<string> =>
   writeFile(path, JSON.stringify(value, null, 1));
 
-/** Merges `patch` into the composition's saved default props (the Root file) and re-runs `calculateMetadata()`. */
-export const patchProps = async (compositionId: string, patch: PropsPatch): Promise<void> => {
-  await saveDefaultProps({
-    compositionId,
-    defaultProps: ({savedDefaultProps}) => deepMerge(savedDefaultProps, patch as Readonly<Record<string, unknown>>),
+/** `props` with a pending patch applied: what the tabs see until the composition reloads with it. */
+export const applyPatch = <T extends Readonly<Record<string, unknown>>>(props: T, patch: PropsPatch | null): T =>
+  patch === null ? props : (deepMerge(props, patch as Readonly<Record<string, unknown>>) as T);
+
+/** Whether `props` already carry every value of `patch`: nested objects key by key, arrays and scalars by value. */
+export const patchApplied = (
+  props: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>,
+): boolean =>
+  Object.entries(patch).every(([key, value]) => {
+    if (value === undefined) return true;
+    const current = props[key];
+    if (isPlainObject(current) && isPlainObject(value)) return patchApplied(current, value);
+    return JSON.stringify(current) === JSON.stringify(value);
   });
+
+/**
+ * Merges `patch` into the composition's saved default props (the Root file) and re-runs
+ * `calculateMetadata()`. `savedDefaultProps` lags behind: the Studio updates it when the Root has
+ * reloaded, so a second save in that window would be built from the props before the first one.
+ * The store's `pendingPatch` (every patch not yet seen back in the props) is merged in with it;
+ * a save that fails leaves it as it was.
+ */
+export const patchProps = async (compositionId: string, patch: PropsPatch): Promise<void> => {
+  const previous = getStudioState().pendingPatch;
+  const pending = deepMerge(previous ?? {}, patch as Readonly<Record<string, unknown>>) as PropsPatch;
+  setStudioState({pendingPatch: pending});
+  try {
+    await saveDefaultProps({
+      compositionId,
+      defaultProps: ({savedDefaultProps}) => deepMerge(savedDefaultProps, pending as Readonly<Record<string, unknown>>),
+    });
+  } catch (error) {
+    setStudioState({pendingPatch: previous});
+    throw error;
+  }
   reevaluateComposition();
 };
 
@@ -140,4 +172,21 @@ export const readPublicFile = async (path: string): Promise<Blob> => {
       {path, status: response.status},
     );
   return response.blob();
+};
+
+/**
+ * Reads the timings file a `timingsFile` prop names, as the composition does (a `public/` path
+ * through `staticFile()`, a URL as it is), validated. The file, not `resolved.timings`: those are
+ * cut to the ayah range and moved `audioOffsetSeconds` earlier, so an edit written from them would
+ * drop ayahs and shift every time.
+ */
+export const readTimingsFile = async (path: string): Promise<StudioTimings> => {
+  const response = await fetch(isUrl(path) ? path : staticFile(path));
+  if (!response.ok)
+    throw new MushafStudioError(
+      'BAD_STUDIO_PROP',
+      `timingsFile ${path} could not be read (HTTP ${response.status}). Check the path (under public/) or the URL.`,
+      {path, status: response.status},
+    );
+  return parseRecitationTimings(await response.json()) as StudioTimings;
 };

@@ -2,9 +2,18 @@ import type * as React from 'react';
 import {useMemo, useState} from 'react';
 import {realignSession, sessionTimestamps, splitSession, timingsFromQud} from '../../qud';
 import type {AlignmentEdit, AlignmentSegment, StudioTimings} from '../../types';
-import {nudgeWord, roundMs, withEdit} from '../edit-timings';
+import {nudgeWords, roundMs, withEdit} from '../edit-timings';
 import {getHfToken, runStudioTask, type StudioSession, setStudioState, useStudioState} from '../store';
-import {isUrl, patchProps, projectPath, reevaluate, seekTo, stemOf, writeJsonFile} from '../studio-api';
+import {
+  isUrl,
+  patchProps,
+  projectPath,
+  readTimingsFile,
+  reevaluate,
+  seekTo,
+  stemOf,
+  writeJsonFile,
+} from '../studio-api';
 import {colors, confidenceColor, styles} from '../styles';
 import {resolvedOf, type TabProps} from '../tab-props';
 import {Button, Disclosure, Note, NumberInput, ProgressBar, range, Section} from '../ui';
@@ -157,14 +166,20 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   };
 
   const applyEdits = () => {
-    void runStudioTask('Writing the timings...', async () => {
+    void runStudioTask('Reading the timings file...', async () => {
       const at = new Date().toISOString();
-      let next: StudioTimings = timings;
-      for (const [key, span] of pending) {
+      // The tab shows composition time: the file's times moved `audioOffsetSeconds` earlier and cut to the
+      // range. The edit goes into the file itself, every time moved back; the occurrences are the same
+      // in both, the cut drops whole ayahs only and the move keeps the order.
+      const offset = resolved?.audioOffsetSeconds ?? 0;
+      const file = await readTimingsFile(props.timingsFile);
+      // All at once: applied one by one, each sort would renumber the occurrences the next edit names.
+      const nudges = [...pending].map(([key, span]) => {
         const {id, occurrence} = parseKey(key);
-        next = nudgeWord(next, {id, occurrenceIndex: occurrence, start: span.start, end: span.end, at});
-      }
-      await writeTimings(next);
+        return {id, occurrenceIndex: occurrence, start: span.start + offset, end: span.end + offset, at};
+      });
+      setStudioState({busy: 'Writing the timings...'});
+      await writeTimings(nudgeWords(file, nudges));
       setPending(new Map());
     });
   };
@@ -180,8 +195,18 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
       {align, timestamps},
       {audio: live.audio, model: live.model, device: live.device, riwayah: live.riwayah},
     );
-    await writeTimings(withEdit(converted, {...log, at: new Date().toISOString()}));
-    setStudioState({session: {...live, align}, notice: align.warning ?? null});
+    // The new alignment starts an empty log; the file keeps its history, with this step at the end.
+    const kept = timings.alignment?.edits ?? [];
+    const next = [...kept, {...log, at: new Date().toISOString()}].reduce(withEdit, converted);
+    await writeTimings(next);
+    const nudges = kept.filter((edit) => edit.kind === 'nudge').length;
+    const notices = [
+      align.warning,
+      nudges > 0
+        ? `The new alignment replaces the times of the ${nudges} nudge${nudges === 1 ? '' : 's'} made before; the edit log keeps ${nudges === 1 ? 'it' : 'them'}.`
+        : null,
+    ].filter((entry): entry is string => typeof entry === 'string' && entry !== '');
+    setStudioState({session: {...live, align}, notice: notices.length > 0 ? notices.join(' ') : null});
     setPending(new Map());
     setBoundaries(null);
   };
@@ -409,7 +434,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
               value={boundary.start}
               min={0}
               step={0.01}
-              onChange={(start) => setBoundaries((b) => (b ?? []).map((x, i) => (i === index ? {...x, start} : x)))}
+              onChange={(start) => setBoundaries(shownBoundaries.map((x, i) => (i === index ? {...x, start} : x)))}
             />
             <NumberInput
               label={`Boundary ${index + 1} end`}

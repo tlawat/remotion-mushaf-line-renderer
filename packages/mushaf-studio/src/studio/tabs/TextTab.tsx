@@ -1,13 +1,15 @@
 import {recitedRange} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {useEffect, useMemo, useState} from 'react';
+import {staticFile} from 'remotion';
+import {loadTextFile} from '../../compositions/shared';
 import {
   fetchQuranComTranslation,
   fetchQuranComWordGloss,
   listQuranComTranslations,
   serialiseTranslation,
 } from '../../translations';
-import {loadOnce, runStudioTask, useStudioState} from '../store';
+import {loadOnce, runStudioTask, setStudioState, useStudioState} from '../store';
 import {JSON_EXTENSIONS, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
 import {resolvedOf, type TabProps} from '../tab-props';
@@ -15,6 +17,13 @@ import {Button, Field, Note, Section} from '../ui';
 import {usePublicFiles} from '../use-public-files';
 
 type FileField = 'translationFile' | 'glossFile' | 'transliterationFile';
+
+/** What each prop takes: `loadTextFile()` refuses the other kind before it reaches the props. */
+const KIND: Readonly<Record<FileField, 'ayah' | 'word'>> = {
+  translationFile: 'ayah',
+  glossFile: 'word',
+  transliterationFile: 'word',
+};
 
 /** Text: an ayah translation and a word gloss from quran.com into `public/`, or any file already there. */
 export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => {
@@ -54,15 +63,31 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
       })()
     : null;
 
+  /**
+   * Points a prop at a file (`''` for none). A file of the wrong kind is refused here, in the status
+   * line: saved, it would fail `calculateMetadata()` and the composition would not mount.
+   */
   const setFile = (field: FileField, path: string) =>
-    void runStudioTask('Updating the composition...', () => patchProps(compositionId, {text: {[field]: path}}));
+    void runStudioTask(path ? 'Checking the file...' : 'Updating the composition...', async () => {
+      if (path) {
+        // `fetch` wrapped, not referenced: the native one throws "Illegal invocation" as another object's method.
+        const io = {fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init), staticFile};
+        await loadTextFile(KIND[field], field, path, io);
+      }
+      setStudioState({busy: 'Updating the composition...'});
+      await patchProps(compositionId, {text: {[field]: path}});
+    });
+
+  /** `-<surah>-<from>-<to>`: two compositions of one project keep their own files. */
+  const suffix = passage ? `-${passage.chapter}-${passage.fromAyah}-${passage.toAyah}` : '';
 
   const fetchTranslation = () => {
     if (!resource || !passage) return;
     const id = resource.id;
     void runStudioTask(`Fetching ${resource.name}...`, async () => {
       const translation = await fetchQuranComTranslation({resourceId: id, ...passage});
-      const path = await writeFile(projectPath(project, `translation-${id}.json`), serialiseTranslation(translation));
+      const name = `translation-${id}${suffix}.json`;
+      const path = await writeFile(projectPath(project, name), serialiseTranslation(translation));
       await patchProps(compositionId, {text: {translationFile: path}});
     });
   };
@@ -73,7 +98,7 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
     const prop: FileField = field === 'translation' ? 'glossFile' : 'transliterationFile';
     void runStudioTask(`Fetching the word ${field}...`, async () => {
       const gloss = await fetchQuranComWordGloss({field, language: lang, ...passage});
-      const name = field === 'translation' ? `gloss-${lang}.json` : `transliteration-${lang}.json`;
+      const name = field === 'translation' ? `gloss-${lang}${suffix}.json` : `transliteration-${lang}${suffix}.json`;
       const path = await writeFile(projectPath(project, name), serialiseTranslation(gloss));
       await patchProps(compositionId, {text: {[prop]: path}});
     });

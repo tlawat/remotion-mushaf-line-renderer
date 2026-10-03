@@ -7,7 +7,7 @@ export type MushafStudioPanelProps = {
   readonly compositionId: string;
   /** The composition's current props (content and style), so the panel shows what the preview shows. */
   readonly props: MushafRecitationProps;
-  /** Where the panel's files go, under `public/`: `mushaf-studio/<project>/`. Default `'default'`. */
+  /** Where the panel's files go, under `public/`: `mushaf-studio/<project>/`. Default: the composition id. */
   readonly project?: string | undefined;
   /** Which tab opens first. */
   readonly initialTab?: 'source' | 'align' | 'review' | 'lines' | 'text' | undefined;

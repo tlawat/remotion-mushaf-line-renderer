@@ -38,7 +38,13 @@ describe('the studio store', () => {
 
   it('remembers the panel layout in localStorage and the session in sessionStorage', async () => {
     setStudioState({tab: 'lines', collapsed: true});
-    expect(JSON.parse(localStorage.getItem('mushaf-studio.panel')!)).toEqual({tab: 'lines', collapsed: true});
+    expect(JSON.parse(localStorage.getItem('mushaf-studio.panel')!)).toEqual({
+      tab: 'lines',
+      collapsed: true,
+      side: 'right',
+    });
+    setStudioState({side: 'left'});
+    expect(JSON.parse(localStorage.getItem('mushaf-studio.panel')!).side).toBe('left');
     const session = {
       audioId: 'abc',
       align: {audio_id: 'abc', segments: []},
@@ -56,7 +62,14 @@ describe('the studio store', () => {
     vi.resetModules();
     const fresh = await import('../../../src/studio/store');
     const state = fresh.getStudioState();
-    expect(state).toMatchObject({tab: 'lines', collapsed: true, session, uploadedAudio: 'mushaf-studio/default/a.mp3'});
+    expect(state).toMatchObject({
+      tab: 'lines',
+      collapsed: true,
+      side: 'left',
+      session,
+      uploadedAudio: 'mushaf-studio/default/a.mp3',
+    });
+    expect(state.pendingPatch).toBeNull();
     expect(state.busy).toBeNull();
     expect(state.error).toBeNull();
     expect(state.catalogue).toBeNull();
@@ -70,7 +83,13 @@ describe('the studio store', () => {
     sessionStorage.setItem('mushaf-studio.session', '{"session": {"audioId": 1}}');
     vi.resetModules();
     const fresh = await import('../../../src/studio/store');
-    expect(fresh.getStudioState()).toMatchObject({tab: null, collapsed: false, session: null, uploadedAudio: null});
+    expect(fresh.getStudioState()).toMatchObject({
+      tab: null,
+      collapsed: false,
+      side: 'right',
+      session: null,
+      uploadedAudio: null,
+    });
   });
 
   it('keeps the Hugging Face token in sessionStorage only', () => {
@@ -124,5 +143,41 @@ describe('the studio store', () => {
     expect(getStudioState().quranComResources).toBeNull();
     await loadOnce('quranComResources', failing);
     expect(failing).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs one task at a time: a second one is refused with a notice while the first is busy', async () => {
+    let finish!: () => void;
+    const first = runStudioTask('Aligning...', () => new Promise<void>((resolve) => (finish = resolve)));
+    expect(getStudioState().busy).toBe('Aligning...');
+    const second = vi.fn(async () => undefined);
+    expect(await runStudioTask('Copying the recording into public/...', second)).toBe(false);
+    expect(second).not.toHaveBeenCalled();
+    expect(getStudioState().notice).toBe(
+      'The panel is busy (Aligning...); wait for it to finish before copying the recording into public/.',
+    );
+    expect(getStudioState().busy).toBe('Aligning...');
+    finish();
+    expect(await first).toBe(true);
+    expect(getStudioState().busy).toBeNull();
+    expect(await runStudioTask('Copying the recording into public/...', second)).toBe(true);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads a list in `loading`, never through `busy`, so a list arriving does not free a running task', async () => {
+    let finish!: () => void;
+    const task = runStudioTask('Aligning...', () => new Promise<void>((resolve) => (finish = resolve)));
+    let deliver!: (value: never) => void;
+    const load = vi.fn(() => new Promise<never>((resolve) => (deliver = resolve)));
+    const loading = loadOnce('catalogue', load);
+    expect(getStudioState().loading).toEqual(['catalogue']);
+    expect(getStudioState().busy).toBe('Aligning...');
+    deliver([{slug: 'a'}] as never);
+    await loading;
+    expect(getStudioState().loading).toEqual([]);
+    expect(getStudioState().catalogue).toEqual([{slug: 'a'}]);
+    expect(getStudioState().busy).toBe('Aligning...');
+    finish();
+    await task;
+    expect(getStudioState().busy).toBeNull();
   });
 });

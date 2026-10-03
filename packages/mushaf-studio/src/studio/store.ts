@@ -6,8 +6,20 @@ import {useSyncExternalStore} from 'react';
 import {isMushafStudioError} from '../errors';
 import type {QudAlignResponse, QudDevice, QudModel, QudProgress, QudRecitation, QudRiwayah} from '../qud/types';
 import type {QuranComResource} from '../translations';
+import type {PropsPatch} from './studio-api';
 
 export type StudioTab = 'source' | 'align' | 'review' | 'lines' | 'text';
+
+/** Which edge of the Studio the dock sits on. */
+export type StudioSide = 'left' | 'right';
+
+/** The lists `loadOnce()` fetches once and keeps. */
+export type CachedList = 'catalogue' | 'quranComResources';
+
+export const LOADING_LABELS: Readonly<Record<CachedList, string>> = {
+  catalogue: 'Loading the catalogue...',
+  quranComResources: 'Loading the translation list...',
+};
 
 export const STUDIO_TABS: readonly {readonly id: StudioTab; readonly label: string}[] = [
   {id: 'source', label: 'Source'},
@@ -32,8 +44,11 @@ export type StudioState = {
   /** `null` until the user picks one: the panel then shows its `initialTab`. */
   readonly tab: StudioTab | null;
   readonly collapsed: boolean;
-  /** What the panel is doing, shown in the status line; `null` when idle. */
+  readonly side: StudioSide;
+  /** What the panel is doing, shown in the status line; `null` when idle. One task at a time: see `runStudioTask()`. */
   readonly busy: string | null;
+  /** The cached lists being fetched. Apart from `busy`, so a list arriving never frees the panel for a second task. */
+  readonly loading: readonly CachedList[];
   readonly progress: QudProgress | null;
   readonly error: string | null;
   /** Something worth knowing that is not an error (a device fallback, a file now in `public/`). */
@@ -45,6 +60,12 @@ export type StudioState = {
   readonly session: StudioSession | null;
   /** The last recording the user put into `public/` through the Source tab. */
   readonly uploadedAudio: string | null;
+  /**
+   * What `patchProps()` saved that the composition has not come back with yet (the Root reloads after
+   * the file is written): merged into every later save and into what the tabs see, so two changes in
+   * quick succession both land. Cleared by the panel when the props arrive equal to it.
+   */
+  readonly pendingPatch: PropsPatch | null;
 };
 
 const PANEL_KEY = 'mushaf-studio.panel';
@@ -92,12 +113,14 @@ const isSession = (value: unknown): value is StudioSession => {
 };
 
 const initialState = (): StudioState => {
-  const panel = readJson('local', PANEL_KEY) as {tab?: unknown; collapsed?: unknown} | null;
+  const panel = readJson('local', PANEL_KEY) as {tab?: unknown; collapsed?: unknown; side?: unknown} | null;
   const saved = readJson('session', SESSION_KEY) as {session?: unknown; uploadedAudio?: unknown} | null;
   return {
     tab: isTab(panel?.tab) ? panel.tab : null,
     collapsed: panel?.collapsed === true,
+    side: panel?.side === 'left' ? 'left' : 'right',
     busy: null,
+    loading: [],
     progress: null,
     error: null,
     notice: null,
@@ -105,6 +128,7 @@ const initialState = (): StudioState => {
     quranComResources: null,
     session: isSession(saved?.session) ? saved.session : null,
     uploadedAudio: typeof saved?.uploadedAudio === 'string' ? saved.uploadedAudio : null,
+    pendingPatch: null,
   };
 };
 
@@ -128,7 +152,8 @@ export const subscribeStudioStore = (listener: () => void): (() => void) => {
 export const setStudioState = (patch: Partial<StudioState>): void => {
   const next = {...getStudioState(), ...patch};
   state = next;
-  if ('tab' in patch || 'collapsed' in patch) writeJson('local', PANEL_KEY, {tab: next.tab, collapsed: next.collapsed});
+  if ('tab' in patch || 'collapsed' in patch || 'side' in patch)
+    writeJson('local', PANEL_KEY, {tab: next.tab, collapsed: next.collapsed, side: next.side});
   if ('session' in patch || 'uploadedAudio' in patch)
     writeJson('session', SESSION_KEY, {session: next.session, uploadedAudio: next.uploadedAudio});
   for (const listener of listeners) listener();
@@ -193,9 +218,18 @@ export const describeError = (error: unknown): string => {
 
 /**
  * Runs one panel task: `busy` says what is happening until it settles, and a failure lands in
- * `error` (never in React). Resolves with whether the task completed.
+ * `error` (never in React). One task at a time: while another is running (an upload, an alignment,
+ * a save) this one does not start, the status line says so, and the call resolves with `false`.
+ * Resolves with whether the task completed.
  */
 export const runStudioTask = async (label: string, task: () => Promise<void>): Promise<boolean> => {
+  const {busy} = getStudioState();
+  if (busy !== null) {
+    setStudioState({
+      notice: `The panel is busy (${busy}); wait for it to finish before ${label.replace(/\.+$/, '').toLowerCase()}.`,
+    });
+    return false;
+  }
   setStudioState({busy: label, error: null, progress: null});
   try {
     await task();
@@ -208,26 +242,29 @@ export const runStudioTask = async (label: string, task: () => Promise<void>): P
   }
 };
 
-const pending: {[K in 'catalogue' | 'quranComResources']?: Promise<void>} = {};
+const pending: {[K in CachedList]?: Promise<void>} = {};
 
 /**
  * Fetches a cached list once, whoever asks first (React's double-invoked effects included): the
- * catalogue of recitations or quran.com's translation resources.
+ * catalogue of recitations or quran.com's translation resources. Tracked in `loading`, not in
+ * `busy`: a list arriving while the user aligns must not free the Align button for a second run. A
+ * failure lands in `error`; the next call tries again.
  */
-export const loadOnce = <K extends 'catalogue' | 'quranComResources'>(
+export const loadOnce = <K extends CachedList>(
   key: K,
   load: () => Promise<NonNullable<StudioState[K]>>,
 ): Promise<void> => {
   if (getStudioState()[key] !== null) return Promise.resolve();
   const inFlight = pending[key];
   if (inFlight) return inFlight;
-  const label = key === 'catalogue' ? 'Loading the catalogue...' : 'Loading the translation list...';
-  const request = runStudioTask(label, async () => {
-    const value = await load();
-    setStudioState({[key]: value});
-  }).then(() => undefined);
-  pending[key] = request.finally(() => {
-    delete pending[key];
-  });
-  return pending[key];
+  setStudioState({loading: [...getStudioState().loading, key]});
+  const request = load()
+    .then((value) => setStudioState({[key]: value}))
+    .catch((error) => setStudioState({error: describeError(error)}))
+    .finally(() => {
+      delete pending[key];
+      setStudioState({loading: getStudioState().loading.filter((entry) => entry !== key)});
+    });
+  pending[key] = request;
+  return request;
 };

@@ -1,11 +1,12 @@
 import type * as React from 'react';
-import {memo, useState} from 'react';
+import {memo, useEffect, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
 import type {MushafRecitationProps} from '../compositions/recitation/schema';
-import {isInStudio} from './environment';
+import {useInStudio} from './environment';
 import type {MushafStudioPanelProps} from './index';
-import {STUDIO_TABS, type StudioTab, setStudioState, useStudioState} from './store';
+import {describeError, LOADING_LABELS, STUDIO_TABS, type StudioTab, setStudioState, useStudioState} from './store';
+import {applyPatch, patchApplied} from './studio-api';
 import {styles} from './styles';
 import {resolvedOf, type TabProps} from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
@@ -13,7 +14,7 @@ import {LinesTab} from './tabs/LinesTab';
 import {ReviewTab} from './tabs/ReviewTab';
 import {SourceTab} from './tabs/SourceTab';
 import {TextTab} from './tabs/TextTab';
-import {Spinner} from './ui';
+import {Spinner, TabErrorBoundary} from './ui';
 
 const TABS: Readonly<Record<StudioTab, React.FC<TabProps>>> = {
   source: SourceTab,
@@ -26,8 +27,8 @@ const TABS: Readonly<Record<StudioTab, React.FC<TabProps>>> = {
 const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
 const StatusLine: React.FC = () => {
-  const {busy, error, notice, progress} = useStudioState();
-  const idle = !busy && !error && !notice;
+  const {busy, loading, error, notice, progress} = useStudioState();
+  const idle = !busy && loading.length === 0 && !error && !notice;
   return (
     <div style={styles.status} role="status" aria-live="polite">
       {busy ? (
@@ -37,6 +38,12 @@ const StatusLine: React.FC = () => {
             {busy}
             {progress ? ` (${progress.step}/${progress.steps})` : ''}
           </span>
+        </div>
+      ) : null}
+      {!busy && loading.length > 0 ? (
+        <div style={styles.statusLine('busy')}>
+          <Spinner />
+          <span>{loading.map((key) => LOADING_LABELS[key]).join(' ')}</span>
         </div>
       ) : null}
       {error ? (
@@ -75,15 +82,24 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
   const state = useStudioState();
   const {fps} = useVideoConfig();
   const [host] = useState(() => (typeof document === 'undefined' ? null : document.body));
+  const {pendingPatch} = state;
+  // The composition has come back with what was saved: the tabs read the props themselves again.
+  useEffect(() => {
+    if (pendingPatch !== null && patchApplied(props, pendingPatch as Readonly<Record<string, unknown>>))
+      setStudioState({pendingPatch: null});
+  }, [props, pendingPatch]);
   if (!host) return null;
   const tab = state.tab ?? initialTab ?? 'source';
   const Tab = TABS[tab];
+  const shown = applyPatch(props, pendingPatch);
+  const other = state.side === 'left' ? 'right' : 'left';
   const dock = (
     <aside
       data-mushaf-studio="panel"
       data-collapsed={state.collapsed ? 'true' : 'false'}
+      data-side={state.side}
       aria-label="Mushaf Studio"
-      style={styles.dock(state.collapsed)}
+      style={styles.dock(state.collapsed, state.side)}
       onKeyDown={stop}
       onKeyUp={stop}
       onKeyPress={stop}
@@ -101,14 +117,24 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
         <>
           <header style={styles.header}>
             <span style={styles.title}>Mushaf Studio</span>
-            <button
-              type="button"
-              style={styles.button('ghost', false)}
-              onClick={() => setStudioState({collapsed: true})}
-              title="Collapse the panel"
-            >
-              »
-            </button>
+            <span style={styles.row}>
+              <button
+                type="button"
+                style={styles.button('ghost', false)}
+                onClick={() => setStudioState({side: other})}
+                title={`Move the panel to the ${other} edge`}
+              >
+                {other === 'left' ? '⇤' : '⇥'}
+              </button>
+              <button
+                type="button"
+                style={styles.button('ghost', false)}
+                onClick={() => setStudioState({collapsed: true})}
+                title="Collapse the panel"
+              >
+                {state.side === 'left' ? '«' : '»'}
+              </button>
+            </span>
           </header>
           <div style={styles.tabs} role="tablist" aria-label="Mushaf Studio tabs">
             {STUDIO_TABS.map((entry) => (
@@ -125,7 +151,9 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
             ))}
           </div>
           <div style={styles.content} role="tabpanel">
-            <Tab compositionId={compositionId} props={props} project={project} fps={fps} />
+            <TabErrorBoundary key={tab} onError={(error) => setStudioState({error: describeError(error)})}>
+              <Tab compositionId={compositionId} props={shown} project={project ?? compositionId} fps={fps} />
+            </TabErrorBoundary>
           </div>
           <StatusLine />
         </>
@@ -136,19 +164,25 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
 };
 
 const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
-  // No hook above this line: outside the Studio nothing of the dock (and nothing of `document`) is touched.
-  const inStudio = isInStudio();
+  // Only the environment hook above this line: outside the Studio's preview nothing of the dock
+  // (and nothing of `document`) is touched.
+  const inStudio = useInStudio();
   if (!inStudio) return null;
   return <StudioDock {...panelProps} />;
 };
 
-/** A cheap fingerprint of `resolved`: enough to notice a new resolution without comparing the data. */
+/**
+ * A cheap fingerprint of `resolved`: enough to notice a new resolution without comparing the data.
+ * The counts alone miss a re-alignment that keeps them, so the session, the last edit and the sum
+ * of the word starts are in it too.
+ */
 const resolvedSignature = (props: MushafRecitationProps): string => {
   const resolved = resolvedOf(props);
   if (!resolved) return 'none';
   const {timings, lines, schedule} = resolved;
   const last = schedule[schedule.length - 1];
   const sidecar = timings.alignment;
+  const starts = timings.ayat.reduce((sum, ayah) => (ayah.words ?? []).reduce((n, word) => n + word.start, sum), 0);
   return [
     lines.length,
     schedule.length,
@@ -158,6 +192,9 @@ const resolvedSignature = (props: MushafRecitationProps): string => {
     sidecar?.segments.length ?? -1,
     sidecar?.words.length ?? -1,
     sidecar?.edits.length ?? -1,
+    sidecar?.audioId ?? '',
+    sidecar?.edits[sidecar.edits.length - 1]?.at ?? '',
+    starts,
   ].join(':');
 };
 

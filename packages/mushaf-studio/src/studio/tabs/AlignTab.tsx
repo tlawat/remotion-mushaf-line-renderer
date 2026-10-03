@@ -3,7 +3,7 @@ import {useState} from 'react';
 import {alignAudio, sessionTimestamps, timingsFromQud} from '../../qud';
 import type {QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
 import {getHfToken, runStudioTask, setHfToken, setStudioState, useStudioState} from '../store';
-import {baseName, isUrl, patchProps, projectPath, readPublicFile, stemOf, writeJsonFile} from '../studio-api';
+import {baseName, isUrl, patchProps, projectPath, readPublicFile, slugify, stemOf, writeJsonFile} from '../studio-api';
 import {colors, styles} from '../styles';
 import type {TabProps} from '../tab-props';
 import {Button, Field, Note, ProgressBar, Section} from '../ui';
@@ -29,7 +29,8 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
   const [device, setDevice] = useState<QudDevice>(session?.device ?? 'GPU');
   const [riwayah, setRiwayah] = useState<QudRiwayah>(session?.riwayah ?? 'hafs');
   const [token, setToken] = useState(() => getHfToken());
-  const audio = isUrl(props.audioFile) ? uploadedAudio : props.audioFile;
+  // The recording the user just put into public/ wins over whatever the composition plays, a downloaded clip included.
+  const audio = uploadedAudio ?? (isUrl(props.audioFile) || !props.audioFile ? null : props.audioFile);
   const working = busy !== null;
 
   const align = () => {
@@ -55,7 +56,8 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
         {align: response, timestamps},
         {audio, model, device: response.device ?? device, riwayah},
       );
-      const timingsFile = await writeJsonFile(projectPath(project, `${stemOf(name)}.timings.json`), timings);
+      const stem = slugify(stemOf(name)) || 'audio';
+      const timingsFile = await writeJsonFile(projectPath(project, `${stem}.timings.json`), timings);
       setStudioState({
         session: {audioId: response.audio_id, align: response, audio, model, device, riwayah},
         notice: notices.length > 0 ? notices.join(' ') : null,
@@ -74,8 +76,8 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
           </p>
         ) : (
           <Note>
-            The composition plays a URL. Put a recording into public/ in the Source tab (own recording, or a file
-            already there) to align it.
+            The composition plays a URL or nothing yet. Put a recording into public/ in the Source tab (own recording,
+            or a file already there) to align it.
           </Note>
         )}
       </Section>
@@ -156,7 +158,7 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
         {progress ? (
           <div style={{marginTop: 8}}>
             <div style={styles.row}>
-              <span>{STAGES[progress.stage] ?? progress.stage}</span>
+              <span>{STAGES[progress.stage as QudStage] ?? progress.stage}</span>
               <span style={{color: colors.muted}}>
                 {progress.step}/{progress.steps}
               </span>

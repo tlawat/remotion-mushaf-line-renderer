@@ -70,6 +70,8 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
       const timingsFile = await writeJsonFile(projectPath(project, `${base}.timings.json`), timings);
       setStudioState({busy: 'Updating the composition...'});
       await patchProps(compositionId, {audioFile: audio, timingsFile, fromAyah: 0, toAyah: 0, splits: []});
+      // The clip is what Align works on now, not an earlier upload.
+      setStudioState({uploadedAudio: null});
     });
   };
 
@@ -84,7 +86,10 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
   };
 
   const pickPublic = (path: string) => {
-    void runStudioTask('Updating the composition...', () => patchProps(compositionId, {audioFile: path}));
+    void runStudioTask('Updating the composition...', async () => {
+      await patchProps(compositionId, {audioFile: path});
+      setStudioState({uploadedAudio: null});
+    });
   };
 
   return (
@@ -106,7 +111,7 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
                     <optgroup key={name} label={name}>
                       {entries.map((entry) => (
                         <option key={entry.slug} value={entry.slug}>
-                          {entry.riwayah} · {entry.style} · {entry.channel}
+                          {entry.riwayah} · {entry.style} · {entry.channel} · {entry.slug}
                         </option>
                       ))}
                     </optgroup>

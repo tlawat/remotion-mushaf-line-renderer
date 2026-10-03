@@ -1,6 +1,6 @@
 // The few controls the tabs share. Function components, inline styles, nothing clever.
 import type * as React from 'react';
-import {useEffect, useId, useState} from 'react';
+import {Component, useEffect, useId, useState} from 'react';
 import {colors, styles} from './styles';
 
 export const Section: React.FC<{readonly title: string; readonly children: React.ReactNode}> = ({title, children}) => (
@@ -107,6 +107,41 @@ export const Spinner: React.FC = () => {
   }, []);
   return <span aria-hidden="true">{FRAMES[frame]}</span>;
 };
+
+type BoundaryProps = {
+  /** Receives the error a tab threw while rendering (the panel puts it in the status line). */
+  readonly onError: (error: unknown) => void;
+  readonly children: React.ReactNode;
+};
+
+type BoundaryState = {readonly failed: boolean};
+
+/**
+ * Keeps a tab's crash inside the tab: the error goes to `onError`, the tab is replaced by a Reload
+ * button that mounts it again, and the dock around it stays. A class, the one exception to the
+ * function components here, because React has no hook for `componentDidCatch`.
+ */
+export class TabErrorBoundary extends Component<BoundaryProps, BoundaryState> {
+  override state: BoundaryState = {failed: false};
+
+  static getDerivedStateFromError(): BoundaryState {
+    return {failed: true};
+  }
+
+  override componentDidCatch(error: unknown): void {
+    this.props.onError(error);
+  }
+
+  override render(): React.ReactNode {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div>
+        <Note>This tab stopped on an error (see the status line). Reload it; if it stops again, check the props.</Note>
+        <Button onClick={() => this.setState({failed: false})}>Reload</Button>
+      </div>
+    );
+  }
+}
 
 /** `12.345` seconds as `12.35`. */
 export const seconds = (value: number): string => value.toFixed(2);

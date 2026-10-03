@@ -18,6 +18,8 @@ export const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helv
 
 export const DOCK_WIDTH = 380;
 export const COLLAPSED_WIDTH = 28;
+/** The height of the Studio's top bar: the dock starts under it so the Render button stays reachable. */
+export const STUDIO_TOP_BAR = 40;
 
 const base: CSSProperties = {
   boxSizing: 'border-box',
@@ -28,17 +30,18 @@ const base: CSSProperties = {
 };
 
 export const styles = {
-  dock: (collapsed: boolean): CSSProperties => ({
+  /** The dock on one edge, under the top bar; collapsed it is a thin strip so the Props sidebar stays usable. */
+  dock: (collapsed: boolean, side: 'left' | 'right'): CSSProperties => ({
     ...base,
     position: 'fixed',
-    top: 0,
-    right: 0,
+    top: STUDIO_TOP_BAR,
+    [side]: 0,
     bottom: 0,
     width: collapsed ? COLLAPSED_WIDTH : DOCK_WIDTH,
     display: 'flex',
     flexDirection: 'column',
     background: colors.background,
-    borderLeft: `1px solid ${colors.border}`,
+    [side === 'right' ? 'borderLeft' : 'borderRight']: `1px solid ${colors.border}`,
     zIndex: 1000,
     overflow: 'hidden',
   }),
