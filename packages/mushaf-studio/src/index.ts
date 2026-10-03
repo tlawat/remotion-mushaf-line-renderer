@@ -1,5 +1,7 @@
 // @tlawat/mushaf-studio: compositions, schemas and the Mushaf panel for Remotion Studio.
 
+// Captions
+export * from './captions';
 // Compositions
 export {
   calculateMushafPassageMetadata,
