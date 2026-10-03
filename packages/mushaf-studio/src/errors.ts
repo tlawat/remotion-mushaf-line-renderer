@@ -20,6 +20,8 @@ export type MushafStudioErrorCode =
   | 'BAD_LINE_SPLIT'
   /** A composition prop is out of range or inconsistent (the Zod schema catches most; this covers the rest). */
   | 'BAD_STUDIO_PROP'
+  /** An edit of the timings in the panel is impossible: a start after the end, a word the file does not have. */
+  | 'BAD_TIMING_EDIT'
   /** A Studio API was called outside the Studio. */
   | 'NOT_IN_STUDIO';
 
