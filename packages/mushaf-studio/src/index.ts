@@ -3,27 +3,14 @@
 // Captions
 export * from './captions';
 // Compositions
-export {
-  calculateMushafPassageMetadata,
-  defaultMushafPassageProps,
-  MushafPassage,
-  type MushafPassageProps,
-  mushafPassageSchema,
-} from './compositions/passage';
-export {
-  calculateMushafRecitationMetadata,
-  defaultMushafRecitationProps,
-  MushafRecitation,
-  type MushafRecitationProps,
-  mushafRecitationSchema,
-  resolveRecitation,
-} from './compositions/recitation';
+export * from './compositions/passage';
+export * from './compositions/recitation';
 // Errors
 export {isMushafStudioError, MushafStudioError, type MushafStudioErrorCode} from './errors';
 // Fonts
 export * from './fonts';
 // Lines
-export {applySplits, doubtfulWords, splitLineAt, wordIdAt} from './lines';
+export * from './lines';
 // QUD
 export * from './qud';
 // Schema

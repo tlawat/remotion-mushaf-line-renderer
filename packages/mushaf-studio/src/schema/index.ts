@@ -6,6 +6,18 @@ import {zColor} from '@remotion/zod-types';
 import type {MushafThemeSelection} from '@tlawat/remotion-mushaf-line';
 import {z} from 'zod';
 
+// The converters, one file per concern; the fragments stay here because they are the contract.
+export {animationFrom, type LineAnimationProps, scrollTimingFrom} from './animation';
+export {type DataSource, dataSchema, dataSourceFrom, MIRROR_FILES} from './data';
+export {type FontProps, type FontSetup, fontPropsFrom} from './fonts';
+export {
+  activeWordStyleFrom,
+  type WordStartIndex,
+  type WordStyleOptions,
+  withAlpha,
+  wordStyleFrom,
+} from './highlight';
+
 /** The ten presets of the colour font plus `plain` (the monochrome font) and `custom` (see `customThemeSchema`). */
 export const THEME_NAMES = [
   'plain',

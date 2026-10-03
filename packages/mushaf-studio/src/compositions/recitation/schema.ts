@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {
   animationSchema,
   customThemeSchema,
+  dataSchema,
   defaultAnimation,
   defaultCustomTheme,
   defaultHighlight,
@@ -35,6 +36,7 @@ export const mushafRecitationSchema = z.object({
   theme: themeNameSchema,
   customTheme: customThemeSchema,
   fonts: fontsSchema,
+  data: dataSchema,
   layout: layoutSchema,
   animation: animationSchema,
   highlight: highlightSchema,
@@ -49,7 +51,8 @@ export type MushafRecitationProps = z.infer<typeof mushafRecitationSchema>;
 /**
  * Defaults that work out of the box: Al-Fatihah (ayahs 2-7) by Abdul Hamid Ghraio from the
  * aligner's catalogue, the audio streamed from the catalogue's clip URL and the timings committed
- * in the app's `public/`; plain theme, a three-line window.
+ * in the app's `public/`; the mushaf data from the mirror the app ships; plain theme, a three-line
+ * window.
  */
 export const defaultMushafRecitationProps: MushafRecitationProps = {
   audioFile:
@@ -62,6 +65,7 @@ export const defaultMushafRecitationProps: MushafRecitationProps = {
   theme: 'plain',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
+  data: 'mirror',
   layout: defaultLayout,
   animation: defaultAnimation,
   highlight: defaultHighlight,

@@ -134,7 +134,10 @@ export type ResolvedRecitation = {
   readonly lines: readonly MushafLineData[];
   readonly schedule: readonly LineSchedule[];
   readonly translation: AyahTranslation | null;
+  /** The word-by-word translation (`text.glossFile`), if any. */
   readonly gloss: WordGloss | null;
+  /** The word-by-word transliteration (`text.transliterationFile`), if any. */
+  readonly transliteration: WordGloss | null;
   /** Word ids the Review tab marks, with their reasons. */
   readonly doubtful: Readonly<Record<string, readonly DoubtReason[]>>;
 };
