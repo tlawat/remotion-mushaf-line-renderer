@@ -49,9 +49,31 @@
       "name": "@tlawat/mushaf-fonts-qpc-v4-tajweed",
       "version": "1.20260912.0",
     },
+    "packages/mushaf-studio": {
+      "name": "@tlawat/mushaf-studio",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@remotion/studio": "4.0.521",
+        "@remotion/transitions": "4.0.521",
+        "@remotion/zod-types": "4.0.521",
+        "@tlawat/remotion-mushaf-line": "workspace:*",
+        "remotion": "4.0.521",
+        "zod": "4.5.4",
+      },
+      "peerDependencies": {
+        "@remotion/studio": ">=4.0.521",
+        "@remotion/transitions": ">=4.0.521",
+        "@remotion/zod-types": ">=4.0.521",
+        "@tlawat/remotion-mushaf-line": ">=0.4.1",
+        "react": ">=18.0.0",
+        "react-dom": ">=18.0.0",
+        "remotion": ">=4.0.521",
+        "zod": ">=4.0.0",
+      },
+    },
     "packages/remotion-mushaf-line-renderer": {
       "name": "@tlawat/remotion-mushaf-line",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "devDependencies": {
         "@remotion/bundler": "4.0.521",
         "@remotion/player": "4.0.521",
@@ -462,6 +484,8 @@
     "@tlawat/mushaf-fonts-qpc-v4": ["@tlawat/mushaf-fonts-qpc-v4@workspace:packages/fonts-qpc-v4"],
 
     "@tlawat/mushaf-fonts-qpc-v4-tajweed": ["@tlawat/mushaf-fonts-qpc-v4-tajweed@workspace:packages/fonts-qpc-v4-tajweed"],
+
+    "@tlawat/mushaf-studio": ["@tlawat/mushaf-studio@workspace:packages/mushaf-studio"],
 
     "@tlawat/remotion-mushaf-line": ["@tlawat/remotion-mushaf-line@workspace:packages/remotion-mushaf-line-renderer"],
 

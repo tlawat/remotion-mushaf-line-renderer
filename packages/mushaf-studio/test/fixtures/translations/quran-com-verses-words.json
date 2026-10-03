@@ -1,0 +1,39 @@
+{
+  "verses": [
+    {
+      "id": 1,
+      "verse_number": 1,
+      "verse_key": "1:1",
+      "words": [
+        {
+          "id": 1,
+          "position": 1,
+          "char_type_name": "word",
+          "text_uthmani": "بِسْمِ",
+          "location": "1:1:1",
+          "translation": { "text": "In (the) name", "language_name": "english" },
+          "transliteration": { "text": "bis'mi", "language_name": "english" }
+        },
+        {
+          "id": 2,
+          "position": 2,
+          "char_type_name": "word",
+          "text_uthmani": "ٱللَّهِ",
+          "location": "1:1:2",
+          "translation": { "text": "(of) Allah", "language_name": "english" },
+          "transliteration": { "text": "l-lahi", "language_name": "english" }
+        },
+        {
+          "id": 5,
+          "position": 5,
+          "char_type_name": "end",
+          "text_uthmani": "١",
+          "location": "1:1:5",
+          "translation": { "text": "(1)", "language_name": "english" },
+          "transliteration": { "text": null, "language_name": "english" }
+        }
+      ]
+    }
+  ],
+  "pagination": { "per_page": 50, "current_page": 1, "next_page": null, "total_pages": 1, "total_records": 1 }
+}

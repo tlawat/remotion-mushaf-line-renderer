@@ -1,0 +1,69 @@
+import {z} from 'zod';
+import {
+  animationSchema,
+  customThemeSchema,
+  defaultAnimation,
+  defaultCustomTheme,
+  defaultHighlight,
+  defaultLayout,
+  defaultReview,
+  defaultText,
+  fontsSchema,
+  highlightSchema,
+  layoutSchema,
+  lineSplitSchema,
+  reviewSchema,
+  textSchema,
+  themeNameSchema,
+} from '../../schema';
+
+/**
+ * The props of `<MushafRecitation>`: content (set by the Mushaf panel) and style (set in the
+ * Props sidebar). `resolved` is filled by `calculateMetadata()` and is not meant to be edited.
+ */
+export const mushafRecitationSchema = z.object({
+  /** A `public/` path (`mushaf-studio/fatiha/audio.mp3`) or an https URL. */
+  audioFile: z.string().describe('Audio: a path in public/ or a URL'),
+  /** A `public/` path to a `RecitationTimings` JSON (with or without the studio's `alignment` sidecar). */
+  timingsFile: z.string().describe('Timings JSON in public/'),
+  /** 0 keeps the file's range. */
+  fromAyah: z.number().int().min(0).max(286).describe('First ayah to show (0: as the timings say)'),
+  toAyah: z.number().int().min(0).max(286).describe('Last ayah to show (0: as the timings say)'),
+  /** Show only the recited ayahs on the first and last lines. */
+  slice: z.boolean().describe('Hide the neighbours’ words on the first and last lines'),
+  splits: z.array(lineSplitSchema).describe('Printed lines split into two timed segments'),
+  theme: themeNameSchema,
+  customTheme: customThemeSchema,
+  fonts: fontsSchema,
+  layout: layoutSchema,
+  animation: animationSchema,
+  highlight: highlightSchema,
+  text: textSchema,
+  review: reviewSchema,
+  /** Filled by calculateMetadata; see `ResolvedRecitation`. */
+  resolved: z.any().nullable().describe('Filled by calculateMetadata'),
+});
+
+export type MushafRecitationProps = z.infer<typeof mushafRecitationSchema>;
+
+/**
+ * Defaults that work out of the box: Al-Fatihah from the aligner's catalogue (audio streamed from
+ * its clip URL, timings committed in the app's `public/`), plain theme, a three-line window.
+ */
+export const defaultMushafRecitationProps: MushafRecitationProps = {
+  audioFile: 'mushaf-studio/fatiha/audio.mp3',
+  timingsFile: 'mushaf-studio/fatiha/timings.json',
+  fromAyah: 0,
+  toAyah: 0,
+  slice: true,
+  splits: [],
+  theme: 'plain',
+  customTheme: defaultCustomTheme,
+  fonts: 'fallback',
+  layout: defaultLayout,
+  animation: defaultAnimation,
+  highlight: defaultHighlight,
+  text: defaultText,
+  review: defaultReview,
+  resolved: null,
+};

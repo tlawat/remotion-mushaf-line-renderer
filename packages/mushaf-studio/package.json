@@ -1,0 +1,77 @@
+{
+  "name": "@tlawat/mushaf-studio",
+  "version": "0.1.0",
+  "description": "Mushaf Studio: compositions, Zod schemas and a Studio panel to make word-synced recitation videos of the KFGQPC V4 mushaf inside Remotion Studio.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tlawat/remotion-mushaf-line-renderer.git",
+    "directory": "packages/mushaf-studio"
+  },
+  "homepage": "https://github.com/tlawat/remotion-mushaf-line-renderer/tree/main/packages/mushaf-studio#readme",
+  "bugs": "https://github.com/tlawat/remotion-mushaf-line-renderer/issues",
+  "keywords": [
+    "remotion",
+    "remotion-studio",
+    "quran",
+    "mushaf",
+    "qul",
+    "qud",
+    "recitation",
+    "tajweed",
+    "video"
+  ],
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.mjs",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', {recursive: true, force: true})\" && tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:types": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "peerDependencies": {
+    "@remotion/studio": ">=4.0.521",
+    "@remotion/transitions": ">=4.0.521",
+    "@remotion/zod-types": ">=4.0.521",
+    "@tlawat/remotion-mushaf-line": ">=0.4.1",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "remotion": ">=4.0.521",
+    "zod": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/studio": "4.0.521",
+    "@remotion/transitions": "4.0.521",
+    "@remotion/zod-types": "4.0.521",
+    "@tlawat/remotion-mushaf-line": "workspace:*",
+    "remotion": "4.0.521",
+    "zod": "4.5.4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

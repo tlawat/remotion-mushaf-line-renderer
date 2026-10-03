@@ -1,0 +1,124 @@
+{
+  "recitations": [
+    {
+      "slug": "abdul_hamid_ghraio_2025_yt",
+      "label": "Abdul Hamid Ghraio · Hafs A'n Assem · Murattal · YouTube · Qasr",
+      "reciter": {
+        "reciter_id": "abdul_hamid_ghraio",
+        "name_en": "Abdul Hamid Ghraio",
+        "name_ar": "عبدالحميد القريو"
+      },
+      "riwayah": "Hafs A'n Assem",
+      "style": "Murattal",
+      "channel": "YouTube",
+      "source": "abdulhamid_ghraio",
+      "chapters": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+        112, 113, 114
+      ]
+    },
+    {
+      "slug": "abdulbasit_abdulsamad_tarteel",
+      "label": "Abdulbasit Abdulsamad · Hafs A'n Assem · Murattal · Tarteel CDN",
+      "reciter": {
+        "reciter_id": "abdulbasit_abdulsamad",
+        "name_en": "Abdulbasit Abdulsamad",
+        "name_ar": "عبد الباسط عبد الصمد"
+      },
+      "riwayah": "Hafs A'n Assem",
+      "style": "Murattal",
+      "channel": "Tarteel CDN",
+      "source": "qul",
+      "chapters": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+        112, 113, 114
+      ]
+    },
+    {
+      "slug": "abdulbasit_abdulsamad_warsh_qdc",
+      "label": "Abdulbasit Abdulsamad · Warsh A'n Nafi' · Murattal · QuranicAudio",
+      "reciter": {
+        "reciter_id": "abdulbasit_abdulsamad",
+        "name_en": "Abdulbasit Abdulsamad",
+        "name_ar": "عبد الباسط عبد الصمد"
+      },
+      "riwayah": "Warsh A'n Nafi'",
+      "style": "Murattal",
+      "channel": "QuranicAudio",
+      "source": "quranicaudio",
+      "chapters": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+        112, 113, 114
+      ]
+    },
+    {
+      "slug": "abdulrahman_al_sudais_tarteel",
+      "label": "Abdulrahman Al-Sudais · Hafs A'n Assem · Murattal · Tarteel CDN",
+      "reciter": {
+        "reciter_id": "abdulrahman_al_sudais",
+        "name_en": "Abdulrahman Al-Sudais",
+        "name_ar": "عبد الرحمن السديس"
+      },
+      "riwayah": "Hafs A'n Assem",
+      "style": "Murattal",
+      "channel": "Tarteel CDN",
+      "source": "qul",
+      "chapters": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+        112, 113, 114
+      ]
+    },
+    {
+      "slug": "abu_bakr_al_shatri_tarteel",
+      "label": "Abu Bakr Al-Shatri · Hafs A'n Assem · Murattal · Tarteel CDN",
+      "reciter": {
+        "reciter_id": "abu_bakr_al_shatri",
+        "name_en": "Abu Bakr Al-Shatri",
+        "name_ar": "أبو بكر الشاطري"
+      },
+      "riwayah": "Hafs A'n Assem",
+      "style": "Murattal",
+      "channel": "Tarteel CDN",
+      "source": "qul",
+      "chapters": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+        112, 113, 114
+      ]
+    },
+    {
+      "slug": "ahmed_deban_qalon_mp3quran",
+      "label": "Ahmed Deban · Qalon A'n Nafi' · Murattal · MP3Quran",
+      "reciter": {
+        "reciter_id": "ahmed_deban",
+        "name_en": "Ahmed Deban",
+        "name_ar": "أحمد ديبان"
+      },
+      "riwayah": "Qalon A'n Nafi'",
+      "style": "Murattal",
+      "channel": "MP3Quran",
+      "source": "mp3quran",
+      "chapters": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+        112, 113, 114
+      ]
+    }
+  ]
+}
