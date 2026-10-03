@@ -50,7 +50,8 @@
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist', {recursive: true, force: true})\" && tsup",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test:types": "tsc --noEmit -p tsconfig.test.json"
+    "test:types": "tsc --noEmit -p tsconfig.test.json",
+    "test:studio": "playwright test -c test/studio/playwright.config.mts"
   },
   "peerDependencies": {
     "@remotion/studio": ">=4.0.521",
