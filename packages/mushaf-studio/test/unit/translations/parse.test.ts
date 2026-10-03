@@ -59,6 +59,26 @@ describe('stripFootnotes', () => {
     expect(stripFootnotes('a < b')).toBe('a < b');
   });
 
+  it('ends a tag at the first > outside quotes: a quoted attribute may hold one', () => {
+    expect(stripFootnotes('<span title="a>b">x</span> y')).toBe('x y');
+    expect(stripFootnotes("<i data-x='1 > 0'>x</i>")).toBe('x');
+    expect(stripFootnotes('a<sup foot_note="1" title="see > below">1</sup> b')).toBe('a b');
+    // An apostrophe in the text opens no quote.
+    expect(stripFootnotes("<i>Allah's</i> mercy, <b>don't</b>")).toBe("Allah's mercy, don't");
+  });
+
+  it('decodes HTML entities, named and numeric, after the tags are gone', () => {
+    expect(
+      stripFootnotes('Mercy &amp; Peace, &quot;q&quot; it&#39;s &apos;a&apos;&nbsp;b &#x2019;&#X201C;&#8221;'),
+    ).toBe("Mercy & Peace, \"q\" it's 'a' b ’“”");
+    // An escaped tag is text, not markup.
+    expect(stripFootnotes('&lt;sup&gt;1&lt;/sup&gt; x')).toBe('<sup>1</sup> x');
+    // Entities it does not know, and code points that are not characters, stay as they are.
+    expect(stripFootnotes('AT&T &copy; &#0; &#xD800; &#1114112; &amp')).toBe(
+      'AT&T &copy; &#0; &#xD800; &#1114112; &amp',
+    );
+  });
+
   it('is idempotent', () => {
     const once = stripFootnotes('x<sup>1</sup>y [[n]] <i>z</i>');
     expect(stripFootnotes(once)).toBe(once);
@@ -214,7 +234,14 @@ describe('parseTranslationFile: errors', () => {
 
   it('rejects envelopes it cannot read', () => {
     expect(bad({version: 2, kind: 'ayah', text: {'1:1': 'a'}})).toContain('version is 2');
-    expect(bad({version: 1, kind: 'verse', text: {'1:1': 'a'}})).toContain('kind should be "ayah" or "word"');
+    expect(bad({version: 1, kind: 'verse', text: {'1:1': 'a'}})).toContain(
+      'kind should be "ayah" or "word"; found "verse"',
+    );
+    // A version key makes it the envelope, whatever else it lacks: its own error, not a key error.
+    const noKind = bad({version: 1, text: {'1:1': 'a'}});
+    expect(noKind).toContain('kind should be "ayah" or "word"; the file has none');
+    expect(noKind).not.toContain('neither an ayah key');
+    expect(bad({version: 2, text: {'1:1': 'a'}})).toContain('version is 2');
     expect(bad({version: 1, kind: 'ayah', words: {'1:1': 'a'}})).toContain('under "text"');
     expect(bad({version: 1, kind: 'word', words: []})).toContain('under "words"');
     expect(bad({version: 1, kind: 'ayah', text: {}})).toContain('empty object');

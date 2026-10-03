@@ -22,15 +22,34 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 // space and sometimes not (`Allah<sup ...>1</sup>, the`).
 const CUT = '';
 const CUTS = /+/g;
-const SUP = /<sup\b[^>]*>[\s\S]*?<\/sup\s*>/gi;
+// An attribute value in quotes may hold a `>` (`title="a>b"`): the tag ends at the first `>` outside quotes.
+const SUP = /<sup\b(?:[^<>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/sup\s*>/gi;
 const INLINE_NOTE = /\[\[[\s\S]*?\]\]/g;
-const TAG = /<\/?[a-z][^<>]*>/gi;
+const TAG = /<\/?[a-z](?:[^<>"']|"[^"]*"|'[^']*')*>/gi;
+const ENTITY = /&(?:#(\d{1,7})|#[xX]([\da-fA-F]{1,6})|(amp|lt|gt|quot|apos|nbsp));/g;
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0',
+};
 /** A character a word or a sentence ends with: a space goes after it when the next word starts glued to it. */
 const ENDS_WORD = /[\p{L}\p{N}\p{M}\p{Pe}\p{Pf}.,;:!?˺]$/u;
 /** A character a word starts with: a letter, a digit or an opening bracket or quote (˹ included). */
 const STARTS_WORD = /^[\p{L}\p{N}\p{Ps}\p{Pi}˹]/u;
 /** Scripts written without spaces between words. */
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}]/u;
+
+/** The entities QUL's HTML-escaped sources use, and numeric ones; any other `&...;` is left as it is. */
+const decodeEntities = (text: string): string =>
+  text.replace(ENTITY, (entity: string, decimal?: string, hex?: string, name?: string) => {
+    if (name !== undefined) return NAMED_ENTITIES[name] ?? entity;
+    const code = decimal === undefined ? Number.parseInt(hex ?? '', 16) : Number(decimal);
+    const valid = code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
+    return valid ? String.fromCodePoint(code) : entity;
+  });
 
 const settleCuts = (text: string): string =>
   text.replace(CUTS, (cut: string, offset: number) => {
@@ -44,10 +63,14 @@ const settleCuts = (text: string): string =>
  * Removes footnote markup from a translation's text: `<sup foot_note="...">1</sup>` with its
  * content, inline `[[...]]` footnotes with theirs, and any other tag without its content, leaving
  * plain text with single spaces. Where markup sat between two words with no space around it, one
- * space takes its place (`beings<sup>1</sup>and` → `beings and`). Pure.
+ * space takes its place (`beings<sup>1</sup>and` → `beings and`). Then the HTML entities are
+ * decoded (`&amp; &lt; &gt; &quot; &apos; &nbsp;`, `&#39;`, `&#x2019;`), after the tags are gone so
+ * that an escaped `&lt;b&gt;` stays text. Pure.
  */
 export const stripFootnotes = (text: string): string =>
-  settleCuts(text.replace(SUP, CUT).replace(INLINE_NOTE, CUT).replace(TAG, CUT)).replace(/\s+/g, ' ').trim();
+  decodeEntities(settleCuts(text.replace(SUP, CUT).replace(INLINE_NOTE, CUT).replace(TAG, CUT)))
+    .replace(/\s+/g, ' ')
+    .trim();
 
 // ---------------------------------------------------------------------------------------------
 // Keys
@@ -235,7 +258,9 @@ const parseEnvelope = (
     );
   }
   if (data.kind !== 'ayah' && data.kind !== 'word') {
-    fail(`the studio envelope's kind should be "ayah" or "word"; found ${describeValue(data.kind)}.`);
+    fail(
+      `the studio envelope's kind should be "ayah" or "word"; ${data.kind === undefined ? 'the file has none' : `found ${describeValue(data.kind)}`}.`,
+    );
   }
   const kind = data.kind as KeyKind;
   const field = kind === 'ayah' ? 'text' : 'words';
@@ -266,7 +291,8 @@ export const parseTranslationFile = (value: unknown, meta?: Partial<TranslationM
     return {kind: 'ayah', meta: mergeMeta(meta), text: parseNestedArrays(value)};
   }
   if (!isRecord(value)) return fail(`expected one of ${SHAPES}; found ${describeValue(value)}.`);
-  if ('version' in value && 'kind' in value) return parseEnvelope(value, meta);
+  // No QUL shape has a `version` key: a file with one is the envelope, whose errors name what is missing.
+  if ('version' in value) return parseEnvelope(value, meta);
   const {kind, entries} = parseEntries(value, 'the file');
   return kind === 'ayah' ? {kind, meta: mergeMeta(meta), text: entries} : {kind, meta: mergeMeta(meta), words: entries};
 };

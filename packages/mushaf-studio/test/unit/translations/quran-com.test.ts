@@ -6,6 +6,7 @@ import {
   fetchQuranComWordGloss,
   listQuranComTranslations,
 } from '../../../src/translations';
+import {fetchQuranComVerseWords} from '../../../src/translations/quran-com';
 import {type FakeAnswer, fakeFetch, fixture} from './helpers';
 
 const API = 'https://api.quran.com/api/v4';
@@ -126,6 +127,26 @@ describe('listQuranComTranslations', () => {
     });
     await expect(listQuranComTranslations({}, {fetch, signal: controller.signal})).rejects.toBe(abort);
     expect(mock.mock.calls[0]![1]).toEqual({signal: controller.signal});
+  });
+
+  it('rethrows an abort that lands while the body is read, not as TRANSLATION_FETCH_FAILED', async () => {
+    const controller = new AbortController();
+    const abort = new DOMException('aborted', 'AbortError');
+    /** Answers 200, then the body read fails: `abortFirst` aborts the caller's signal first. */
+    const answering = (abortFirst: boolean) =>
+      (async () =>
+        ({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => {
+            if (abortFirst) controller.abort();
+            throw abort;
+          },
+        }) as unknown as Response) as typeof globalThis.fetch;
+    await expect(listQuranComTranslations({}, {fetch: answering(true), signal: controller.signal})).rejects.toBe(abort);
+    // An AbortError is an abort even when this call's signal did not raise it.
+    await expect(listQuranComTranslations({}, {fetch: answering(false)})).rejects.toBe(abort);
   });
 });
 
@@ -261,6 +282,56 @@ const versePages = () => {
   return {page1, page2};
 };
 
+/** Pages of chapter 2, one ayah each, that name a next page up to `last` (a number, or never null). */
+const endlessPages = (last: number) =>
+  quranCom({
+    '/verses/by_chapter/2': (url) => {
+      const page = Number(url.searchParams.get('page'));
+      const word = (position: number, type: string) => ({
+        char_type_name: type,
+        location: `2:${page}:${position}`,
+        translation: {text: `word ${page}`},
+      });
+      return {
+        body: {
+          verses: [{verse_number: page, words: [word(1, 'word'), word(2, 'end')]}],
+          pagination: {current_page: page, next_page: page < last ? page + 1 : null},
+        },
+      };
+    },
+  });
+
+describe('fetchQuranComVerseWords', () => {
+  it('reads up to 12 pages, markers included, and passes the language when given', async () => {
+    const {fetch, urls} = endlessPages(12);
+    const words = await fetchQuranComVerseWords({chapter: 2, wordFields: ['text_uthmani'], language: 'ur'}, {fetch});
+    expect(urls).toHaveLength(12);
+    expect(Object.fromEntries(urls[0]!.searchParams)).toEqual({
+      words: 'true',
+      language: 'ur',
+      word_fields: 'text_uthmani,location,char_type_name',
+      per_page: '50',
+      page: '1',
+    });
+    expect(words).toHaveLength(24);
+    expect(words.slice(0, 2).map((w) => [w.location, w.char_type_name])).toEqual([
+      ['2:1:1', 'word'],
+      ['2:1:2', 'end'],
+    ]);
+  });
+
+  it('fails with TRANSLATION_FETCH_FAILED naming the page limit when a 13th page is still named', async () => {
+    const {fetch, urls} = endlessPages(13);
+    const error = await rejection(fetchQuranComVerseWords({chapter: 2, wordFields: []}, {fetch}));
+    expect(urls).toHaveLength(12);
+    expect(error.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(error.message).toMatch(/still names a next page \(13\) after 12 pages, the page limit/);
+    // Stopping at the range's last ayah is not the limit.
+    const ranged = endlessPages(13);
+    await expect(fetchQuranComVerseWords({chapter: 2, wordFields: [], toAyah: 12}, ranged)).resolves.toHaveLength(24);
+  });
+});
+
 describe('fetchQuranComWordGloss', () => {
   it('asks for the words of the chapter and keeps the words, keyed by location, without end markers', async () => {
     const {fetch, urls} = quranCom({'/verses/by_chapter/1': {body: fixture('quran-com-verses-words.json')}});
@@ -270,7 +341,7 @@ describe('fetchQuranComWordGloss', () => {
     expect(Object.fromEntries(urls[0]!.searchParams)).toEqual({
       words: 'true',
       language: 'en',
-      word_fields: 'location',
+      word_fields: 'location,char_type_name',
       per_page: '50',
       page: '1',
     });
@@ -351,6 +422,16 @@ describe('fetchQuranComWordGloss', () => {
     expect(
       (await rejection(fetchQuranComWordGloss({chapter: 1, field: 'translation'}, {fetch: broken.fetch}))).code,
     ).toBe('TRANSLATION_FETCH_FAILED');
+  });
+
+  it('fails naming the page limit when quran.com still names a next page after 12, never cutting the words short', async () => {
+    const {fetch, urls} = endlessPages(Number.POSITIVE_INFINITY);
+    const error = await rejection(fetchQuranComWordGloss({chapter: 2, field: 'translation'}, {fetch}));
+    expect(urls.map((u) => u.searchParams.get('page'))).toEqual(Array.from({length: 12}, (_, i) => String(i + 1)));
+    expect(error.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(error.message).toContain('still names a next page (13) after 12 pages, the page limit for one chapter');
+    expect(error.message).toContain('page=12');
+    expect(error.details).toMatchObject({chapter: 2, pageLimit: 12});
   });
 
   it('refuses a bad chapter or range before asking anything', async () => {

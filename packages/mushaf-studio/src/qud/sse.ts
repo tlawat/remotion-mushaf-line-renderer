@@ -9,7 +9,7 @@ export type SseEvent = {readonly event: string; readonly data: string};
 export type SseChunk = {readonly events: readonly SseEvent[]; readonly rest: string};
 
 const toEvents = (block: string): SseEvent[] => {
-  let event = 'message';
+  let event = '';
   const data: string[] = [];
   for (const line of block.split('\n')) {
     if (line === '' || line.startsWith(':')) continue;
@@ -20,8 +20,9 @@ const toEvents = (block: string): SseEvent[] => {
     if (field === 'event') event = value;
     else if (field === 'data') data.push(value);
   }
-  // As in the EventSource spec, a block without data (a lone comment, an `event:` alone) dispatches nothing.
-  return data.length === 0 ? [] : [{event, data: data.join('\n')}];
+  // As in the EventSource spec, a block without data (a lone comment, an `event:` alone) dispatches
+  // nothing, and an empty type (no `event:`, or an empty one) is `'message'`.
+  return data.length === 0 ? [] : [{event: event || 'message', data: data.join('\n')}];
 };
 
 /**

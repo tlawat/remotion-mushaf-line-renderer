@@ -83,6 +83,17 @@ describe('parseSseChunk', () => {
       {event: 'message', data: ''},
     ]);
   });
+
+  it("gives an empty event type the default 'message', as the spec does", () => {
+    expect(
+      parseSseChunk('', 'event:\ndata: a\n\nevent: \ndata: b\n\nevent: progress\nevent:\ndata: c\n\n').events,
+    ).toEqual([
+      {event: 'message', data: 'a'},
+      {event: 'message', data: 'b'},
+      {event: 'message', data: 'c'},
+    ]);
+    expect(flushSse('event:\ndata: d')).toEqual([{event: 'message', data: 'd'}]);
+  });
 });
 
 describe('flushSse', () => {

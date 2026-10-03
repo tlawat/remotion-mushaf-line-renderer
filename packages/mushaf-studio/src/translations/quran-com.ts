@@ -204,90 +204,21 @@ export const fetchQuranComTranslation = async (
 };
 
 const PER_PAGE = 50;
-// The longest surah is 286 ayahs, six pages; anything past this is an API that never says "last page".
+// The longest surah is 286 ayahs, six pages; an API still naming a next page past this never says "last page".
 const MAX_PAGES = 12;
-
-/**
- * `GET /verses/by_chapter/{chapter}?words=true&language=...`: the per-word translation or
- * transliteration of a chapter (or an ayah range) as a `WordGloss`, keyed by `location`, with the
- * ayah-end markers left out. Follows `pagination.next_page`; quran.com's `from`/`to` narrow the
- * verses but not its page count, so paging also stops at the range's last ayah or an empty page.
- */
-export const fetchQuranComWordGloss = async (
-  query: {
-    readonly chapter: number;
-    readonly field: 'translation' | 'transliteration';
-    /** quran.com's language code, default `'en'`. */
-    readonly language?: string | undefined;
-    readonly fromAyah?: number | undefined;
-    readonly toAyah?: number | undefined;
-  },
-  options: QuranComOptions = {},
-): Promise<WordGloss> => {
-  const {chapter, field, fromAyah, toAyah} = query;
-  const language = query.language ?? 'en';
-  assertRange(chapter, fromAyah, toAyah);
-  const words: Record<string, string> = {};
-  for (let page = 1; page <= MAX_PAGES; ) {
-    const url = endpoint(options, `/verses/by_chapter/${chapter}`, {
-      words: 'true',
-      language,
-      word_fields: 'location',
-      per_page: PER_PAGE,
-      page,
-      from: fromAyah,
-      to: toAyah,
-    });
-    const body = await fetchJson(url, HINT, options);
-    const verses = arrayField(body, 'verses', url);
-    let lastAyah = 0;
-    for (const verse of verses) {
-      if (!isRecord(verse) || !Array.isArray(verse.words)) {
-        badResponse(url, '{verses: [{verse_number, words: [...]}]}', verse);
-        continue;
-      }
-      for (const word of verse.words as unknown[]) {
-        if (!isRecord(word) || word.char_type_name !== 'word' || typeof word.location !== 'string') continue;
-        const [surah, ayah] = word.location.split(':').map(Number);
-        if (surah !== chapter || ayah === undefined) continue;
-        lastAyah = Math.max(lastAyah, ayah);
-        const gloss = word[field];
-        const text = isRecord(gloss) && typeof gloss.text === 'string' ? stripFootnotes(gloss.text) : '';
-        if (text && inRange(ayah, fromAyah, toAyah)) words[word.location] = text;
-      }
-    }
-    const next = isRecord(body) && isRecord(body.pagination) ? body.pagination.next_page : null;
-    const done = verses.length === 0 || (toAyah !== undefined && lastAyah >= toAyah);
-    if (done || typeof next !== 'number' || next <= page) break;
-    page = next;
-  }
-  if (Object.keys(words).length === 0) {
-    throw new MushafStudioError(
-      'TRANSLATION_FETCH_FAILED',
-      `quran.com has no word ${field} in "${language}" for ${rangeLabel(chapter, fromAyah, toAyah)}: check the language code and the ayah range.`,
-      {chapter, field, language},
-    );
-  }
-  return {
-    kind: 'word',
-    meta: {
-      id: `quran.com:wbw-${field}-${language}`,
-      name: field === 'translation' ? `quran.com word by word (${language})` : 'quran.com transliteration',
-      language,
-      source: 'quran.com',
-    },
-    words,
-  };
-};
 
 /**
  * `GET /verses/by_chapter/{chapter}?words=true` for a chapter or an ayah range, every page, as the
  * raw word records quran.com answers with (in reading order, ayah-end markers included), keeping
- * only the words of the range: the paging `fetchQuranComWordGloss()` does, for fetchers that read
+ * only the words of the range: the paging behind `fetchQuranComWordGloss()`, for fetchers that read
  * other word fields (`fetchQuranComText()` reads `text_uthmani` / `text_indopak`). Asks for
- * `wordFields` plus `location` and `char_type_name`, which the paging needs. Checks the chapter and
- * the range first (`BAD_STUDIO_PROP`); a failed request or a verse without `words` is
- * `TRANSLATION_FETCH_FAILED`. An empty result is not an error here: the caller names what it missed.
+ * `wordFields` plus `location` and `char_type_name`, which the paging needs, and passes `language`
+ * (the language of the words' `translation` and `transliteration`) when given. Follows
+ * `pagination.next_page`; quran.com's `from`/`to` narrow the verses but not its page count, so
+ * paging also stops at the range's last ayah or an empty page. Checks the chapter and the range
+ * first (`BAD_STUDIO_PROP`); a failed request, a verse without `words`, or a next page still named
+ * after 12 pages (twice the longest surah) is `TRANSLATION_FETCH_FAILED`, never a result cut
+ * short. An empty result is not an error here: the caller names what it missed.
  */
 export const fetchQuranComVerseWords = async (
   query: {
@@ -296,16 +227,20 @@ export const fetchQuranComVerseWords = async (
     readonly wordFields: readonly string[];
     readonly fromAyah?: number | undefined;
     readonly toAyah?: number | undefined;
+    /** quran.com's language code for the words' `translation` and `transliteration`; default quran.com's own. */
+    readonly language?: string | undefined;
   },
   options: QuranComOptions = {},
 ): Promise<readonly Readonly<Record<string, unknown>>[]> => {
-  const {chapter, fromAyah, toAyah} = query;
+  const {chapter, fromAyah, toAyah, language} = query;
   assertRange(chapter, fromAyah, toAyah);
   const fields = [...new Set([...query.wordFields, 'location', 'char_type_name'])].join(',');
   const words: Readonly<Record<string, unknown>>[] = [];
-  for (let page = 1; page <= MAX_PAGES; ) {
+  let page = 1;
+  for (let read = 1; ; read++) {
     const url = endpoint(options, `/verses/by_chapter/${chapter}`, {
       words: 'true',
+      language,
       word_fields: fields,
       per_page: PER_PAGE,
       page,
@@ -330,10 +265,62 @@ export const fetchQuranComVerseWords = async (
     }
     const next = isRecord(body) && isRecord(body.pagination) ? body.pagination.next_page : null;
     const done = verses.length === 0 || (toAyah !== undefined && lastAyah >= toAyah);
-    if (done || typeof next !== 'number' || next <= page) break;
+    if (done || typeof next !== 'number' || next <= page) return words;
+    if (read === MAX_PAGES) {
+      throw new MushafStudioError(
+        'TRANSLATION_FETCH_FAILED',
+        `${url} still names a next page (${next}) after ${MAX_PAGES} pages, the page limit for one chapter (the longest takes ${Math.ceil(286 / PER_PAGE)}): the words would be cut short. ${HINT}`,
+        {url, chapter, pageLimit: MAX_PAGES},
+      );
+    }
     page = next;
   }
-  return words;
+};
+
+/**
+ * `GET /verses/by_chapter/{chapter}?words=true&language=...`: the per-word translation or
+ * transliteration of a chapter (or an ayah range) as a `WordGloss`, keyed by `location`, with the
+ * ayah-end markers left out. Built on `fetchQuranComVerseWords()`: the same paging, range and
+ * errors, and `TRANSLATION_FETCH_FAILED` when no word of the range has a gloss.
+ */
+export const fetchQuranComWordGloss = async (
+  query: {
+    readonly chapter: number;
+    readonly field: 'translation' | 'transliteration';
+    /** quran.com's language code, default `'en'`. */
+    readonly language?: string | undefined;
+    readonly fromAyah?: number | undefined;
+    readonly toAyah?: number | undefined;
+  },
+  options: QuranComOptions = {},
+): Promise<WordGloss> => {
+  const {chapter, field, fromAyah, toAyah} = query;
+  const language = query.language ?? 'en';
+  const records = await fetchQuranComVerseWords({chapter, fromAyah, toAyah, language, wordFields: []}, options);
+  const words: Record<string, string> = {};
+  for (const word of records) {
+    if (word.char_type_name !== 'word') continue;
+    const gloss = word[field];
+    const text = isRecord(gloss) && typeof gloss.text === 'string' ? stripFootnotes(gloss.text) : '';
+    if (text) words[word.location as string] = text;
+  }
+  if (Object.keys(words).length === 0) {
+    throw new MushafStudioError(
+      'TRANSLATION_FETCH_FAILED',
+      `quran.com has no word ${field} in "${language}" for ${rangeLabel(chapter, fromAyah, toAyah)}: check the language code and the ayah range.`,
+      {chapter, field, language},
+    );
+  }
+  return {
+    kind: 'word',
+    meta: {
+      id: `quran.com:wbw-${field}-${language}`,
+      name: field === 'translation' ? `quran.com word by word (${language})` : 'quran.com transliteration',
+      language,
+      source: 'quran.com',
+    },
+    words,
+  };
 };
 
 /** "1:2-7", or "chapter 1" for a whole chapter: how the fetchers name a range in their messages. */

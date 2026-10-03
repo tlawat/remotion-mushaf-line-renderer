@@ -36,7 +36,7 @@ type Slot = {
   readonly wordIndex: number | null;
   readonly start: number;
   readonly end: number;
-  /** The ayah-end marker: a word the timings time and the aligner never heard. */
+  /** The ayah-end marker: the last word of a complete ayah, which a sidecar with words never heard. */
   readonly marker: boolean;
   /** Index into `alignment.words` of this very occurrence (same id, same rank), else `null`. */
   readonly heard: number | null;
@@ -56,6 +56,8 @@ const arabicIndic = (n: number): string => String(n).replace(/\d/g, (d) => Strin
  */
 const slotsOf = (timings: StudioTimings): Slot[] => {
   const sidecar = timings.alignment;
+  // A sidecar without words (the manual one a first edit starts) heard nothing, so it names no marker.
+  const heardAny = (sidecar?.words.length ?? 0) > 0;
   const heardById = new Map<string, number[]>();
   for (const [i, word] of (sidecar?.words ?? []).entries()) {
     const list = heardById.get(word.id);
@@ -81,7 +83,7 @@ const slotsOf = (timings: StudioTimings): Slot[] => {
         wordIndex,
         start,
         end,
-        marker: sidecar !== undefined && heard === undefined,
+        marker: heardAny && heard === undefined && ayah.complete === true && wordIndex === ayah.words.length - 1,
         heard: own ?? null,
         heardText: heard === undefined ? null : sidecar!.words[own ?? heard[0]!]!.text,
       });
@@ -96,11 +98,15 @@ const slotsOf = (timings: StudioTimings): Slot[] => {
  * milliseconds. A word's text is the sidecar's Uthmani text, else `textOf(id)`, else its id; its
  * confidence is that of the aligner segment it was heard in, else `null`. An ayah timed without
  * words is one caption, `"<surah>:<ayah>"`, over the ayah's span: its words are not invented. The
- * ayah-end markers (words the sidecar never heard; without a sidecar there are none) are left out
- * unless `markers` is `true`. `fromCaptions()` takes the captions back.
+ * ayah-end markers (the last word of a complete ayah, when the sidecar has words but not that one;
+ * without a sidecar, or with one that has no words, there are none) are left out unless `markers`
+ * is `true`. Every caption after the first starts with a space, as Remotion's
+ * `createTikTokStyleCaptions()` expects: it starts a page only at a caption whose text starts with
+ * one, and joins the texts as they are. `fromCaptions()` takes the captions back.
  *
  * ```ts
  * toCaptions(timings)[0]; // {text: 'ٱلْحَمْدُ', startMs: 320, endMs: 890, timestampMs: 320, confidence: 1}
+ * toCaptions(timings)[1].text; // ' لِلَّهِ'
  * ```
  */
 export const toCaptions = (timings: StudioTimings, options: ToCaptionsOptions = {}): readonly Caption[] => {
@@ -110,8 +116,9 @@ export const toCaptions = (timings: StudioTimings, options: ToCaptionsOptions = 
   for (const slot of slotsOf(timings)) {
     if (slot.marker && options.markers !== true) continue;
     const ayah = timings.ayat[slot.ayahIndex]!;
-    const caption = (text: string, score: number | null): Caption => {
+    const caption = (word: string, score: number | null): Caption => {
       const startMs = toMs(slot.start);
+      const text = captions.length === 0 ? word : ` ${word}`;
       return {text, startMs, endMs: toMs(slot.end), timestampMs: startMs, confidence: score};
     };
     if (slot.wordIndex === null) captions.push(caption(`${timings.surah}:${ayah.ayah}`, null));
@@ -132,20 +139,30 @@ export const toCaptions = (timings: StudioTimings, options: ToCaptionsOptions = 
 
 const badCaption = (index: number, caption: Caption, problem: string): never => {
   throw new MushafStudioError(
-    'BAD_STUDIO_PROP',
+    'BAD_TIMING_EDIT',
     `Caption ${index} (${describeValue(caption.text)}) ${problem}. Fix it in the caption editor, or start again from toCaptions().`,
     {index},
   );
 };
 
-const isMs = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+/**
+ * Throws `BAD_TIMING_EDIT` naming the caption when its start or end is not a finite number of
+ * milliseconds (`NaN`, `Infinity`, not a number). Shared by `fromCaptions()` and `captionsToSrt()`,
+ * which would otherwise write `NaN:NaN:NaN,NaN`. Not exported from the module.
+ */
+export const checkCaptionTimes = (index: number, caption: Caption): void => {
+  if (typeof caption.startMs !== 'number' || !Number.isFinite(caption.startMs))
+    badCaption(index, caption, `starts at ${describeValue(caption.startMs)}: expected a finite number of milliseconds`);
+  if (typeof caption.endMs !== 'number' || !Number.isFinite(caption.endMs))
+    badCaption(index, caption, `ends at ${describeValue(caption.endMs)}: expected a finite number of milliseconds`);
+};
 
 const checkCaptions = (captions: readonly Caption[]): void => {
   for (const [i, caption] of captions.entries()) {
-    if (!isMs(caption.startMs))
-      badCaption(i, caption, `starts at ${describeValue(caption.startMs)}: expected milliseconds, 0 or more`);
-    if (!isMs(caption.endMs) || caption.endMs < caption.startMs)
-      badCaption(i, caption, `ends at ${describeValue(caption.endMs)}, before its start (${caption.startMs})`);
+    checkCaptionTimes(i, caption);
+    if (caption.startMs < 0) badCaption(i, caption, `starts at ${caption.startMs}: expected milliseconds, 0 or more`);
+    if (caption.endMs < caption.startMs)
+      badCaption(i, caption, `ends at ${caption.endMs}, before its start (${caption.startMs})`);
     const previous = captions[i - 1];
     if (previous !== undefined && caption.startMs < previous.startMs)
       badCaption(
@@ -167,9 +184,10 @@ const checkCaptions = (captions: readonly Caption[]): void => {
  * sidecar's segments and edits) is kept: an unchanged round trip returns `base` deep-equal. The
  * edit is not logged in `alignment.edits`; the caller decides.
  *
- * Throws `BAD_STUDIO_PROP` when the count is not the one `toCaptions()` makes (with or without the
- * markers), when a caption starts before the one before it or ends before it starts, and when the
- * result is not valid recitation timings.
+ * Throws `BAD_TIMING_EDIT` when the count is not the one `toCaptions()` makes (with or without the
+ * markers), when a time is not a finite number of milliseconds, when a caption starts before 0,
+ * before the one before it or ends before it starts, and when the result is not valid recitation
+ * timings.
  */
 export const fromCaptions = (captions: readonly Caption[], base: StudioTimings): StudioTimings => {
   const all = slotsOf(base);
@@ -177,7 +195,7 @@ export const fromCaptions = (captions: readonly Caption[], base: StudioTimings):
   const withMarkers = captions.length === all.length;
   if (!withMarkers && captions.length !== words.length)
     throw new MushafStudioError(
-      'BAD_STUDIO_PROP',
+      'BAD_TIMING_EDIT',
       `fromCaptions() got ${captions.length} captions, but the timings make ${words.length} (${all.length} with the ayah-end markers). Edit the captions toCaptions() made from these same timings, without adding or removing any.`,
       {captions: captions.length, expected: words.length, expectedWithMarkers: all.length},
     );
@@ -234,7 +252,7 @@ export const fromCaptions = (captions: readonly Caption[], base: StudioTimings):
     parseRecitationTimings(result);
   } catch (error) {
     throw new MushafStudioError(
-      'BAD_STUDIO_PROP',
+      'BAD_TIMING_EDIT',
       `The edited captions do not make valid recitation timings: ${error instanceof Error ? error.message : String(error)}`,
       {cause: error},
     );

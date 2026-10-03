@@ -49,18 +49,44 @@ const badResponse: (route: string, problem: string, value: unknown) => never = (
 };
 
 const hint = (status: number | null): string => {
+  if (status === 402)
+    return " The free GPU quota is spent: align with `device: 'CPU'`, or pass a Hugging Face token (the `token` option) to spend your own GPU quota.";
   if (status === 404)
     return ' Check the recitation and chapter; a session (audio_id) expires after a few hours, so align again.';
   if (status !== null && status >= 500) return ' The service failed; try again in a moment.';
   return '';
 };
 
-/** The client's error for a non-2xx answer or an `error` event: their body is `{code, message, detail}`. */
+/**
+ * A request validation error (HTTP 422, FastAPI's `{detail: [{loc, msg, type}]}`): the first field
+ * and what is wrong with it (`body.device: "Input should be 'GPU' or 'CPU'"`), and the whole list.
+ * `null` for any other body.
+ */
+const validationError = (body: unknown): {readonly said: string; readonly detail: readonly unknown[]} | null => {
+  if (!isRecord(body) || !Array.isArray(body.detail)) return null;
+  const detail = body.detail as readonly unknown[];
+  const first = detail[0];
+  if (!isRecord(first) || typeof first.msg !== 'string') return null;
+  const loc = Array.isArray(first.loc)
+    ? first.loc.filter((part) => typeof part === 'string' || typeof part === 'number').join('.')
+    : '';
+  const more = detail.length > 1 ? ` (and ${detail.length - 1} more)` : '';
+  return {said: `the request was refused: ${loc === '' ? '' : `${loc}: `}"${first.msg}"${more}`, detail};
+};
+
+/**
+ * The client's error for a non-2xx answer or an `error` event: their body is `{code, message, detail}`,
+ * or FastAPI's `{detail: [{loc, msg}]}` for a request it refused (HTTP 422).
+ */
 const apiError = (route: string, status: number | null, body: unknown, retryAfter: string | null = null) => {
   const error = isRecord(body) && typeof body.code === 'string' && typeof body.message === 'string' ? body : null;
   const code = error === null ? null : (error.code as string);
   const detail = error !== null && isRecord(error.detail) ? error.detail : null;
-  const said = error === null ? "a body that is not the API's {code, message} error" : `${code}: "${error.message}"`;
+  const validation = error === null ? validationError(body) : null;
+  const said =
+    error !== null
+      ? `${code}: "${error.message}"`
+      : (validation?.said ?? "a body that is not the API's {code, message} error");
   if (status === 429) {
     const header = retryAfter !== null && /^\d+$/.test(retryAfter.trim()) ? Number(retryAfter) : null;
     const retryAfterSeconds = isNumber(detail?.retry_after_s) ? detail.retry_after_s : header;
@@ -73,7 +99,7 @@ const apiError = (route: string, status: number | null, body: unknown, retryAfte
   return new MushafStudioError(
     'QUD_HTTP',
     `QUD ${route} failed${status === null ? '' : ` with HTTP ${status}`} (${said}).${hint(status)}`,
-    {route, status, code, detail},
+    {route, status, code, detail: validation?.detail ?? detail},
   );
 };
 

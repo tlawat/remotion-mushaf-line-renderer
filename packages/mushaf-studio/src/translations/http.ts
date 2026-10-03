@@ -6,6 +6,9 @@ export type FetchJsonOptions = {
   readonly signal?: AbortSignal | undefined;
 };
 
+const isAbort = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as {name?: unknown}).name === 'AbortError';
+
 /**
  * GETs `url` and returns its JSON body. A network failure, a non-2xx answer or a body that is not
  * JSON is a `TRANSLATION_FETCH_FAILED` naming the URL (and the status); `hint` says what to do about
@@ -35,6 +38,8 @@ export const fetchJson = async (url: string, hint: string, options: FetchJsonOpt
   try {
     return await response.json();
   } catch (error) {
+    // The body is still streaming while it is read: an abort can land here too.
+    if (options.signal?.aborted || isAbort(error)) throw error;
     throw new MushafStudioError(
       'TRANSLATION_FETCH_FAILED',
       `${url} answered HTTP ${response.status} but not with JSON (${error instanceof Error ? error.message : String(error)}). ${hint}`,

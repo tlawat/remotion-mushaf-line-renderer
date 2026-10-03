@@ -10,6 +10,7 @@ import {
   listAudioRecitations,
   listRecitations,
   type QudProgress,
+  type QudSegment,
   realignSession,
   sessionTimestamps,
   splitSession,
@@ -41,13 +42,16 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
     headers: {'content-type': 'application/json', ...headers},
   });
 
-/** An event stream delivered in the given chunks, as the network may cut it. */
-const events = (chunks: readonly string[]): Response => {
-  const encoder = new TextEncoder();
+/**
+ * An event stream encoded once and delivered in chunks of `size` bytes, as the network may cut it:
+ * an odd size cuts inside the two-byte UTF-8 of Arabic letters and marks.
+ */
+const events = (stream: string, size = Number.POSITIVE_INFINITY): Response => {
+  const bytes = new TextEncoder().encode(stream);
   return new Response(
     new ReadableStream<Uint8Array>({
       start(controller) {
-        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        for (let i = 0; i < bytes.length; i += size) controller.enqueue(bytes.slice(i, i + size));
         controller.close();
       },
     }),
@@ -59,10 +63,6 @@ const progress = (stage: string, step: number): string =>
   `event: progress\ndata: ${JSON.stringify({stage, step, steps: 5})}\n\n`;
 
 const result = (body: unknown): string => `event: result\ndata: ${JSON.stringify(body)}\n\n`;
-
-/** Cuts a text into chunks of `size` characters, so boundaries fall mid-line. */
-const cut = (text: string, size: number): string[] =>
-  Array.from({length: Math.ceil(text.length / size)}, (_, i) => text.slice(i * size, (i + 1) * size));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -148,7 +148,7 @@ describe('streaming routes', () => {
       progress('transcribing', 3),
       result(align),
     ].join('');
-    const {fetch, sent} = fakeFetch(events(cut(stream, 7)));
+    const {fetch, sent} = fakeFetch(events(stream, 7));
     const seen: QudProgress[] = [];
     const audio = new Blob([new Uint8Array([1, 2, 3])], {type: 'audio/mpeg'});
     const answer = await alignAudio(
@@ -181,15 +181,43 @@ describe('streaming routes', () => {
     });
   });
 
+  it('decodes a character the network cut in two: the matched_text survives every chunk size', async () => {
+    const align = fixture('align-response.json') as {segments: {matched_text?: string | null}[]};
+    const matched = align.segments.map((s) => s.matched_text);
+    expect(matched.some((text) => typeof text === 'string' && /[\u0600-\u06ff]/.test(text))).toBe(true);
+    for (const size of [1, 3, 5, 7, 11]) {
+      const {fetch} = fakeFetch(events(progress('matching', 4) + result(align), size));
+      const answer = await alignAudio(new Blob(['x']), 'a.mp3', {}, {fetch});
+      expect(answer.segments.map((s) => s.matched_text)).toEqual(matched);
+      expect(answer).toEqual(align);
+    }
+  });
+
+  it('passes a progress stage it does not know through as it came', async () => {
+    const {fetch} = fakeFetch(events(progress('warming_up', 1) + result(fixture('align-response.json'))));
+    const seen: QudProgress[] = [];
+    await alignAudio(new Blob(['x']), 'a.mp3', {onProgress: (p) => seen.push(p)}, {fetch});
+    // Typed as such: a stage outside QudStage is a QudProgress too (test:types checks it).
+    const unknown: QudProgress = {stage: 'warming_up', step: 1, steps: 5};
+    expect(seen).toEqual([unknown]);
+  });
+
+  it("accepts null refs, as the API sends for an isti'adha or a basmala, and types them so", async () => {
+    const special: QudSegment = {segment: 1, time_from: 0, time_to: 2.1, ref_from: null, ref_to: null, confidence: 1};
+    const body = {audio_id: AUDIO_ID, segments: [special]};
+    const {fetch} = fakeFetch(events(result(body)));
+    await expect(alignAudio(new Blob(['x']), 'a.mp3', {}, {fetch})).resolves.toEqual(body);
+  });
+
   it('alignAudio: sends only the audio when no option is given (the API defaults apply)', async () => {
-    const {fetch, sent} = fakeFetch(events([result(fixture('align-response.json'))]));
+    const {fetch, sent} = fakeFetch(events(result(fixture('align-response.json'))));
     await alignAudio(new Blob(['x']), 'a.wav', {}, {fetch});
     expect([...(sent[0]!.init.body as FormData).keys()]).toEqual(['audio']);
   });
 
   it('rejects with QUD_HTTP and the status and code of an error event', async () => {
     const error = {status: 422, code: 'no_speech', message: 'No speech was detected in the audio.', detail: null};
-    const {fetch} = fakeFetch(events([progress('segmenting', 2), `event: error\ndata: ${JSON.stringify(error)}\n\n`]));
+    const {fetch} = fakeFetch(events(`${progress('segmenting', 2)}event: error\ndata: ${JSON.stringify(error)}\n\n`));
     const seen: QudProgress[] = [];
     const promise = alignAudio(new Blob(['x']), 'a.mp3', {onProgress: (p) => seen.push(p)}, {fetch});
     await expect(promise).rejects.toMatchObject({
@@ -203,7 +231,7 @@ describe('streaming routes', () => {
 
   it('maps a 429 error event to QUD_RATE_LIMITED', async () => {
     const error = {status: 429, code: 'rate_limited', message: 'Try later.', detail: {retry_after_s: 90}};
-    const {fetch} = fakeFetch(events([`event: error\ndata: ${JSON.stringify(error)}\n\n`]));
+    const {fetch} = fakeFetch(events(`event: error\ndata: ${JSON.stringify(error)}\n\n`));
     await expect(alignUrl('https://example.com/a.mp3', {}, {fetch})).rejects.toMatchObject({
       code: 'QUD_RATE_LIMITED',
       details: {status: 429, retryAfterSeconds: 90},
@@ -212,9 +240,9 @@ describe('streaming routes', () => {
 
   it('rejects with QUD_BAD_RESPONSE when the stream ends without a result, or the result is malformed', async () => {
     const {fetch} = fakeFetch(
-      events([progress('segmenting', 2)]),
-      events([result({segments: []})]),
-      events(['event: result\ndata: {not json\n\n']),
+      events(progress('segmenting', 2)),
+      events(result({segments: []})),
+      events('event: result\ndata: {not json\n\n'),
     );
     const call = () => alignAudio(new Blob(['x']), 'a.mp3', {}, {fetch});
     await expect(call()).rejects.toMatchObject({code: 'QUD_BAD_RESPONSE'});
@@ -224,9 +252,7 @@ describe('streaming routes', () => {
 
   it('reads a last event that has no closing blank line, and skips progress it cannot read', async () => {
     const align = fixture('align-response.json');
-    const {fetch} = fakeFetch(
-      events(['event: progress\ndata: oops\n\n', `event: result\ndata: ${JSON.stringify(align)}`]),
-    );
+    const {fetch} = fakeFetch(events(`event: progress\ndata: oops\n\nevent: result\ndata: ${JSON.stringify(align)}`));
     const seen: QudProgress[] = [];
     await expect(alignAudio(new Blob(['x']), 'a.mp3', {onProgress: (p) => seen.push(p)}, {fetch})).resolves.toEqual(
       align,
@@ -236,7 +262,7 @@ describe('streaming routes', () => {
 
   it('alignUrl: POST /align/url/stream with the URL and options as JSON', async () => {
     const align = fixture('align-response.json');
-    const {fetch, sent} = fakeFetch(events([progress('queued_gpu', 1), result(align)]));
+    const {fetch, sent} = fakeFetch(events(progress('queued_gpu', 1) + result(align)));
     await expect(
       alignUrl('https://example.com/fatiha.mp3', {model: 'Base', riwayah: 'warsh', padRightMs: 300}, {fetch}),
     ).resolves.toEqual(align);
@@ -253,7 +279,7 @@ describe('streaming routes', () => {
 
   it('realignSession: POST /sessions/{id}/realign/stream with the boundaries', async () => {
     const align = fixture('align-response.json');
-    const {fetch, sent} = fakeFetch(events(cut(progress('matching', 4) + result(align), 3)));
+    const {fetch, sent} = fakeFetch(events(progress('matching', 4) + result(align), 3));
     const seen: QudProgress[] = [];
     const request = {
       timestamps: [
@@ -269,7 +295,7 @@ describe('streaming routes', () => {
   });
 
   it('passes the signal to fetch and rethrows its abort as is', async () => {
-    const {fetch, sent} = fakeFetch(events([result(fixture('align-response.json'))]));
+    const {fetch, sent} = fakeFetch(events(result(fixture('align-response.json'))));
     const controller = new AbortController();
     controller.abort();
     const promise = alignAudio(new Blob(['x']), 'a.mp3', {signal: controller.signal}, {fetch});
@@ -278,7 +304,9 @@ describe('streaming routes', () => {
   });
 
   it('stops reading the stream when the signal aborts mid-way', async () => {
-    const {fetch} = fakeFetch(events([progress('segmenting', 2), result(fixture('align-response.json'))]));
+    // The progress event in a chunk of its own, the result in the next.
+    const first = progress('segmenting', 2);
+    const {fetch} = fakeFetch(events(first + result(fixture('align-response.json')), first.length));
     const controller = new AbortController();
     const promise = alignAudio(
       new Blob(['x']),
@@ -358,6 +386,36 @@ describe('errors', () => {
       code: 'QUD_HTTP',
       details: {status: 502, code: null},
     });
+  });
+
+  it('says what to do on a 402 (GPU quota spent): device CPU or a Hugging Face token, still QUD_HTTP', async () => {
+    const body = {code: 'gpu_quota_exhausted', message: 'The free GPU quota is exhausted.', detail: null};
+    const event = {status: 402, ...body};
+    const {fetch} = fakeFetch(json(body, 402), events(`event: error\ndata: ${JSON.stringify(event)}\n\n`));
+    for (const promise of [
+      alignUrl('https://example.com/a.mp3', {}, {fetch}),
+      alignAudio(new Blob(['x']), 'a.mp3', {}, {fetch}),
+    ]) {
+      const error = await promise.catch((e: unknown) => e);
+      expect(error).toMatchObject({code: 'QUD_HTTP', details: {status: 402, code: 'gpu_quota_exhausted'}});
+      expect((error as Error).message).toMatch(/HTTP 402 \(gpu_quota_exhausted: "The free GPU quota is exhausted\."\)/);
+      expect((error as Error).message).toContain("device: 'CPU'");
+      expect((error as Error).message).toContain('Hugging Face token');
+    }
+  });
+
+  it('quotes the field and the message of a 422 validation error', async () => {
+    const detail = [
+      {loc: ['body', 'device'], msg: "Input should be 'GPU' or 'CPU'", type: 'enum'},
+      {loc: ['body', 'pad_left_ms'], msg: 'Input should be a valid integer', type: 'int_parsing'},
+    ];
+    const {fetch} = fakeFetch(json({detail}, 422), json({detail: [{msg: 'Field required'}]}, 422));
+    const promise = alignUrl('https://example.com/a.mp3', {}, {fetch});
+    await expect(promise).rejects.toMatchObject({code: 'QUD_HTTP', details: {status: 422, code: null, detail}});
+    await expect(promise).rejects.toThrow(
+      `QUD POST /align/url/stream failed with HTTP 422 (the request was refused: body.device: "Input should be 'GPU' or 'CPU'" (and 1 more)).`,
+    );
+    await expect(sessionTimestamps(AUDIO_ID, {}, {fetch})).rejects.toThrow(/refused: "Field required"\)/);
   });
 
   it('says a session may have expired on a 404', async () => {

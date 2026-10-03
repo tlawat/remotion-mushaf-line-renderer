@@ -28,9 +28,9 @@ export type QudSegment = {
   readonly segment: number;
   readonly time_from: number;
   readonly time_to: number;
-  /** "surah:ayah:word" of the first and last matched word; empty for isti'adha, basmala or no match. */
-  readonly ref_from: string;
-  readonly ref_to: string;
+  /** "surah:ayah:word" of the first and last matched word; empty or `null` for isti'adha, basmala or no match. */
+  readonly ref_from: string | null;
+  readonly ref_to: string | null;
   readonly matched_text?: string | null;
   readonly confidence: number;
   readonly has_missing_words?: boolean;
@@ -71,7 +71,7 @@ export type QudChapterSegments = {
   readonly segments: readonly QudSegment[];
 };
 
-/** The stages the streaming routes (align, realign) report. */
+/** The stages the streaming routes (align, realign) report, as the API documents them. */
 export type QudStage =
   | 'queued_gpu'
   | 'queued_cpu'
@@ -81,7 +81,16 @@ export type QudStage =
   | 'recovering'
   | 'building';
 
-export type QudProgress = {readonly stage: QudStage; readonly step: number; readonly steps: number};
+/**
+ * One progress event of a streaming route. `stage` is one of the documented `QudStage`s, or any
+ * other string the API sends: an unknown stage is passed through as it came, not dropped, so a
+ * display should fall back to the raw name.
+ */
+export type QudProgress = {
+  readonly stage: QudStage | (string & {});
+  readonly step: number;
+  readonly steps: number;
+};
 
 export type QudModel = 'Base' | 'Large';
 export type QudDevice = 'GPU' | 'CPU';
