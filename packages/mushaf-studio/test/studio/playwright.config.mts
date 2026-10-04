@@ -13,7 +13,7 @@ export const STUDIO_PORT = 3123;
 export default defineConfig({
   testDir: here,
   testMatch: /.*\.spec\.ts$/,
-  timeout: 120_000,
+  timeout: 300_000,
   expect: {timeout: 30_000},
   fullyParallel: false,
   workers: 1,

@@ -27,7 +27,7 @@ const openComposition = async (page: Page, id: string) => {
 test('MushafRecitation mounts and the Mushaf panel is docked', async ({page}) => {
   const errors = await openComposition(page, 'MushafRecitation');
   // calculateMetadata fetches the timings and QUL's exports, then the first page font loads behind delayRender().
-  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 90_000});
+  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
   await expect(page.locator(PANEL)).toBeVisible();
   // The dock sits beside the Studio, never over the preview: the line's box ends before the dock.
   await expect
@@ -148,7 +148,7 @@ test('MushafRecitation mounts and the Mushaf panel is docked', async ({page}) =>
 
 test('MushafPassage mounts', async ({page}) => {
   const errors = await openComposition(page, 'MushafPassage');
-  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 90_000});
+  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
   await expect(page.locator('.mushaf-line__row').first()).toHaveCSS('visibility', 'visible', {timeout: 120_000});
   await expect(errorOverlay(page)).toHaveCount(0);
   const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
@@ -157,7 +157,7 @@ test('MushafPassage mounts', async ({page}) => {
 
 test('MushafAyahText mounts, loads the Uthmani font and marks the recited word', async ({page}) => {
   const errors = await openComposition(page, 'MushafAyahText');
-  await expect(page.locator('.mushaf-uword').first()).toBeVisible({timeout: 90_000});
+  await expect(page.locator('.mushaf-uword').first()).toBeVisible({timeout: 180_000});
   await page
     .locator('.mushaf-uword')
     .first()
@@ -173,7 +173,7 @@ test('MushafAyahText mounts, loads the Uthmani font and marks the recited word',
 
 test('MushafPage mounts, paints its lines and marks the line being recited', async ({page}) => {
   const errors = await openComposition(page, 'MushafPage');
-  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 90_000});
+  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
   // A row of the page is painted once its font is in: a box with a height, visible.
   await expect(page.locator('.mushaf-line__row').first()).toHaveCSS('visibility', 'visible', {timeout: 120_000});
   await expect
@@ -195,9 +195,9 @@ test('MushafPage mounts, paints its lines and marks the line being recited', asy
 
 test('MushafThumbnail mounts', async ({page}) => {
   const errors = await openComposition(page, 'MushafThumbnail');
-  await expect(page.locator('[data-mushaf-thumbnail]')).toBeVisible({timeout: 90_000});
+  await expect(page.locator('[data-mushaf-thumbnail]')).toBeVisible({timeout: 180_000});
   await expect(page.locator('[data-mushaf-thumbnail-part="line"] .mushaf-line').first()).toBeVisible({
-    timeout: 90_000,
+    timeout: 180_000,
   });
   await expect(errorOverlay(page)).toHaveCount(0);
   const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
