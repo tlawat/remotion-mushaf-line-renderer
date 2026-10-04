@@ -35,7 +35,7 @@ describe('<AyahText>', () => {
     expect(root.style.fontFeatureSettings).toBe('');
   });
 
-  it('paints a span per word in order, separated by spaces, the marker as U+06DD and its digits', () => {
+  it('paints a span per word in order, separated by spaces, the marker as its digits alone', () => {
     const root = mount();
     const all = spans(root);
     expect(all.map((s) => s.dataset.location)).toEqual(['1:3:1', '1:3:2', '1:3:3']);
@@ -44,8 +44,8 @@ describe('<AyahText>', () => {
       'mushaf-uword mushaf-uword--word',
       'mushaf-uword mushaf-uword--end',
     ]);
-    expect(all[2]!.textContent).toBe('۝٣');
-    expect(root.textContent).toBe(`${WORDS[0]!.text} ${WORDS[1]!.text} ۝٣`);
+    expect(all[2]!.textContent).toBe('٣');
+    expect(root.textContent).toBe(`${WORDS[0]!.text} ${WORDS[1]!.text} ٣`);
   });
 
   it('marks the active word with the class and the highlight style, over its own word style', () => {
@@ -89,6 +89,6 @@ describe('<AyahText>', () => {
 
   it('shows the text wordText gives for a word, the marker keeping its ornament', () => {
     const root = mount({wordText: (word) => (word.id === '1:3:2' ? 'ٱـ' : word.kind === 'end' ? '3' : undefined)});
-    expect(spans(root).map((span) => span.textContent)).toEqual(['ٱلرَّحْمَـٰنِ', 'ٱـ', '۝3']);
+    expect(spans(root).map((span) => span.textContent)).toEqual(['ٱلرَّحْمَـٰنِ', 'ٱـ', '3']);
   });
 });

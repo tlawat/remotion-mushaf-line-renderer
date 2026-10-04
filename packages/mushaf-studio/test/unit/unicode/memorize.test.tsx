@@ -115,7 +115,7 @@ describe('<MushafAyahText> memorisation', () => {
     expect(word(root, '1:2:1').textContent).toBe(words['1:2:1']);
     expect(word(root, '1:2:4').textContent).toBe(firstLetterOf(words['1:2:4']!));
     expect(word(root, '1:2:4').textContent).toBe('ٱـ');
-    expect(word(root, '1:2:5').textContent).toBe(`۝${words['1:2:5']}`);
+    expect(word(root, '1:2:5').textContent).toBe(words['1:2:5']);
     cleanup();
     at(3.891 + 2.9);
     const second = await mount({...three, mode: 'first-letters'});

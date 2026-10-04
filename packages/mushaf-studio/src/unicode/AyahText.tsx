@@ -26,16 +26,14 @@ export type AyahTextProps = {
   readonly className?: string | undefined;
 };
 
-/** U+06DD ARABIC END OF AYAH: the font draws the ornament around the digits that follow it. */
-const END_OF_AYAH = '۝';
-
 const classOf = (word: AyahWord, active: boolean): string =>
   `mushaf-uword mushaf-uword--${word.kind}${active ? ' mushaf-uword--active' : ''}`;
 
 /**
  * One ayah as Unicode text, right to left and centred, a `<span class="mushaf-uword">` per word
- * (`data-location` its id) with a space between, the ayah-end marker as U+06DD and its digits
- * (`۝١`) in a span of its own. The active word gets `highlightStyle` and `mushaf-uword--active`.
+ * (`data-location` its id) with a space between, the ayah-end marker as its Arabic-Indic digits
+ * (`١`) in a span of its own: QUL's Uthmani Hafs font draws the rosette around them itself, and a
+ * U+06DD in front would add a second, empty one. The active word gets `highlightStyle` and `mushaf-uword--active`.
  * Font features are left to the font. Pure in its props, so frames are deterministic.
  */
 export const AyahText: React.FC<AyahTextProps> = ({
@@ -76,7 +74,7 @@ export const AyahText: React.FC<AyahTextProps> = ({
         <React.Fragment key={word.id}>
           {i > 0 ? ' ' : null}
           <span className={classOf(word, active)} data-location={word.id} style={merged}>
-            {word.kind === 'end' ? `${END_OF_AYAH}${shown}` : shown}
+            {shown}
           </span>
         </React.Fragment>
       );

@@ -130,7 +130,7 @@ describe('<MushafAyahText>', () => {
         Number(all[i - 1]!.dataset.from) + Number(all[i - 1]!.dataset.duration),
       );
     }
-    expect(ayahBlock(root, '1:7').textContent).toContain('۝٧');
+    expect(ayahBlock(root, '1:7').textContent).toContain('٧');
   });
 
   it('plays the audio, a URL as it is and a public/ path through staticFile()', () => {

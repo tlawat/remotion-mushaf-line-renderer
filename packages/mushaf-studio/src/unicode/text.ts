@@ -158,7 +158,7 @@ export const loadAyahWords = async (
 
 /**
  * The words of one ayah in position order, the ayah-end marker last as `kind: 'end'` with its
- * digits as `text` (a leading U+06DD is dropped: `<AyahText>` draws it). The marker is the ayah's
+ * digits as `text` (a leading U+06DD is dropped: the font draws the rosette around the digits). The marker is the ayah's
  * highest position when that entry is an ayah number; an ayah the file does not hold gives `[]`.
  */
 export const ayahWordsOf = (data: AyahWords, surah: number, ayah: number): readonly AyahWord[] => {
