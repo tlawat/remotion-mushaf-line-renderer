@@ -1,4 +1,12 @@
 // Captions interop (roadmap item 3): the word timings as Remotion `Caption[]` for the Studio's
-// caption editor and back, and as SRT. Pure. The doc comments live on the implementations.
-export {type Caption, fromCaptions, type ToCaptionsOptions, toCaptions} from './convert';
+// caption editor and back, and as SRT and WebVTT. Pure. The doc comments live on the implementations.
+export {
+  type Caption,
+  type CaptionCue,
+  fromCaptions,
+  type ToCaptionsOptions,
+  toCaptionCues,
+  toCaptions,
+} from './convert';
 export {captionsToSrt} from './srt';
+export {captionsToVtt, type VttAlign, type VttOptions} from './vtt';

@@ -2,18 +2,21 @@ import {type Caption, checkCaptionTimes} from './convert';
 
 const pad = (n: number, width = 2): string => String(n).padStart(width, '0');
 
-/** `HH:MM:SS,mmm`; past 99 hours the hours take more digits rather than wrap. */
-const srtTime = (ms: number): string => {
+/**
+ * `HH:MM:SS<separator>mmm` (`,` for SRT, `.` for WebVTT); a time below 0 is 0, and past 99 hours
+ * the hours take more digits rather than wrap. Not exported from the module.
+ */
+export const cueTime = (ms: number, separator: ',' | '.'): string => {
   const total = Math.max(0, Math.round(ms));
   const hours = Math.floor(total / 3_600_000);
   const minutes = Math.floor(total / 60_000) % 60;
   const seconds = Math.floor(total / 1000) % 60;
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${pad(total % 1000, 3)}`;
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}${separator}${pad(total % 1000, 3)}`;
 };
 
-// A blank line ends a cue in SRT, so a caption's own blank lines are dropped; the space that
-// `toCaptions()` puts before every word but the first is trimmed with the rest.
-const cueText = (text: string): string =>
+// A blank line ends a cue in SRT and WebVTT, so a caption's own blank lines are dropped; the space
+// that `toCaptions()` puts before every word but the first is trimmed with the rest.
+export const cueText = (text: string): string =>
   text
     .split(/\r\n?|\n/)
     .map((line) => line.trim())
@@ -35,6 +38,6 @@ export const captionsToSrt = (captions: readonly Caption[]): string =>
   captions
     .map((caption, i) => {
       checkCaptionTimes(i, caption);
-      return `${i + 1}\n${srtTime(caption.startMs)} --> ${srtTime(caption.endMs)}\n${cueText(caption.text)}\n\n`;
+      return `${i + 1}\n${cueTime(caption.startMs, ',')} --> ${cueTime(caption.endMs, ',')}\n${cueText(caption.text)}\n\n`;
     })
     .join('');

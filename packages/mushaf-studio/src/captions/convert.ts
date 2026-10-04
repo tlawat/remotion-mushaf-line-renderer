@@ -94,6 +94,60 @@ const slotsOf = (timings: StudioTimings): Slot[] => {
 };
 
 /**
+ * One caption with where it comes from: the word id it times (`"1:2:3"`; the marker's own id for an
+ * ayah-end marker; `"<surah>:<ayah>"` for an ayah timed without words), and its surah and ayah, so
+ * an export can group the words by ayah (`captionsToVtt(cues, {lines: 'ayah'})`).
+ */
+export type CaptionCue = {
+  readonly caption: Caption;
+  readonly id: string;
+  readonly surah: number;
+  readonly ayah: number;
+};
+
+/**
+ * `toCaptions()` with each caption's word id, surah and ayah alongside: the same captions, in the
+ * same order, with the same texts (`toCaptionCues(t).map((c) => c.caption)` is `toCaptions(t)`).
+ *
+ * ```ts
+ * toCaptionCues(timings)[0]; // {caption: {text: 'ٱلْحَمْدُ', startMs: 320, ...}, id: '1:2:1', surah: 1, ayah: 2}
+ * ```
+ */
+export const toCaptionCues = (timings: StudioTimings, options: ToCaptionsOptions = {}): readonly CaptionCue[] => {
+  const heard: readonly AlignmentWord[] = timings.alignment?.words ?? [];
+  const confidence = new Map((timings.alignment?.segments ?? []).map((s) => [s.segment, s.confidence]));
+  const cues: CaptionCue[] = [];
+  for (const slot of slotsOf(timings)) {
+    if (slot.marker && options.markers !== true) continue;
+    const ayah = timings.ayat[slot.ayahIndex]!;
+    const cue = (id: string, word: string, score: number | null): CaptionCue => {
+      const startMs = toMs(slot.start);
+      const text = cues.length === 0 ? word : ` ${word}`;
+      const caption = {text, startMs, endMs: toMs(slot.end), timestampMs: startMs, confidence: score};
+      return {caption, id, surah: timings.surah, ayah: ayah.ayah};
+    };
+    if (slot.wordIndex === null) {
+      const key = `${timings.surah}:${ayah.ayah}`;
+      cues.push(cue(key, key, null));
+      continue;
+    }
+    const {id} = ayah.words![slot.wordIndex]!;
+    if (slot.marker) cues.push(cue(id, `${AYAH_END}${arabicIndic(ayah.ayah)}`, null));
+    else {
+      const segment = slot.heard === null ? undefined : heard[slot.heard]!.segment;
+      cues.push(
+        cue(
+          id,
+          slot.heardText ?? options.textOf?.(id) ?? id,
+          segment === undefined ? null : (confidence.get(segment) ?? null),
+        ),
+      );
+    }
+  }
+  return cues;
+};
+
+/**
  * The timings as Remotion captions: one per timed word occurrence, in audio order, times in whole
  * milliseconds. A word's text is the sidecar's Uthmani text, else `textOf(id)`, else its id; its
  * confidence is that of the aligner segment it was heard in, else `null`. An ayah timed without
@@ -102,40 +156,16 @@ const slotsOf = (timings: StudioTimings): Slot[] => {
  * without a sidecar, or with one that has no words, there are none) are left out unless `markers`
  * is `true`. Every caption after the first starts with a space, as Remotion's
  * `createTikTokStyleCaptions()` expects: it starts a page only at a caption whose text starts with
- * one, and joins the texts as they are. `fromCaptions()` takes the captions back.
+ * one, and joins the texts as they are. `fromCaptions()` takes the captions back; `toCaptionCues()`
+ * gives the same captions with their word ids and ayahs.
  *
  * ```ts
  * toCaptions(timings)[0]; // {text: 'ٱلْحَمْدُ', startMs: 320, endMs: 890, timestampMs: 320, confidence: 1}
  * toCaptions(timings)[1].text; // ' لِلَّهِ'
  * ```
  */
-export const toCaptions = (timings: StudioTimings, options: ToCaptionsOptions = {}): readonly Caption[] => {
-  const heard: readonly AlignmentWord[] = timings.alignment?.words ?? [];
-  const confidence = new Map((timings.alignment?.segments ?? []).map((s) => [s.segment, s.confidence]));
-  const captions: Caption[] = [];
-  for (const slot of slotsOf(timings)) {
-    if (slot.marker && options.markers !== true) continue;
-    const ayah = timings.ayat[slot.ayahIndex]!;
-    const caption = (word: string, score: number | null): Caption => {
-      const startMs = toMs(slot.start);
-      const text = captions.length === 0 ? word : ` ${word}`;
-      return {text, startMs, endMs: toMs(slot.end), timestampMs: startMs, confidence: score};
-    };
-    if (slot.wordIndex === null) captions.push(caption(`${timings.surah}:${ayah.ayah}`, null));
-    else if (slot.marker) captions.push(caption(`${AYAH_END}${arabicIndic(ayah.ayah)}`, null));
-    else {
-      const {id} = ayah.words![slot.wordIndex]!;
-      const segment = slot.heard === null ? undefined : heard[slot.heard]!.segment;
-      captions.push(
-        caption(
-          slot.heardText ?? options.textOf?.(id) ?? id,
-          segment === undefined ? null : (confidence.get(segment) ?? null),
-        ),
-      );
-    }
-  }
-  return captions;
-};
+export const toCaptions = (timings: StudioTimings, options: ToCaptionsOptions = {}): readonly Caption[] =>
+  toCaptionCues(timings, options).map((cue) => cue.caption);
 
 const badCaption = (index: number, caption: Caption, problem: string): never => {
   throw new MushafStudioError(

@@ -7,6 +7,8 @@ export * from './compositions/passage';
 export * from './compositions/recitation';
 // Errors
 export {isMushafStudioError, MushafStudioError, type MushafStudioErrorCode} from './errors';
+// Export
+export * from './export';
 // Fonts
 export * from './fonts';
 // Lines
