@@ -111,6 +111,10 @@ export const Spinner: React.FC = () => {
 type BoundaryProps = {
   /** Receives the error a tab threw while rendering (the panel puts it in the status line). */
   readonly onError: (error: unknown) => void;
+  /** What the boundary says in place of the tab, in the panel's language. */
+  readonly message: string;
+  /** The label of the button that mounts the tab again. */
+  readonly reload: string;
   readonly children: React.ReactNode;
 };
 
@@ -136,8 +140,8 @@ export class TabErrorBoundary extends Component<BoundaryProps, BoundaryState> {
     if (!this.state.failed) return this.props.children;
     return (
       <div>
-        <Note>This tab stopped on an error (see the status line). Reload it; if it stops again, check the props.</Note>
-        <Button onClick={() => this.setState({failed: false})}>Reload</Button>
+        <Note>{this.props.message}</Note>
+        <Button onClick={() => this.setState({failed: false})}>{this.props.reload}</Button>
       </div>
     );
   }
@@ -146,4 +150,5 @@ export class TabErrorBoundary extends Component<BoundaryProps, BoundaryState> {
 /** `12.345` seconds as `12.35`. */
 export const seconds = (value: number): string => value.toFixed(2);
 
-export const range = (from: number, to: number): string => `${seconds(from)}–${seconds(to)} s`;
+/** `1.40–5.80 s`; the unit is the panel's word for seconds. */
+export const range = (from: number, to: number, unit = 's'): string => `${seconds(from)}–${seconds(to)} ${unit}`;

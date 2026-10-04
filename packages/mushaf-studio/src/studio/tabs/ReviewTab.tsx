@@ -3,8 +3,28 @@ import {useMemo, useState} from 'react';
 import {captionsToSrt, toCaptions} from '../../captions';
 import {DEFAULT_CONFIDENCE_THRESHOLD, realignSession, sessionTimestamps, splitSession, timingsFromQud} from '../../qud';
 import type {AlignmentEdit, AlignmentSegment, StudioTimings} from '../../types';
+import {CompareTimings} from '../Compare';
+import {isDoubtfulSegment} from '../doubts';
 import {nudgeWords, roundMs, withEdit} from '../edit-timings';
-import {getHfToken, runStudioTask, type StudioSession, setStudioState, useStudioState} from '../store';
+import {
+  doubtfulReviewWords,
+  parseWordKey,
+  REVIEW_SHORTCUTS,
+  type ReviewWord,
+  reviewKeyAction,
+  reviewWords,
+  stepDoubt,
+} from '../review-words';
+import {
+  getHfToken,
+  getStudioState,
+  runStudioTask,
+  type StudioSession,
+  setStudioState,
+  t as tNow,
+  useStudioState,
+  useT,
+} from '../store';
 import {
   isUrl,
   patchProps,
@@ -12,33 +32,22 @@ import {
   readTimingsFile,
   reevaluate,
   seekTo,
+  seekToTime,
   slugify,
   stemOf,
+  togglePlayback,
   writeFile,
   writeJsonFile,
 } from '../studio-api';
 import {colors, confidenceColor, styles} from '../styles';
 import {audioOffsetOf, hasLines, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
 import {Button, Disclosure, Note, NumberInput, ProgressBar, range, Section} from '../ui';
-
-/** A timed word as the editor shows it: `key` is `id#occurrence`, the handle `nudgeWord()` takes. */
-type EditableWord = {
-  readonly key: string;
-  readonly id: string;
-  readonly occurrence: number;
-  readonly text: string;
-  readonly start: number;
-  readonly end: number;
-};
+import {Waveform, type WaveformView} from '../Waveform';
 
 type Span = {readonly start: number; readonly end: number};
 
-const keyOf = (id: string, occurrence: number): string => `${id}#${occurrence}`;
-
-const parseKey = (key: string): {id: string; occurrence: number} => {
-  const hash = key.lastIndexOf('#');
-  return {id: key.slice(0, hash), occurrence: Number(key.slice(hash + 1))};
-};
+/** Seconds around the selected segment the waveform shows by default. */
+const DEFAULT_ZOOM_PADDING = 2;
 
 const TimeControl: React.FC<{
   readonly label: string;
@@ -57,28 +66,55 @@ const TimeControl: React.FC<{
 );
 
 const WordList: React.FC<{
-  readonly words: readonly EditableWord[];
+  readonly words: readonly ReviewWord[];
   readonly pending: ReadonlyMap<string, Span>;
+  readonly selected: string | null;
   readonly onChange: (key: string, span: Span) => void;
-}> = ({words, pending, onChange}) => (
+  readonly onSelect: (word: ReviewWord) => void;
+  readonly startLabel: (id: string) => string;
+  readonly endLabel: (id: string) => string;
+}> = ({words, pending, selected, onChange, onSelect, startLabel, endLabel}) => (
   // biome-ignore lint/a11y/noStaticElementInteractions: the editor swallows clicks so the row behind it does not seek
-  <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+  <div onClick={(e) => e.stopPropagation()} onKeyUp={(e) => e.stopPropagation()}>
     {words.map((word) => {
       const span = pending.get(word.key) ?? word;
       const changed = pending.has(word.key);
+      const isSelected = word.key === selected;
       return (
-        <div key={word.key} style={{...styles.row, padding: '3px 0', borderTop: `1px solid ${colors.border}`}}>
-          <span style={{...styles.rtl, flex: '1 1 60px', color: changed ? colors.accent : colors.text}}>
+        <div
+          key={word.key}
+          data-word-key={word.key}
+          data-selected={isSelected ? 'true' : 'false'}
+          style={{
+            ...styles.row,
+            padding: '3px 0',
+            borderTop: `1px solid ${colors.border}`,
+            boxShadow: isSelected ? `inset 2px 0 0 ${colors.accent}` : 'none',
+          }}
+        >
+          <button
+            type="button"
+            style={{
+              ...styles.rtl,
+              flex: '1 1 60px',
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              color: changed ? colors.accent : colors.text,
+            }}
+            onClick={() => onSelect(word)}
+          >
             {word.text}
-          </span>
+          </button>
           <span style={{...styles.code, color: colors.muted}}>{word.id}</span>
           <TimeControl
-            label={`${word.id} start`}
+            label={startLabel(word.id)}
             value={span.start}
             onChange={(start) => onChange(word.key, {...span, start})}
           />
           <TimeControl
-            label={`${word.id} end`}
+            label={endLabel(word.id)}
             value={span.end}
             onChange={(end) => onChange(word.key, {...span, end})}
           />
@@ -92,9 +128,19 @@ const Flag: React.FC<{readonly color: string; readonly children: React.ReactNode
   <span style={styles.flag(color)}>{children}</span>
 );
 
-/** Review: the aligner's segments with their confidence, the words with their times, split and re-align. */
+/** A key typed into a field is the field's, not a shortcut. */
+const isTyping = (target: EventTarget): boolean =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
+
+/**
+ * Review: the aligner's segments with their confidence, the words with their times, the waveform,
+ * a comparison with another timings file, split and re-align; and a keyboard for going through the
+ * doubtful words (see `REVIEW_SHORTCUTS`).
+ */
 export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fps}) => {
-  const {session, busy} = useStudioState();
+  const {session, busy, showDoubts} = useStudioState();
+  const t = useT();
   const resolved = resolvedOf(props);
   const timings = resolved?.timings ?? null;
   const alignment = timings?.alignment ?? null;
@@ -108,38 +154,34 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const [realignOpen, setRealignOpen] = useState(false);
   /** The user's boundaries; `null` means "as the segments are", so a new alignment shows its own. */
   const [boundaries, setBoundaries] = useState<readonly Span[] | null>(null);
+  /** The word the keyboard edits (`ReviewWord.key`), and the segment the waveform zooms to. */
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
+  const [zoomPadding, setZoomPadding] = useState(DEFAULT_ZOOM_PADDING);
+  const [help, setHelp] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
 
-  // The sidecar's words by segment, each with its occurrence index among the words of the same id.
-  const wordsBySegment = useMemo(() => {
-    const map = new Map<number, EditableWord[]>();
-    const seen = new Map<string, number>();
-    for (const word of alignment?.words ?? []) {
-      const occurrence = seen.get(word.id) ?? 0;
-      seen.set(word.id, occurrence + 1);
-      const list = map.get(word.segment) ?? [];
-      list.push({
-        key: keyOf(word.id, occurrence),
-        id: word.id,
-        occurrence,
-        text: word.text,
-        start: word.start,
-        end: word.end,
-      });
-      map.set(word.segment, list);
-    }
+  const words = useMemo(() => (timings ? reviewWords(timings) : []), [timings]);
+  const byGroup = useMemo(() => {
+    const map = new Map<string, ReviewWord[]>();
+    for (const word of words) map.set(word.group, [...(map.get(word.group) ?? []), word]);
     return map;
-  }, [alignment]);
+  }, [words]);
+  // The ayahs list names every word by its sidecar text where there is one.
   const textOf = useMemo(() => {
     const map = new Map<string, string>();
     for (const word of alignment?.words ?? []) if (!map.has(word.id)) map.set(word.id, word.text);
     return map;
   }, [alignment]);
+  const doubtful = useMemo(
+    () => (timings ? doubtfulReviewWords(words, timings, threshold) : []),
+    [words, timings, threshold],
+  );
 
-  if (!timings) {
-    return <Note>Nothing to review yet: pick a recitation in Source or align a recording in Align.</Note>;
-  }
+  if (!timings) return <Note>{t('review.nothing')}</Note>;
 
   const working = busy !== null;
+  const offset = audioOffsetOf(resolved);
   const segments: readonly AlignmentSegment[] = alignment?.segments ?? [];
   const low = segments.filter((s) => s.confidence < threshold).length;
   const missing = segments.filter((s) => s.hasMissingWords).length;
@@ -151,15 +193,32 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const shownBoundaries = boundaries ?? segmentBoundaries;
   const sessionMatches: StudioSession | null =
     session !== null && alignment?.audioId !== undefined && alignment.audioId === session.audioId ? session : null;
+  const unit = t('unit.seconds');
+  const startLabel = (id: string) => t('review.wordStart', {id});
+  const endLabel = (id: string) => t('review.wordEnd', {id});
 
-  const toggle = (key: string) =>
+  const toggle = (key: string) => {
     setExpanded((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+    // The waveform follows the segment opened last.
+    if (key.startsWith('s')) {
+      const number = Number(key.slice(1));
+      setSelectedSegment((current) => (expanded.has(key) && current === number ? null : number));
+    }
+  };
   const edit = (key: string, span: Span) => setPending((current) => new Map(current).set(key, span));
+
+  /** Selects a word: the keyboard edits it, its row opens, the waveform zooms to its segment, the playhead moves to it. */
+  const select = (word: ReviewWord, seek: boolean) => {
+    setSelectedWord(word.key);
+    setExpanded((current) => (current.has(word.group) ? current : new Set(current).add(word.group)));
+    if (word.group.startsWith('s')) setSelectedSegment(Number(word.group.slice(1)));
+    if (seek) seekToTime(word.start, fps);
+  };
 
   /** Writes new timings where the composition reads them (or into the project when it reads a URL) and re-resolves. */
   const writeTimings = async (next: StudioTimings): Promise<void> => {
@@ -171,19 +230,19 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   };
 
   const applyEdits = () => {
-    void runStudioTask('Reading the timings file...', async () => {
+    const edits = pending;
+    void runStudioTask(tNow('review.busy.reading'), async () => {
       const at = new Date().toISOString();
       // The tab shows composition time: the file's times moved `audioOffsetSeconds` earlier and cut to the
       // range. The edit goes into the file itself, every time moved back; the occurrences are the same
       // in both, the cut drops whole ayahs only and the move keeps the order.
-      const offset = audioOffsetOf(resolved);
       const file = await readTimingsFile(props.timingsFile);
       // All at once: applied one by one, each sort would renumber the occurrences the next edit names.
-      const nudges = [...pending].map(([key, span]) => {
-        const {id, occurrence} = parseKey(key);
+      const nudges = [...edits].map(([key, span]) => {
+        const {id, occurrence} = parseWordKey(key);
         return {id, occurrenceIndex: occurrence, start: span.start + offset, end: span.end + offset, at};
       });
-      setStudioState({busy: 'Writing the timings...'});
+      setStudioState({busy: tNow('review.busy.writing')});
       await writeTimings(nudgeWords(file, nudges));
       setPending(new Map());
     });
@@ -198,18 +257,19 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
     const source = props.timingsFile;
     const withMarkers = markers;
     // An ayah text has the Unicode words of its range: a word the sidecar does not name gets them, not its id.
-    const words: Readonly<Record<string, string>> = resolved !== null && !hasLines(resolved) ? resolved.text.words : {};
-    void runStudioTask('Reading the timings file...', async () => {
+    const unicode: Readonly<Record<string, string>> =
+      resolved !== null && !hasLines(resolved) ? resolved.text.words : {};
+    void runStudioTask(tNow('review.busy.reading'), async () => {
       const file = await readTimingsFile(source);
-      const captions = toCaptions(file, {markers: withMarkers, textOf: (id) => words[id] ?? null});
+      const captions = toCaptions(file, {markers: withMarkers, textOf: (id) => unicode[id] ?? null});
       const stem = slugify(stemOf(source).replace(/\.timings$/, '')) || 'timings';
-      setStudioState({busy: 'Writing the captions...'});
+      setStudioState({busy: tNow('review.busy.captions')});
       const path =
         format === 'srt'
           ? await writeFile(projectPath(project, `${stem}.srt`), captionsToSrt(captions))
           : await writeJsonFile(projectPath(project, `${stem}.captions.json`), captions);
       setStudioState({
-        notice: `public/${path} is written: ${captions.length} ${format === 'srt' ? 'cues' : 'captions'}, timed to the audio file.`,
+        notice: tNow(format === 'srt' ? 'review.notice.srt' : 'review.notice.captions', {path, count: captions.length}),
       });
     });
   };
@@ -219,7 +279,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
     align: StudioSession['align'],
     log: Omit<AlignmentEdit, 'at'>,
   ): Promise<void> => {
-    setStudioState({busy: 'Fetching the word times...', progress: null});
+    setStudioState({busy: tNow('align.busy.wordTimes'), progress: null});
     const timestamps = await sessionTimestamps(live.audioId, {}, {token: getHfToken() || null});
     const converted = timingsFromQud(
       {align, timestamps},
@@ -229,13 +289,10 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
     const kept = timings.alignment?.edits ?? [];
     const next = [...kept, {...log, at: new Date().toISOString()}].reduce(withEdit, converted);
     await writeTimings(next);
-    const nudges = kept.filter((edit) => edit.kind === 'nudge').length;
-    const notices = [
-      align.warning,
-      nudges > 0
-        ? `The new alignment replaces the times of the ${nudges} nudge${nudges === 1 ? '' : 's'} made before; the edit log keeps ${nudges === 1 ? 'it' : 'them'}.`
-        : null,
-    ].filter((entry): entry is string => typeof entry === 'string' && entry !== '');
+    const nudges = kept.filter((entry) => entry.kind === 'nudge').length;
+    const notices = [align.warning, nudges > 0 ? tNow('review.notice.nudgesReplaced', {count: nudges}) : null].filter(
+      (entry): entry is string => typeof entry === 'string' && entry !== '',
+    );
     setStudioState({session: {...live, align}, notice: notices.length > 0 ? notices.join(' ') : null});
     setPending(new Map());
     setBoundaries(null);
@@ -244,7 +301,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const splitNow = () => {
     if (!sessionMatches) return;
     const live = sessionMatches;
-    void runStudioTask('Splitting the segments...', async () => {
+    void runStudioTask(tNow('review.busy.splitting'), async () => {
       const request = {
         max_verses: split.maxVerses,
         max_words: split.maxWords > 0 ? split.maxWords : null,
@@ -263,7 +320,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
     if (!sessionMatches || shownBoundaries.length === 0) return;
     const live = sessionMatches;
     const timestamps = shownBoundaries;
-    void runStudioTask('Re-aligning...', async () => {
+    void runStudioTask(tNow('review.busy.realigning'), async () => {
       const align = await realignSession(
         live.audioId,
         {timestamps, model_name: live.model, device: live.device, riwayah: live.riwayah},
@@ -274,33 +331,148 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
     });
   };
 
-  const sessionHint = sessionMatches
-    ? null
-    : 'Align this audio in this session first: the aligner keeps a session for a few hours only.';
+  /** The keyboard of the tab: shortcuts only while focus is in it and not in a field; none reaches the Studio. */
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isTyping(event.target)) return;
+    const action = reviewKeyAction(event);
+    if (action === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const current = words.find((word) => word.key === selectedWord) ?? null;
+    switch (action.kind) {
+      case 'step': {
+        const next = stepDoubt(doubtful, current, action.direction);
+        if (next) select(next, true);
+        else setStudioState({notice: tNow('review.noDoubtful')});
+        return;
+      }
+      case 'nudge': {
+        if (!current) {
+          setStudioState({notice: tNow('review.selectFirst')});
+          return;
+        }
+        const span = pending.get(current.key) ?? current;
+        const moved = Math.max(0, roundMs(span[action.edge] + action.seconds));
+        edit(current.key, {...span, [action.edge]: moved});
+        return;
+      }
+      case 'apply':
+        if (pending.size > 0 && getStudioState().busy === null) applyEdits();
+        return;
+      case 'toggle-playback':
+        togglePlayback();
+        return;
+      case 'help':
+        setHelp((open) => !open);
+        return;
+    }
+  };
+
+  const sessionHint = sessionMatches ? null : t('review.sessionHint');
+  const zoomSegment = segments.find((segment) => segment.segment === selectedSegment) ?? null;
+  const lastEnd = Math.max(
+    timings.ayat[timings.ayat.length - 1]?.end ?? 0,
+    segments[segments.length - 1]?.timeTo ?? 0,
+    0.1,
+  );
+  const view: WaveformView = zoomSegment
+    ? {from: zoomSegment.timeFrom - zoomPadding, to: zoomSegment.timeTo + zoomPadding}
+    : {from: 0, to: lastEnd + 0.5};
 
   return (
-    <div>
+    <div
+      data-mushaf-review=""
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: the tab takes focus so its keyboard shortcuts work
+      tabIndex={0}
+      role="application"
+      aria-label={t('review.keyboardLabel')}
+      onKeyDown={onKeyDown}
+      style={{outline: 'none'}}
+    >
       <Note>
-        {segments.length} segments, {wordCount} words
-        {alignment
-          ? `, ${low} under ${Math.round(threshold * 100)}%, ${missing} with missing words, ${errors} with errors`
-          : ''}
-        , {incomplete} incomplete ayah{incomplete === 1 ? '' : 's'}
-        {alignment ? `, ${repeats} with repeats` : ''}.
+        {t('review.summary', {segments: segments.length, words: wordCount})}
+        {alignment ? t('review.summaryAlignment', {low, percent: Math.round(threshold * 100), missing, errors}) : ''}
+        {t('review.summaryIncomplete', {count: incomplete})}
+        {alignment ? t('review.summaryRepeats', {repeats}) : ''}.
       </Note>
+      <div style={{...styles.row, marginBottom: 8}}>
+        <label style={styles.row}>
+          <input
+            type="checkbox"
+            data-mushaf-control="show-doubts"
+            checked={showDoubts}
+            onChange={(e) => setStudioState({showDoubts: e.target.checked})}
+          />
+          <span style={styles.label}>{t('review.showDoubts')}</span>
+        </label>
+        <Button variant="ghost" onClick={() => setHelp((open) => !open)} title={t('review.keys.title')}>
+          ?
+        </Button>
+      </div>
+      {help ? (
+        <Section title={t('review.keys.title')}>
+          <ul data-mushaf-review="shortcuts" style={{...styles.list, fontSize: 11}}>
+            {REVIEW_SHORTCUTS.map((shortcut) => (
+              <li key={shortcut.keys} style={{...styles.row, padding: '2px 0'}}>
+                <kbd style={{...styles.code, minWidth: 52}}>{shortcut.keys}</kbd>
+                <span>{t(shortcut.description)}</span>
+              </li>
+            ))}
+          </ul>
+          <Note>{t('review.keys.focus')}</Note>
+        </Section>
+      ) : null}
+      {props.audioFile ? (
+        <Section title={t('review.waveform')}>
+          <Waveform
+            audioFile={props.audioFile}
+            offset={offset}
+            view={view}
+            segments={segments}
+            threshold={threshold}
+            selected={selectedSegment}
+            fps={fps}
+            onSeek={(time) => seekToTime(time, fps)}
+          />
+          <div style={{...styles.row, marginTop: 4}}>
+            <input
+              type="range"
+              aria-label={t('review.zoom')}
+              min={0.5}
+              max={30}
+              step={0.5}
+              value={zoomPadding}
+              disabled={zoomSegment === null}
+              onChange={(e) => setZoomPadding(Number(e.target.value))}
+              style={{flex: '1 1 auto'}}
+            />
+            <span style={styles.label}>
+              {zoomSegment
+                ? t('review.zoomAround', {padding: zoomPadding, unit, segment: zoomSegment.segment})
+                : t('review.zoomWhole')}
+            </span>
+          </div>
+        </Section>
+      ) : null}
       {alignment ? (
-        <Section title="Segments">
+        <Section title={t('review.segments')}>
           <ul style={styles.list}>
             {segments.map((segment) => {
               const key = `s${segment.segment}`;
               const open = expanded.has(key);
               return (
                 // biome-ignore lint/a11y/useKeyWithClickEvents: the row is a seek target; the expand button is keyboard-reachable
-                <li key={key} style={styles.listRow(open)} onClick={() => seekTo(segment.timeFrom, fps)}>
+                <li
+                  key={key}
+                  data-segment={segment.segment}
+                  data-doubtful={isDoubtfulSegment(segment, threshold) ? 'true' : 'false'}
+                  style={styles.listRow(open)}
+                  onClick={() => seekTo(segment.timeFrom, fps)}
+                >
                   <div style={styles.row}>
                     <Button
                       variant="ghost"
-                      title={open ? 'Hide the words' : 'Show the words'}
+                      title={open ? t('review.hideWords') : t('review.showWords')}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggle(key);
@@ -309,27 +481,35 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
                       {open ? '▾' : '▸'}
                     </Button>
                     <strong>#{segment.segment}</strong>
-                    <span style={{color: colors.muted}}>{range(segment.timeFrom, segment.timeTo)}</span>
+                    <span style={{color: colors.muted}}>{range(segment.timeFrom, segment.timeTo, unit)}</span>
                     <span style={{...styles.code, color: colors.muted}}>
                       {segment.refFrom ?? '–'} → {segment.refTo ?? '–'}
                     </span>
                   </div>
-                  <div style={styles.rtl}>{segment.matchedText ?? segment.kind ?? 'no match'}</div>
+                  <div style={styles.rtl}>{segment.matchedText ?? segment.kind ?? t('review.noMatch')}</div>
                   <div style={styles.row}>
                     <ProgressBar ratio={segment.confidence} color={confidenceColor(segment.confidence, threshold)} />
                     <span
-                      style={{color: confidenceColor(segment.confidence, threshold), minWidth: 34, textAlign: 'right'}}
+                      style={{color: confidenceColor(segment.confidence, threshold), minWidth: 34, textAlign: 'end'}}
                     >
                       {Math.round(segment.confidence * 100)}%
                     </span>
                   </div>
                   <div>
-                    {segment.hasMissingWords ? <Flag color={colors.warning}>missing words</Flag> : null}
-                    {segment.hasRepeatedWords ? <Flag color={colors.warning}>repeated</Flag> : null}
+                    {segment.hasMissingWords ? <Flag color={colors.warning}>{t('review.flagMissing')}</Flag> : null}
+                    {segment.hasRepeatedWords ? <Flag color={colors.warning}>{t('review.flagRepeated')}</Flag> : null}
                     {segment.error ? <Flag color={colors.danger}>{segment.error}</Flag> : null}
                   </div>
                   {open ? (
-                    <WordList words={wordsBySegment.get(segment.segment) ?? []} pending={pending} onChange={edit} />
+                    <WordList
+                      words={byGroup.get(key) ?? []}
+                      pending={pending}
+                      selected={selectedWord}
+                      onChange={edit}
+                      onSelect={(word) => select(word, true)}
+                      startLabel={startLabel}
+                      endLabel={endLabel}
+                    />
                   ) : null}
                 </li>
               );
@@ -338,7 +518,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         </Section>
       ) : null}
       <Disclosure
-        title={`Ayahs (${timings.ayat.length})`}
+        title={t('review.ayahs', {count: timings.ayat.length})}
         open={alignment ? expanded.has('ayahs') : !expanded.has('ayahs')}
         onToggle={() => toggle('ayahs')}
       >
@@ -347,16 +527,17 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
             const key = `a${ayah.ayah}`;
             const open = expanded.has(key);
             const seen = new Map<string, number>();
-            const words: EditableWord[] = (ayah.words ?? []).map((word) => {
+            const ayahWords: ReviewWord[] = (ayah.words ?? []).map((word) => {
               const occurrence = seen.get(word.id) ?? 0;
               seen.set(word.id, occurrence + 1);
               return {
-                key: keyOf(word.id, occurrence),
+                key: `${word.id}#${occurrence}`,
                 id: word.id,
                 occurrence,
                 text: textOf.get(word.id) ?? word.id,
                 start: word.start,
                 end: word.end,
+                group: key,
               };
             });
             return (
@@ -365,8 +546,8 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
                 <div style={styles.row}>
                   <Button
                     variant="ghost"
-                    title={open ? 'Hide the words' : 'Show the words'}
-                    disabled={words.length === 0}
+                    title={open ? t('review.hideWords') : t('review.showWords')}
+                    disabled={ayahWords.length === 0}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggle(key);
@@ -377,60 +558,73 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
                   <strong>
                     {timings.surah}:{ayah.ayah}
                   </strong>
-                  <span style={{color: colors.muted}}>{range(ayah.start, ayah.end)}</span>
-                  <span style={{color: colors.muted}}>{words.length} words</span>
-                  {ayah.complete === false ? <Flag color={colors.warning}>incomplete</Flag> : null}
+                  <span style={{color: colors.muted}}>{range(ayah.start, ayah.end, unit)}</span>
+                  <span style={{color: colors.muted}}>{t('review.wordCount', {count: ayahWords.length})}</span>
+                  {ayah.complete === false ? <Flag color={colors.warning}>{t('review.flagIncomplete')}</Flag> : null}
                 </div>
-                {open ? <WordList words={words} pending={pending} onChange={edit} /> : null}
+                {open ? (
+                  <WordList
+                    words={ayahWords}
+                    pending={pending}
+                    selected={selectedWord}
+                    onChange={edit}
+                    onSelect={(word) => select(word, true)}
+                    startLabel={startLabel}
+                    endLabel={endLabel}
+                  />
+                ) : null}
               </li>
             );
           })}
         </ul>
       </Disclosure>
-      <Section title="Edits">
+      <Section title={t('review.edits')}>
         <div style={styles.row}>
           <Button variant="primary" onClick={applyEdits} disabled={working || pending.size === 0}>
-            Apply edits ({pending.size})
+            {t('review.apply', {count: pending.size})}
           </Button>
           <Button onClick={() => setPending(new Map())} disabled={pending.size === 0}>
-            Discard
+            {t('review.discard')}
           </Button>
         </div>
-        <Note>
-          Applying rewrites public/{props.timingsFile} with the new times and logs the edit in its alignment sidecar.
-        </Note>
+        <Note>{t('review.applyNote', {file: props.timingsFile})}</Note>
       </Section>
-      <Section title="Export">
+      <Section title={t('review.export')}>
         <div style={styles.row}>
           <Button onClick={() => exportCaptions('srt')} disabled={working || !props.timingsFile}>
             SRT
           </Button>
           <Button onClick={() => exportCaptions('json')} disabled={working || !props.timingsFile}>
-            Captions JSON
+            {t('review.captionsJson')}
           </Button>
           <label style={styles.row}>
             <input type="checkbox" checked={markers} onChange={(e) => setMarkers(e.target.checked)} />
-            <span style={styles.label}>include ayah markers</span>
+            <span style={styles.label}>{t('review.markers')}</span>
           </label>
         </div>
-        <Note>
-          The captions of the whole timings file, timed to the audio file. The JSON is the Caption[] that Remotion's
-          caption tooling (@remotion/captions) reads.
-        </Note>
+        <Note>{t('review.exportNote')}</Note>
       </Section>
-      <Disclosure title="Split segments..." open={splitOpen} onToggle={() => setSplitOpen((o) => !o)}>
+      <Disclosure title={t('compare.title')} open={compareOpen} onToggle={() => setCompareOpen((o) => !o)}>
+        <CompareTimings
+          timingsFile={isUrl(props.timingsFile) ? '' : props.timingsFile}
+          offset={offset}
+          onSeek={(time) => seekToTime(time, fps)}
+        />
+        <Note>{t('compare.note')}</Note>
+      </Disclosure>
+      <Disclosure title={t('review.splitTitle')} open={splitOpen} onToggle={() => setSplitOpen((o) => !o)}>
         <div style={styles.row}>
-          <span style={styles.label}>Max verses</span>
+          <span style={styles.label}>{t('review.maxVerses')}</span>
           <NumberInput
-            label="Max verses"
+            label={t('review.maxVersesLabel')}
             value={split.maxVerses}
             min={1}
             max={50}
             onChange={(maxVerses) => setSplit({...split, maxVerses})}
           />
-          <span style={styles.label}>max words</span>
+          <span style={styles.label}>{t('review.maxWords')}</span>
           <NumberInput
-            label="Max words"
+            label={t('review.maxWordsLabel')}
             value={split.maxWords}
             min={0}
             max={200}
@@ -438,9 +632,9 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
           />
         </div>
         <div style={{...styles.row, marginTop: 6}}>
-          <span style={styles.label}>Max seconds (30 disables)</span>
+          <span style={styles.label}>{t('review.maxSeconds')}</span>
           <NumberInput
-            label="Max duration"
+            label={t('review.maxDurationLabel')}
             value={split.maxDuration}
             min={1}
             max={30}
@@ -452,7 +646,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
               checked={split.stopSigns}
               onChange={(e) => setSplit({...split, stopSigns: e.target.checked})}
             />
-            <span style={styles.label}>only at stop signs</span>
+            <span style={styles.label}>{t('review.stopSigns')}</span>
           </label>
         </div>
         <div style={{marginTop: 8}}>
@@ -462,30 +656,26 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
             disabled={working || !sessionMatches}
             title={sessionHint ?? undefined}
           >
-            Split segments
+            {t('review.splitButton')}
           </Button>
         </div>
         {sessionHint ? <Note>{sessionHint}</Note> : null}
       </Disclosure>
-      <Disclosure
-        title="Re-align with these boundaries (advanced)"
-        open={realignOpen}
-        onToggle={() => setRealignOpen((open) => !open)}
-      >
-        <Note>Each boundary is a stretch of the recording the aligner transcribes and matches on its own.</Note>
+      <Disclosure title={t('review.realignTitle')} open={realignOpen} onToggle={() => setRealignOpen((open) => !open)}>
+        <Note>{t('review.boundaryNote')}</Note>
         {shownBoundaries.map((boundary, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: boundaries have no identity of their own
           <div key={index} style={{...styles.row, marginBottom: 4}}>
             <span style={{...styles.label, minWidth: 18}}>{index + 1}</span>
             <NumberInput
-              label={`Boundary ${index + 1} start`}
+              label={t('review.boundaryStart', {n: index + 1})}
               value={boundary.start}
               min={0}
               step={0.01}
               onChange={(start) => setBoundaries(shownBoundaries.map((x, i) => (i === index ? {...x, start} : x)))}
             />
             <NumberInput
-              label={`Boundary ${index + 1} end`}
+              label={t('review.boundaryEnd', {n: index + 1})}
               value={boundary.end}
               min={0}
               step={0.01}
@@ -493,7 +683,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
             />
             <Button
               variant="ghost"
-              title="Remove this boundary"
+              title={t('review.removeBoundary')}
               onClick={() => setBoundaries(shownBoundaries.filter((_, i) => i !== index))}
             >
               ×
@@ -508,10 +698,10 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
               setBoundaries([...shownBoundaries, {start, end: roundMs(start + 1)}]);
             }}
           >
-            Add boundary
+            {t('review.addBoundary')}
           </Button>
           <Button onClick={() => setBoundaries(null)} disabled={boundaries === null}>
-            Reset from segments
+            {t('review.resetBoundaries')}
           </Button>
           <Button
             variant="primary"
@@ -519,24 +709,27 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
             disabled={working || !sessionMatches || shownBoundaries.length === 0}
             title={sessionHint ?? undefined}
           >
-            Re-align
+            {t('review.realignButton')}
           </Button>
         </div>
         {sessionHint ? <Note>{sessionHint}</Note> : null}
         {timings.alignment?.edits.length ? (
           <Note>
-            Edit log:{' '}
-            {timings.alignment.edits
-              .map((e) => `${e.kind} at ${e.at.slice(0, 19).replace('T', ' ')} (${e.note})`)
-              .join('; ')}
+            {t('review.editLog', {
+              edits: timings.alignment.edits
+                .map((e) =>
+                  t('review.editEntry', {kind: e.kind, at: e.at.slice(0, 19).replace('T', ' '), note: e.note}),
+                )
+                .join('; '),
+            })}
           </Note>
         ) : null}
       </Disclosure>
       <Note>
-        Click a segment or an ayah to play it from its start;{' '}
+        {t('review.clickHint')}{' '}
         {isAyahTextProps(props)
-          ? `the threshold is the default ${Math.round(threshold * 100)}% (this composition has no review props).`
-          : `the threshold (${Math.round(threshold * 100)}%) is the composition's review.confidenceThreshold in the Props sidebar.`}
+          ? t('review.thresholdDefault', {percent: Math.round(threshold * 100)})
+          : t('review.thresholdProps', {percent: Math.round(threshold * 100)})}
       </Note>
     </div>
   );

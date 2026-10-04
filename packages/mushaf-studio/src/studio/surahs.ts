@@ -139,8 +139,9 @@ export const surah = (number: number): Surah | undefined => SURAHS[number - 1];
 /** How many ayahs a surah has (`ayahCount(2)` is 286); 0 for a number that is not a surah. */
 export const ayahCount = (number: number): number => surah(number)?.ayahs ?? 0;
 
-/** "2. Al-Baqarah (البقرة)", for selects. */
-export const surahLabel = (number: number): string => {
+/** "2. Al-Baqarah (البقرة)", for selects; "2. البقرة" in the panel's Arabic. */
+export const surahLabel = (number: number, language: 'en' | 'ar' = 'en'): string => {
   const entry = surah(number);
-  return entry ? `${entry.number}. ${entry.english} (${entry.arabic})` : String(number);
+  if (!entry) return String(number);
+  return language === 'ar' ? `${entry.number}. ${entry.arabic}` : `${entry.number}. ${entry.english} (${entry.arabic})`;
 };

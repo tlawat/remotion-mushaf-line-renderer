@@ -3,7 +3,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../qud';
 import type {QudRecitation} from '../../qud/types';
 import {saveRecording} from '../recording';
-import {describeError, loadOnce, runStudioTask, setStudioState, useStudioState} from '../store';
+import {describeError, loadOnce, runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
 import {AUDIO_EXTENSIONS, fileNameFor, isUrl, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
 import {ayahCount, surahLabel} from '../surahs';
@@ -23,7 +23,8 @@ const groupByReciter = (catalogue: readonly QudRecitation[]): readonly [string, 
 
 /** Source: a reviewed recitation from the aligner's catalogue, an own recording, or a file already in `public/`. */
 export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) => {
-  const {catalogue, uploadedAudio, busy} = useStudioState();
+  const {catalogue, uploadedAudio, busy, language} = useStudioState();
+  const t = useT();
   useEffect(() => {
     void loadOnce('catalogue', () => listRecitations());
   }, []);
@@ -44,19 +45,17 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
   const useRecitation = () => {
     if (!recitation) return;
     const query = {slug: recitation.slug, chapter, verseFrom: from, verseTo: to};
-    void runStudioTask('Fetching the segments...', async () => {
+    void runStudioTask(tNow('source.busy.segments'), async () => {
       const segments = await getChapterSegments(query);
       const base = slugify(`${recitation.slug}-${chapter}-${from}-${to}`);
       let audio = segments.audio_url;
-      setStudioState({busy: 'Downloading the clip...'});
+      setStudioState({busy: tNow('source.busy.clip')});
       try {
         const response = await fetch(segments.audio_url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         audio = await writeFile(projectPath(project, `${base}.mp3`), await response.arrayBuffer());
       } catch (error) {
-        setStudioState({
-          notice: `The clip could not be downloaded (${describeError(error)}); the composition streams it from the catalogue instead.`,
-        });
+        setStudioState({notice: tNow('source.notice.clipFailed', {error: describeError(error)})});
       }
       const timings = timingsFromCatalogue(segments, {audio});
       await saveRecording({
@@ -73,17 +72,14 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
   };
 
   const upload = (file: File) => {
-    void runStudioTask('Copying the recording into public/...', async () => {
+    void runStudioTask(tNow('source.busy.copying'), async () => {
       const path = await writeFile(projectPath(project, fileNameFor(file.name)), await file.arrayBuffer());
-      setStudioState({
-        uploadedAudio: path,
-        notice: `${file.name} is now public/${path}. Nothing has been sent anywhere.`,
-      });
+      setStudioState({uploadedAudio: path, notice: tNow('source.notice.copied', {name: file.name, path})});
     });
   };
 
   const pickPublic = (path: string) => {
-    void runStudioTask('Updating the composition...', async () => {
+    void runStudioTask(tNow('busy.updating'), async () => {
       await patchProps(compositionId, {audioFile: path});
       setStudioState({uploadedAudio: null});
     });
@@ -91,12 +87,12 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
 
   return (
     <div>
-      <Section title="Catalogue">
+      <Section title={t('source.catalogue')}>
         {catalogue === null ? (
-          <Note>Loading the reviewed recitations of the aligner...</Note>
+          <Note>{t('source.loadingCatalogue')}</Note>
         ) : (
           <>
-            <Field label="Reciter">
+            <Field label={t('source.reciter')}>
               {(id) => (
                 <select
                   id={id}
@@ -116,7 +112,7 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
                 </select>
               )}
             </Field>
-            <Field label="Surah">
+            <Field label={t('source.surah')}>
               {(id) => (
                 <select
                   id={id}
@@ -129,46 +125,43 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
                 >
                   {(recitation?.chapters ?? []).map((number) => (
                     <option key={number} value={number}>
-                      {surahLabel(number)}
+                      {surahLabel(number, language)}
                     </option>
                   ))}
                 </select>
               )}
             </Field>
             <div style={styles.row}>
-              <span style={styles.label}>Ayahs</span>
+              <span style={styles.label}>{t('source.ayahs')}</span>
               <NumberInput
-                label="From ayah"
+                label={t('source.fromAyah')}
                 value={from}
                 min={1}
                 max={count}
                 onChange={(value) => setVerses({from: value, to: Math.max(value, to)})}
               />
-              <span style={styles.label}>to</span>
+              <span style={styles.label}>{t('source.to')}</span>
               <NumberInput
-                label="To ayah"
+                label={t('source.toAyah')}
                 value={to}
                 min={from}
                 max={count}
                 onChange={(value) => setVerses({from, to: value})}
               />
-              <span style={styles.label}>of {count}</span>
+              <span style={styles.label}>{t('source.of', {count})}</span>
             </div>
-            <Note>
-              The clip of exactly these ayahs is downloaded into public/ with its reviewed word timings; nothing of
-              yours is uploaded.
-            </Note>
+            <Note>{t('source.catalogueNote')}</Note>
             <Button variant="primary" onClick={useRecitation} disabled={working || !recitation}>
-              Use this recitation
+              {t('source.use')}
             </Button>
           </>
         )}
       </Section>
-      <Section title="Own recording">
+      <Section title={t('source.own')}>
         <input
           type="file"
           accept="audio/*"
-          aria-label="Own recording"
+          aria-label={t('source.own')}
           disabled={working}
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -178,35 +171,33 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
         />
         {uploadedAudio ? (
           <>
-            <Note>
-              public/{uploadedAudio} is ready. It stays on this machine until you press Align in the next tab.
-            </Note>
-            <Button onClick={() => setStudioState({tab: 'align'})}>Go to Align</Button>
+            <Note>{t('source.ready', {path: uploadedAudio})}</Note>
+            <Button onClick={() => setStudioState({tab: 'align'})}>{t('source.goToAlign')}</Button>
           </>
         ) : (
-          <Note>The file is copied into public/ so renders can find it; align it in the next tab.</Note>
+          <Note>{t('source.ownNote')}</Note>
         )}
       </Section>
-      <Section title="Audio already in public/">
+      <Section title={t('source.publicTitle')}>
         {audioFiles.length === 0 ? (
-          <Note>No audio file in public/ yet.</Note>
+          <Note>{t('source.noPublicAudio')}</Note>
         ) : (
           <div style={styles.row}>
             <select
               style={{...styles.input, flex: '1 1 auto', width: 'auto'}}
-              aria-label="Audio in public/"
+              aria-label={t('source.publicSelect')}
               value={publicChoice || (isUrl(props.audioFile) ? '' : props.audioFile)}
               onChange={(e) => setPublicChoice(e.target.value)}
             >
-              <option value="">Pick a file</option>
+              <option value="">{t('common.pickFile')}</option>
               {audioFiles.map((file) => (
                 <option key={file.name} value={file.name}>
-                  {file.name} ({Math.round(file.sizeInBytes / 1024)} kB)
+                  {t('source.fileSize', {name: file.name, size: Math.round(file.sizeInBytes / 1024)})}
                 </option>
               ))}
             </select>
             <Button onClick={() => publicChoice && pickPublic(publicChoice)} disabled={working || !publicChoice}>
-              Use as audio
+              {t('source.useAsAudio')}
             </Button>
           </div>
         )}

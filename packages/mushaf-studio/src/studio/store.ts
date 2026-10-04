@@ -1,12 +1,15 @@
 // The panel's state: a plain module store read through `useSyncExternalStore`, so the composition
 // re-rendering with every frame never re-renders the panel. What survives a reload is split by
-// sensitivity: the panel's own layout in localStorage, the aligner session in sessionStorage, and
-// a Hugging Face token in sessionStorage only (never a file, never the props).
+// sensitivity: the panel's own layout (its language and the timeline markers included) in
+// localStorage, the aligner session in sessionStorage, and a Hugging Face token in sessionStorage,
+// or in localStorage when the user asks the panel to remember it (never a file, never the props).
 import {useSyncExternalStore} from 'react';
 import {isMushafStudioError} from '../errors';
 import type {QudAlignResponse, QudDevice, QudModel, QudProgress, QudRecitation, QudRiwayah} from '../qud/types';
 import type {QuranComResource} from '../translations';
+import {isStudioLanguage, type MessageKey, type MessageParams, type StudioLanguage, translate} from './i18n';
 import type {PropsPatch} from './studio-api';
+import type {WaveformEntry} from './waveform';
 
 export type StudioTab = 'source' | 'look' | 'align' | 'review' | 'lines' | 'text';
 
@@ -16,18 +19,20 @@ export type StudioSide = 'left' | 'right';
 /** The lists `loadOnce()` fetches once and keeps. */
 export type CachedList = 'catalogue' | 'quranComResources';
 
-export const LOADING_LABELS: Readonly<Record<CachedList, string>> = {
-  catalogue: 'Loading the catalogue...',
-  quranComResources: 'Loading the translation list...',
+/** What the status line says while a cached list loads: keys of the panel's dictionary. */
+export const LOADING_LABELS: Readonly<Record<CachedList, MessageKey>> = {
+  catalogue: 'status.loadingCatalogue',
+  quranComResources: 'status.loadingTranslations',
 };
 
-export const STUDIO_TABS: readonly {readonly id: StudioTab; readonly label: string}[] = [
-  {id: 'source', label: 'Source'},
-  {id: 'look', label: 'Look'},
-  {id: 'align', label: 'Align'},
-  {id: 'review', label: 'Review'},
-  {id: 'lines', label: 'Lines'},
-  {id: 'text', label: 'Text'},
+/** The tabs in order, each with its label's key in the panel's dictionary. */
+export const STUDIO_TABS: readonly {readonly id: StudioTab; readonly label: MessageKey}[] = [
+  {id: 'source', label: 'tab.source'},
+  {id: 'look', label: 'tab.look'},
+  {id: 'align', label: 'tab.align'},
+  {id: 'review', label: 'tab.review'},
+  {id: 'lines', label: 'tab.lines'},
+  {id: 'text', label: 'tab.text'},
 ];
 
 /** An alignment made in this browser session: what split and re-align need (the aligner keeps a session for a few hours). */
@@ -46,6 +51,10 @@ export type StudioState = {
   readonly tab: StudioTab | null;
   readonly collapsed: boolean;
   readonly side: StudioSide;
+  /** The panel's language; Arabic lays the dock out right to left. */
+  readonly language: StudioLanguage;
+  /** Whether the doubtful segments are marked on the Studio's timeline (default on). */
+  readonly showDoubts: boolean;
   /** What the panel is doing, shown in the status line; `null` when idle. One task at a time: see `runStudioTask()`. */
   readonly busy: string | null;
   /** The cached lists being fetched. Apart from `busy`, so a list arriving never frees the panel for a second task. */
@@ -72,6 +81,11 @@ export type StudioState = {
    * `compositionId`. In memory only; one level.
    */
   readonly lookUndo: LookUndo | null;
+  /**
+   * The decoded recordings' envelopes by audio URL, for the Review tab's waveform. In memory only:
+   * decoding again after a reload costs a second, storing them would cost megabytes.
+   */
+  readonly waveforms: Readonly<Record<string, WaveformEntry>>;
 };
 
 /** The fields a look changed, with their values from before it, and where. */
@@ -85,6 +99,11 @@ export type LookUndo = {
 const PANEL_KEY = 'mushaf-studio.panel';
 const SESSION_KEY = 'mushaf-studio.session';
 const TOKEN_KEY = 'mushaf-studio.hf-token';
+/** The localStorage prefix of the alignment cache's small entries (`align-cache.ts`). */
+export const ALIGN_CACHE_PREFIX = 'mushaf-studio.align.';
+
+/** The keys of the panel layout that persist, in localStorage. */
+const LAYOUT_FIELDS = ['tab', 'collapsed', 'side', 'language', 'showDoubts'] as const;
 
 const storage = (kind: 'local' | 'session'): Storage | null => {
   try {
@@ -127,12 +146,20 @@ const isSession = (value: unknown): value is StudioSession => {
 };
 
 const initialState = (): StudioState => {
-  const panel = readJson('local', PANEL_KEY) as {tab?: unknown; collapsed?: unknown; side?: unknown} | null;
+  const panel = readJson('local', PANEL_KEY) as {
+    tab?: unknown;
+    collapsed?: unknown;
+    side?: unknown;
+    language?: unknown;
+    showDoubts?: unknown;
+  } | null;
   const saved = readJson('session', SESSION_KEY) as {session?: unknown; uploadedAudio?: unknown} | null;
   return {
     tab: isTab(panel?.tab) ? panel.tab : null,
     collapsed: panel?.collapsed === true,
     side: panel?.side === 'left' ? 'left' : 'right',
+    language: isStudioLanguage(panel?.language) ? panel.language : 'en',
+    showDoubts: panel?.showDoubts !== false,
     busy: null,
     loading: [],
     progress: null,
@@ -144,6 +171,7 @@ const initialState = (): StudioState => {
     uploadedAudio: typeof saved?.uploadedAudio === 'string' ? saved.uploadedAudio : null,
     pendingPatch: null,
     lookUndo: null,
+    waveforms: {},
   };
 };
 
@@ -167,8 +195,8 @@ export const subscribeStudioStore = (listener: () => void): (() => void) => {
 export const setStudioState = (patch: Partial<StudioState>): void => {
   const next = {...getStudioState(), ...patch};
   state = next;
-  if ('tab' in patch || 'collapsed' in patch || 'side' in patch)
-    writeJson('local', PANEL_KEY, {tab: next.tab, collapsed: next.collapsed, side: next.side});
+  if (LAYOUT_FIELDS.some((field) => field in patch))
+    writeJson('local', PANEL_KEY, Object.fromEntries(LAYOUT_FIELDS.map((field) => [field, next[field]])));
   if ('session' in patch || 'uploadedAudio' in patch)
     writeJson('session', SESSION_KEY, {session: next.session, uploadedAudio: next.uploadedAudio});
   for (const listener of listeners) listener();
@@ -180,6 +208,10 @@ export const resetStudioStore = (): void => {
     storage('local')?.removeItem(PANEL_KEY);
     storage('session')?.removeItem(SESSION_KEY);
     storage('session')?.removeItem(TOKEN_KEY);
+    storage('local')?.removeItem(TOKEN_KEY);
+    // The alignment cache's small entries (align-cache.ts); its IndexedDB store is left alone.
+    const local = storage('local');
+    for (const key of Object.keys(local ?? {})) if (key.startsWith(ALIGN_CACHE_PREFIX)) local?.removeItem(key);
   } catch {
     // Nothing to forget.
   }
@@ -198,24 +230,84 @@ export const studioStore = {
 export const useStudioState = (): StudioState =>
   useSyncExternalStore(subscribeStudioStore, getStudioState, getStudioState);
 
-/** The Hugging Face token the user typed, from sessionStorage; `''` for none. */
-export const getHfToken = (): string => {
+/** The panel's language, re-rendering the caller only when it changes. */
+export const useStudioLanguage = (): StudioLanguage =>
+  useSyncExternalStore(
+    subscribeStudioStore,
+    () => getStudioState().language,
+    () => getStudioState().language,
+  );
+
+/** A panel string in the current language, for code outside a component (tasks, notices). */
+export const t = (key: MessageKey, params?: MessageParams): string => translate(getStudioState().language, key, params);
+
+/** `t()` bound to the panel's language: what a component calls, re-rendered when the language changes. */
+export const useT = (): ((key: MessageKey, params?: MessageParams) => string) => {
+  const language = useStudioLanguage();
+  return (key, params) => translate(language, key, params);
+};
+
+const readToken = (kind: 'local' | 'session'): string => {
   try {
-    return storage('session')?.getItem(TOKEN_KEY) ?? '';
+    return storage(kind)?.getItem(TOKEN_KEY) ?? '';
   } catch {
     return '';
   }
 };
 
-/** Keeps the token for this browser session only (an empty string forgets it). */
+/**
+ * The Hugging Face token the user typed: this tab's sessionStorage, else the one the user asked
+ * this browser to remember (localStorage); `''` for none.
+ */
+export const getHfToken = (): string => readToken('session') || readToken('local');
+
+/** Whether the token is remembered for this browser (localStorage) rather than this tab only. */
+export const isHfTokenRemembered = (): boolean => readToken('local') !== '';
+
+/**
+ * Keeps the token for this browser session only (an empty string forgets it), or, once the user
+ * has ticked "Remember for this browser", in localStorage, where the remembered one is replaced.
+ */
 export const setHfToken = (token: string): void => {
+  const kind = isHfTokenRemembered() ? 'local' : 'session';
   try {
-    const session = storage('session');
-    if (!session) return;
-    if (token) session.setItem(TOKEN_KEY, token);
-    else session.removeItem(TOKEN_KEY);
+    const target = storage(kind);
+    if (!target) return;
+    if (token) target.setItem(TOKEN_KEY, token);
+    else target.removeItem(TOKEN_KEY);
   } catch {
     // No storage: the token is kept in the input only.
+  }
+};
+
+/**
+ * Moves the token between this tab (sessionStorage) and this browser (localStorage), on the user's
+ * request only. It never leaves the computer except in the aligner's Authorization header.
+ */
+export const rememberHfToken = (remember: boolean): void => {
+  const token = getHfToken();
+  try {
+    const local = storage('local');
+    const session = storage('session');
+    if (remember) {
+      if (token) local?.setItem(TOKEN_KEY, token);
+      session?.removeItem(TOKEN_KEY);
+    } else {
+      local?.removeItem(TOKEN_KEY);
+      if (token) session?.setItem(TOKEN_KEY, token);
+    }
+  } catch {
+    // No storage: nothing to move.
+  }
+};
+
+/** Forgets the token everywhere the panel kept it. */
+export const forgetHfToken = (): void => {
+  try {
+    storage('local')?.removeItem(TOKEN_KEY);
+    storage('session')?.removeItem(TOKEN_KEY);
+  } catch {
+    // Nothing to forget.
   }
 };
 
@@ -224,7 +316,7 @@ export const describeError = (error: unknown): string => {
   if (isMushafStudioError(error)) {
     const retry = error.details.retryAfterSeconds;
     return error.code === 'QUD_RATE_LIMITED' && typeof retry === 'number'
-      ? `${error.message} Retry in ${Math.ceil(retry)} s.`
+      ? `${error.message} ${t('status.retryIn', {seconds: Math.ceil(retry)})}`
       : error.message;
   }
   if (error instanceof Error) return error.message;
@@ -241,7 +333,7 @@ export const runStudioTask = async (label: string, task: () => Promise<void>): P
   const {busy} = getStudioState();
   if (busy !== null) {
     setStudioState({
-      notice: `The panel is busy (${busy}); wait for it to finish before ${label.replace(/\.+$/, '').toLowerCase()}.`,
+      notice: t('status.busyRefused', {busy, task: label.replace(/\.+$/, '').toLowerCase()}),
     });
     return false;
   }

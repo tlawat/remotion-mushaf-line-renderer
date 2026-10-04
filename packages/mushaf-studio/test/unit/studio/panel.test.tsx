@@ -20,6 +20,9 @@ vi.mock('remotion', async (importOriginal) => ({
   getRemotionEnvironment: () => env,
   useRemotionEnvironment: () => env,
   useVideoConfig: () => ({width: 1920, height: 1080, fps: 30, durationInFrames: 900, id: 'MushafRecitation'}),
+  // Outside a composition: the timeline markers draw nothing, the waveform's playhead is at frame 0.
+  useCurrentFrame: () => 0,
+  Sequence: () => null,
   staticFile: (path: string) => `/static/${path}`,
 }));
 
@@ -32,6 +35,7 @@ const studio = vi.hoisted(() => ({
   seek: vi.fn(),
   play: vi.fn(),
   pause: vi.fn(),
+  toggle: vi.fn(),
   goToComposition: vi.fn(),
   focusDefaultPropsPath: vi.fn(),
 }));

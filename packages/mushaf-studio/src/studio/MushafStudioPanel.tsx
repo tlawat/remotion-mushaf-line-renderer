@@ -4,11 +4,22 @@ import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
 import {LOOK_GROUPS} from '../presets';
 import {reserveDockSpace} from './dock-space';
+import {DoubtMarkers} from './doubts';
 import {useInStudio} from './environment';
+import {directionOf, STUDIO_LANGUAGES} from './i18n';
 import type {MushafStudioPanelProps} from './index';
-import {describeError, LOADING_LABELS, STUDIO_TABS, type StudioTab, setStudioState, useStudioState} from './store';
+import {ProjectMenu} from './ProjectMenu';
+import {
+  describeError,
+  LOADING_LABELS,
+  STUDIO_TABS,
+  type StudioTab,
+  setStudioState,
+  useStudioState,
+  useT,
+} from './store';
 import {applyPatch, patchApplied} from './studio-api';
-import {styles} from './styles';
+import {colors, styles} from './styles';
 import {hasLines, isAyahTextProps, resolvedOf, type StudioCompositionProps, type TabProps} from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
 import {LinesTab} from './tabs/LinesTab';
@@ -31,6 +42,7 @@ const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
 const StatusLine: React.FC = () => {
   const {busy, loading, error, notice, progress} = useStudioState();
+  const t = useT();
   const idle = !busy && loading.length === 0 && !error && !notice;
   return (
     <div style={styles.status} role="status" aria-live="polite">
@@ -46,7 +58,7 @@ const StatusLine: React.FC = () => {
       {!busy && loading.length > 0 ? (
         <div style={styles.statusLine('busy')}>
           <Spinner />
-          <span>{loading.map((key) => LOADING_LABELS[key]).join(' ')}</span>
+          <span>{loading.map((key) => t(LOADING_LABELS[key])).join(' ')}</span>
         </div>
       ) : null}
       {error ? (
@@ -56,7 +68,7 @@ const StatusLine: React.FC = () => {
             type="button"
             style={styles.button('ghost', false)}
             onClick={() => setStudioState({error: null})}
-            title="Dismiss"
+            title={t('status.dismiss')}
           >
             ×
           </button>
@@ -69,13 +81,13 @@ const StatusLine: React.FC = () => {
             type="button"
             style={styles.button('ghost', false)}
             onClick={() => setStudioState({notice: null})}
-            title="Dismiss"
+            title={t('status.dismiss')}
           >
             ×
           </button>
         </div>
       ) : null}
-      {idle ? <div style={styles.statusLine('idle')}>Ready.</div> : null}
+      {idle ? <div style={styles.statusLine('idle')}>{t('status.ready')}</div> : null}
     </div>
   );
 };
@@ -83,6 +95,7 @@ const StatusLine: React.FC = () => {
 /** The dock itself: Studio only, so `useVideoConfig()` and `document` are safe here. */
 const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, project, initialTab}) => {
   const state = useStudioState();
+  const t = useT();
   const {fps} = useVideoConfig();
   const [host] = useState(() => (typeof document === 'undefined' ? null : document.body));
   const {pendingPatch} = state;
@@ -103,7 +116,10 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
       data-mushaf-studio="panel"
       data-collapsed={state.collapsed ? 'true' : 'false'}
       data-side={state.side}
-      aria-label="Mushaf Studio"
+      data-language={state.language}
+      dir={directionOf(state.language)}
+      lang={state.language}
+      aria-label={t('panel.title')}
       style={styles.dock(state.collapsed, state.side)}
       onKeyDown={stop}
       onKeyUp={stop}
@@ -114,20 +130,44 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
           type="button"
           style={{...styles.collapsedTitle, background: 'transparent', border: 'none'}}
           onClick={() => setStudioState({collapsed: false})}
-          title="Open the Mushaf panel"
+          title={t('panel.open')}
         >
-          Mushaf Studio
+          {t('panel.title')}
         </button>
       ) : (
         <>
           <header style={styles.header}>
-            <span style={styles.title}>Mushaf Studio</span>
+            <span style={styles.title}>{t('panel.title')}</span>
             <span style={styles.row}>
+              <fieldset
+                aria-label={t('panel.language')}
+                data-mushaf-control="language"
+                style={{...styles.row, gap: 0, border: 'none', margin: 0, padding: 0}}
+              >
+                {STUDIO_LANGUAGES.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    lang={entry.id}
+                    data-language={entry.id}
+                    aria-pressed={entry.id === state.language}
+                    style={{
+                      ...styles.button('ghost', false),
+                      color: entry.id === state.language ? colors.text : colors.muted,
+                      fontWeight: entry.id === state.language ? 600 : 400,
+                    }}
+                    onClick={() => setStudioState({language: entry.id})}
+                  >
+                    {entry.name}
+                  </button>
+                ))}
+              </fieldset>
+              <ProjectMenu compositionId={compositionId} props={shown} project={project} />
               <button
                 type="button"
                 style={styles.button('ghost', false)}
                 onClick={() => setStudioState({side: other})}
-                title={`Move the panel to the ${other} edge`}
+                title={other === 'left' ? t('panel.moveLeft') : t('panel.moveRight')}
               >
                 {other === 'left' ? '⇤' : '⇥'}
               </button>
@@ -135,13 +175,13 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
                 type="button"
                 style={styles.button('ghost', false)}
                 onClick={() => setStudioState({collapsed: true})}
-                title="Collapse the panel"
+                title={t('panel.collapse')}
               >
                 {state.side === 'left' ? '«' : '»'}
               </button>
             </span>
           </header>
-          <div style={styles.tabs} role="tablist" aria-label="Mushaf Studio tabs">
+          <div style={styles.tabs} role="tablist" aria-label={t('panel.tabs')}>
             {STUDIO_TABS.map((entry) => (
               <button
                 key={entry.id}
@@ -151,12 +191,17 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
                 style={styles.tab(entry.id === tab)}
                 onClick={() => setStudioState({tab: entry.id})}
               >
-                {entry.label}
+                {t(entry.label)}
               </button>
             ))}
           </div>
           <div style={styles.content} role="tabpanel">
-            <TabErrorBoundary key={tab} onError={(error) => setStudioState({error: describeError(error)})}>
+            <TabErrorBoundary
+              key={tab}
+              onError={(error) => setStudioState({error: describeError(error)})}
+              message={t('panel.tabCrashed')}
+              reload={t('panel.reload')}
+            >
               <Tab compositionId={compositionId} props={shown} project={project ?? compositionId} fps={fps} />
             </TabErrorBoundary>
           </div>
@@ -173,7 +218,14 @@ const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
   // (and nothing of `document`) is touched.
   const inStudio = useInStudio();
   if (!inStudio) return null;
-  return <StudioDock {...panelProps} />;
+  // The timeline markers are the composition's own children (Sequences register where they are
+  // rendered); the dock is portaled out of it.
+  return (
+    <>
+      <DoubtMarkers props={panelProps.props} />
+      <StudioDock {...panelProps} />
+    </>
+  );
 };
 
 /**
@@ -241,8 +293,11 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
 /**
  * The Mushaf panel: rendered inside a composition (`<MushafRecitation>` or `<MushafAyahText>`), it
  * renders nothing outside the Studio (in a render, a `<Player>`, on the server). In the Studio it
- * portals a dock into `document.body`, with the tabs Source, Look, Align, Review, Lines and Text. Every change it makes goes through the same path:
- * write the file(s) into `public/`, `saveDefaultProps()` on the composition, then
- * `reevaluateComposition()`. It never calls `delayRender()` and does not re-render with the frame.
+ * portals a dock into `document.body`, in English or Arabic, with the tabs Source, Look, Align,
+ * Review, Lines and Text and a Project menu, and marks the doubtful segments on the Studio's
+ * timeline with empty `<Sequence>`s rendered in the composition itself. Every change it makes goes
+ * through the same path: write the file(s) into `public/`, `saveDefaultProps()` on the
+ * composition, then `reevaluateComposition()`. It never calls `delayRender()`, and only the
+ * waveform's playhead re-renders with the frame.
  */
 export const MushafStudioPanel: React.FC<MushafStudioPanelProps> = memo(Panel, propsEqual);

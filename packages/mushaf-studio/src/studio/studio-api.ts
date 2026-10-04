@@ -9,6 +9,7 @@ import {
   type StaticFile,
   saveDefaultProps,
   seek,
+  toggle,
   writeStaticFile,
 } from '@remotion/studio';
 import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
@@ -17,7 +18,7 @@ import {MushafStudioError} from '../errors';
 import type {MushafLookPatch} from '../presets';
 import type {Review, Text} from '../schema';
 import type {LineSplit, StudioTimings} from '../types';
-import {getStudioState, setStudioState} from './store';
+import {getStudioState, setStudioState, t} from './store';
 
 /**
  * What the panel changes on the composition: the content props, the file fields of `text` and
@@ -152,6 +153,12 @@ export const seekTo = (seconds: number, fps: number): void => {
   play();
 };
 
+/** Moves the playhead to a time (seconds of the composition) without starting playback. */
+export const seekToTime = (seconds: number, fps: number): void => seek(Math.max(0, Math.round(seconds * fps)));
+
+/** Plays or pauses the Studio's preview, as its own Space key does. */
+export const togglePlayback = (): void => toggle();
+
 export const AUDIO_EXTENSIONS: readonly string[] = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'webm'];
 export const JSON_EXTENSIONS: readonly string[] = ['json'];
 
@@ -168,15 +175,23 @@ export const publicFiles = (extensions: readonly string[]): readonly StaticFile[
   }
 };
 
+/** Every file of `public/`, as the Studio lists them; `[]` when it cannot. */
+export const staticFileList = (): readonly StaticFile[] => {
+  try {
+    return getStaticFiles();
+  } catch {
+    return [];
+  }
+};
+
 /** Reads a file of `public/` through the dev server, as `<Audio>` would. */
 export const readPublicFile = async (path: string): Promise<Blob> => {
   const response = await fetch(staticFile(path));
   if (!response.ok)
-    throw new MushafStudioError(
-      'BAD_STUDIO_PROP',
-      `public/${path} could not be read (HTTP ${response.status}). Pick a file that is in public/, or put the recording there through the Source tab.`,
-      {path, status: response.status},
-    );
+    throw new MushafStudioError('BAD_STUDIO_PROP', t('error.publicFile', {path, status: response.status}), {
+      path,
+      status: response.status,
+    });
   return response.blob();
 };
 
@@ -189,10 +204,9 @@ export const readPublicFile = async (path: string): Promise<Blob> => {
 export const readTimingsFile = async (path: string): Promise<StudioTimings> => {
   const response = await fetch(isUrl(path) ? path : staticFile(path));
   if (!response.ok)
-    throw new MushafStudioError(
-      'BAD_STUDIO_PROP',
-      `timingsFile ${path} could not be read (HTTP ${response.status}). Check the path (under public/) or the URL.`,
-      {path, status: response.status},
-    );
+    throw new MushafStudioError('BAD_STUDIO_PROP', t('error.timingsFile', {path, status: response.status}), {
+      path,
+      status: response.status,
+    });
   return parseRecitationTimings(await response.json()) as StudioTimings;
 };

@@ -2,7 +2,7 @@ import {type MushafLineData, type MushafWord, sliceWords} from '@tlawat/remotion
 import type * as React from 'react';
 import {useMemo} from 'react';
 import type {LineSplit} from '../../types';
-import {runStudioTask, useStudioState} from '../store';
+import {runStudioTask, t as tNow, useStudioState, useT} from '../store';
 import {patchProps, seekTo} from '../studio-api';
 import {colors, styles} from '../styles';
 import {hasLines, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
@@ -22,26 +22,20 @@ const sameSplit = (a: LineSplit, b: LineSplit): boolean =>
 /** Lines: every scheduled slot with its words as chips; click a word to start a new slot there. */
 export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
   const {busy} = useStudioState();
+  const t = useT();
   const resolved = resolvedOf(props);
   const textOf = useMemo(() => {
     const map = new Map<string, string>();
     for (const word of resolved?.timings.alignment?.words ?? []) if (!map.has(word.id)) map.set(word.id, word.text);
     return map;
   }, [resolved]);
-  if (isAyahTextProps(props))
-    return (
-      <Note>
-        This composition has no printed lines: it shows one ayah at a time as Unicode text, timed by the ayahs of the
-        timings file.
-      </Note>
-    );
-  if (!resolved || !hasLines(resolved))
-    return <Note>No lines yet: the composition resolves them from the timings file.</Note>;
+  if (isAyahTextProps(props)) return <Note>{t('lines.noPrintedLines')}</Note>;
+  if (!resolved || !hasLines(resolved)) return <Note>{t('lines.noLines')}</Note>;
 
   const working = busy !== null;
   const splits: readonly LineSplit[] = props.splits;
   const save = (next: readonly LineSplit[]) =>
-    void runStudioTask('Updating the splits...', () => patchProps(compositionId, {splits: next}));
+    void runStudioTask(tNow('lines.busy.splits'), () => patchProps(compositionId, {splits: next}));
   const addSplit = (line: MushafLineData, word: MushafWord) => {
     const split: LineSplit = {page: line.page, line: line.line, atWordId: word.wordId};
     if (splits.some((s) => sameSplit(s, split))) return;
@@ -52,7 +46,7 @@ export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
 
   return (
     <div>
-      <Section title={`Slots (${resolved.schedule.length})`}>
+      <Section title={t('lines.slots', {count: resolved.schedule.length})}>
         <ul style={styles.list}>
           {resolved.schedule.map((slot) => {
             const line = resolved.lines[slot.index];
@@ -65,11 +59,9 @@ export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
               // biome-ignore lint/a11y/useKeyWithClickEvents: the row is a seek target; its chips are buttons
               <li key={`${slot.index}`} style={styles.listRow(false)} onClick={() => seekTo(slot.start, fps)}>
                 <div style={styles.row}>
-                  <strong>
-                    p{line.page} l{line.line}
-                  </strong>
-                  <span style={{color: colors.muted}}>{range(slot.start, slot.end)}</span>
-                  <span style={{color: colors.muted}}>slot {slot.index + 1}</span>
+                  <strong>{t('lines.pageLine', {page: line.page, line: line.line})}</strong>
+                  <span style={{color: colors.muted}}>{range(slot.start, slot.end, t('unit.seconds'))}</span>
+                  <span style={{color: colors.muted}}>{t('lines.slot', {n: slot.index + 1})}</span>
                 </div>
                 <div style={{display: 'flex', flexWrap: 'wrap', direction: 'rtl', alignItems: 'center'}}>
                   {line.words.map((word) => {
@@ -84,7 +76,7 @@ export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
                           data-word-id={word.wordId}
                           style={styles.chip(isKept, clickable, word.kind !== 'word')}
                           disabled={!clickable}
-                          title={clickable ? `Split the line before ${word.id}` : word.id}
+                          title={clickable ? t('lines.splitBefore', {id: word.id}) : word.id}
                           onClick={(e) => {
                             e.stopPropagation();
                             addSplit(line, word);
@@ -101,19 +93,17 @@ export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
           })}
         </ul>
       </Section>
-      <Section title={`Splits (${splits.length})`}>
+      <Section title={t('lines.splits', {count: splits.length})}>
         {splits.length === 0 ? (
-          <Note>Click a word that is not the first of its slot to start a new timed slot at it.</Note>
+          <Note>{t('lines.splitsHint')}</Note>
         ) : (
           <ul style={styles.list}>
             {splits.map((split) => (
               <li key={`${split.page}-${split.line}-${split.atWordId}`} style={{...styles.row, padding: '3px 0'}}>
-                <span>
-                  p{split.page} l{split.line} at word {split.atWordId}
-                </span>
+                <span>{t('lines.splitAt', {page: split.page, line: split.line, word: split.atWordId})}</span>
                 <Button
                   variant="ghost"
-                  title="Remove this split"
+                  title={t('lines.removeSplit')}
                   disabled={working}
                   onClick={() => save(splits.filter((s) => !sameSplit(s, split)))}
                 >

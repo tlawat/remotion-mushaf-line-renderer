@@ -42,6 +42,8 @@ describe('the studio store', () => {
       tab: 'lines',
       collapsed: true,
       side: 'right',
+      language: 'en',
+      showDoubts: true,
     });
     setStudioState({side: 'left'});
     expect(JSON.parse(localStorage.getItem('mushaf-studio.panel')!).side).toBe('left');

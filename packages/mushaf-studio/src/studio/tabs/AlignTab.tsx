@@ -1,60 +1,85 @@
 import type * as React from 'react';
 import {useState} from 'react';
-import {alignAudio, sessionTimestamps, timingsFromQud} from '../../qud';
+import {timingsFromQud} from '../../qud';
 import type {QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
+import {alignWithCache} from '../align-cache';
+import type {MessageKey} from '../i18n';
 import {saveRecording} from '../recording';
-import {getHfToken, runStudioTask, setHfToken, setStudioState, useStudioState} from '../store';
+import {
+  forgetHfToken,
+  getHfToken,
+  isHfTokenRemembered,
+  rememberHfToken,
+  runStudioTask,
+  setHfToken,
+  setStudioState,
+  t as tNow,
+  useStudioState,
+  useT,
+} from '../store';
 import {baseName, isUrl, readPublicFile, slugify, stemOf} from '../studio-api';
 import {colors, styles} from '../styles';
 import type {TabProps} from '../tab-props';
 import {Button, Field, Note, ProgressBar, Section} from '../ui';
 
-const STAGES: Readonly<Record<QudStage, string>> = {
-  queued_gpu: 'Queued for the GPU',
-  queued_cpu: 'Queued for the CPU',
-  segmenting: 'Segmenting',
-  transcribing: 'Transcribing',
-  matching: 'Matching to the mushaf',
-  recovering: 'Recovering missed words',
-  building: 'Building the segments',
+const STAGES: Readonly<Record<QudStage, MessageKey>> = {
+  queued_gpu: 'align.stage.queuedGpu',
+  queued_cpu: 'align.stage.queuedCpu',
+  segmenting: 'align.stage.segmenting',
+  transcribing: 'align.stage.transcribing',
+  matching: 'align.stage.matching',
+  recovering: 'align.stage.recovering',
+  building: 'align.stage.building',
 };
 
 const MODELS: readonly QudModel[] = ['Base', 'Large'];
 const DEVICES: readonly QudDevice[] = ['GPU', 'CPU'];
 const RIWAYAT: readonly QudRiwayah[] = ['hafs', 'warsh', 'qalun', 'shuba'];
 
+/** `HH:MM` of a `Date.now()`, for "aligned at". */
+const clock = (at: number): string => {
+  const date = new Date(at);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
 /** Align: sends a recording of `public/` to the QUD Universal Aligner and writes the timings it returns. */
 export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) => {
   const {uploadedAudio, busy, progress, session} = useStudioState();
+  const t = useT();
   const [model, setModel] = useState<QudModel>(session?.model ?? 'Base');
   const [device, setDevice] = useState<QudDevice>(session?.device ?? 'GPU');
   const [riwayah, setRiwayah] = useState<QudRiwayah>(session?.riwayah ?? 'hafs');
   const [token, setToken] = useState(() => getHfToken());
+  const [remembered, setRemembered] = useState(() => isHfTokenRemembered());
   // The recording the user just put into public/ wins over whatever the composition plays, a downloaded clip included.
   const audio = uploadedAudio ?? (isUrl(props.audioFile) || !props.audioFile ? null : props.audioFile);
   const working = busy !== null;
 
   const align = () => {
     if (!audio) return;
-    const options = {token: token || null};
-    void runStudioTask('Reading the audio...', async () => {
+    const client = {token: token || null};
+    void runStudioTask(tNow('align.busy.reading'), async () => {
       const blob = await readPublicFile(audio);
       const name = baseName(audio);
-      setStudioState({busy: 'Aligning...'});
-      const response = await alignAudio(
-        blob,
-        name,
-        {model, device, riwayah, onProgress: (step) => setStudioState({progress: step})},
-        options,
-      );
+      setStudioState({busy: tNow('align.busy.checking')});
+      const result = await alignWithCache({
+        audio: blob,
+        fileName: name,
+        align: {model, device, riwayah, onProgress: (step) => setStudioState({progress: step})},
+        client,
+        now: () => Date.now(),
+        onUpload: () => setStudioState({busy: tNow('align.busy.aligning')}),
+        onAligned: () => setStudioState({busy: tNow('align.busy.wordTimes'), progress: null}),
+      });
+      const response = result.align;
       const notices: string[] = [];
+      if (result.reused && result.alignedAt !== null)
+        notices.push(tNow('align.notice.reused', {time: clock(result.alignedAt)}));
       if (response.device && response.device !== device)
-        notices.push(`The aligner ran on the ${response.device}, the ${device} was not available.`);
+        notices.push(tNow('align.notice.device', {used: response.device, asked: device}));
       if (response.warning) notices.push(response.warning);
-      setStudioState({busy: 'Fetching the word times...', progress: null});
-      const timestamps = await sessionTimestamps(response.audio_id, {}, options);
       const timings = timingsFromQud(
-        {align: response, timestamps},
+        {align: response, timestamps: result.timestamps},
         {audio, model, device: response.device ?? device, riwayah},
       );
       const stem = slugify(stemOf(name)) || 'audio';
@@ -76,21 +101,18 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
 
   return (
     <div>
-      <Section title="Audio to align">
+      <Section title={t('align.audioTitle')}>
         {audio ? (
           <p style={{margin: '0 0 8px'}}>
             <span style={styles.code}>public/{audio}</span>
           </p>
         ) : (
-          <Note>
-            The composition plays a URL or nothing yet. Put a recording into public/ in the Source tab (own recording,
-            or a file already there) to align it.
-          </Note>
+          <Note>{t('align.noAudio')}</Note>
         )}
       </Section>
-      <Section title="Options">
+      <Section title={t('align.options')}>
         <div style={styles.row}>
-          <Field label="Model">
+          <Field label={t('align.model')}>
             {(id) => (
               <select id={id} style={styles.input} value={model} onChange={(e) => setModel(e.target.value as QudModel)}>
                 {MODELS.map((m) => (
@@ -101,7 +123,7 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
               </select>
             )}
           </Field>
-          <Field label="Device">
+          <Field label={t('align.device')}>
             {(id) => (
               <select
                 id={id}
@@ -117,7 +139,7 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
               </select>
             )}
           </Field>
-          <Field label="Riwayah">
+          <Field label={t('align.riwayah')}>
             {(id) => (
               <select
                 id={id}
@@ -134,7 +156,7 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
             )}
           </Field>
         </div>
-        <Field label="Hugging Face token (optional, for your own GPU quota)">
+        <Field label={t('align.token')}>
           {(id) => (
             <input
               id={id}
@@ -149,23 +171,42 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
             />
           )}
         </Field>
-        <Note>
-          The token is kept in this browser tab's sessionStorage only: never written to a file, to the props or to the
-          Root file, and sent to the aligner alone.
-        </Note>
+        <div style={styles.row}>
+          <label style={styles.row}>
+            <input
+              type="checkbox"
+              data-mushaf-control="remember-token"
+              checked={remembered}
+              onChange={(e) => {
+                rememberHfToken(e.target.checked);
+                setRemembered(e.target.checked);
+              }}
+            />
+            <span style={styles.label}>{t('align.remember')}</span>
+          </label>
+          <Button
+            variant="ghost"
+            disabled={!token && !remembered}
+            onClick={() => {
+              forgetHfToken();
+              setToken('');
+              setRemembered(false);
+            }}
+          >
+            {t('align.forget')}
+          </Button>
+        </div>
+        <Note>{remembered ? t('align.tokenRemembered') : t('align.tokenSession')}</Note>
       </Section>
-      <Section title="Align">
-        <Note>
-          Your audio leaves this machine only when you press Align: it is uploaded to the QUD Universal Aligner
-          (aligner.qud.dev), which keeps it for a few hours; the alignment it returns is CC-BY-4.0.
-        </Note>
+      <Section title={t('align.title')}>
+        <Note>{t('align.consent')}</Note>
         <Button variant="primary" onClick={align} disabled={working || !audio}>
-          Align
+          {t('align.button')}
         </Button>
         {progress ? (
           <div style={{marginTop: 8}}>
             <div style={styles.row}>
-              <span>{STAGES[progress.stage as QudStage] ?? progress.stage}</span>
+              <span>{STAGES[progress.stage as QudStage] ? t(STAGES[progress.stage as QudStage]) : progress.stage}</span>
               <span style={{color: colors.muted}}>
                 {progress.step}/{progress.steps}
               </span>
@@ -175,8 +216,13 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
         ) : null}
         {session ? (
           <Note>
-            Last alignment in this session: public/{session.audio} ({session.model}, {session.device}, {session.riwayah}
-            ), session {session.audioId.slice(0, 8)}. Split and re-align in Review use it.
+            {t('align.lastSession', {
+              audio: session.audio,
+              model: session.model,
+              device: session.device,
+              riwayah: session.riwayah,
+              id: session.audioId.slice(0, 8),
+            })}
           </Note>
         ) : null}
       </Section>

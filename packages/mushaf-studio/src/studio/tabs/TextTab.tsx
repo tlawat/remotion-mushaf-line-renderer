@@ -12,7 +12,7 @@ import {
 import {unicodeFontOf} from '../../unicode/font';
 import {fetchQuranComText, QURAN_TEXT_SCRIPTS, type QuranTextScript, serialiseAyahWords} from '../../unicode/text';
 import {quranTextName} from '../recording';
-import {loadOnce, runStudioTask, setStudioState, useStudioState} from '../store';
+import {loadOnce, runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
 import {JSON_EXTENSIONS, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
 import {isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
@@ -34,6 +34,7 @@ const KIND: Readonly<Record<FileField, 'ayah' | 'word'>> = {
  */
 export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => {
   const {quranComResources, busy} = useStudioState();
+  const t = useT();
   useEffect(() => {
     void loadOnce('quranComResources', () => listQuranComTranslations({}));
   }, []);
@@ -78,13 +79,13 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
    * line: saved, it would fail `calculateMetadata()` and the composition would not mount.
    */
   const setFile = (field: FileField, path: string) =>
-    void runStudioTask(path ? 'Checking the file...' : 'Updating the composition...', async () => {
+    void runStudioTask(path ? tNow('text.busy.checking') : tNow('busy.updating'), async () => {
       if (path) {
         // `fetch` wrapped, not referenced: the native one throws "Illegal invocation" as another object's method.
         const io = {fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init), staticFile};
         await loadTextFile(KIND[field], field, path, io);
       }
-      setStudioState({busy: 'Updating the composition...'});
+      setStudioState({busy: tNow('busy.updating')});
       await patchProps(compositionId, {text: {[field]: path}});
     });
 
@@ -94,7 +95,7 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
   const fetchTranslation = () => {
     if (!resource || !passage) return;
     const id = resource.id;
-    void runStudioTask(`Fetching ${resource.name}...`, async () => {
+    void runStudioTask(tNow('text.busy.fetching', {name: resource.name}), async () => {
       const translation = await fetchQuranComTranslation({resourceId: id, ...passage});
       const name = `translation-${id}${suffix}.json`;
       const path = await writeFile(projectPath(project, name), serialiseTranslation(translation));
@@ -109,25 +110,23 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
   const fetchText = () => {
     if (!passage) return;
     const chosen = script;
-    void runStudioTask(`Fetching the ${chosen} text...`, async () => {
+    void runStudioTask(tNow('text.busy.text', {script: chosen}), async () => {
       const text = await fetchQuranComText({...passage, script: chosen});
       const path = await writeFile(projectPath(project, quranTextName(chosen, passage)), serialiseAyahWords(text));
       if (!isAyahTextProps(props)) {
-        setStudioState({
-          notice: `public/${path} is written. This composition sets the printed lines and reads no Quran text; a MushafAyahText composition reads it as its textFile.`,
-        });
+        setStudioState({notice: tNow('text.notice.writtenRecitation', {path})});
         return;
       }
       const font = unicodeFontOf(props.font);
       if (font.script !== chosen) {
         setStudioState({
-          notice: `public/${path} is written, but textFile is left as it is: font "${font.id}" sets ${font.script} text, not ${chosen}.`,
+          notice: tNow('text.notice.wrongScript', {path, font: font.id, fontScript: font.script, script: chosen}),
         });
         return;
       }
-      setStudioState({busy: 'Updating the composition...'});
+      setStudioState({busy: tNow('busy.updating')});
       await patchProps(compositionId, {textFile: path});
-      setStudioState({notice: `public/${path} is written and is now the composition's textFile.`});
+      setStudioState({notice: tNow('text.notice.textFileSet', {path})});
     });
   };
 
@@ -135,28 +134,31 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
     if (!passage) return;
     const lang = slugify(glossLanguage) || 'en';
     const prop: FileField = field === 'translation' ? 'glossFile' : 'transliterationFile';
-    void runStudioTask(`Fetching the word ${field}...`, async () => {
-      const gloss = await fetchQuranComWordGloss({field, language: lang, ...passage});
-      const name = field === 'translation' ? `gloss-${lang}${suffix}.json` : `transliteration-${lang}${suffix}.json`;
-      const path = await writeFile(projectPath(project, name), serialiseTranslation(gloss));
-      await patchProps(compositionId, {text: {[prop]: path}});
-    });
+    void runStudioTask(
+      tNow(field === 'translation' ? 'text.busy.wordTranslation' : 'text.busy.wordTransliteration'),
+      async () => {
+        const gloss = await fetchQuranComWordGloss({field, language: lang, ...passage});
+        const name = field === 'translation' ? `gloss-${lang}${suffix}.json` : `transliteration-${lang}${suffix}.json`;
+        const path = await writeFile(projectPath(project, name), serialiseTranslation(gloss));
+        await patchProps(compositionId, {text: {[prop]: path}});
+      },
+    );
   };
 
-  const current = (field: FileField): string => props.text[field] || 'none';
+  const current = (field: FileField): string => props.text[field] || t('common.none');
   // An ayah text paints no word gloss or transliteration: the controls would set props it ignores.
   const words = !isAyahTextProps(props);
 
   return (
     <div>
-      {passage ? null : <Note>Fetching needs the timings: pick a recitation or align a recording first.</Note>}
-      <Section title="Quran text">
+      {passage ? null : <Note>{t('text.needsTimings')}</Note>}
+      <Section title={t('text.quranText')}>
         <Note>
           {isAyahTextProps(props)
-            ? `Now: ${props.textFile || 'none'}`
-            : 'The printed lines need no text file; a MushafAyahText composition reads this one as its textFile.'}
+            ? t('text.now', {file: props.textFile || t('common.none')})
+            : t('text.recitationNeedsNoText')}
         </Note>
-        <Field label="Script">
+        <Field label={t('text.script')}>
           {(id) => (
             <select
               id={id}
@@ -173,16 +175,16 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
           )}
         </Field>
         <Button variant="primary" onClick={fetchText} disabled={working || !passage}>
-          Fetch the text of this passage
+          {t('text.fetchText')}
         </Button>
       </Section>
-      <Section title="Ayah translation">
-        <Note>Now: {current('translationFile')}</Note>
+      <Section title={t('text.ayahTranslation')}>
+        <Note>{t('text.now', {file: current('translationFile')})}</Note>
         {quranComResources === null ? (
-          <Note>Loading quran.com's translation list...</Note>
+          <Note>{t('text.loadingList')}</Note>
         ) : (
           <>
-            <Field label="Language">
+            <Field label={t('text.language')}>
               {(id) => (
                 <select
                   id={id}
@@ -201,7 +203,7 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
                 </select>
               )}
             </Field>
-            <Field label="Translation">
+            <Field label={t('text.translation')}>
               {(id) => (
                 <select
                   id={id}
@@ -219,21 +221,21 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
             </Field>
             <div style={styles.row}>
               <Button variant="primary" onClick={fetchTranslation} disabled={working || !resource || !passage}>
-                Fetch for this passage
+                {t('text.fetchForPassage')}
               </Button>
               <Button onClick={() => setFile('translationFile', '')} disabled={working || !props.text.translationFile}>
-                None
+                {t('text.none')}
               </Button>
             </div>
           </>
         )}
       </Section>
       {words ? (
-        <Section title="Word by word">
+        <Section title={t('text.wordByWord')}>
           <Note>
-            Gloss: {current('glossFile')}; transliteration: {current('transliterationFile')}
+            {t('text.glossNow', {gloss: current('glossFile'), transliteration: current('transliterationFile')})}
           </Note>
-          <Field label="Language (quran.com code, en, ur, id, ...)">
+          <Field label={t('text.glossLanguage')}>
             {(id) => (
               <input
                 id={id}
@@ -245,37 +247,37 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
           </Field>
           <div style={styles.row}>
             <Button onClick={() => fetchGloss('translation')} disabled={working || !passage}>
-              Fetch translation
+              {t('text.fetchWordTranslation')}
             </Button>
             <Button onClick={() => fetchGloss('transliteration')} disabled={working || !passage}>
-              Fetch transliteration
+              {t('text.fetchWordTransliteration')}
             </Button>
             <Button onClick={() => setFile('glossFile', '')} disabled={working || !props.text.glossFile}>
-              No gloss
+              {t('text.noGloss')}
             </Button>
             <Button
               onClick={() => setFile('transliterationFile', '')}
               disabled={working || !props.text.transliterationFile}
             >
-              No transliteration
+              {t('text.noTransliteration')}
             </Button>
           </div>
         </Section>
       ) : (
-        <Note>Word glosses apply to MushafRecitation.</Note>
+        <Note>{t('text.glossOnlyRecitation')}</Note>
       )}
-      <Section title="Use a file from public/">
+      <Section title={t('text.publicTitle')}>
         {jsonFiles.length === 0 ? (
-          <Note>No JSON file in public/ yet.</Note>
+          <Note>{t('text.noJson')}</Note>
         ) : (
           <>
             <select
               style={styles.input}
-              aria-label="JSON file in public/"
+              aria-label={t('text.jsonSelect')}
               value={publicChoice}
               onChange={(e) => setPublicChoice(e.target.value)}
             >
-              <option value="">Pick a file</option>
+              <option value="">{t('common.pickFile')}</option>
               {jsonFiles.map((file) => (
                 <option key={file.name} value={file.name}>
                   {file.name}
@@ -284,28 +286,25 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
             </select>
             <div style={{...styles.row, marginTop: 6}}>
               <Button onClick={() => setFile('translationFile', publicChoice)} disabled={working || !publicChoice}>
-                As translation
+                {t('text.asTranslation')}
               </Button>
               {words ? (
                 <>
                   <Button onClick={() => setFile('glossFile', publicChoice)} disabled={working || !publicChoice}>
-                    As gloss
+                    {t('text.asGloss')}
                   </Button>
                   <Button
                     onClick={() => setFile('transliterationFile', publicChoice)}
                     disabled={working || !publicChoice}
                   >
-                    As transliteration
+                    {t('text.asTransliteration')}
                   </Button>
                 </>
               ) : null}
             </div>
           </>
         )}
-        <Note>
-          Files downloaded from QUL (qul.tarteel.ai, login needed) can be dropped into public/ and chosen here in any of
-          QUL's shapes: key/value, nested arrays, footnotes as tags, inline footnotes, text chunks, word by word.
-        </Note>
+        <Note>{t('text.qulNote')}</Note>
       </Section>
     </div>
   );

@@ -175,7 +175,7 @@ export const styles = {
   flag: (color: string): CSSProperties => ({
     display: 'inline-block',
     padding: '0 5px',
-    marginRight: 4,
+    marginInlineEnd: 4,
     borderRadius: 8,
     fontSize: 10,
     background: color,
@@ -188,7 +188,7 @@ export const styles = {
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: 5,
-    textAlign: 'left',
+    textAlign: 'start',
     padding: '8px 9px',
     borderRadius: 4,
     border: `1px solid ${active ? colors.accent : colors.border}`,

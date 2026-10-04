@@ -1,12 +1,13 @@
 import type * as React from 'react';
 import {applyLook, lookMatches, lookPatchFor, looksFor, lookUndoPatch, type MushafLook} from '../../presets';
-import {runStudioTask, setStudioState, useStudioState} from '../store';
+import type {MessageKey} from '../i18n';
+import {runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
 import {patchProps} from '../studio-api';
 import {styles} from '../styles';
 import {compositionKindOf, type StudioCompositionProps, type TabProps} from '../tab-props';
 import {Button, Note, Section} from '../ui';
 
-type Chip = {readonly label: string; readonly color: string};
+type Chip = {readonly label: MessageKey; readonly color: string};
 
 /**
  * The colours the composition would have with the look: page, ink, the current word's mark (unless
@@ -15,14 +16,14 @@ type Chip = {readonly label: string; readonly color: string};
 const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chip[] => {
   const next = applyLook(props, look);
   const chips: Chip[] = [
-    {label: 'Page', color: next.layout.background},
-    {label: 'Ink', color: next.layout.color},
+    {label: 'look.chip.page', color: next.layout.background},
+    {label: 'look.chip.ink', color: next.layout.color},
   ];
   if (next.highlight.mode !== 'none' && next.highlight.style !== 'none')
-    chips.push({label: 'Current word', color: next.highlight.color});
+    chips.push({label: 'look.chip.currentWord', color: next.highlight.color});
   if ('theme' in next && next.theme === 'custom' && next.customTheme.override.accent)
-    chips.push({label: 'Rosette', color: next.customTheme.accent});
-  else chips.push({label: 'Translation', color: next.text.translationColor});
+    chips.push({label: 'look.chip.rosette', color: next.customTheme.accent});
+  else chips.push({label: 'look.chip.translation', color: next.text.translationColor});
   return chips;
 };
 
@@ -33,13 +34,14 @@ const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chi
  */
 export const LookTab: React.FC<TabProps> = ({compositionId, props}) => {
   const {busy, lookUndo} = useStudioState();
+  const t = useT();
   const working = busy !== null;
   const looks = looksFor(compositionKindOf(props));
   const undo = lookUndo !== null && lookUndo.compositionId === compositionId ? lookUndo : null;
 
   const choose = (look: MushafLook) => {
     const before = lookUndoPatch(props, look);
-    void runStudioTask(`Applying ${look.name}...`, async () => {
+    void runStudioTask(tNow('look.busy.applying', {name: look.name}), async () => {
       await patchProps(compositionId, lookPatchFor(props, look));
       setStudioState({lookUndo: {compositionId, name: look.name, patch: before}});
     });
@@ -47,7 +49,7 @@ export const LookTab: React.FC<TabProps> = ({compositionId, props}) => {
 
   const revert = () => {
     if (!undo) return;
-    void runStudioTask(`Undoing ${undo.name}...`, async () => {
+    void runStudioTask(tNow('look.busy.undoing', {name: undo.name}), async () => {
       await patchProps(compositionId, undo.patch);
       setStudioState({lookUndo: null});
     });
@@ -55,18 +57,15 @@ export const LookTab: React.FC<TabProps> = ({compositionId, props}) => {
 
   return (
     <div>
-      <Note>
-        A look sets the style props in one click; change any of them in the Props sidebar afterwards. The recitation,
-        the timings and the translation files are left as they are.
-      </Note>
+      <Note>{t('look.note')}</Note>
       {undo ? (
         <div style={{...styles.row, marginBottom: 10}}>
-          <Button onClick={revert} disabled={working} title={`Put back what ${undo.name} changed`}>
-            Undo {undo.name}
+          <Button onClick={revert} disabled={working} title={t('look.undoTitle', {name: undo.name})}>
+            {t('look.undo', {name: undo.name})}
           </Button>
         </div>
       ) : null}
-      <Section title="Looks">
+      <Section title={t('look.looks')}>
         <div style={styles.lookGrid}>
           {looks.map((look) => {
             const active = lookMatches(props, look);
@@ -82,11 +81,15 @@ export const LookTab: React.FC<TabProps> = ({compositionId, props}) => {
               >
                 <span style={styles.lookName}>
                   <span>{look.name}</span>
-                  {active ? <span title="The props have this look">✓</span> : null}
+                  {active ? <span title={t('look.active')}>✓</span> : null}
                 </span>
                 <span style={styles.row} aria-hidden="true">
                   {swatchOf(props, look).map((chip) => (
-                    <span key={chip.label} title={`${chip.label}: ${chip.color}`} style={styles.swatch(chip.color)} />
+                    <span
+                      key={chip.label}
+                      title={`${t(chip.label)}: ${chip.color}`}
+                      style={styles.swatch(chip.color)}
+                    />
                   ))}
                 </span>
                 <span style={styles.lookDescription}>{look.description}</span>

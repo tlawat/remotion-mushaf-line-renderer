@@ -7,7 +7,7 @@ import {isMushafStudioError, MushafStudioError} from '../errors';
 import type {StudioTimings} from '../types';
 import {unicodeFontOf} from '../unicode/font';
 import {fetchQuranComText, type QuranTextScript, serialiseAyahWords} from '../unicode/text';
-import {describeError, setStudioState} from './store';
+import {describeError, setStudioState, t} from './store';
 import {type PropsPatch, patchProps, projectPath, writeFile, writeJsonFile} from './studio-api';
 import {freshRecording, isAyahTextProps, type StudioCompositionProps} from './tab-props';
 
@@ -37,14 +37,14 @@ export const saveRecording = async (options: {
   const timingsFile = await writeJsonFile(projectPath(project, timingsName), timings);
   const patch: PropsPatch = {audioFile, timingsFile, ...freshRecording(props)};
   if (!isAyahTextProps(props)) {
-    setStudioState({busy: 'Updating the composition...'});
+    setStudioState({busy: t('busy.updating')});
     await patchProps(compositionId, patch);
     return timingsFile;
   }
   const {surah, fromAyah, toAyah} = recitedRange(timings);
   const passage: Passage = {chapter: surah, fromAyah, toAyah};
   const {script} = unicodeFontOf(props.font);
-  setStudioState({busy: `Fetching the ${script} text...`});
+  setStudioState({busy: t('text.busy.text', {script})});
   let textFile: string;
   try {
     const text = await fetchQuranComText({...passage, script});
@@ -52,11 +52,17 @@ export const saveRecording = async (options: {
   } catch (error) {
     throw new MushafStudioError(
       isMushafStudioError(error) ? error.code : 'TRANSLATION_FETCH_FAILED',
-      `The timings are in public/${timingsFile}, but the Quran text for ${surah}:${fromAyah}-${toAyah} could not be fetched: ${describeError(error).replace(/\.$/, '')}; fetch it in the Text tab, then pick the timings again.`,
+      t('error.textAfterTimings', {
+        timingsFile,
+        surah,
+        fromAyah,
+        toAyah,
+        error: describeError(error).replace(/\.$/, ''),
+      }),
       {timingsFile, ...passage, script},
     );
   }
-  setStudioState({busy: 'Updating the composition...'});
+  setStudioState({busy: t('busy.updating')});
   await patchProps(compositionId, {...patch, textFile});
   return timingsFile;
 };

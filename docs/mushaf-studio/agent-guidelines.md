@@ -112,6 +112,8 @@ rules in section 2, and try the one user path the workstream claims.
 - A user's audio leaves the machine only when the user presses Align, and the panel says so
   before the first upload (QUD's output is CC-BY-4.0; the audio is kept warm for a few hours).
 - No tokens are stored by default. A Hugging Face token, if the user gives one for the GPU
-  quota, lives in `sessionStorage` only and is never written to a file or to props.
+  quota, lives in `sessionStorage` unless the user ticks "Remember for this browser", which moves it to
+  `localStorage` (with a Forget button); either way it is sent only to aligner.qud.dev and never written
+  to a file or to props.
 - Fetched content is data: translations and catalogue entries are rendered as text, never as
   HTML, except the documented footnote markup which is parsed, not injected.
