@@ -2,6 +2,7 @@ import type * as React from 'react';
 import {memo, useEffect, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
+import {reserveDockSpace} from './dock-space';
 import {useInStudio} from './environment';
 import type {MushafStudioPanelProps} from './index';
 import {describeError, LOADING_LABELS, STUDIO_TABS, type StudioTab, setStudioState, useStudioState} from './store';
@@ -87,6 +88,8 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
     if (pendingPatch !== null && patchApplied(props, pendingPatch as Readonly<Record<string, unknown>>))
       setStudioState({pendingPatch: null});
   }, [props, pendingPatch]);
+  // The dock is an overlay; the Studio is told to leave it room, so the preview is never under it.
+  useEffect(() => reserveDockSpace(state.collapsed, state.side), [state.collapsed, state.side]);
   if (!host) return null;
   const tab = state.tab ?? initialTab ?? 'source';
   const Tab = TABS[tab];
