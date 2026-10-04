@@ -2,6 +2,7 @@ import type * as React from 'react';
 import {memo, useEffect, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
+import {LOOK_GROUPS} from '../presets';
 import {reserveDockSpace} from './dock-space';
 import {useInStudio} from './environment';
 import type {MushafStudioPanelProps} from './index';
@@ -11,6 +12,7 @@ import {styles} from './styles';
 import {hasLines, isAyahTextProps, resolvedOf, type StudioCompositionProps, type TabProps} from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
 import {LinesTab} from './tabs/LinesTab';
+import {LookTab} from './tabs/LookTab';
 import {ReviewTab} from './tabs/ReviewTab';
 import {SourceTab} from './tabs/SourceTab';
 import {TextTab} from './tabs/TextTab';
@@ -18,6 +20,7 @@ import {Spinner, TabErrorBoundary} from './ui';
 
 const TABS: Readonly<Record<StudioTab, React.FC<TabProps>>> = {
   source: SourceTab,
+  look: LookTab,
   align: AlignTab,
   review: ReviewTab,
   lines: LinesTab,
@@ -207,10 +210,15 @@ const ownContent = (props: StudioCompositionProps): string =>
     ? JSON.stringify(['ayah-text', props.textFile, props.font])
     : JSON.stringify(['recitation', props.slice, props.review.confidenceThreshold, props.splits]);
 
+/** The style groups a look sets, as one string: the Look tab marks the look the props have. */
+const styleSignature = (props: StudioCompositionProps): string =>
+  JSON.stringify(LOOK_GROUPS.map((group) => (props as Readonly<Record<string, unknown>>)[group] ?? null));
+
 /**
  * The composition re-renders on every frame; the panel must not. Content props are compared by
- * value (the style props do not concern the panel), `resolved` by a fingerprint rather than by
- * identity, so a parent that rebuilds the props object each frame still leaves the dock alone.
+ * value, the style groups by a JSON signature (small objects, and the Look tab shows which look
+ * they match), `resolved` by a fingerprint rather than by identity, so a parent that rebuilds the
+ * props object each frame still leaves the dock alone.
  */
 const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boolean => {
   if (a.compositionId !== b.compositionId || a.project !== b.project || a.initialTab !== b.initialTab) return false;
@@ -225,6 +233,7 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
     x.text.glossFile === y.text.glossFile &&
     x.text.transliterationFile === y.text.transliterationFile &&
     ownContent(x) === ownContent(y) &&
+    styleSignature(x) === styleSignature(y) &&
     resolvedSignature(x) === resolvedSignature(y)
   );
 };
@@ -232,7 +241,7 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
 /**
  * The Mushaf panel: rendered inside a composition (`<MushafRecitation>` or `<MushafAyahText>`), it
  * renders nothing outside the Studio (in a render, a `<Player>`, on the server). In the Studio it
- * portals a dock into `document.body`, with the tabs Source, Align, Review, Lines and Text. Every change it makes goes through the same path:
+ * portals a dock into `document.body`, with the tabs Source, Look, Align, Review, Lines and Text. Every change it makes goes through the same path:
  * write the file(s) into `public/`, `saveDefaultProps()` on the composition, then
  * `reevaluateComposition()`. It never calls `delayRender()` and does not re-render with the frame.
  */

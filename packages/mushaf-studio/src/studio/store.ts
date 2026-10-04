@@ -8,7 +8,7 @@ import type {QudAlignResponse, QudDevice, QudModel, QudProgress, QudRecitation, 
 import type {QuranComResource} from '../translations';
 import type {PropsPatch} from './studio-api';
 
-export type StudioTab = 'source' | 'align' | 'review' | 'lines' | 'text';
+export type StudioTab = 'source' | 'look' | 'align' | 'review' | 'lines' | 'text';
 
 /** Which edge of the Studio the dock sits on. */
 export type StudioSide = 'left' | 'right';
@@ -23,6 +23,7 @@ export const LOADING_LABELS: Readonly<Record<CachedList, string>> = {
 
 export const STUDIO_TABS: readonly {readonly id: StudioTab; readonly label: string}[] = [
   {id: 'source', label: 'Source'},
+  {id: 'look', label: 'Look'},
   {id: 'align', label: 'Align'},
   {id: 'review', label: 'Review'},
   {id: 'lines', label: 'Lines'},
@@ -66,6 +67,19 @@ export type StudioState = {
    * quick succession both land. Cleared by the panel when the props arrive equal to it.
    */
   readonly pendingPatch: PropsPatch | null;
+  /**
+   * What the last look the Look tab applied changed, as it was before: Undo saves `patch` on
+   * `compositionId`. In memory only; one level.
+   */
+  readonly lookUndo: LookUndo | null;
+};
+
+/** The fields a look changed, with their values from before it, and where. */
+export type LookUndo = {
+  readonly compositionId: string;
+  /** The look's name, for the Undo button. */
+  readonly name: string;
+  readonly patch: PropsPatch;
 };
 
 const PANEL_KEY = 'mushaf-studio.panel';
@@ -129,6 +143,7 @@ const initialState = (): StudioState => {
     session: isSession(saved?.session) ? saved.session : null,
     uploadedAudio: typeof saved?.uploadedAudio === 'string' ? saved.uploadedAudio : null,
     pendingPatch: null,
+    lookUndo: null,
   };
 };
 

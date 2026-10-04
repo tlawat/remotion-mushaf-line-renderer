@@ -14,15 +14,17 @@ import {
 import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {staticFile} from 'remotion';
 import {MushafStudioError} from '../errors';
+import type {MushafLookPatch} from '../presets';
 import type {Review, Text} from '../schema';
 import type {LineSplit, StudioTimings} from '../types';
 import {getStudioState, setStudioState} from './store';
 
 /**
- * What the panel changes on the composition: the content props, and the file fields of `text` and
- * `review`. `slice`, `splits` and `review` are `<MushafRecitation>`'s, `textFile` `<MushafAyahText>`'s.
+ * What the panel changes on the composition: the content props, the file fields of `text` and
+ * `review`, and the style groups a look sets (see `MushafLookPatch`). `slice`, `splits` and `review`
+ * are `<MushafRecitation>`'s, `textFile` `<MushafAyahText>`'s.
  */
-export type PropsPatch = {
+export type PropsPatch = Omit<MushafLookPatch, 'text'> & {
   readonly audioFile?: string | undefined;
   readonly timingsFile?: string | undefined;
   readonly fromAyah?: number | undefined;

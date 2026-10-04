@@ -220,7 +220,7 @@ describe('<MushafStudioPanel>', () => {
     expect(qud.listRecitations).not.toHaveBeenCalled();
   });
 
-  it('docks into document.body with the five tabs in the Studio', async () => {
+  it('docks into document.body with the six tabs in the Studio', async () => {
     const {container} = render(
       <MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />,
     );
@@ -233,6 +233,7 @@ describe('<MushafStudioPanel>', () => {
     expect(screen.getByText('Mushaf Studio')).toBeTruthy();
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Source',
+      'Look',
       'Align',
       'Review',
       'Lines',
@@ -267,7 +268,7 @@ describe('<MushafStudioPanel>', () => {
     expect(JSON.parse(localStorage.getItem('mushaf-studio.panel')!).collapsed).toBe(true);
     fireEvent.click(screen.getByTitle('Open the Mushaf panel'));
     expect(dock()!.dataset.collapsed).toBe('false');
-    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
   });
 
   it('opens the initial tab given, until the user picks one', () => {
@@ -431,7 +432,7 @@ describe('<MushafStudioPanel>', () => {
     linesRenders.crash = true;
     render(<MushafStudioPanel compositionId="MushafRecitation" props={resolvedProps(timings)} initialTab="lines" />);
     expect(dock()).not.toBeNull();
-    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
     expect(getStudioState().error).toBe('the Lines tab exploded');
     expect(screen.getByText('the Lines tab exploded')).toBeTruthy();
     expect(screen.getByText('Reload')).toBeTruthy();

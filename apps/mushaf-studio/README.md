@@ -60,7 +60,7 @@ Hamid Ghraio, the audio streamed from the catalogue's clip URL and the timings i
 ## The Mushaf panel
 
 The panel is docked beside the preview of `MushafRecitation` and of `MushafAyahText` (not
-`MushafPassage`, which has no audio), with five tabs. Open, the dock narrows the Studio so the
+`MushafPassage`, which has no audio), with six tabs. Open, the dock narrows the Studio so the
 preview sits beside it rather than under it; collapsed, it is a thin strip at the edge, and the
 preview takes the room back. Every change it makes goes the same way: it writes its files into
 `public/mushaf-studio/<project>/`, where the project is the composition's id, slugified
@@ -83,6 +83,28 @@ Where the recitation comes from.
   there is nothing to align; go to Review.
 - **Own recording.** Pick an audio file, or one already in `public/`. The panel copies it into the
   project's folder and sets `audioFile`. It stays on your machine until you press Align.
+
+### Look
+
+One-click style presets. Each card shows a look's name, what it is for and a swatch of the colours
+it gives (page, ink, the current word's mark, the rosettes or the translation); the look the props
+already have is ticked. A click saves the look's style props (theme, layout, animation,
+highlighting, text placement) into `src/Root.tsx` and never touches the content: the recitation,
+the timings, the ayah range, the splits and the translation files stay as they are. Fine-tune any
+of it in the Props sidebar afterwards. **Undo** puts back what the last look changed. Each
+composition shows the looks designed for it (`MushafAyahText` has no tajweed theme, so it gets no
+Tajweed light; it takes the page, ink and highlighting of the others). The looks are exported as
+`MUSHAF_LOOKS`, with `applyLook()`, for use in code.
+
+- **Classic page**: ink on a cream page, the current word in gold, three lines on screen.
+- **Tajweed light**: the tajweed colours on a white page, the words still to come dimmed.
+- **Night**: the dark tajweed theme on a deep blue-black page, the current word glowing.
+- **Black & gold**: warm white on black, the rosettes and the current word in gold.
+- **Sepia**: the sepia tajweed theme on an old-paper page, a soft marker behind the current word.
+- **Reel 9:16**: a vertical frame, one line at a time, wide margins, the translation below.
+- **Square post 1:1**: a square frame, three lines with faint neighbours, the translation below.
+- **Karaoke**: a bright marker that walks word by word, the other words dimmed.
+- **Study**: the translation below, a readable gloss strip, the current word in teal.
 
 ### Align
 

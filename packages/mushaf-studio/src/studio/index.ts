@@ -14,7 +14,7 @@ export type MushafStudioPanelProps = {
   /** Where the panel's files go, under `public/`: `mushaf-studio/<project>/`. Default: the composition id. */
   readonly project?: string | undefined;
   /** Which tab opens first. */
-  readonly initialTab?: 'source' | 'align' | 'review' | 'lines' | 'text' | undefined;
+  readonly initialTab?: 'source' | 'look' | 'align' | 'review' | 'lines' | 'text' | undefined;
 };
 
 export {isInStudio} from './environment';

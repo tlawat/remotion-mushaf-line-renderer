@@ -22,6 +22,10 @@ export type TabProps = {
  */
 export const isAyahTextProps = (props: StudioCompositionProps): props is MushafAyahTextProps => 'textFile' in props;
 
+/** Which composition rendered the panel, in the vocabulary of `MushafLook.applies`. */
+export const compositionKindOf = (props: StudioCompositionProps): 'recitation' | 'ayah-text' =>
+  isAyahTextProps(props) ? 'ayah-text' : 'recitation';
+
 /** What `calculateMetadata()` puts in `props.resolved`: a recitation's (lines, schedule) or an ayah text's (ayahs). */
 export type StudioResolved = ResolvedRecitation | ResolvedAyahText;
 
