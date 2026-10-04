@@ -1,8 +1,10 @@
-import type {AyahTiming, MushafWord, RecitationTimings, WordContext} from '@tlawat/remotion-mushaf-line';
+import type {AyahTiming, MushafWord, RecitationTimingsV1, WordContext} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {interpolateColors} from 'remotion';
+import {clipAt, type MemorizeClip} from '../memorize/timeline';
+import {visibilityStyle, wordVisibility} from '../memorize/visibility';
 import type {DoubtReason} from '../types';
-import type {Highlight, Review} from './index';
+import type {Highlight, Memorize, Review} from './index';
 
 /** Four decimals: enough for any alpha, free of float noise. */
 const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
@@ -62,7 +64,7 @@ export type WordStyleOptions = {
    * without per-word times, a word the aligner missed, the ayah-end marker): such a word is upcoming
    * until its ayah starts, the marker until its ayah ends. Without them an unknown word is never dimmed.
    */
-  readonly timings?: RecitationTimings | undefined;
+  readonly timings?: RecitationTimingsV1 | undefined;
   /** The word `wordAt()` names on this frame, for `mode: 'ayah'`; `null` between words. */
   readonly activeWordId: string | null;
   /**
@@ -75,6 +77,21 @@ export type WordStyleOptions = {
    * `from` back gives the composition frame, which is the audio time. Default 0.
    */
   readonly sequenceFrom?: number | undefined;
+  /**
+   * The second of the recording heard at a second of the composition (`audioClock(clips)`), for
+   * the dimming and the memorisation rules when ayahs repeat. Default: the same second.
+   */
+  readonly audioTime?: ((seconds: number) => number) | undefined;
+  /**
+   * The memorisation mode and its clip timeline: a word the mode hides gets `opacity` 0 (0.12 for
+   * `'first-letters'`, see `wordVisibility()`), over the dimming. Default: off.
+   */
+  readonly memorize?:
+    | {
+        readonly settings: Pick<Memorize, 'mode' | 'revealAfterRepeats'>;
+        readonly clips: readonly MemorizeClip[];
+      }
+    | undefined;
 };
 
 /** The thickness of the dotted doubt underline, in em of the line's type size. */
@@ -107,6 +124,8 @@ export const wordStyleFrom = (
   options: WordStyleOptions,
 ): ((word: MushafWord, context: WordContext) => React.CSSProperties | undefined) => {
   const {highlight, review, doubtful, timingsIndex, timings, activeWordId, isStudio, sequenceFrom = 0} = options;
+  const audioTime = options.audioTime ?? ((seconds: number) => seconds);
+  const memorize = options.memorize?.settings.mode === 'off' ? undefined : options.memorize;
   const ayahTimings = new Map<string, AyahTiming>();
   for (const ayah of timings?.ayat ?? []) ayahTimings.set(`${timings!.surah}:${ayah.ayah}`, ayah);
   /** When a word is first heard: its own time, else its ayah's start (the marker: its ayah's end), else unknown. */
@@ -129,11 +148,25 @@ export const wordStyleFrom = (
     let style: React.CSSProperties | undefined;
     const inActiveAyah = activeAyah !== null && ayahKey(word) === activeAyah;
     if (inActiveAyah && ayahStyle) style = {...ayahStyle};
+    const seconds = (context.frame + sequenceFrom) / context.fps;
     if (dims && !context.active && !inActiveAyah) {
       const start = startOf(word);
-      const now = (context.frame + sequenceFrom) / context.fps;
-      const dim = !highlight.dimUpcomingOnly || (start !== undefined && start > now);
+      const dim = !highlight.dimUpcomingOnly || (start !== undefined && start > audioTime(seconds));
       if (dim) style = {...style, opacity: highlight.dimOthers};
+    }
+    if (memorize) {
+      const hidden = visibilityStyle(
+        wordVisibility({
+          mode: memorize.settings.mode,
+          revealAfterRepeats: memorize.settings.revealAfterRepeats,
+          start: startOf(word),
+          now: audioTime(seconds),
+          active: context.active,
+          clip: clipAt(memorize.clips, seconds),
+          script: 'glyph',
+        }),
+      );
+      if (hidden) style = {...style, ...hidden};
     }
     if (marks && (doubtful[word.id]?.length ?? 0) > 0) style = {...style, ...doubtStyle};
     return style;

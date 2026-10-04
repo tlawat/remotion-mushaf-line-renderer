@@ -9,6 +9,7 @@ import {
 import {staticFile as remotionStaticFile} from 'remotion';
 import {describeValue, MushafStudioError} from '../../errors';
 import {applySplits, doubtfulWords} from '../../lines';
+import {clipTimeline, type MemorizeClip} from '../../memorize/timeline';
 import {dataSourceFrom, themeSelectionFrom} from '../../schema';
 import type {ResolvedRecitation, StudioTimings} from '../../types';
 import {fileUrl, headerSeconds, loadTextFile, STUDIO_FPS, surahHeaderLines, withHeaderSlots} from '../shared';
@@ -91,6 +92,12 @@ export const readTimings = async (
   }
   // BAD_RECITATION_TIMINGS from the package passes through: it names the field and the format.
   const timings = parseRecitationTimings(json);
+  if (timings.version === 2) {
+    throw bad(
+      `timingsFile ${describeValue(file)}: this timings file crosses surahs (version 2); MushafRecitation reads one surah per file for now: split it, or use the renderer's getMushafLinesForRanges() directly.`,
+      {prop: 'timingsFile', file, version: 2},
+    );
+  }
   assertSidecar(file, (json as {alignment?: unknown}).alignment);
   return timings as StudioTimings;
 };
@@ -194,19 +201,26 @@ export const shiftTimings = (timings: StudioTimings, offset: number): StudioTimi
 };
 
 /**
+ * What `resolveRecitation()` gives: `ResolvedRecitation` and the clip timeline of `memorize`
+ * (`clipTimeline()`), one clip per ayah at its own time when ayahs play once.
+ */
+export type ResolvedRecitationWithClips = ResolvedRecitation & {readonly clips: readonly MemorizeClip[]};
+
+/**
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah
  * range and to the ayahs the recording carries whole, moves them `audioOffsetSeconds` earlier
  * (see `audioOffsetFor()`), finds the lines (`getMushafLines(recitedRange(...))`, sliced), applies
  * the splits, schedules the lines (after the surah's header lines when `header` asks for them and
  * the recitation starts at ayah 1, see `surahHeaderLines()` and `withHeaderSlots()`), loads the
  * translation and gloss files, and marks the doubtful
- * words of the whole range (an incomplete ayah's words included). Pure given `fetch`;
+ * words of the whole range (an incomplete ayah's words included), and lays out the clip timeline
+ * of `memorize` (each ayah played `repeat` times). Pure given `fetch`;
  * `calculateMetadata()` is this plus the size and duration.
  */
 export const resolveRecitation = async (
   props: MushafRecitationProps,
   options: ResolveRecitationOptions = {},
-): Promise<ResolvedRecitation> => {
+): Promise<ResolvedRecitationWithClips> => {
   // `globalThis.fetch` is wrapped, not referenced: calling the native fetch as a method of another
   // object ("io.fetch(url)") throws "Illegal invocation" in browsers.
   const io = {
@@ -251,5 +265,6 @@ export const resolveRecitation = async (
     gloss,
     transliteration,
     doubtful: doubtfulWords(inRange, {threshold: props.review.confidenceThreshold}),
+    clips: clipTimeline(timings, props.memorize),
   };
 };

@@ -2,6 +2,7 @@ import {staticFile as remotionStaticFile} from 'remotion';
 import {readTimings, trimTimings} from '../compositions/recitation/resolve';
 import {fileUrl, loadTextFile} from '../compositions/shared';
 import {describeValue, MushafStudioError} from '../errors';
+import {clipTimeline, type MemorizeClip} from '../memorize/timeline';
 import type {AyahTranslation, StudioTimings} from '../types';
 import {unicodeFontOf} from './font';
 import type {MushafAyahTextProps} from './schema';
@@ -25,6 +26,8 @@ export type ResolvedAyahText = {
   readonly translation: AyahTranslation | null;
   /** One per timed ayah, in order. */
   readonly ayahs: readonly ResolvedAyah[];
+  /** The clip timeline of `memorize` (`clipTimeline()`): one clip per ayah at its own time when ayahs play once. */
+  readonly clips: readonly MemorizeClip[];
 };
 
 export type ResolveAyahTextOptions = {
@@ -38,7 +41,7 @@ const bad = (message: string, details: Readonly<Record<string, unknown>>): Musha
 /**
  * Resolves the content props once: fetches and validates the timings and trims them to the ayah
  * range (as `<MushafRecitation>` does), loads the text file and the ayah translation, and pairs
- * every timed ayah with its words. The text is read from `public/` only, never fetched from
+ * every timed ayah with its words, and lays out the clip timeline of `memorize`. The text is read from `public/` only, never fetched from
  * quran.com here, so renders are offline and reproducible. Throws `BAD_STUDIO_PROP` for an empty
  * `textFile`, a text in a script the font does not set, or an ayah the text does not hold. Pure
  * given `fetch`; `calculateMetadata()` is this plus the size and duration.
@@ -76,5 +79,5 @@ export const resolveAyahText = async (
     }
     return {surah: timings.surah, ayah: timing.ayah, start: timing.start, end: timing.end, words};
   });
-  return {timings, text, translation, ayahs};
+  return {timings, text, translation, ayahs, clips: clipTimeline(timings, props.memorize)};
 };

@@ -3,11 +3,13 @@ import {
   defaultAnimation,
   defaultHighlight,
   defaultLayout,
+  defaultMemorize,
   defaultOverlay,
   defaultText,
   ENTRANCES,
   highlightSchema,
   layoutSchema,
+  memorizeSchema,
   overlaySchema,
   textSchema,
 } from '../schema';
@@ -54,6 +56,10 @@ export const mushafAyahTextSchema = z.object({
   ),
   animation: ayahAnimationSchema.describe('How each ayah comes in and goes out'),
   highlight: highlightSchema.describe('What follows the recitation and how it is marked'),
+  /** `'first-letters'` shows the first letter of each word to come, with a tatweel. */
+  memorize: memorizeSchema.describe(
+    'Memorisation: repeat each ayah, hide the words to come or show their first letters',
+  ),
   /** The ayah translation goes under (or over) the ayah; the gloss fields do not apply. */
   text: textSchema.describe('The ayah translation (the word-by-word fields do not apply)'),
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
@@ -87,6 +93,7 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
     leadInSeconds: defaultAnimation.leadInSeconds,
   },
   highlight: {...defaultHighlight, color: '#c8a45c'},
+  memorize: defaultMemorize,
   // The shared default translation colour is a dark grey for a light page; this one reads on the dark page.
   text: {...defaultText, translationColor: '#c9c1b2'},
   // The shared default title ink is the light page's; this one reads on the dark page.

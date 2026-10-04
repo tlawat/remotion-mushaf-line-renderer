@@ -1,5 +1,6 @@
 import type {RecitationTimings} from '@tlawat/remotion-mushaf-line';
 import type {CalculateMetadataFunction} from 'remotion';
+import {isIdentityTimeline, timelineDuration} from '../../memorize/timeline';
 import {sizeForAspect} from '../../schema';
 import {STUDIO_FPS} from '../shared';
 import {resolveRecitation} from './resolve';
@@ -15,7 +16,8 @@ export const recitationDuration = (timings: RecitationTimings, fps: number): num
 /**
  * `calculateMetadata` for `<Composition id="MushafRecitation">`: `resolved`, width and height from
  * the aspect, duration from the timings (moved `audioOffsetSeconds` earlier, so it is the audio's
- * from the trim on). `abortSignal` reaches every fetch.
+ * from the trim on), or from the clip timeline when `memorize` repeats the ayahs. `abortSignal`
+ * reaches every fetch.
  */
 export const calculateMushafRecitationMetadata: CalculateMetadataFunction<MushafRecitationProps> = async ({
   props,
@@ -26,6 +28,8 @@ export const calculateMushafRecitationMetadata: CalculateMetadataFunction<Mushaf
     props: {...props, resolved},
     ...sizeForAspect(props.layout.aspect),
     fps: STUDIO_FPS,
-    durationInFrames: recitationDuration(resolved.timings, STUDIO_FPS),
+    durationInFrames: isIdentityTimeline(resolved.clips)
+      ? recitationDuration(resolved.timings, STUDIO_FPS)
+      : timelineDuration(resolved.clips, STUDIO_FPS),
   };
 };

@@ -17,8 +17,12 @@ export {isMushafStudioError, MushafStudioError, type MushafStudioErrorCode} from
 export * from './export';
 // Fonts
 export * from './fonts';
+// Interlinear glosses
+export * from './interlinear';
 // Lines
 export * from './lines';
+// Memorisation
+export * from './memorize';
 // Overlay
 export * from './overlay';
 // Page

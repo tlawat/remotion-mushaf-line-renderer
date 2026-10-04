@@ -86,4 +86,9 @@ describe('<AyahText>', () => {
     cleanup();
     expect(mount(props).outerHTML).toBe(a);
   });
+
+  it('shows the text wordText gives for a word, the marker keeping its ornament', () => {
+    const root = mount({wordText: (word) => (word.id === '1:3:2' ? 'ٱـ' : word.kind === 'end' ? '3' : undefined)});
+    expect(spans(root).map((span) => span.textContent)).toEqual(['ٱلرَّحْمَـٰنِ', 'ٱـ', '۝3']);
+  });
 });

@@ -9,6 +9,11 @@ export type AyahTextProps = {
   readonly highlightStyle?: React.CSSProperties | undefined;
   /** A style per word (dimming, a whole-ayah highlight); the active word's `highlightStyle` goes over it. */
   readonly wordStyle?: ((word: AyahWord) => React.CSSProperties | undefined) | undefined;
+  /**
+   * The text shown for a word in place of its own (the ayah-end marker keeps its ornament): the
+   * first-letter cue of the memorisation mode. `undefined`, or no function, shows the word's text.
+   */
+  readonly wordText?: ((word: AyahWord) => string | undefined) | undefined;
   readonly fontFamily: string;
   /** px. */
   readonly fontSize: number;
@@ -38,6 +43,7 @@ export const AyahText: React.FC<AyahTextProps> = ({
   activeWordId,
   highlightStyle,
   wordStyle,
+  wordText,
   fontFamily,
   fontSize,
   lineHeight,
@@ -65,11 +71,12 @@ export const AyahText: React.FC<AyahTextProps> = ({
       const active = activeWordId === word.id;
       const own = wordStyle?.(word);
       const merged = active && highlightStyle ? {...own, ...highlightStyle} : own;
+      const shown = wordText?.(word) ?? word.text;
       return (
         <React.Fragment key={word.id}>
           {i > 0 ? ' ' : null}
           <span className={classOf(word, active)} data-location={word.id} style={merged}>
-            {word.kind === 'end' ? `${END_OF_AYAH}${word.text}` : word.text}
+            {word.kind === 'end' ? `${END_OF_AYAH}${shown}` : shown}
           </span>
         </React.Fragment>
       );

@@ -7,6 +7,7 @@ export {MushafRecitation} from './MushafRecitation';
 export {
   audioOffsetFor,
   playableTimings,
+  type ResolvedRecitationWithClips,
   type ResolveRecitationOptions,
   readTimings,
   resolveRecitation,

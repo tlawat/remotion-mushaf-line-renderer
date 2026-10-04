@@ -12,6 +12,18 @@ import type * as React from 'react';
 import {AbsoluteFill, Audio, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {ayahAt, fileUrl} from '../compositions/shared';
 import {MushafStudioError} from '../errors';
+import {
+  audioClock,
+  clipAt,
+  clipTimeline,
+  firstLetterOf,
+  isIdentityTimeline,
+  type MemorizeClip,
+  RepeatCounter,
+  visibilityStyle,
+  type WordVisibility,
+  wordVisibility,
+} from '../memorize';
 import {MushafTitleOverlay} from '../overlay';
 import {activeWordStyleFrom} from '../schema';
 import {MushafStudioPanel} from '../studio';
@@ -90,9 +102,15 @@ export const ayahPresentationStyle = (
  * as `highlight` says, and its translation under it, with the title card and corner label of
  * `overlay` when asked. The same timings and translation files as the
  * recitation; in the Studio the Mushaf panel is docked over it, as over `<MushafRecitation>`.
+ *
+ * Under a memorisation mode each ayah plays `memorize.repeat` times on the clip timeline (one
+ * `<Audio>` per clip, the ayah on screen through all its plays, the highlight restarting with each,
+ * a "2/3" counter in a corner); the blank modes hide words (opacity 0, so nothing reflows) and
+ * `'first-letters'` shows each word to come as its first letter and a tatweel (`firstLetterOf()`),
+ * the ayah-end marker kept as a cue.
  */
 export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
-  const {audioFile, layout, animation, highlight, text, fontSize, lineHeight, overlay} = props;
+  const {audioFile, layout, animation, highlight, memorize, text, fontSize, lineHeight, overlay} = props;
   const {width, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
@@ -106,7 +124,14 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
     );
   }
   const {timings, ayahs, translation} = resolved;
-  const now = frame / fps;
+  // The clip timeline calculateMetadata laid out; rebuilt (the same pure function) for a `resolved` made without it.
+  const clips: readonly MemorizeClip[] = resolved.clips ?? clipTimeline(timings, memorize);
+  const identity = isIdentityTimeline(clips);
+  const repeats = clips.reduce((most, clip) => Math.max(most, clip.repetition), 1);
+  const seconds = frame / fps;
+  // The second of the recording being heard: the composition's own when ayahs play once.
+  const now = audioClock(clips)(seconds);
+  const clip = clipAt(clips, seconds);
   const heard = wordAt(timings, now);
   const activeWordId = highlight.mode === 'none' ? null : heard;
   const activeAyah = highlight.mode === 'ayah' ? ayahKeyOf(activeWordId) : null;
@@ -119,33 +144,72 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
 
   // A pure function of the frame: the ayah of the current word is painted whole under `mode: 'ayah'`;
   // the other words are dimmed, or only those not heard yet (the marker counts as heard at the ayah's end).
+  const startOf = (ayah: ResolvedAyah, word: AyahWord): number | undefined =>
+    wordTiming(timings, word.id)?.start ?? (word.kind === 'end' ? ayah.end : undefined);
+  const visibilityOf = (ayah: ResolvedAyah, word: AyahWord): WordVisibility =>
+    wordVisibility({
+      mode: memorize.mode,
+      revealAfterRepeats: memorize.revealAfterRepeats,
+      start: startOf(ayah, word),
+      now,
+      active: word.id === heard,
+      clip,
+      script: 'unicode',
+    });
   const wordStyleFor = (ayah: ResolvedAyah): ((word: AyahWord) => React.CSSProperties | undefined) => {
     const inActiveAyah = activeAyah === `${ayah.surah}:${ayah.ayah}`;
     return (word) => {
       let style: React.CSSProperties | undefined = inActiveAyah && highlightStyle ? {...highlightStyle} : undefined;
       if (dims && !inActiveAyah && word.id !== activeWordId) {
-        const start = wordTiming(timings, word.id)?.start ?? (word.kind === 'end' ? ayah.end : undefined);
+        const start = startOf(ayah, word);
         if (!highlight.dimUpcomingOnly || (start !== undefined && start > now)) {
           style = {...style, opacity: highlight.dimOthers};
         }
       }
-      return style;
+      const hidden = visibilityStyle(visibilityOf(ayah, word));
+      return hidden ? {...style, ...hidden} : style;
     };
   };
+  // The first-letter cue for a word to come; the marker keeps its number.
+  const wordTextFor =
+    memorize.mode === 'first-letters'
+      ? (ayah: ResolvedAyah) =>
+          (word: AyahWord): string | undefined =>
+            word.kind === 'word' && visibilityOf(ayah, word) === 'first-letter' ? firstLetterOf(word.text) : undefined
+      : undefined;
+  /** Where an ayah's first play starts on the composition's clock: its own start when ayahs play once. */
+  const startOnTimeline = (ayah: ResolvedAyah): number =>
+    clips.find((c) => c.ayah === ayah.ayah && c.repetition === 1)?.compositionFrom ?? ayah.start;
 
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color}}>
       {layout.backgroundImage !== '' && (
         <Img src={fileUrl(layout.backgroundImage, staticFile)} style={BACKGROUND_IMAGE_STYLE} />
       )}
-      {audioFile !== '' && <Audio src={fileUrl(audioFile, staticFile)} />}
+      {audioFile !== '' && identity && <Audio src={fileUrl(audioFile, staticFile)} />}
+      {audioFile !== '' &&
+        !identity &&
+        clips.map((c) => {
+          const trimBefore = Math.round(c.audioFrom * fps);
+          const trimAfter = Math.round(c.audioTo * fps);
+          return (
+            <Sequence
+              key={`${c.ayah}/${c.repetition}`}
+              from={Math.round(c.compositionFrom * fps)}
+              durationInFrames={Math.max(1, trimAfter - trimBefore)}
+              name={`Ayah ${c.ayah} (${c.repetition}/${repeats})`}
+            >
+              <Audio src={fileUrl(audioFile, staticFile)} trimBefore={trimBefore} trimAfter={trimAfter} />
+            </Sequence>
+          );
+        })}
       {ayahs.map((ayah, i) => {
         const key = `${ayah.surah}:${ayah.ayah}`;
         // On screen from `leadInSeconds` before its first word until the next ayah comes in: one
         // ayah at a time, never two half-visible ones over each other.
-        const from = Math.max(0, Math.round((ayah.start - animation.leadInSeconds) * fps));
+        const from = Math.max(0, Math.round((startOnTimeline(ayah) - animation.leadInSeconds) * fps));
         const next = ayahs[i + 1];
-        const end = next ? Math.round((next.start - animation.leadInSeconds) * fps) : durationInFrames;
+        const end = next ? Math.round((startOnTimeline(next) - animation.leadInSeconds) * fps) : durationInFrames;
         const duration = Math.max(1, end - from);
         const block = showTranslation ? (
           <TranslationBlock
@@ -183,6 +247,7 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
                   activeWordId={highlight.mode === 'word' ? activeWordId : null}
                   highlightStyle={highlightStyle}
                   wordStyle={wordStyleFor(ayah)}
+                  wordText={wordTextFor?.(ayah)}
                   fontFamily={font.fontFamily}
                   fontSize={fontSize}
                   lineHeight={lineHeight}
@@ -209,6 +274,13 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
         fontSize={titleFontSize}
         lineHeight={lineHeightForFontSize(titleFontSize)}
         width={measure}
+      />
+      <RepeatCounter
+        clips={clips}
+        repeats={repeats}
+        seconds={seconds}
+        overlay={overlay}
+        background={layout.background}
       />
       {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>

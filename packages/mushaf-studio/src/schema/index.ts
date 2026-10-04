@@ -127,6 +127,48 @@ export const textSchema = z.object({
   glossColor: zColor().describe('Gloss colour'),
 });
 
+/** Where the word-by-word gloss goes: the strip at the bottom, under each printed word, or nowhere. */
+export const GLOSS_POSITIONS = ['strip', 'interlinear', 'none'] as const;
+
+/**
+ * `<MushafRecitation>`'s text settings: `textSchema` and where the gloss goes. Under
+ * `'interlinear'` each word's gloss (and transliteration) sits under that word of the printed line,
+ * at `glossSize` capped to 0.3 of the line's type size, shrunk to fit its word (to 70 %) and cut
+ * with an ellipsis past that; the line slots grow by the gloss rows.
+ */
+export const recitationTextSchema = textSchema.extend({
+  glossPosition: z
+    .enum(GLOSS_POSITIONS)
+    .describe('Where the word-by-word gloss goes: a strip at the bottom, under each printed word, or nowhere'),
+});
+
+export const MEMORIZE_MODES = ['off', 'first-letters', 'blank-upcoming', 'blank-all', 'repeat'] as const;
+
+/**
+ * Memorisation (hifz) modes. Every mode but `'off'` plays each ayah `repeat` times before the next,
+ * `pauseSeconds` apart, with a "2/3" counter in a corner (the duration grows to match). The blank
+ * modes hide words on the first `revealAfterRepeats` plays: `'blank-upcoming'` the words not yet
+ * recited, `'blank-all'` every word but the active one and those already recited in this play.
+ * `'first-letters'` shows an upcoming word's first letter and a tatweel in Unicode text
+ * (`<MushafAyahText>`); the printed lines' glyph fonts cannot be cut into letters, so there it is
+ * `'blank-upcoming'` with a faint outline (opacity 0.12). `'repeat'` repeats without hiding.
+ */
+export const memorizeSchema = z.object({
+  mode: z
+    .enum(MEMORIZE_MODES)
+    .describe(
+      'Memorisation: off, first letters of the words to come, blank the words to come, blank all but the recited words, or repeat only',
+    ),
+  repeat: z.number().int().min(1).max(10).describe('Plays of each ayah before the next (every mode but off)'),
+  pauseSeconds: z.number().min(0).max(5).step(0.1).describe('Seconds of silence between two plays of an ayah'),
+  revealAfterRepeats: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .describe('Blank and first-letter modes: plays of each ayah that hide the text; the later ones show it'),
+});
+
 export const reviewSchema = z.object({
   /** In the Studio only (never in a render): paint the words whose alignment is doubtful. */
   showDoubtful: z.boolean().describe('Studio only: mark words whose alignment is doubtful'),
@@ -177,6 +219,10 @@ export type Animation = z.infer<typeof animationSchema>;
 export type Highlight = z.infer<typeof highlightSchema>;
 export type Text = z.infer<typeof textSchema>;
 export type Review = z.infer<typeof reviewSchema>;
+export type GlossPosition = (typeof GLOSS_POSITIONS)[number];
+export type RecitationText = z.infer<typeof recitationTextSchema>;
+export type MemorizeMode = (typeof MEMORIZE_MODES)[number];
+export type Memorize = z.infer<typeof memorizeSchema>;
 export type Overlay = z.infer<typeof overlaySchema>;
 export type HeaderMode = z.infer<typeof headerSchema>;
 
@@ -234,6 +280,12 @@ export const defaultText: Text = {
   glossSize: 34,
   glossColor: '#6a6a6a',
 };
+
+/** `defaultText` with the gloss in its strip at the bottom. */
+export const defaultRecitationText: RecitationText = {...defaultText, glossPosition: 'strip'};
+
+/** Off; when a mode is picked: three plays of each ayah, half a second apart, the text revealed from the second. */
+export const defaultMemorize: Memorize = {mode: 'off', repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1};
 
 /** No title; when one is turned on: a three-second card, dark ink in the translation's serif, the label top right. */
 export const defaultOverlay: Overlay = {

@@ -10,7 +10,7 @@ import {
   type MushafDataSource,
   type MushafLineData,
   type MushafThemeSelection,
-  type RecitationTimings,
+  type RecitationTimingsV1,
   sliceWords,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
@@ -77,7 +77,7 @@ export const firstAyahKey = (line: MushafLineData | undefined): string | null =>
  * current until the next starts, like `wordAt()` does for words; unlike it, this needs no per-word
  * times, so the translation follows the audio even for a file that only times its ayahs.
  */
-export const ayahAt = (timings: RecitationTimings, seconds: number): string | null => {
+export const ayahAt = (timings: RecitationTimingsV1, seconds: number): string | null => {
   let current: number | null = null;
   for (const ayah of timings.ayat) if (ayah.start <= seconds) current = ayah.ayah;
   return current === null ? null : `${timings.surah}:${current}`;
@@ -197,14 +197,19 @@ export type BlockGeometry = {
   readonly top: number;
 };
 
-/** The lines' block for a layout in a frame of `size`: the package's default type size is for a line spanning the whole width, so the measure sets it. */
+/**
+ * The lines' block for a layout in a frame of `size`: the package's default type size is for a line
+ * spanning the whole width, so the measure sets it. `extraLineHeight` (px, default 0) grows every
+ * line slot past the package's line height: the room the interlinear glosses take under the words.
+ */
 export const blockGeometry = (
   layout: Pick<Layout, 'marginX' | 'visibleLines' | 'verticalAlign'>,
   size: {readonly width: number; readonly height: number},
+  options: {readonly extraLineHeight?: number | undefined} = {},
 ): BlockGeometry => {
   const measure = size.width - 2 * layout.marginX;
   const fontSize = fontSizeForWidth(measure);
-  const lineHeight = lineHeightForFontSize(fontSize);
+  const lineHeight = lineHeightForFontSize(fontSize) + (options.extraLineHeight ?? 0);
   const slots = layout.visibleLines === 0 ? 1 : layout.visibleLines;
   const blockHeight = slots * lineHeight;
   const top = Math.round((size.height - blockHeight) * layout.verticalAlign);

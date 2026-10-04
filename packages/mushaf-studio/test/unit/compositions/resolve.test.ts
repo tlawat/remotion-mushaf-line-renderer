@@ -489,3 +489,46 @@ describe('calculateMushafRecitationMetadata', () => {
     }
   });
 });
+
+describe('timings across surahs', () => {
+  it('refuses a version-2 timings file with BAD_STUDIO_PROP, naming the way out', async () => {
+    const v2 = {
+      version: 2,
+      ayat: [
+        {surah: 1, ayah: 7, start: 0.5, end: 4},
+        {surah: 2, ayah: 1, start: 5, end: 7},
+      ],
+    };
+    const error = await rejection(resolveRecitation(props(), {fetch: fetchJson(v2), staticFile}));
+    expect(isMushafStudioError(error)).toBe(true);
+    expect(error.code).toBe('BAD_STUDIO_PROP');
+    expect(error.message).toContain('crosses surahs (version 2)');
+    expect(error.message).toContain('getMushafLinesForRanges()');
+    expect(mocks.getMushafLines).not.toHaveBeenCalled();
+  });
+});
+
+describe('the clip timeline', () => {
+  it('is resolved with the content, and calculateMetadata counts the frames from it when ayahs repeat', async () => {
+    const {clipTimeline, timelineDuration} = await import('../../../src/memorize');
+    const once = await resolveRecitation(props(), {fetch: fetchJson(fatiha), staticFile});
+    expect(once.clips).toEqual(clipTimeline(once.timings, defaultMushafRecitationProps.memorize));
+    const memorize = {mode: 'blank-upcoming' as const, repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1};
+    vi.stubGlobal('fetch', fetchJson(fatiha));
+    try {
+      const metadata = await calculateMushafRecitationMetadata({
+        props: props({memorize}),
+        defaultProps: props(),
+        abortSignal: new AbortController().signal,
+        compositionId: 'MushafRecitation',
+        isRendering: false,
+      });
+      const resolved = (metadata.props as MushafRecitationProps).resolved as typeof once;
+      expect(resolved.clips).toHaveLength(18);
+      expect(metadata.durationInFrames).toBe(timelineDuration(resolved.clips, 30));
+      expect(metadata.durationInFrames).toBeGreaterThan(857);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

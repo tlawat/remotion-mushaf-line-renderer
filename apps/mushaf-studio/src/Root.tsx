@@ -97,6 +97,12 @@ export const RemotionRoot: React.FC = () => {
             dimUpcomingOnly: false,
             occurrence: 'first',
           },
+          memorize: {
+            mode: 'off',
+            repeat: 3,
+            pauseSeconds: 0.5,
+            revealAfterRepeats: 1,
+          },
           text: {
             translationFile: '',
             translationPosition: 'below',
@@ -110,6 +116,7 @@ export const RemotionRoot: React.FC = () => {
             glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
             glossSize: 34,
             glossColor: '#6a6a6a',
+            glossPosition: 'strip',
           },
           overlay: {
             title: 'none',
@@ -254,6 +261,12 @@ export const RemotionRoot: React.FC = () => {
             dimOthers: 1,
             dimUpcomingOnly: false,
             occurrence: 'first',
+          },
+          memorize: {
+            mode: 'off',
+            repeat: 3,
+            pauseSeconds: 0.5,
+            revealAfterRepeats: 1,
           },
           text: {
             translationFile: '',
