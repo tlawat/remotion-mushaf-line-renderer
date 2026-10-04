@@ -9,7 +9,14 @@ import {mushafAyahTextSchema} from '../unicode/schema';
 import type {MessageKey, MessageParams} from './i18n';
 import {t} from './store';
 import {isUrl} from './studio-api';
-import {isAyahTextProps, type StudioCompositionProps} from './tab-props';
+import {
+  endCardOf,
+  isAyahTextProps,
+  isPageProps,
+  type StudioCompositionProps,
+  textFileOf,
+  translationLayersOf,
+} from './tab-props';
 
 /** What `project.json` holds. */
 export type ProjectFile = {
@@ -30,17 +37,22 @@ const publicPath = (value: unknown): string | null =>
 
 /**
  * The `public/` paths a composition's props point to, sorted and once each: the audio, the timings,
- * the text files, the background image, an ayah text's Quran text, and the mushaf mirror when
- * `data` reads it. URLs are not files of the project and are left out.
+ * the text files (every translation layer), the end card's tafsir and surah introduction, the
+ * background image, an ayah text's Quran text, and the mushaf mirror when `data` reads it. URLs are
+ * not files of the project and are left out.
  */
 export const collectProjectFiles = (props: StudioCompositionProps): readonly string[] => {
   const record = props as unknown as Readonly<Record<string, unknown>>;
+  const card = endCardOf(props);
   const candidates: unknown[] = [
     props.audioFile,
     props.timingsFile,
-    props.text.translationFile,
-    props.text.glossFile,
-    props.text.transliterationFile,
+    textFileOf(props, 'translationFile'),
+    textFileOf(props, 'glossFile'),
+    textFileOf(props, 'transliterationFile'),
+    ...translationLayersOf(props).map((layer) => layer.file),
+    card.tafsirFile,
+    card.chapterInfoFile,
     props.layout.backgroundImage,
   ];
   if (isAyahTextProps(props)) candidates.push(props.textFile);
@@ -108,9 +120,9 @@ export const missingProjectFiles = (
   return project.files.filter((file) => !present.has(file));
 };
 
-/** Whether a project's props are for the same kind of composition as the panel's. */
+/** Whether a project's props are for the same kind of composition as the panel's: an ayah text, a page, or a recitation. */
 export const projectFits = (project: ProjectFile, props: StudioCompositionProps): boolean =>
-  'textFile' in project.props === isAyahTextProps(props);
+  'textFile' in project.props === isAyahTextProps(props) && 'pageView' in project.props === isPageProps(props);
 
 /** Offers a text as a download, through a Blob and a link click. Browser only. */
 export const downloadText = (name: string, text: string, type = 'application/json'): void => {

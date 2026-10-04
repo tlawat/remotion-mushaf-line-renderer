@@ -1,11 +1,11 @@
 // The Review tab's "Compare with...": another timings file of public/ against the composition's,
-// word by word (see compare.ts). The two files are read as they are, in their own times.
+// word by word (see timings-diff.ts). The two files are read as they are, in their own times.
 import type * as React from 'react';
 import {useState} from 'react';
-import {diffTimings, type TimingsDiff} from './compare';
 import {runStudioTask, t as tNow, useStudioState, useT} from './store';
 import {JSON_EXTENSIONS, readTimingsFile} from './studio-api';
 import {colors, styles} from './styles';
+import {diffTimings, type TimingsDiff} from './timings-diff';
 import {seconds} from './ui';
 import {usePublicFiles} from './use-public-files';
 

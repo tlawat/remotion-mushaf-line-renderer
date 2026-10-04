@@ -65,6 +65,12 @@ const translations = vi.hoisted(() => ({
 }));
 vi.mock('../../../src/translations', () => translations);
 
+// The end card's tafsir list is quran.com's: none here.
+vi.mock('../../../src/content', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/content')>()),
+  listQuranComTafsirs: vi.fn(async () => []),
+}));
+
 // quran.com stays out of it: the text a fetch gives is the fixture's.
 const unicodeText = vi.hoisted(() => ({fetchQuranComText: vi.fn()}));
 vi.mock('../../../src/unicode/text', async (importOriginal) => ({
@@ -220,6 +226,12 @@ const ayahTextProps = (t: StudioTimings): MushafAyahTextProps => ({
   timingsFile: 'mushaf-studio/p/fatiha.timings.json',
   resolved: {timings: t, text: parseAyahWords(fatihaText), translation: null, ayahs: []},
 });
+
+/** `props` as written before `text.translations`: the Text tab sets the one `translationFile`. */
+const singleTranslation = <P extends {readonly text: object}>(props: P): P => {
+  const {translations: _layers, ...text} = props.text as {readonly translations?: unknown};
+  return {...props, text};
+};
 
 const session = (): StudioSession => ({
   audioId: 'abc',
@@ -629,7 +641,7 @@ describe('Text', () => {
       meta: {id: 'f', name: 'f', language: 'en', source: 'file'},
       words: {},
     });
-    panel(propsWith(reviewTimings()), 'text');
+    panel(singleTranslation(propsWith(reviewTimings())), 'text');
     fireEvent.change(screen.getByRole('combobox', {name: 'JSON file in public/'}), {
       target: {value: 'mushaf-studio/p/words.json'},
     });
@@ -658,7 +670,7 @@ describe('Text', () => {
     translations.fetchQuranComTranslation.mockResolvedValue({kind: 'ayah'});
     translations.fetchQuranComWordGloss.mockResolvedValue({kind: 'word'});
     translations.serialiseTranslation.mockReturnValue('{"serialised":true}');
-    panel(propsWith(reviewTimings()), 'text');
+    panel(singleTranslation(propsWith(reviewTimings())), 'text');
     await screen.findByText('Fetch for this passage');
     fireEvent.click(screen.getByText('Fetch for this passage'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
@@ -712,18 +724,18 @@ describe('Text', () => {
     render(
       <MushafStudioPanel compositionId="MushafAyahText" props={ayahTextProps(reviewTimings())} initialTab="text" />,
     );
-    expect(screen.getByText('Word glosses apply to MushafRecitation.')).toBeTruthy();
+    expect(screen.getByText(/^Word glosses apply to MushafRecitation/)).toBeTruthy();
     expect(screen.queryByText('Word by word')).toBeNull();
     expect(screen.queryByText('Fetch transliteration')).toBeNull();
     expect(screen.queryByText('No gloss')).toBeNull();
     expect(screen.queryByText('As gloss')).toBeNull();
     expect(screen.queryByText('As transliteration')).toBeNull();
-    // The ayah translation still applies.
-    expect(screen.getByText('As translation')).toBeTruthy();
+    // The ayah translations still apply.
+    expect(screen.getByText('As a translation layer')).toBeTruthy();
     cleanup();
     panel(propsWith(reviewTimings()), 'text');
     expect(screen.getByText('Word by word')).toBeTruthy();
-    expect(screen.queryByText('Word glosses apply to MushafRecitation.')).toBeNull();
+    expect(screen.queryByText(/^Word glosses apply to MushafRecitation/)).toBeNull();
   });
 
   it("sets an ayah text's textFile to the fetched file, but not to a text in a script its font does not set", async () => {

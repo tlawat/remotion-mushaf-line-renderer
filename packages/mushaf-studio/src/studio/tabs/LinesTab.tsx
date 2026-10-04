@@ -5,7 +5,7 @@ import type {LineSplit} from '../../types';
 import {runStudioTask, t as tNow, useStudioState, useT} from '../store';
 import {patchProps, seekTo} from '../studio-api';
 import {colors, styles} from '../styles';
-import {hasLines, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
+import {hasLines, isAyahTextProps, isPageProps, isPageResolved, resolvedOf, type TabProps} from '../tab-props';
 import {Button, Note, range, Section} from '../ui';
 
 const MARKERS: Readonly<Record<MushafWord['kind'], string>> = {
@@ -19,8 +19,54 @@ const MARKERS: Readonly<Record<MushafWord['kind'], string>> = {
 const sameSplit = (a: LineSplit, b: LineSplit): boolean =>
   a.page === b.page && a.line === b.line && a.atWordId === b.atWordId;
 
-/** Lines: every scheduled slot with its words as chips; click a word to start a new slot there. */
-export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
+/**
+ * A page composition's slots: every printed page with when it is on screen and how many of its
+ * lines are recited; click one to seek there. The page shows its lines as printed: no splits.
+ */
+const PageSlots: React.FC<Pick<TabProps, 'props' | 'fps'>> = ({props, fps}) => {
+  const t = useT();
+  const resolved = resolvedOf(props);
+  if (!resolved || !isPageResolved(resolved)) return <Note>{t('lines.noPages')}</Note>;
+  return (
+    <div>
+      <Section title={t('lines.pages', {count: resolved.pages.length})}>
+        <ul style={styles.list}>
+          {resolved.pages.map((slot) => {
+            const recited = resolved.lines.filter((line) => line.page === slot.page).length;
+            return (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: the row is a seek target, as the line slots are
+              <li
+                key={`${slot.page}-${slot.start}`}
+                data-page={slot.page}
+                style={styles.listRow(false)}
+                title={t('lines.seekPage', {page: slot.page})}
+                onClick={() => seekTo(slot.start, fps)}
+              >
+                <div style={styles.row}>
+                  <strong>{t('lines.page', {page: slot.page})}</strong>
+                  <span style={{color: colors.muted}}>{range(slot.start, slot.end, t('unit.seconds'))}</span>
+                  <span style={{color: colors.muted}}>{t('lines.recitedLines', {count: recited})}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </Section>
+      <Note>{t('lines.pageNote')}</Note>
+    </div>
+  );
+};
+
+/**
+ * Lines: every scheduled slot with its words as chips; click a word to start a new slot there. On a
+ * page composition, its pages and their times instead.
+ */
+export const LinesTab: React.FC<TabProps> = (tabProps) => {
+  if (isPageProps(tabProps.props)) return <PageSlots props={tabProps.props} fps={tabProps.fps} />;
+  return <RecitationLines {...tabProps} />;
+};
+
+const RecitationLines: React.FC<TabProps> = ({compositionId, props, fps}) => {
   const {busy} = useStudioState();
   const t = useT();
   const resolved = resolvedOf(props);
@@ -29,7 +75,7 @@ export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
     for (const word of resolved?.timings.alignment?.words ?? []) if (!map.has(word.id)) map.set(word.id, word.text);
     return map;
   }, [resolved]);
-  if (isAyahTextProps(props)) return <Note>{t('lines.noPrintedLines')}</Note>;
+  if (isAyahTextProps(props) || isPageProps(props)) return <Note>{t('lines.noPrintedLines')}</Note>;
   if (!resolved || !hasLines(resolved)) return <Note>{t('lines.noLines')}</Note>;
 
   const working = busy !== null;

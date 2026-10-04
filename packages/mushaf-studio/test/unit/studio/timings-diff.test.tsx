@@ -34,7 +34,7 @@ const studio = vi.hoisted(() => ({
 }));
 vi.mock('@remotion/studio', () => studio);
 
-const {diffTimings, summarise} = await import('../../../src/studio/compare');
+const {diffTimings, summarise} = await import('../../../src/studio/timings-diff');
 const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
 const {resetStudioStore, getStudioState} = await import('../../../src/studio/store');

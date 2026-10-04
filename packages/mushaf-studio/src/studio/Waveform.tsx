@@ -7,7 +7,7 @@ import {useCurrentFrame} from 'remotion';
 import type {AlignmentSegment} from '../types';
 import {useStudioState, useT} from './store';
 import {colors, confidenceColor} from './styles';
-import {audioUrlOf, loadWaveform, peaksBetween, type WaveformEnvelope} from './waveform';
+import {audioUrlOf, loadWaveform, peaksBetween, type WaveformEnvelope} from './waveform-peaks';
 
 export const WAVEFORM_WIDTH = 356;
 export const WAVEFORM_HEIGHT = 60;

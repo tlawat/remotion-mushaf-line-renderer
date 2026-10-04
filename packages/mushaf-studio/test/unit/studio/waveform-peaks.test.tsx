@@ -35,7 +35,9 @@ const studio = vi.hoisted(() => ({
 }));
 vi.mock('@remotion/studio', () => studio);
 
-const {computePeaks, envelopeOf, peaksBetween, loadWaveform, audioUrlOf} = await import('../../../src/studio/waveform');
+const {computePeaks, envelopeOf, peaksBetween, loadWaveform, audioUrlOf} = await import(
+  '../../../src/studio/waveform-peaks'
+);
 const {timeAtX, xAtTime} = await import('../../../src/studio/Waveform');
 const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');

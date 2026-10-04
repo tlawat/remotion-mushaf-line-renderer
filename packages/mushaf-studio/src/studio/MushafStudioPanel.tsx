@@ -20,7 +20,17 @@ import {
 } from './store';
 import {applyPatch, patchApplied} from './studio-api';
 import {colors, styles} from './styles';
-import {hasLines, isAyahTextProps, resolvedOf, type StudioCompositionProps, type TabProps} from './tab-props';
+import {
+  endCardOf,
+  hasLines,
+  isAyahTextProps,
+  isPageProps,
+  isPageResolved,
+  resolvedOf,
+  type StudioCompositionProps,
+  type TabProps,
+  textFileOf,
+} from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
 import {LinesTab} from './tabs/LinesTab';
 import {LookTab} from './tabs/LookTab';
@@ -231,7 +241,8 @@ const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
 /**
  * A cheap fingerprint of `resolved`: enough to notice a new resolution without comparing the data.
  * The counts alone miss a re-alignment that keeps them, so the session, the last edit and the sum
- * of the word starts are in it too. An ayah text has its ayahs where a recitation has its lines.
+ * of the word starts are in it too. An ayah text has its ayahs, a page its pages, where a
+ * recitation has its lines.
  */
 const resolvedSignature = (props: StudioCompositionProps): string => {
   const resolved = resolvedOf(props);
@@ -242,7 +253,11 @@ const resolvedSignature = (props: StudioCompositionProps): string => {
   const sidecar = timings.alignment;
   const starts = timings.ayat.reduce((sum, ayah) => (ayah.words ?? []).reduce((n, word) => n + word.start, sum), 0);
   return [
-    hasLines(resolved) ? resolved.lines.length : `a${resolved.ayahs.length}`,
+    hasLines(resolved)
+      ? resolved.lines.length
+      : isPageResolved(resolved)
+        ? `p${resolved.pages.map((page) => `${page.page}@${page.start}`).join(',')}`
+        : `a${resolved.ayahs.length}`,
     schedule.length,
     last ? `${last.start}-${last.end}` : '',
     timings.surah,
@@ -256,11 +271,19 @@ const resolvedSignature = (props: StudioCompositionProps): string => {
   ].join(':');
 };
 
-/** What one composition has and the other does not: an ayah text's file and font (its script), a recitation's lines. */
-const ownContent = (props: StudioCompositionProps): string =>
-  isAyahTextProps(props)
-    ? JSON.stringify(['ayah-text', props.textFile, props.font])
-    : JSON.stringify(['recitation', props.slice, props.review.confidenceThreshold, props.splits]);
+/**
+ * What one composition has and the others do not: an ayah text's file and font (its script), a
+ * recitation's lines, a page's review threshold; and the end card's files where there is one.
+ */
+const ownContent = (props: StudioCompositionProps): string => {
+  const card = endCardOf(props);
+  const own = isAyahTextProps(props)
+    ? ['ayah-text', props.textFile, props.font]
+    : isPageProps(props)
+      ? ['page', props.review.confidenceThreshold]
+      : ['recitation', props.slice, props.review.confidenceThreshold, props.splits];
+  return JSON.stringify([...own, card.show ?? null, card.tafsirFile ?? null, card.chapterInfoFile ?? null]);
+};
 
 /** The style groups a look sets, as one string: the Look tab marks the look the props have. */
 const styleSignature = (props: StudioCompositionProps): string =>
@@ -281,9 +304,9 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
     x.timingsFile === y.timingsFile &&
     x.fromAyah === y.fromAyah &&
     x.toAyah === y.toAyah &&
-    x.text.translationFile === y.text.translationFile &&
-    x.text.glossFile === y.text.glossFile &&
-    x.text.transliterationFile === y.text.transliterationFile &&
+    textFileOf(x, 'translationFile') === textFileOf(y, 'translationFile') &&
+    textFileOf(x, 'glossFile') === textFileOf(y, 'glossFile') &&
+    textFileOf(x, 'transliterationFile') === textFileOf(y, 'transliterationFile') &&
     ownContent(x) === ownContent(y) &&
     styleSignature(x) === styleSignature(y) &&
     resolvedSignature(x) === resolvedSignature(y)
@@ -291,7 +314,7 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
 };
 
 /**
- * The Mushaf panel: rendered inside a composition (`<MushafRecitation>` or `<MushafAyahText>`), it
+ * The Mushaf panel: rendered inside a composition (`<MushafRecitation>`, `<MushafAyahText>` or `<MushafPage>`), it
  * renders nothing outside the Studio (in a render, a `<Player>`, on the server). In the Studio it
  * portals a dock into `document.body`, in English or Arabic, with the tabs Source, Look, Align,
  * Review, Lines and Text and a Project menu, and marks the doubtful segments on the Studio's

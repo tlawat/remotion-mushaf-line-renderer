@@ -1,6 +1,5 @@
 import type * as React from 'react';
 import {useMemo, useState} from 'react';
-import {captionsToSrt, toCaptions} from '../../captions';
 import {DEFAULT_CONFIDENCE_THRESHOLD, realignSession, sessionTimestamps, splitSession, timingsFromQud} from '../../qud';
 import type {AlignmentEdit, AlignmentSegment, StudioTimings} from '../../types';
 import {CompareTimings} from '../Compare';
@@ -33,16 +32,15 @@ import {
   reevaluate,
   seekTo,
   seekToTime,
-  slugify,
   stemOf,
   togglePlayback,
-  writeFile,
   writeJsonFile,
 } from '../studio-api';
 import {colors, confidenceColor, styles} from '../styles';
-import {audioOffsetOf, hasLines, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
+import {audioOffsetOf, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
 import {Button, Disclosure, Note, NumberInput, ProgressBar, range, Section} from '../ui';
 import {Waveform, type WaveformView} from '../Waveform';
+import {ExportRow} from './ExportRow';
 
 type Span = {readonly start: number; readonly end: number};
 
@@ -146,7 +144,6 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const alignment = timings?.alignment ?? null;
   // An ayah text has no `review` props: it marks no doubtful word, and the list uses the default threshold.
   const threshold = isAyahTextProps(props) ? DEFAULT_CONFIDENCE_THRESHOLD : props.review.confidenceThreshold;
-  const [markers, setMarkers] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState<ReadonlyMap<string, Span>>(() => new Map());
   const [splitOpen, setSplitOpen] = useState(false);
@@ -245,32 +242,6 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
       setStudioState({busy: tNow('review.busy.writing')});
       await writeTimings(nudgeWords(file, nudges));
       setPending(new Map());
-    });
-  };
-
-  /**
-   * Writes the captions of the timings file into the project: SRT, or the `Caption[]` JSON of
-   * `@remotion/captions`. The file, as `applyEdits` reads it, not `resolved.timings` (cut to the
-   * range, and moved for a recitation): the captions follow the audio file.
-   */
-  const exportCaptions = (format: 'srt' | 'json') => {
-    const source = props.timingsFile;
-    const withMarkers = markers;
-    // An ayah text has the Unicode words of its range: a word the sidecar does not name gets them, not its id.
-    const unicode: Readonly<Record<string, string>> =
-      resolved !== null && !hasLines(resolved) ? resolved.text.words : {};
-    void runStudioTask(tNow('review.busy.reading'), async () => {
-      const file = await readTimingsFile(source);
-      const captions = toCaptions(file, {markers: withMarkers, textOf: (id) => unicode[id] ?? null});
-      const stem = slugify(stemOf(source).replace(/\.timings$/, '')) || 'timings';
-      setStudioState({busy: tNow('review.busy.captions')});
-      const path =
-        format === 'srt'
-          ? await writeFile(projectPath(project, `${stem}.srt`), captionsToSrt(captions))
-          : await writeJsonFile(projectPath(project, `${stem}.captions.json`), captions);
-      setStudioState({
-        notice: tNow(format === 'srt' ? 'review.notice.srt' : 'review.notice.captions', {path, count: captions.length}),
-      });
     });
   };
 
@@ -589,21 +560,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         </div>
         <Note>{t('review.applyNote', {file: props.timingsFile})}</Note>
       </Section>
-      <Section title={t('review.export')}>
-        <div style={styles.row}>
-          <Button onClick={() => exportCaptions('srt')} disabled={working || !props.timingsFile}>
-            SRT
-          </Button>
-          <Button onClick={() => exportCaptions('json')} disabled={working || !props.timingsFile}>
-            {t('review.captionsJson')}
-          </Button>
-          <label style={styles.row}>
-            <input type="checkbox" checked={markers} onChange={(e) => setMarkers(e.target.checked)} />
-            <span style={styles.label}>{t('review.markers')}</span>
-          </label>
-        </div>
-        <Note>{t('review.exportNote')}</Note>
-      </Section>
+      <ExportRow props={props} project={project} />
       <Disclosure title={t('compare.title')} open={compareOpen} onToggle={() => setCompareOpen((o) => !o)}>
         <CompareTimings
           timingsFile={isUrl(props.timingsFile) ? '' : props.timingsFile}

@@ -4,6 +4,7 @@
 // becomes a status line, never a React error.
 import {
   getStaticFiles,
+  goToComposition,
   play,
   reevaluateComposition,
   type StaticFile,
@@ -19,11 +20,13 @@ import type {MushafLookPatch} from '../presets';
 import type {Review, Text} from '../schema';
 import type {LineSplit, StudioTimings} from '../types';
 import {getStudioState, setStudioState, t} from './store';
+import type {EndCardView, TranslationLayer} from './tab-props';
 
 /**
- * What the panel changes on the composition: the content props, the file fields of `text` and
- * `review`, and the style groups a look sets (see `MushafLookPatch`). `slice`, `splits` and `review`
- * are `<MushafRecitation>`'s, `textFile` `<MushafAyahText>`'s.
+ * What the panel changes on the composition: the content props, the file fields of `text` (its
+ * translation layers included) and `review`, the end card's files, and the style groups a look sets
+ * (see `MushafLookPatch`). `slice` and `splits` are `<MushafRecitation>`'s, `textFile`
+ * `<MushafAyahText>`'s; a `<MushafPage>` has no `text`.
  */
 export type PropsPatch = Omit<MushafLookPatch, 'text'> & {
   readonly audioFile?: string | undefined;
@@ -33,8 +36,11 @@ export type PropsPatch = Omit<MushafLookPatch, 'text'> & {
   readonly slice?: boolean | undefined;
   readonly splits?: readonly LineSplit[] | undefined;
   readonly textFile?: string | undefined;
-  readonly text?: Partial<Text> | undefined;
+  readonly text?:
+    | (Omit<Partial<Text>, 'translations'> & {readonly translations?: TranslationLayer[] | undefined})
+    | undefined;
   readonly review?: Partial<Review> | undefined;
+  readonly endCard?: EndCardView | undefined;
 };
 
 const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -142,6 +148,33 @@ export const patchProps = async (compositionId: string, patch: PropsPatch): Prom
     throw error;
   }
   reevaluateComposition();
+};
+
+/** Whether a Studio error says the Root has no composition of that id (`saveDefaultProps()` throws it). */
+const isMissingComposition = (error: unknown): boolean =>
+  error instanceof Error && /No composition with the ID/.test(error.message);
+
+/**
+ * Merges `patch` into the saved default props of another composition of the Root (the thumbnail
+ * still, say), then selects it in the Studio. Not `patchProps()`: the panel's `pendingPatch` is the
+ * panel's own composition's. Resolves with `false`, having saved nothing, when the Root has no
+ * composition `compositionId`; any other failure is thrown.
+ */
+export const patchOtherComposition = async (
+  compositionId: string,
+  patch: Readonly<Record<string, unknown>>,
+): Promise<boolean> => {
+  try {
+    await saveDefaultProps({
+      compositionId,
+      defaultProps: ({savedDefaultProps}) => deepMerge(savedDefaultProps, patch),
+    });
+  } catch (error) {
+    if (isMissingComposition(error)) return false;
+    throw error;
+  }
+  goToComposition(compositionId);
+  return true;
 };
 
 /** Re-runs `calculateMetadata()` after a file the composition reads was rewritten. */

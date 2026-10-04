@@ -61,6 +61,10 @@ const translations = vi.hoisted(() => ({
   loadTranslation: vi.fn(),
 }));
 vi.mock('../../../src/translations', () => translations);
+vi.mock('../../../src/content', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/content')>()),
+  listQuranComTafsirs: vi.fn(async () => []),
+}));
 
 // The Lines tab wrapped to count its renders: the wrapper re-renders only when the dock does (the
 // tab's own store subscription does not reach it), so the count says whether the memo held. With
@@ -501,9 +505,10 @@ describe('<MushafStudioPanel>', () => {
     const {rerender} = render(
       <MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} initialTab="text" />,
     );
-    expect(screen.getByText('Now: none')).toBeTruthy();
+    // `translations` is empty: `translationFile` is the one layer, when there is one.
+    expect(screen.getByText('No translation layer yet.')).toBeTruthy();
     await patchProps('MushafRecitation', {text: {translationFile: 'mushaf-studio/p/t.json'}});
-    await screen.findByText('Now: mushaf-studio/p/t.json');
+    await screen.findByText('1. mushaf-studio/p/t.json (font: auto)');
     // A frame with the old props (the Root has not reloaded yet) does not take the change back.
     rerender(
       <MushafStudioPanel
@@ -512,7 +517,7 @@ describe('<MushafStudioPanel>', () => {
         initialTab="text"
       />,
     );
-    expect(screen.getByText('Now: mushaf-studio/p/t.json')).toBeTruthy();
+    expect(screen.getByText('1. mushaf-studio/p/t.json (font: auto)')).toBeTruthy();
     expect(getStudioState().pendingPatch).toEqual({text: {translationFile: 'mushaf-studio/p/t.json'}});
     // The props arrive with it: the pending patch has done its job.
     rerender(
@@ -526,6 +531,6 @@ describe('<MushafStudioPanel>', () => {
       />,
     );
     await waitFor(() => expect(getStudioState().pendingPatch).toBeNull());
-    expect(screen.getByText('Now: mushaf-studio/p/t.json')).toBeTruthy();
+    expect(screen.getByText('1. mushaf-studio/p/t.json (font: auto)')).toBeTruthy();
   });
 });

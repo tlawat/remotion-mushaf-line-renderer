@@ -9,7 +9,7 @@ import type {QudAlignResponse, QudDevice, QudModel, QudProgress, QudRecitation, 
 import type {QuranComResource} from '../translations';
 import {isStudioLanguage, type MessageKey, type MessageParams, type StudioLanguage, translate} from './i18n';
 import type {PropsPatch} from './studio-api';
-import type {WaveformEntry} from './waveform';
+import type {WaveformEntry} from './waveform-peaks';
 
 export type StudioTab = 'source' | 'look' | 'align' | 'review' | 'lines' | 'text';
 
@@ -17,12 +17,13 @@ export type StudioTab = 'source' | 'look' | 'align' | 'review' | 'lines' | 'text
 export type StudioSide = 'left' | 'right';
 
 /** The lists `loadOnce()` fetches once and keeps. */
-export type CachedList = 'catalogue' | 'quranComResources';
+export type CachedList = 'catalogue' | 'quranComResources' | 'quranComTafsirs';
 
 /** What the status line says while a cached list loads: keys of the panel's dictionary. */
 export const LOADING_LABELS: Readonly<Record<CachedList, MessageKey>> = {
   catalogue: 'status.loadingCatalogue',
   quranComResources: 'status.loadingTranslations',
+  quranComTafsirs: 'status.loadingTafsirs',
 };
 
 /** The tabs in order, each with its label's key in the panel's dictionary. */
@@ -67,6 +68,8 @@ export type StudioState = {
   readonly catalogue: readonly QudRecitation[] | null;
   /** `listQuranComTranslations()` for every language, fetched once. */
   readonly quranComResources: readonly QuranComResource[] | null;
+  /** `listQuranComTafsirs()` for every language, fetched once (by the Text tab, for the end card). */
+  readonly quranComTafsirs: readonly QuranComResource[] | null;
   readonly session: StudioSession | null;
   /** The last recording the user put into `public/` through the Source tab. */
   readonly uploadedAudio: string | null;
@@ -167,6 +170,7 @@ const initialState = (): StudioState => {
     notice: null,
     catalogue: null,
     quranComResources: null,
+    quranComTafsirs: null,
     session: isSession(saved?.session) ? saved.session : null,
     uploadedAudio: typeof saved?.uploadedAudio === 'string' ? saved.uploadedAudio : null,
     pendingPatch: null,

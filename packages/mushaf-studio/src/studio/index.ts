@@ -1,6 +1,7 @@
 // Contract of the Studio panel (workstream 5): the panel in MushafStudioPanel.tsx, its state in
 // store.ts, the Studio API wrappers in studio-api.ts, the tabs in tabs/.
 import type {MushafRecitationProps} from '../compositions/recitation/schema';
+import type {MushafPageProps} from '../page/schema';
 import type {MushafAyahTextProps} from '../unicode/schema';
 
 export type MushafStudioPanelProps = {
@@ -8,9 +9,10 @@ export type MushafStudioPanelProps = {
   readonly compositionId: string;
   /**
    * The composition's current props (content and style), so the panel shows what the preview shows:
-   * `<MushafRecitation>`'s or `<MushafAyahText>`'s (told apart by `textFile`, which only the latter has).
+   * `<MushafRecitation>`'s, `<MushafAyahText>`'s (told apart by `textFile`, which only it has) or
+   * `<MushafPage>`'s (told apart by `pageView`).
    */
-  readonly props: MushafRecitationProps | MushafAyahTextProps;
+  readonly props: MushafRecitationProps | MushafAyahTextProps | MushafPageProps;
   /** Where the panel's files go, under `public/`: `mushaf-studio/<project>/`. Default: the composition id. */
   readonly project?: string | undefined;
   /** Which tab opens first. */
