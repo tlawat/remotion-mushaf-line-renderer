@@ -1,6 +1,8 @@
 import {
   enterTiming,
   exitTiming,
+  fontSizeForWidth,
+  lineHeightForFontSize,
   revealRtlStyle,
   slideFadeStyle,
   wordAt,
@@ -8,8 +10,9 @@ import {
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Audio, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
-import {fileUrl} from '../compositions/shared';
+import {ayahAt, fileUrl} from '../compositions/shared';
 import {MushafStudioError} from '../errors';
+import {MushafTitleOverlay} from '../overlay';
 import {activeWordStyleFrom} from '../schema';
 import {MushafStudioPanel} from '../studio';
 import {useInStudio} from '../studio/environment';
@@ -84,11 +87,12 @@ export const ayahPresentationStyle = (
  * of reels and short clips, where `<MushafRecitation>` shows the printed page lines. Each timed
  * ayah is a Sequence from `leadInSeconds` before its first word to where the next one comes in,
  * centred at `layout.verticalAlign`, with the current word (or ayah) highlighted, the others dimmed
- * as `highlight` says, and its translation under it. The same timings and translation files as the
+ * as `highlight` says, and its translation under it, with the title card and corner label of
+ * `overlay` when asked. The same timings and translation files as the
  * recitation; in the Studio the Mushaf panel is docked over it, as over `<MushafRecitation>`.
  */
 export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
-  const {audioFile, layout, animation, highlight, text, fontSize, lineHeight} = props;
+  const {audioFile, layout, animation, highlight, text, fontSize, lineHeight, overlay} = props;
   const {width, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
@@ -103,12 +107,14 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
   }
   const {timings, ayahs, translation} = resolved;
   const now = frame / fps;
-  const activeWordId = highlight.mode === 'none' ? null : wordAt(timings, now);
+  const heard = wordAt(timings, now);
+  const activeWordId = highlight.mode === 'none' ? null : heard;
   const activeAyah = highlight.mode === 'ayah' ? ayahKeyOf(activeWordId) : null;
   const highlightStyle = activeWordStyleFrom(highlight);
   const dims = highlight.mode !== 'none' && highlight.dimOthers < 1;
   const measure = width - 2 * layout.marginX;
   const lineBox = fontSize * lineHeight;
+  const titleFontSize = fontSizeForWidth(measure);
   const showTranslation = translation !== null && text.translationPosition !== 'none';
 
   // A pure function of the frame: the ayah of the current word is painted whole under `mode: 'ayah'`;
@@ -191,6 +197,19 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
           </Sequence>
         );
       })}
+      <MushafTitleOverlay
+        overlay={overlay}
+        surah={timings.surah}
+        fromAyah={timings.ayat[0]!.ayah}
+        toAyah={timings.ayat[timings.ayat.length - 1]!.ayah}
+        ayahKey={ayahKeyOf(heard) ?? ayahAt(timings, now)}
+        firstWordSeconds={timings.ayat[0]!.words?.[0]?.start ?? timings.ayat[0]!.start}
+        background={layout.background}
+        // The surah name is set as a printed line would be across the measure, not at the Arabic text's size.
+        fontSize={titleFontSize}
+        lineHeight={lineHeightForFontSize(titleFontSize)}
+        width={measure}
+      />
       {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );

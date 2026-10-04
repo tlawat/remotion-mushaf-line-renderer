@@ -234,11 +234,12 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `toAyah`      | 0–286                       | `0`                           | Last ayah to show (0: as the timings say).                   |
 | `slice`       | boolean                     | `true`                        | Hide the neighbours' words on the first and last lines.      |
 | `splits`      | `{page, line, atWordId}[]`  | `[]`                          | Printed lines split into two timed segments; `atWordId` is the `MushafWord.wordId` that starts the second. |
+| `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'`            | When the recitation starts at ayah 1: the surah's header lines before it (see [`header`](#header-mushafrecitation-and-mushafpassage)). |
 | `theme`       | `'plain'`, `'light'`, `'dark'`, `'sepia'`, `'black'`, `'normal'`, `'p1'`–`'p5'`, `'custom'` | `'plain'` | Colour theme of the mushaf line; `'custom'` uses `customTheme`. |
 | `customTheme` | object                      | see below                     | A preset and a colour per part.                              |
 | `fonts`       | `'fallback'`, `'cdn'`, `'package'` | `'fallback'`           | Where the page fonts come from: QUL's CDN with the fonts packages as fallback, the CDN only, or the packages only (offline). |
 | `data`        | `'mirror'`, `'cdn'`         | `'mirror'`                    | The mushaf data: the mirror in `public/data/qpc-v4/` through `staticFile()`, or QUL's exports on Tarteel's CDN. |
-| `layout`, `animation`, `highlight`, `text`, `review` | objects | see below | The style groups.                                       |
+| `layout`, `animation`, `highlight`, `text`, `overlay`, `review` | objects | see below | The style groups.                            |
 | `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translation, the gloss, the doubtful words. Leave it `null`. |
 
 ### `MushafPassage`
@@ -250,7 +251,8 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `toAyah`      | 0–286     | `5`        | Last ayah (0: to the end of the surah).        |
 | `slice`       | boolean   | `true`     | Hide the neighbours' words on the first and last lines. |
 | `holdSeconds` | 0.5–30    | `4`        | Seconds each line stays.                       |
-| `theme`, `customTheme`, `fonts`, `data`, `layout`, `animation`, `text` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above. |
+| `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'` | When `fromAyah` is 1: the surah's header lines first. |
+| `theme`, `customTheme`, `fonts`, `data`, `layout`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above. |
 | `resolved`    |           | `null`     | Filled by `calculateMetadata()`.               |
 
 ### `MushafAyahText`
@@ -269,6 +271,7 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `layout`      | object              | `aspect: '9:16'`, dark page          | As for `MushafRecitation`; `visibleLines` and `neighbourOpacity` do not apply. |
 | `animation`   | `{enter, exit, leadInSeconds}` | slide-fade, 0.4 s         | How each ayah comes in and goes out.                                        |
 | `highlight`, `text` | objects       | as for `MushafRecitation`            | The word-by-word fields of `text` do not apply.                             |
+| `overlay`     | object              | as for `MushafRecitation`, `color: '#f4efe6'` | The title card and corner label, in the dark page's ink.              |
 | `resolved`    |                     | `null`                               | Filled by `calculateMetadata()`.                                            |
 
 ### `customTheme`
@@ -335,6 +338,45 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `glossFont`            | CSS font family               | `'"Noto Sans", "Helvetica Neue", Arial, sans-serif'` | Font of the gloss strip.     |
 | `glossSize`            | 12–120 px                     | `34`          | Gloss size.                                                  |
 | `glossColor`           | colour                        | `'#6a6a6a'`   | Gloss colour.                                                |
+
+### `overlay`
+
+A title over the video, in all three compositions (`overlaySchema`, `defaultOverlay`; the
+components are `<MushafTitleOverlay>`, `<MushafTitleCard>` and `<MushafCornerLabel>`, pure in their
+props and the frame). The intro card covers the frame in the page colour and shows the surah's name
+in its printed frame (`<MushafSurahName surah framed>`, with the composition's `fonts`), the range in
+Latin and Arabic-Indic digits ("Al-Fatihah · 1:2–7 · ١:٢–٧") and the reciter. Nothing is shifted for
+it: it stays `introSeconds`, fading out over its last half second, or goes 0.3 s before the first
+word when the recitation starts earlier. `MushafPassage`, with no audio to keep in step, starts its
+lines after it (`passageTimeline()`). The corner label reads "Al-Fatihah · 1:3 · Reciter": the surah
+and the ayah being heard (the translation block's key), and comes in as the card goes under `both`.
+
+| Field          | Type                                                     | Default                         | Description                                               |
+| -------------- | -------------------------------------------------------- | ------------------------------- | --------------------------------------------------------- |
+| `title`        | `'none'`, `'intro'`, `'corner'`, `'both'`                | `'none'`                        | No title, the intro card, the corner label, or both.      |
+| `introSeconds` | 1–8                                                      | `3`                             | Seconds the intro card stays.                             |
+| `reciter`      | string                                                   | `''`                            | The reciter's name, under the range and in the corner (empty: none). The panel does not fill it: type it in the Props sidebar. |
+| `color`        | colour                                                   | `'#1b1b1b'`                     | Colour of the title texts and the surah name.             |
+| `font`         | CSS font family                                          | `'Georgia, "Noto Serif", serif'` | Font of the title texts.                                 |
+| `corner`       | `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` | `'top-right'`             | Corner of the label.                                      |
+| `cornerSize`   | 12–60 px                                                 | `28`                            | Size of the label, and its distance from the edges.       |
+
+The transliterated names are `SURAH_NAMES` / `surahEnglishName()`.
+
+### `header` (`MushafRecitation` and `MushafPassage`)
+
+`'name'` puts the surah's `surah_name` line (its name in the printed frame) before the first ayah
+line when the passage starts at ayah 1; `'name-basmalah'` adds the `basmallah` line after it when
+the page prints one. Both come from `getMushafLines({page})` of the page that carries the first
+ayah (`surahHeaderLines()`), so Al-Fatihah (whose basmalah is ayah 1) and At-Tawbah (which has none)
+get the name alone. The header lines carry no timed words: they are scheduled before the first ayah
+line (`withHeaderSlots()`), `overlay.introSeconds` apart when the intro card is on and 1.5 s apart
+otherwise, never before 0, so the window's steps never decrease; one line at a time, they come in
+one after the other before the first ayah line, and a header line the recording leaves no room for
+is left out. In `MushafPassage` each holds that long, after the intro card. Under
+`fonts: 'package'` the surah-name and `quran-common` fonts are read from
+`public/fonts/surah-names-v4/surah_names.woff2` and `public/fonts/quran-common/quran-common.woff2`
+(`bun run qul fonts 1` downloads them; they are not committed).
 
 ### `review` (`MushafRecitation` only)
 

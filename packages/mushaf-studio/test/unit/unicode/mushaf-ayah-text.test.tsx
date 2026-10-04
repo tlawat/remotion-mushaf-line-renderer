@@ -18,6 +18,12 @@ vi.mock('../../../src/unicode/font', async (importOriginal) => ({
   useUnicodeFont: () => font,
 }));
 
+// The surah name's fonts are the package's business; here it says which surah it was given.
+vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tlawat/remotion-mushaf-line')>()),
+  MushafSurahName: (props: {surah: number}) => <span data-surah-name={props.surah} />,
+}));
+
 // The panel is the studio tests' business (test/unit/studio); here it says where it was rendered and with what.
 vi.mock('../../../src/studio', () => ({
   MushafStudioPanel: (props: {compositionId: string; props: {textFile?: string}}) => (
@@ -232,6 +238,20 @@ describe('<MushafAyahText>', () => {
     expect(
       mount({text: {translationPosition: 'none'}}, withTranslation).querySelector('.mushaf-translation'),
     ).toBeNull();
+  });
+
+  it('shows the title overlay: the card in the dark page’s ink, and the corner label with the ayah of the word heard, even with no highlight', () => {
+    expect(defaultMushafAyahTextProps.overlay.color).toBe('#f4efe6');
+    const both = {...defaultMushafAyahTextProps.overlay, title: 'both' as const, introSeconds: 3};
+    // The first word is at 0.331 s: the card is still there at frame 0 and gone a frame later.
+    const first = mount({overlay: both});
+    expect(first.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('1');
+    expect(first.querySelector<HTMLElement>('[data-mushaf-overlay="intro"]')!.style.color).toBe('rgb(244, 239, 230)');
+    cleanup();
+    remotion.state.frame = 120; // 4 s: ayah 3
+    const c = mount({overlay: both, highlight: {mode: 'none'}});
+    expect(c.querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
+    expect(c.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Fatihah · 1:3');
   });
 
   it('refuses to render without resolved, saying how to fill it', () => {

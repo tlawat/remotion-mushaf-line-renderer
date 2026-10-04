@@ -3,6 +3,7 @@ import type * as React from 'react';
 import {AbsoluteFill, Audio, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {MushafStudioError} from '../../errors';
 import {wordStarts} from '../../lines';
+import {MushafTitleOverlay} from '../../overlay';
 import {activeWordStyleFrom, animationFrom, fontPropsFrom, scrollTimingFrom, wordStyleFrom} from '../../schema';
 import {MushafStudioPanel} from '../../studio';
 import {useInStudio} from '../../studio/environment';
@@ -15,6 +16,7 @@ import {
   fileUrl,
   firstAyahKey,
   glossBlockStyle,
+  headerCount,
   leadFrames,
   linesBlockStyle,
   translationBlockStyle,
@@ -35,10 +37,11 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
 /**
  * The flagship composition: the printed lines of a recited passage follow the audio, one line at a
  * time or through a line window, with the current word highlighted, an ayah translation and a
- * word gloss, and (in the Studio) the doubtful words marked and the Mushaf panel docked.
+ * word gloss, the surah's header lines before ayah 1 and a title card and corner label when asked,
+ * and (in the Studio) the doubtful words marked and the Mushaf panel docked.
  */
 export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
-  const {audioFile, fonts, layout, animation, highlight, text, review} = props;
+  const {audioFile, fonts, layout, animation, highlight, text, review, overlay} = props;
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
@@ -62,6 +65,7 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
   const enterFrames = enterTiming().getDurationInFrames({fps});
   const exitFrames = exitTiming().getDurationInFrames({fps});
   const leads = leadFrames(schedule, animation.leadInSeconds, fps);
+  const headers = headerCount(lines);
 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
   const animationProps = animationFrom(animation, {visibleLines: slots});
@@ -92,6 +96,9 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
       const from = Math.max(0, leads[i]! - enterFrames);
       const nextLead = leads[i + 1];
       const end = nextLead === undefined ? Math.round((current.end + 1) * fps) : Math.max(0, nextLead - enterFrames);
+      // A header line squeezed out by a recitation that starts at once has no frame of its own:
+      // stretched to its exit, it would sit over the first ayah line.
+      if (current.index < headers && end <= from) return null;
       return (
         <Sequence
           key={current.index}
@@ -178,6 +185,19 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
           />
         </div>
       )}
+      <MushafTitleOverlay
+        overlay={overlay}
+        surah={timings.surah}
+        fromAyah={timings.ayat[0]!.ayah}
+        toAyah={timings.ayat[timings.ayat.length - 1]!.ayah}
+        ayahKey={ayahKey}
+        firstWordSeconds={timings.ayat[0]!.words?.[0]?.start ?? timings.ayat[0]!.start}
+        background={layout.background}
+        fontSize={fontSize}
+        lineHeight={lineHeight}
+        width={geometry.measure}
+        fontProps={fontSetup.props}
+      />
       {isStudio && fontSetup.warning !== null && <div style={WARNING_STYLE}>Mushaf Studio: {fontSetup.warning}</div>}
       {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>

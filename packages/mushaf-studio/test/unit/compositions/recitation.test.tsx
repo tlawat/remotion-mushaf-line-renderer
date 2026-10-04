@@ -70,7 +70,8 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
       />
     );
   };
-  return {...actual, MushafLine, MushafLineWindow};
+  const MushafSurahName = (props: {surah: number}) => <span data-surah-name={props.surah} />;
+  return {...actual, MushafLine, MushafLineWindow, MushafSurahName};
 });
 
 vi.mock('../../../src/translations', () => ({
@@ -94,6 +95,9 @@ vi.mock('../../../src/studio', () => ({
 const {MushafRecitation, defaultMushafRecitationProps} = await import('../../../src/compositions/recitation');
 const {scheduleLines, scrollPosition} = await import('@tlawat/remotion-mushaf-line');
 const {registerMushafFonts} = await import('../../../src/fonts');
+const {withHeaderSlots} = await import('../../../src/compositions/shared');
+const {defaultOverlay} = await import('../../../src/schema');
+const {syntheticLine} = await import('../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/compositions/recitation').ResolvedRecitation;
 type StudioTimings = import('../../../src/types').StudioTimings;
@@ -160,6 +164,21 @@ const repeated: StudioTimings = {
 };
 /** The same recitation timed by ayah only. */
 const ayahsOnly: StudioTimings = {...timings, ayat: timings.ayat.map(({words: _words, ...a}) => a)};
+
+const overlay = (changes: Partial<MushafRecitationProps['overlay']>) => ({...defaultOverlay, ...changes});
+/** The fixture three seconds later, with room before its first word. */
+const later = (seconds: number): StudioTimings => {
+  const move = (t: number) => Math.round((t + seconds) * 1000) / 1000;
+  return {
+    ...timings,
+    ayat: timings.ayat.map((a) => ({
+      ...a,
+      start: move(a.start),
+      end: move(a.end),
+      words: a.words!.map((w) => ({...w, start: move(w.start), end: move(w.end)})),
+    })),
+  };
+};
 
 beforeEach(() => {
   remotion.reset();
@@ -488,6 +507,77 @@ describe('<MushafRecitation>', () => {
     expect(
       lineMocks(mount(props({layout: layout({visibleLines: 0})}))).every((l) => l.dataset.fontFallback === 'yes'),
     ).toBe(true);
+  });
+
+  it('shows no title by default', () => {
+    const c = mount(props());
+    expect(c.querySelector('[data-mushaf-overlay]')).toBeNull();
+  });
+
+  it('shows the intro card until 0.3 s before the first word, with the surah and the range played', () => {
+    const p = props({overlay: overlay({title: 'intro', introSeconds: 5})}, {timings: later(3)});
+    remotion.state.frame = 0;
+    const c = mount(p);
+    const card = c.querySelector<HTMLElement>('[data-mushaf-overlay="intro"]')!;
+    expect(card.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('1');
+    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Al-Fatihah · 1:2–7 · ١:٢–٧');
+    cleanup();
+    // The first word is at 3.331 s: the card is gone at 3.031 s (frame 91), before introSeconds.
+    remotion.state.frame = 90;
+    expect(mount(p).querySelector('[data-mushaf-overlay="intro"]')).not.toBeNull();
+    cleanup();
+    remotion.state.frame = 91;
+    expect(mount(p).querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
+  });
+
+  it('shows the corner label with the ayah of the word heard and the reciter', () => {
+    const p = props({overlay: overlay({title: 'corner', reciter: 'Abdul Hamid Ghraio'})});
+    remotion.state.frame = 30; // 1 s: 1:2:2
+    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe(
+      'Al-Fatihah · 1:2 · Abdul Hamid Ghraio',
+    );
+    cleanup();
+    remotion.state.frame = 120; // 4 s: ayah 3 (3.533-5.693)
+    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe(
+      'Al-Fatihah · 1:3 · Abdul Hamid Ghraio',
+    );
+  });
+
+  it('shows the header line first, in the window and one at a time, its step before the first ayah line', () => {
+    const moved = later(3);
+    const withHeader = [syntheticLine(1, 1), ...lines];
+    const schedule = withHeaderSlots(scheduleLines(lines, moved), 1, 1.5);
+    const content = {timings: moved, lines: withHeader, schedule};
+    const w = windowOf(mount(props({}, content)))!;
+    expect(w.dataset.lineCount).toBe('7');
+    const from = lead(3.331 - 1.5) - 15;
+    expect(sequences(w.parentElement!.parentElement!)[0]!.dataset.from).toBe(String(from));
+    const steps = JSON.parse(w.dataset.steps!) as number[];
+    expect(steps.slice(0, 2)).toEqual([lead(1.831) - from, lead(3.331) - from]);
+    expect(steps.every((step, i) => i === 0 || step >= steps[i - 1]!)).toBe(true);
+    cleanup();
+    const c = mount(props({layout: layout({visibleLines: 0})}, content));
+    expect(lineMocks(c).map((l) => `${l.dataset.page}/${l.dataset.line}`)).toEqual([
+      '1/1',
+      '1/3',
+      '1/4',
+      '1/5',
+      '1/6',
+      '1/7',
+      '1/8',
+    ]);
+    const seq = sequences(c);
+    expect(seq[0]!.dataset).toMatchObject({from: String(from), duration: String(lead(3.331) - 15 - from)});
+    expect(seq[0]!.dataset.sequence).toBe('p1 l1 (surah_name)');
+  });
+
+  it('leaves out a header line squeezed out by a recitation that starts at once, one line at a time', () => {
+    const withHeader = [syntheticLine(1, 1), ...lines];
+    const schedule = withHeaderSlots(scheduleLines(lines, timings), 1, 1.5);
+    expect(schedule[0]).toEqual({index: 0, start: 0, end: 0.331});
+    const c = mount(props({layout: layout({visibleLines: 0})}, {lines: withHeader, schedule}));
+    expect(lineMocks(c)).toHaveLength(6);
+    expect(lineMocks(c)[0]!.dataset.line).toBe('3');
   });
 
   it('throws a clear error without resolved props', () => {

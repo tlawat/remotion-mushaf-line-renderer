@@ -134,6 +134,34 @@ export const reviewSchema = z.object({
   doubtColor: zColor().describe('Colour of the doubt mark'),
 });
 
+export const OVERLAY_TITLES = ['none', 'intro', 'corner', 'both'] as const;
+export const OVERLAY_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+
+/**
+ * The title overlay: an intro card over the first seconds (the surah name in its printed frame, the
+ * ayah range, the reciter) and a small label in a corner for the whole video (the surah, the ayah
+ * being heard, the reciter). Nothing is shifted for the card: it covers the start and fades out.
+ */
+export const overlaySchema = z.object({
+  title: z
+    .enum(OVERLAY_TITLES)
+    .describe('Title: none, an intro card, a corner label, or both (intro card, then the corner label)'),
+  /** The card fades out 0.3 s before the first word when the recitation starts earlier than this. */
+  introSeconds: z.number().min(1).max(8).step(0.5).describe('Seconds the intro card stays'),
+  /** Free text: the Mushaf panel does not fill it. */
+  reciter: z.string().describe('Reciter’s name, under the title and in the corner (empty: none)'),
+  color: zColor().describe('Colour of the title texts'),
+  font: z.string().describe('CSS font family of the title texts'),
+  corner: z.enum(OVERLAY_CORNERS).describe('Corner of the label'),
+  /** px, at the composition's width. */
+  cornerSize: z.number().int().min(12).max(60).describe('Size of the corner label in px'),
+});
+
+/** The surah's printed header before its first ayah: nothing, its name, or its name and basmalah (when it has one). */
+export const headerSchema = z
+  .enum(['none', 'name', 'name-basmalah'])
+  .describe('When the passage starts at ayah 1: show the surah’s name (and basmalah) before it');
+
 export const lineSplitSchema = z.object({
   page: z.number().int().min(1).max(604),
   line: z.number().int().min(1).max(15),
@@ -149,6 +177,8 @@ export type Animation = z.infer<typeof animationSchema>;
 export type Highlight = z.infer<typeof highlightSchema>;
 export type Text = z.infer<typeof textSchema>;
 export type Review = z.infer<typeof reviewSchema>;
+export type Overlay = z.infer<typeof overlaySchema>;
+export type HeaderMode = z.infer<typeof headerSchema>;
 
 export const defaultCustomTheme: CustomTheme = {
   base: 'normal',
@@ -203,6 +233,17 @@ export const defaultText: Text = {
   glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
   glossSize: 34,
   glossColor: '#6a6a6a',
+};
+
+/** No title; when one is turned on: a three-second card, dark ink in the translation's serif, the label top right. */
+export const defaultOverlay: Overlay = {
+  title: 'none',
+  introSeconds: 3,
+  reciter: '',
+  color: '#1b1b1b',
+  font: 'Georgia, "Noto Serif", serif',
+  corner: 'top-right',
+  cornerSize: 28,
 };
 
 export const defaultReview: Review = {showDoubtful: true, confidenceThreshold: 0.8, doubtColor: '#d94848'};

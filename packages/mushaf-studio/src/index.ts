@@ -11,6 +11,8 @@ export {isMushafStudioError, MushafStudioError, type MushafStudioErrorCode} from
 export * from './fonts';
 // Lines
 export * from './lines';
+// Overlay
+export * from './overlay';
 // Looks
 export * from './presets';
 // QUD

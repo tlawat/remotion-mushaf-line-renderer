@@ -2,8 +2,10 @@ import {exitTiming, MushafLine, MushafLineWindow} from '@tlawat/remotion-mushaf-
 import type * as React from 'react';
 import {AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {MushafStudioError} from '../../errors';
+import {MushafTitleOverlay} from '../../overlay';
 import {animationFrom, fontPropsFrom, scrollTimingFrom} from '../../schema';
 import {useInStudio} from '../../studio/environment';
+import {ayahCount} from '../../studio/surahs';
 import {TranslationBlock} from '../../translations';
 import {
   BACKGROUND_IMAGE_STYLE,
@@ -14,16 +16,17 @@ import {
   translationBlockStyle,
   WARNING_STYLE,
 } from '../shared';
-import type {ResolvedPassage} from './resolve';
+import {passageTimeline, type ResolvedPassage} from './resolve';
 import type {MushafPassageProps} from './schema';
 
 /**
  * A text-only passage, no audio: each line holds `holdSeconds`, through a window (the window
  * scrolls a line every hold) or one at a time (a line leaves as the next one enters), with the
- * translation of the ayah the current line starts with.
+ * translation of the ayah the current line starts with; the surah's header lines first when asked
+ * for and the passage starts at ayah 1, and a title card (the lines start after it) and corner label.
  */
 export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
-  const {fonts, layout, animation, text, holdSeconds} = props;
+  const {fonts, layout, animation, text, overlay} = props;
   const {width, height, fps, durationInFrames} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
@@ -36,8 +39,12 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
     );
   }
   const {lines} = resolved;
-  const holdFrames = Math.max(1, Math.round(holdSeconds * fps));
-  const current = Math.max(0, Math.min(lines.length - 1, Math.floor(frame / holdFrames)));
+  const {starts, holds} = passageTimeline(lines, props, fps);
+  // The line on screen: the last one whose hold has begun, else the first.
+  let current = 0;
+  starts.forEach((start, i) => {
+    if (start <= frame) current = i;
+  });
 
   const geometry = blockGeometry(layout, {width, height});
   const {fontSize, lineHeight, slots} = geometry;
@@ -53,8 +60,8 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
     linesBlock = lines.map((line, i) => (
       <Sequence
         key={`${line.page}/${line.line}`}
-        from={i * holdFrames}
-        durationInFrames={i === lines.length - 1 ? holdFrames + exitFrames : holdFrames}
+        from={starts[i]!}
+        durationInFrames={i === lines.length - 1 ? holds[i]! + exitFrames : holds[i]!}
         premountFor={fps}
         name={`p${line.page} l${line.line} (${line.words[0]?.id ?? line.type})`}
       >
@@ -71,7 +78,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
       >
         <MushafLineWindow
           lines={lines}
-          steps={lines.map((_, i) => i * holdFrames)}
+          steps={starts}
           scrollTiming={scrollTimingFrom(animation.scroll)}
           visibleLines={slots}
           neighbourOpacity={layout.neighbourOpacity}
@@ -105,6 +112,19 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
           />
         </div>
       )}
+      <MushafTitleOverlay
+        overlay={overlay}
+        surah={props.surah}
+        fromAyah={props.fromAyah}
+        toAyah={props.toAyah === 0 ? Math.max(props.fromAyah, ayahCount(props.surah)) : props.toAyah}
+        ayahKey={firstAyahKey(lines[current])}
+        firstWordSeconds={null}
+        background={layout.background}
+        fontSize={fontSize}
+        lineHeight={lineHeight}
+        width={geometry.measure}
+        fontProps={fontSetup.props}
+      />
       {isStudio && fontSetup.warning !== null && <div style={WARNING_STYLE}>Mushaf Studio: {fontSetup.warning}</div>}
     </AbsoluteFill>
   );

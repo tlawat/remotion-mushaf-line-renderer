@@ -6,9 +6,12 @@ import {
   defaultAnimation,
   defaultCustomTheme,
   defaultLayout,
+  defaultOverlay,
   defaultText,
   fontsSchema,
+  headerSchema,
   layoutSchema,
+  overlaySchema,
   textSchema,
   themeNameSchema,
 } from '../../schema';
@@ -25,6 +28,8 @@ export const mushafPassageSchema = z.object({
   toAyah: z.number().int().min(0).max(286).describe('Last ayah (0: end of the surah)'),
   slice: z.boolean().describe('Hide the neighbours’ words on the first and last lines'),
   holdSeconds: z.number().min(0.5).max(30).step(0.5).describe('Seconds each line stays'),
+  /** Only when `fromAyah` is 1: the surah's printed header lines before it. */
+  header: headerSchema,
   theme: themeNameSchema,
   customTheme: customThemeSchema,
   fonts: fontsSchema,
@@ -32,6 +37,7 @@ export const mushafPassageSchema = z.object({
   layout: layoutSchema,
   animation: animationSchema,
   text: textSchema,
+  overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
 
@@ -44,6 +50,7 @@ export const defaultMushafPassageProps: MushafPassageProps = {
   toAyah: 5,
   slice: true,
   holdSeconds: 4,
+  header: 'none',
   theme: 'normal',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
@@ -51,5 +58,6 @@ export const defaultMushafPassageProps: MushafPassageProps = {
   layout: defaultLayout,
   animation: defaultAnimation,
   text: defaultText,
+  overlay: defaultOverlay,
   resolved: null,
 };

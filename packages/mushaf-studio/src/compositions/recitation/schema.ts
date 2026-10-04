@@ -7,12 +7,15 @@ import {
   defaultCustomTheme,
   defaultHighlight,
   defaultLayout,
+  defaultOverlay,
   defaultReview,
   defaultText,
   fontsSchema,
+  headerSchema,
   highlightSchema,
   layoutSchema,
   lineSplitSchema,
+  overlaySchema,
   reviewSchema,
   textSchema,
   themeNameSchema,
@@ -33,6 +36,8 @@ export const mushafRecitationSchema = z.object({
   /** Show only the recited ayahs on the first and last lines. */
   slice: z.boolean().describe('Hide the neighbours’ words on the first and last lines'),
   splits: z.array(lineSplitSchema).describe('Printed lines split into two timed segments'),
+  /** Only when the recitation starts at ayah 1: the surah's printed header lines before it. */
+  header: headerSchema,
   theme: themeNameSchema,
   customTheme: customThemeSchema,
   fonts: fontsSchema,
@@ -41,6 +46,7 @@ export const mushafRecitationSchema = z.object({
   animation: animationSchema,
   highlight: highlightSchema,
   text: textSchema,
+  overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   review: reviewSchema,
   /** Filled by calculateMetadata; see `ResolvedRecitation`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
@@ -62,6 +68,7 @@ export const defaultMushafRecitationProps: MushafRecitationProps = {
   toAyah: 0,
   slice: true,
   splits: [],
+  header: 'none',
   theme: 'plain',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
@@ -70,6 +77,7 @@ export const defaultMushafRecitationProps: MushafRecitationProps = {
   animation: defaultAnimation,
   highlight: defaultHighlight,
   text: defaultText,
+  overlay: defaultOverlay,
   review: defaultReview,
   resolved: null,
 };

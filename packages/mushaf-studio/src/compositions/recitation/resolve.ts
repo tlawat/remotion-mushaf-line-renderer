@@ -11,7 +11,7 @@ import {describeValue, MushafStudioError} from '../../errors';
 import {applySplits, doubtfulWords} from '../../lines';
 import {dataSourceFrom, themeSelectionFrom} from '../../schema';
 import type {ResolvedRecitation, StudioTimings} from '../../types';
-import {fileUrl, loadTextFile, STUDIO_FPS} from '../shared';
+import {fileUrl, headerSeconds, loadTextFile, STUDIO_FPS, surahHeaderLines, withHeaderSlots} from '../shared';
 import type {MushafRecitationProps} from './schema';
 
 export type ResolveRecitationOptions = {
@@ -197,7 +197,9 @@ export const shiftTimings = (timings: StudioTimings, offset: number): StudioTimi
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah
  * range and to the ayahs the recording carries whole, moves them `audioOffsetSeconds` earlier
  * (see `audioOffsetFor()`), finds the lines (`getMushafLines(recitedRange(...))`, sliced), applies
- * the splits, schedules the lines, loads the translation and gloss files, and marks the doubtful
+ * the splits, schedules the lines (after the surah's header lines when `header` asks for them and
+ * the recitation starts at ayah 1, see `surahHeaderLines()` and `withHeaderSlots()`), loads the
+ * translation and gloss files, and marks the doubtful
  * words of the whole range (an incomplete ayah's words included). Pure given `fetch`;
  * `calculateMetadata()` is this plus the size and duration.
  */
@@ -217,21 +219,24 @@ export const resolveRecitation = async (
   const played = playableTimings(inRange);
   const audioOffsetSeconds = audioOffsetFor(file, played, props.animation.leadInSeconds);
   const timings = shiftTimings(played, audioOffsetSeconds);
-  const lines = await getMushafLines({
-    ...recitedRange(timings),
-    theme: themeSelectionFrom(props.theme, props.customTheme),
-    slice: props.slice,
-    data: dataSourceFrom(props.data, io.staticFile),
-  });
+  const theme = themeSelectionFrom(props.theme, props.customTheme);
+  const data = dataSourceFrom(props.data, io.staticFile);
+  const lines = await getMushafLines({...recitedRange(timings), theme, slice: props.slice, data});
   const split = applySplits(lines, props.splits);
-  const schedule = scheduleLines(split, timings, {occurrence: props.highlight.occurrence});
-  if (schedule.length === 0) {
+  const timed = scheduleLines(split, timings, {occurrence: props.highlight.occurrence});
+  if (timed.length === 0) {
     const {first, last} = bounds(timings);
     throw bad(
       `No line of surah ${timings.surah} ayahs ${first}-${last} carries a timed word; the timings and the mushaf data do not agree. Realign the recording.`,
       {prop: 'timingsFile', file: props.timingsFile},
     );
   }
+  // The surah's header goes before its first ayah only: a recitation from a later ayah has none.
+  const headers =
+    timings.ayat[0]!.ayah === 1 && split[0]
+      ? await surahHeaderLines(timings.surah, split[0], props.header, {theme, data})
+      : [];
+  const schedule = withHeaderSlots(timed, headers.length, headerSeconds(props.overlay));
   const [translation, gloss, transliteration] = await Promise.all([
     loadTextFile('ayah', 'translationFile', props.text.translationFile, io),
     loadTextFile('word', 'glossFile', props.text.glossFile, io),
@@ -240,7 +245,7 @@ export const resolveRecitation = async (
   return {
     timings,
     audioOffsetSeconds,
-    lines: split,
+    lines: headers.length === 0 ? split : [...headers, ...split],
     schedule,
     translation,
     gloss,

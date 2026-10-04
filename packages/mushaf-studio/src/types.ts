@@ -142,8 +142,9 @@ export type ResolvedRecitation = {
    * `timings`; add it back before writing those into the file.
    */
   readonly audioOffsetSeconds: number;
-  /** The passage's lines, splits applied, in reading order. */
+  /** The passage's lines, splits applied, in reading order; the surah's header lines first when `header` put them there. */
   readonly lines: readonly MushafLineData[];
+  /** One slot per line on screen, the header lines' included (`withHeaderSlots()`). */
   readonly schedule: readonly LineSchedule[];
   readonly translation: AyahTranslation | null;
   /** The word-by-word translation (`text.glossFile`), if any. */

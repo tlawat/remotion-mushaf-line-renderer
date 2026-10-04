@@ -3,7 +3,9 @@
 export {MushafPassage} from './MushafPassage';
 export {
   calculateMushafPassageMetadata,
+  type PassageTimeline,
   passageDuration,
+  passageTimeline,
   type ResolvedPassage,
   type ResolvePassageOptions,
   resolvePassage,

@@ -3,10 +3,12 @@ import {
   defaultAnimation,
   defaultHighlight,
   defaultLayout,
+  defaultOverlay,
   defaultText,
   ENTRANCES,
   highlightSchema,
   layoutSchema,
+  overlaySchema,
   textSchema,
 } from '../schema';
 import {UNICODE_FONT_IDS} from './font';
@@ -54,6 +56,7 @@ export const mushafAyahTextSchema = z.object({
   highlight: highlightSchema.describe('What follows the recitation and how it is marked'),
   /** The ayah translation goes under (or over) the ayah; the gloss fields do not apply. */
   text: textSchema.describe('The ayah translation (the word-by-word fields do not apply)'),
+  overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   /** Filled by calculateMetadata; see `ResolvedAyahText`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
@@ -86,5 +89,7 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   highlight: {...defaultHighlight, color: '#c8a45c'},
   // The shared default translation colour is a dark grey for a light page; this one reads on the dark page.
   text: {...defaultText, translationColor: '#c9c1b2'},
+  // The shared default title ink is the light page's; this one reads on the dark page.
+  overlay: {...defaultOverlay, color: '#f4efe6'},
   resolved: null,
 };

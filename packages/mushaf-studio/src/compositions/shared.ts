@@ -1,18 +1,22 @@
 // What both compositions share: the frame rate, turning a content prop into a URL, loading a
 // translation file of the expected kind, naming the ayah a line starts with or the one being heard,
-// the frames at which the slots of a schedule are in place, and the geometry and styles of the
-// blocks on the canvas.
+// the frames at which the slots of a schedule are in place, a surah's printed header before its
+// first ayah, and the geometry and styles of the blocks on the canvas.
 import {
   fontSizeForWidth,
+  getMushafLines,
   type LineSchedule,
   lineHeightForFontSize,
+  type MushafDataSource,
   type MushafLineData,
+  type MushafThemeSelection,
   type RecitationTimings,
   sliceWords,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {describeValue, MushafStudioError} from '../errors';
-import type {Layout, Text} from '../schema';
+import {showsIntro} from '../overlay';
+import type {HeaderMode, Layout, Overlay, Text} from '../schema';
 import {loadTranslation} from '../translations';
 import type {Translation} from '../types';
 
@@ -96,6 +100,64 @@ export const leadFrames = (
     previous = Math.max(previous, Math.round((slot.start - leadInSeconds) * fps));
     return previous;
   });
+};
+
+/**
+ * The printed header of `surah` that goes before its first ayah line `first`: the `surah_name` line
+ * and, for `'name-basmalah'`, the `basmallah` line after it when the page has one, from
+ * `getMushafLines({page})` of the page that carries `first` (the header is printed right above the
+ * first ayah, on the same page). Al-Fatihah has a name and no basmalah line (its basmalah is ayah 1),
+ * At-Tawbah has no basmalah at all: both give the name alone. `[]` for `'none'`. The caller decides
+ * that the passage starts at ayah 1.
+ */
+export const surahHeaderLines = async (
+  surah: number,
+  first: MushafLineData,
+  mode: HeaderMode,
+  options: {readonly theme: MushafThemeSelection; readonly data: MushafDataSource | undefined},
+): Promise<readonly MushafLineData[]> => {
+  if (mode === 'none') return [];
+  const page = await getMushafLines({page: first.page, theme: options.theme, data: options.data});
+  const at = page.findIndex((line) => line.type === 'surah_name' && line.surahNumber === surah);
+  if (at < 0) return [];
+  const next = page[at + 1];
+  return mode === 'name-basmalah' && next?.type === 'basmallah' ? [page[at]!, next] : [page[at]!];
+};
+
+/** Seconds a header line holds before the next line when there is no intro card. */
+export const HEADER_SECONDS = 1.5;
+
+/** Seconds between two header lines, and from the last one to the first ayah line: the intro card's length when it is on. */
+export const headerSeconds = (overlay: Pick<Overlay, 'title' | 'introSeconds'>): number =>
+  showsIntro(overlay.title) ? overlay.introSeconds : HEADER_SECONDS;
+
+/** How many of `lines` lead the passage without words: the header lines `surahHeaderLines()` put before it. */
+export const headerCount = (lines: readonly MushafLineData[]): number => {
+  const first = lines.findIndex((line) => line.type === 'ayah');
+  return first < 0 ? lines.length : first;
+};
+
+/**
+ * A schedule with `headers` header lines put before the lines it times (`scheduleLines()` leaves
+ * lines without timed words out): header `k` starts `(headers - k) * spacingSeconds` before the first
+ * timed line, never before 0, and ends where the next one starts; the timed slots follow with their
+ * `index` moved past the headers. Starts never decrease. The same schedule for no headers or none
+ * to put them before.
+ */
+export const withHeaderSlots = (
+  schedule: readonly LineSchedule[],
+  headers: number,
+  spacingSeconds: number,
+): readonly LineSchedule[] => {
+  const first = schedule[0];
+  if (headers === 0 || !first) return schedule;
+  // Never before 0, and never after the first timed line (whatever its own start).
+  const startOf = (k: number): number =>
+    Math.min(first.start, Math.max(0, first.start - (headers - k) * spacingSeconds));
+  const slots: LineSchedule[] = [];
+  for (let k = 0; k < headers; k++)
+    slots.push({index: k, start: startOf(k), end: Math.max(startOf(k), startOf(k + 1))});
+  return [...slots, ...schedule.map((slot) => ({...slot, index: slot.index + headers}))];
 };
 
 /** A background image fills the frame, cropped to it, under everything. */

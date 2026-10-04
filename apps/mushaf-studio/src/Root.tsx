@@ -49,6 +49,7 @@ export const RemotionRoot: React.FC = () => {
           toAyah: 0,
           slice: true,
           splits: [],
+          header: 'none',
           theme: 'plain',
           customTheme: {
             base: 'normal',
@@ -110,6 +111,15 @@ export const RemotionRoot: React.FC = () => {
             glossSize: 34,
             glossColor: '#6a6a6a',
           },
+          overlay: {
+            title: 'none',
+            introSeconds: 3,
+            reciter: '',
+            color: '#1b1b1b',
+            font: 'Georgia, "Noto Serif", serif',
+            corner: 'top-right',
+            cornerSize: 28,
+          },
           review: {
             showDoubtful: true,
             confidenceThreshold: 0.8,
@@ -134,6 +144,7 @@ export const RemotionRoot: React.FC = () => {
           toAyah: 5,
           slice: true,
           holdSeconds: 4,
+          header: 'none',
           theme: 'normal',
           customTheme: {
             base: 'normal',
@@ -186,6 +197,15 @@ export const RemotionRoot: React.FC = () => {
             glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
             glossSize: 34,
             glossColor: '#6a6a6a',
+          },
+          overlay: {
+            title: 'none',
+            introSeconds: 3,
+            reciter: '',
+            color: '#1b1b1b',
+            font: 'Georgia, "Noto Serif", serif',
+            corner: 'top-right',
+            cornerSize: 28,
           },
           resolved: null,
         }}
@@ -248,6 +268,15 @@ export const RemotionRoot: React.FC = () => {
             glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
             glossSize: 34,
             glossColor: '#6a6a6a',
+          },
+          overlay: {
+            title: 'none',
+            introSeconds: 3,
+            reciter: '',
+            color: '#f4efe6',
+            font: 'Georgia, "Noto Serif", serif',
+            corner: 'top-right',
+            cornerSize: 28,
           },
           resolved: null,
         }}
