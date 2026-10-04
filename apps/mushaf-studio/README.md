@@ -304,6 +304,10 @@ reciter's); the JSON files can be committed with the Root.
 
 ## Licences
 
+Read [what you may publish](../../docs/mushaf-studio/licensing.md) before publishing videos made
+with the app: the page fonts' own notice limits them to charitable (sadaqa) use, and publishing
+otherwise needs the King Fahd Complex's permission.
+
 - **Code**: MIT, like the rest of the repository.
 - **Fonts**: the page fonts, the surah-name font and `quran-common` are King Fahd Complex fonts as
   published by [QUL](https://qul.tarteel.ai). They are not open source. The fonts packages
