@@ -22,7 +22,9 @@ export type QuranComOptions = {
   readonly signal?: AbortSignal | undefined;
 };
 
-const HINT = 'quran.com may be down or the request malformed; try again, or load a translation file from public/.';
+/** What a quran.com failure tells the user to do. */
+export const QURAN_COM_HINT =
+  'quran.com may be down or the request malformed; try again, or load a translation file from public/.';
 
 /** quran.com names languages in English (`'english'`); the ones its translations come in most, as ISO 639-1. */
 const ISO_639_1: Readonly<Record<string, string>> = {
@@ -48,7 +50,8 @@ const ISO_639_1: Readonly<Record<string, string>> = {
   urdu: 'ur',
 };
 
-const languageCode = (languageName: string): string => {
+/** quran.com's English language name (`'english'`) as ISO 639-1 (`'en'`) for the common ones, else the name in lower case (`'und'` for none). */
+export const quranComLanguageCode = (languageName: string): string => {
   const name = languageName.trim().toLowerCase();
   return ISO_639_1[name] ?? (name || 'und');
 };
@@ -59,7 +62,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isPositiveInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1;
 
-const endpoint = (
+/** A quran.com API URL: `options.api` (default `DEFAULT_QURAN_COM_API`), the path, and the defined params. */
+export const quranComUrl = (
   options: QuranComOptions,
   path: string,
   params: Record<string, string | number | undefined>,
@@ -70,21 +74,27 @@ const endpoint = (
   return `${(options.api ?? DEFAULT_QURAN_COM_API).replace(/\/+$/, '')}${path}${query ? `?${query}` : ''}`;
 };
 
-const badResponse = (url: string, expected: string, found: unknown): never => {
+/** Throws the `TRANSLATION_FETCH_FAILED` for an answer in a shape the client does not know. */
+export const badQuranComResponse = (url: string, expected: string, found: unknown): never => {
   throw new MushafStudioError(
     'TRANSLATION_FETCH_FAILED',
-    `${url} answered in a shape this client does not know: expected ${expected}, found ${describeValue(found)}. ${HINT}`,
+    `${url} answered in a shape this client does not know: expected ${expected}, found ${describeValue(found)}. ${QURAN_COM_HINT}`,
     {url},
   );
 };
 
-const arrayField = (body: unknown, field: string, url: string): readonly unknown[] => {
+/** `body[field]` when it is an array, else a `TRANSLATION_FETCH_FAILED` naming what was found. */
+export const quranComArrayField = (body: unknown, field: string, url: string): readonly unknown[] => {
   const value = isRecord(body) ? body[field] : undefined;
-  return Array.isArray(value) ? value : badResponse(url, `{${field}: [...]}`, isRecord(body) ? value : body);
+  return Array.isArray(value) ? value : badQuranComResponse(url, `{${field}: [...]}`, isRecord(body) ? value : body);
 };
 
-/** Checks the chapter and the ayah range a fetcher is asked for, before any request goes out. */
-const assertRange = (chapter: number, fromAyah: number | undefined, toAyah: number | undefined): void => {
+/** Checks the chapter and the ayah range a fetcher is asked for, before any request goes out (`BAD_STUDIO_PROP`). */
+export const assertQuranComRange = (
+  chapter: number,
+  fromAyah: number | undefined,
+  toAyah: number | undefined,
+): void => {
   const bad = (problem: string, value: unknown): never => {
     throw new MushafStudioError('BAD_STUDIO_PROP', `${problem} (got ${describeValue(value)}).`, {
       chapter,
@@ -100,7 +110,8 @@ const assertRange = (chapter: number, fromAyah: number | undefined, toAyah: numb
   }
 };
 
-const inRange = (ayah: number, fromAyah: number | undefined, toAyah: number | undefined): boolean =>
+/** Whether `ayah` is inside `fromAyah`..`toAyah` (an open end is the chapter's). */
+export const ayahInRange = (ayah: number, fromAyah: number | undefined, toAyah: number | undefined): boolean =>
   ayah >= (fromAyah ?? 1) && ayah <= (toAyah ?? Number.POSITIVE_INFINITY);
 
 const rangeLabel = (chapter: number, fromAyah: number | undefined, toAyah: number | undefined): string =>
@@ -109,32 +120,45 @@ const rangeLabel = (chapter: number, fromAyah: number | undefined, toAyah: numbe
     : `${chapter}:${fromAyah ?? 1}-${toAyah ?? 'end'}`;
 
 /**
- * `GET /resources/translations`, optionally for one language (`'en'`, or quran.com's own name,
- * `'english'`). quran.com's `language` parameter only translates the names, so the list is also
- * filtered here. `language` is the ISO 639-1 code for the common languages, else quran.com's name
- * in lower case.
+ * `GET /resources/{kind}` (`'translations'`, `'tafsirs'`), optionally for one language: the rows as
+ * `QuranComResource`s, filtered here by `language` (ISO 639-1 for the common languages, or
+ * quran.com's own name, `'english'`), since quran.com's `language` parameter only translates the
+ * names. What `listQuranComTranslations()` and `listQuranComTafsirs()` share.
  */
-export const listQuranComTranslations = async (
+export const listQuranComResources = async (
+  kind: 'translations' | 'tafsirs',
   query: {readonly language?: string | undefined} = {},
   options: QuranComOptions = {},
 ): Promise<readonly QuranComResource[]> => {
-  const url = endpoint(options, '/resources/translations', {language: query.language});
-  const rows = arrayField(await fetchJson(url, HINT, options), 'translations', url);
+  const url = quranComUrl(options, `/resources/${kind}`, {language: query.language});
+  const rows = quranComArrayField(await fetchJson(url, QURAN_COM_HINT, options), kind, url);
+  const fallback = kind === 'translations' ? 'Translation' : 'Tafsir';
   const resources: QuranComResource[] = [];
   for (const row of rows) {
     if (!isRecord(row) || !isPositiveInteger(row.id)) continue;
     const languageName = typeof row.language_name === 'string' ? row.language_name : '';
     resources.push({
       id: row.id,
-      name: typeof row.name === 'string' ? row.name : `Translation ${row.id}`,
+      name: typeof row.name === 'string' ? row.name : `${fallback} ${row.id}`,
       authorName: typeof row.author_name === 'string' ? row.author_name : '',
-      language: languageCode(languageName),
+      language: quranComLanguageCode(languageName),
       languageName,
     });
   }
   const wanted = query.language?.trim().toLowerCase();
   return wanted ? resources.filter((r) => r.language === wanted || r.languageName.toLowerCase() === wanted) : resources;
 };
+
+/**
+ * `GET /resources/translations`, optionally for one language (`'en'`, or quran.com's own name,
+ * `'english'`). quran.com's `language` parameter only translates the names, so the list is also
+ * filtered here. `language` is the ISO 639-1 code for the common languages, else quran.com's name
+ * in lower case.
+ */
+export const listQuranComTranslations = (
+  query: {readonly language?: string | undefined} = {},
+  options: QuranComOptions = {},
+): Promise<readonly QuranComResource[]> => listQuranComResources('translations', query, options);
 
 /**
  * `GET /quran/translations/{resourceId}?chapter_number=...`: an ayah translation for a chapter (or
@@ -160,27 +184,27 @@ export const fetchQuranComTranslation = async (
       {resourceId},
     );
   }
-  assertRange(chapter, fromAyah, toAyah);
+  assertQuranComRange(chapter, fromAyah, toAyah);
   // verse_key is only in the answer when asked for.
-  const url = endpoint(options, `/quran/translations/${resourceId}`, {chapter_number: chapter, fields: 'verse_key'});
+  const url = quranComUrl(options, `/quran/translations/${resourceId}`, {chapter_number: chapter, fields: 'verse_key'});
   const [body, resource] = await Promise.all([
-    fetchJson(url, HINT, options),
+    fetchJson(url, QURAN_COM_HINT, options),
     listQuranComTranslations({}, options).then(
       (list) => list.find((r) => r.id === resourceId),
       () => undefined,
     ),
   ]);
-  const rows = arrayField(body, 'translations', url);
+  const rows = quranComArrayField(body, 'translations', url);
   const text: Record<string, string> = {};
   rows.forEach((row, i) => {
     if (!isRecord(row) || typeof row.text !== 'string') {
-      badResponse(url, '{translations: [{text, verse_key}]}', row);
+      badQuranComResponse(url, '{translations: [{text, verse_key}]}', row);
       return;
     }
     // Rows come in ayah order for a chapter, which is the key when verse_key is missing.
     const key = typeof row.verse_key === 'string' ? row.verse_key : `${chapter}:${i + 1}`;
     const [surah, ayah] = key.split(':').map(Number);
-    if (surah === chapter && ayah !== undefined && Number.isInteger(ayah) && inRange(ayah, fromAyah, toAyah)) {
+    if (surah === chapter && ayah !== undefined && Number.isInteger(ayah) && ayahInRange(ayah, fromAyah, toAyah)) {
       text[`${chapter}:${ayah}`] = stripFootnotes(row.text);
     }
   });
@@ -203,9 +227,49 @@ export const fetchQuranComTranslation = async (
   };
 };
 
-const PER_PAGE = 50;
+/** The page size the paginated fetchers ask quran.com for (its maximum). */
+export const QURAN_COM_PER_PAGE = 50;
 // The longest surah is 286 ayahs, six pages; an API still naming a next page past this never says "last page".
 const MAX_PAGES = 12;
+
+/**
+ * Reads a paginated quran.com endpoint of one chapter page by page: `url(page)` builds each
+ * request, `onPage(rows, url)` receives the page's `field` array and returns `true` once it has
+ * read enough. Follows `pagination.next_page`, and stops at an empty page or when none is named. A
+ * next page still named after 12 pages (twice the longest surah) is `TRANSLATION_FETCH_FAILED`
+ * naming `what` would be cut short, never a partial result; a failed request or a missing `field`
+ * is `TRANSLATION_FETCH_FAILED` too. The paging behind `fetchQuranComVerseWords()` and
+ * `fetchQuranComTafsir()`.
+ */
+export const fetchQuranComPages = async (
+  query: {
+    readonly chapter: number;
+    /** What the pages hold, for the page-limit message (`'the words'`). */
+    readonly what: string;
+    readonly field: string;
+    readonly url: (page: number) => string;
+  },
+  onPage: (rows: readonly unknown[], url: string) => boolean,
+  options: QuranComOptions = {},
+): Promise<void> => {
+  let page = 1;
+  for (let read = 1; ; read++) {
+    const url = query.url(page);
+    const body = await fetchJson(url, QURAN_COM_HINT, options);
+    const rows = quranComArrayField(body, query.field, url);
+    const enough = onPage(rows, url);
+    const next = isRecord(body) && isRecord(body.pagination) ? body.pagination.next_page : null;
+    if (enough || rows.length === 0 || typeof next !== 'number' || next <= page) return;
+    if (read === MAX_PAGES) {
+      throw new MushafStudioError(
+        'TRANSLATION_FETCH_FAILED',
+        `${url} still names a next page (${next}) after ${MAX_PAGES} pages, the page limit for one chapter (the longest takes ${Math.ceil(286 / QURAN_COM_PER_PAGE)}): ${query.what} would be cut short. ${QURAN_COM_HINT}`,
+        {url, chapter: query.chapter, pageLimit: MAX_PAGES},
+      );
+    }
+    page = next;
+  }
+};
 
 /**
  * `GET /verses/by_chapter/{chapter}?words=true` for a chapter or an ayah range, every page, as the
@@ -233,48 +297,45 @@ export const fetchQuranComVerseWords = async (
   options: QuranComOptions = {},
 ): Promise<readonly Readonly<Record<string, unknown>>[]> => {
   const {chapter, fromAyah, toAyah, language} = query;
-  assertRange(chapter, fromAyah, toAyah);
+  assertQuranComRange(chapter, fromAyah, toAyah);
   const fields = [...new Set([...query.wordFields, 'location', 'char_type_name'])].join(',');
   const words: Readonly<Record<string, unknown>>[] = [];
-  let page = 1;
-  for (let read = 1; ; read++) {
-    const url = endpoint(options, `/verses/by_chapter/${chapter}`, {
-      words: 'true',
-      language,
-      word_fields: fields,
-      per_page: PER_PAGE,
-      page,
-      from: fromAyah,
-      to: toAyah,
-    });
-    const body = await fetchJson(url, HINT, options);
-    const verses = arrayField(body, 'verses', url);
-    let lastAyah = 0;
-    for (const verse of verses) {
-      if (!isRecord(verse) || !Array.isArray(verse.words)) {
-        badResponse(url, '{verses: [{verse_number, words: [...]}]}', verse);
-        continue;
+  await fetchQuranComPages(
+    {
+      chapter,
+      what: 'the words',
+      field: 'verses',
+      url: (page) =>
+        quranComUrl(options, `/verses/by_chapter/${chapter}`, {
+          words: 'true',
+          language,
+          word_fields: fields,
+          per_page: QURAN_COM_PER_PAGE,
+          page,
+          from: fromAyah,
+          to: toAyah,
+        }),
+    },
+    (verses, url) => {
+      let lastAyah = 0;
+      for (const verse of verses) {
+        if (!isRecord(verse) || !Array.isArray(verse.words)) {
+          badQuranComResponse(url, '{verses: [{verse_number, words: [...]}]}', verse);
+          continue;
+        }
+        for (const word of verse.words as unknown[]) {
+          if (!isRecord(word) || typeof word.location !== 'string') continue;
+          const [surah, ayah] = word.location.split(':').map(Number);
+          if (surah !== chapter || ayah === undefined) continue;
+          lastAyah = Math.max(lastAyah, ayah);
+          if (ayahInRange(ayah, fromAyah, toAyah)) words.push(word);
+        }
       }
-      for (const word of verse.words as unknown[]) {
-        if (!isRecord(word) || typeof word.location !== 'string') continue;
-        const [surah, ayah] = word.location.split(':').map(Number);
-        if (surah !== chapter || ayah === undefined) continue;
-        lastAyah = Math.max(lastAyah, ayah);
-        if (inRange(ayah, fromAyah, toAyah)) words.push(word);
-      }
-    }
-    const next = isRecord(body) && isRecord(body.pagination) ? body.pagination.next_page : null;
-    const done = verses.length === 0 || (toAyah !== undefined && lastAyah >= toAyah);
-    if (done || typeof next !== 'number' || next <= page) return words;
-    if (read === MAX_PAGES) {
-      throw new MushafStudioError(
-        'TRANSLATION_FETCH_FAILED',
-        `${url} still names a next page (${next}) after ${MAX_PAGES} pages, the page limit for one chapter (the longest takes ${Math.ceil(286 / PER_PAGE)}): the words would be cut short. ${HINT}`,
-        {url, chapter, pageLimit: MAX_PAGES},
-      );
-    }
-    page = next;
-  }
+      return toAyah !== undefined && lastAyah >= toAyah;
+    },
+    options,
+  );
+  return words;
 };
 
 /**

@@ -9,6 +9,8 @@ export * from './captions';
 // Compositions
 export * from './compositions/passage';
 export * from './compositions/recitation';
+// Content
+export * from './content';
 // Errors
 export {isMushafStudioError, MushafStudioError, type MushafStudioErrorCode} from './errors';
 // Export
