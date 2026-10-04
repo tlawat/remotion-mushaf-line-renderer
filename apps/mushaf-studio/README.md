@@ -308,10 +308,11 @@ that is by design, and the video is the same. To let the browser reach the CDN a
 
 ```
 apps/mushaf-studio/
-  src/Root.tsx                      the three compositions and their props: what the Studio saves, what the CLI renders
+  src/Root.tsx                      the compositions, the thumbnail still and their props: what the Studio saves, what the CLI renders
   public/data/qpc-v4/               QUL's two exports (the words, the line layout), committed: data 'mirror'
   public/mushaf-studio/fatiha/      the sample the default props point at
-  public/mushaf-studio/<project>/   what the panel writes (below): mushafrecitation/, mushafayahtext/
+  public/mushaf-studio/<project>/   what the panel writes (below): mushafrecitation/, mushafayahtext/, mushafpage/
+  public/mushaf-studio/cli/         what `bun run make` writes
   out/                              rendered videos (not committed)
 ```
 
@@ -319,7 +320,10 @@ In `public/mushaf-studio/<project>/` (the composition's id, slugified) the panel
 `<reciter>-<surah>-<from>-<to>.mp3` and `.timings.json` for a catalogue pick, your recording and its
 `<name>.timings.json` after Align, and `translation-<id>-<surah>-<from>-<to>.json`, the gloss files
 and `text-<script>-<surah>-<from>-<to>.json` from the Text tab (or, on `MushafAyahText`, with a new
-recitation). A new pick writes new files next to the old ones; the props say which are in use.
+recitation), `tafsir-<id>-<surah>-<from>-<to>.json` and `chapter-info-<surah>-<lang>.json` for the
+end card, and, from Review's export row, `<stem>.srt`, `<stem>.vtt`, `<stem>.ayahs.vtt` and
+`<stem>.captions.json` next to the timings, and `project.json` when you export the project. A new
+pick writes new files next to the old ones; the props say which are in use.
 
 The timings file is the package's recitation timings (see
 [Following a recording](../../packages/remotion-mushaf-line-renderer/README.md#following-a-recording))
