@@ -1,0 +1,33 @@
+{
+  "name": "mushaf-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Mushaf Studio Web: make a word-synced recitation video of the KFGQPC V4 mushaf in the browser, nothing to install. A static Vite + React page on @tlawat/mushaf-studio.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/media": "4.0.521",
+    "@remotion/player": "4.0.521",
+    "@remotion/studio": "4.0.521",
+    "@remotion/transitions": "4.0.521",
+    "@remotion/web-renderer": "4.0.521",
+    "@remotion/zod-types": "4.0.521",
+    "@tlawat/mushaf-studio": "workspace:*",
+    "@tlawat/remotion-mushaf-line": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "4.0.521",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "typescript": "~5.9.3",
+    "vite": "^8.2.2"
+  }
+}

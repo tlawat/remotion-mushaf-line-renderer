@@ -18,6 +18,7 @@ export default defineConfig({
             'packages/*/test/unit/**/*.test.ts',
             'packages/*/test/unit/**/*.test.tsx',
             'apps/*/scripts/**/*.test.ts',
+            'apps/mushaf-web/src/**/*.test.{ts,tsx}',
           ],
           setupFiles: ['packages/remotion-mushaf-line-renderer/test/setup.ts'],
           server: {
