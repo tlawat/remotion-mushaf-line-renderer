@@ -19,6 +19,8 @@ export * from './fonts';
 export * from './lines';
 // Overlay
 export * from './overlay';
+// Page
+export * from './page';
 // Looks
 export * from './presets';
 // QUD
