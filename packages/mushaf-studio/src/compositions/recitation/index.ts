@@ -2,7 +2,12 @@
 // resolver (resolve.ts), `calculateMetadata` (calculate-metadata.ts) and the component.
 export type {ResolvedRecitation} from '../../types';
 export {STUDIO_FPS} from '../shared';
-export {calculateMushafRecitationMetadata, recitationDuration} from './calculate-metadata';
+export {
+  calculateMushafRecitationMetadata,
+  enterSeconds,
+  recitationDuration,
+  withRecitationAudio,
+} from './calculate-metadata';
 export {MushafRecitation} from './MushafRecitation';
 export {
   audioOffsetFor,
@@ -12,6 +17,7 @@ export {
   readTimings,
   resolveRecitation,
   shiftTimings,
+  skipRecitationStart,
   timingsInRange,
   trimTimings,
 } from './resolve';

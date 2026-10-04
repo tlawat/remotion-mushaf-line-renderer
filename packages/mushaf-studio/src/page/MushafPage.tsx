@@ -9,27 +9,40 @@ import {
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {useEffect} from 'react';
+import {AbsoluteFill, Easing, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {volumeAt} from '../audio/volume';
+import {backgroundFor} from '../background/compat';
+import {MushafBackground} from '../background/MushafBackground';
+import {endCardFrames} from '../compositions/extras';
 import {
-  AbsoluteFill,
-  Audio,
-  Easing,
-  Img,
-  interpolate,
-  Sequence,
-  staticFile,
-  useCurrentFrame,
-  useVideoConfig,
-} from 'remotion';
-import {BACKGROUND_IMAGE_STYLE, fileUrl, WARNING_STYLE} from '../compositions/shared';
+  CompositionAudio,
+  CompositionEndCard,
+  CornerLegend,
+  glowLevelAt,
+  StudioWarnings,
+  translationsOf,
+  useTranslationLayers,
+  volumeCurveFor,
+} from '../compositions/parts';
+import {ayahAt, fileUrl} from '../compositions/shared';
 import {MushafStudioError} from '../errors';
 import {wordStarts} from '../lines';
 import {arabicIndicDigits} from '../overlay';
-import {activeWordStyleFrom, type FontProps, fontPropsFrom, wordStyleFrom} from '../schema';
+import {
+  activeWordStyleFrom,
+  defaultOverlay,
+  type FontProps,
+  fontPropsFrom,
+  themeSelectionFrom,
+  wordStyleFrom,
+} from '../schema';
+import {MushafStudioPanel} from '../studio';
 import {useInStudio} from '../studio/environment';
+import {ayahKeyOf, TranslationStack} from '../translations';
 import {LINES_PER_PAGE, type PageGeometry, pageGeometry, rowOf} from './geometry';
 import {PageFrame} from './PageFrame';
 import {inRange, type PageLineSlot, type PageSlot, pageLineAt, type ResolvedPage} from './resolve';
-import type {MushafPageProps, PageView} from './schema';
+import type {MushafPageProps, PageText, PageView} from './schema';
 
 /** Opacity of the words of the page outside the ayahs followed, and of another surah's header. */
 export const OUTSIDE_OPACITY = 0.35;
@@ -233,16 +246,62 @@ const PageLeaf: React.FC<PageLeafProps> = ({
   );
 };
 
+/** Where the translations go: `auto` picks the room under the page when it holds three lines of them, else beside it. */
+export const pageTranslationPlace = (
+  position: PageText['translationPosition'],
+  geometry: Pick<PageGeometry, 'top' | 'height'>,
+  frameHeight: number,
+  fontSize: number,
+): 'beside' | 'below' | 'none' => {
+  if (position !== 'auto') return position;
+  const gap = Math.round(fontSize * 0.6);
+  const room = frameHeight - (geometry.top + geometry.height) - 2 * gap;
+  return room >= 3 * fontSize * 1.35 ? 'below' : 'beside';
+};
+
+/**
+ * The translations' block: under the page, as wide as it (`below`), or in the gutter left of it
+ * between the side margin and the page, centred top to bottom (`beside`); `translationOffsetY` down.
+ */
+export const pageTranslationStyle = (
+  place: 'beside' | 'below',
+  geometry: Pick<PageGeometry, 'top' | 'left' | 'width' | 'height'>,
+  marginX: number,
+  fontSize: number,
+  offsetY: number,
+): React.CSSProperties => {
+  const gap = Math.round(fontSize * 0.6);
+  const nudge = offsetY === 0 ? '' : ` translateY(${offsetY}px)`;
+  return place === 'below'
+    ? {
+        position: 'absolute',
+        left: geometry.left,
+        width: geometry.width,
+        top: geometry.top + geometry.height + gap,
+        ...(nudge ? {transform: nudge.trim()} : {}),
+      }
+    : {
+        position: 'absolute',
+        left: marginX,
+        width: Math.max(1, geometry.left - marginX - gap),
+        top: '50%',
+        transform: `translateY(-50%)${nudge}`,
+      };
+};
+
 /**
  * The whole printed page of the KFGQPC V4 mushaf while a recitation plays, as a reader follows it
  * in print: every line of the page in its place (the surah headers and basmalah lines included),
  * the line being recited marked with a band or a rule, the word being heard highlighted, the words
  * outside the ayahs followed dimmed, and the page turning to the next one just before its first
- * word. In the Studio, the doubtful words are marked.
+ * word. Around it its `background` (the glow following the recitation), the translations beside or
+ * under the page (`text`, up to three stacked), the tajweed legend in a corner and an end card
+ * after the last ayah when asked; the audio normalised and faded as `audio` says. In the Studio, the
+ * doubtful words are marked, the fonts and audio warnings shown, and the Mushaf panel docked.
  */
 export const MushafPage: React.FC<MushafPageProps> = (props) => {
-  const {audioFile, fonts, layout, highlight, review, pageView} = props;
-  const {width, height, fps, durationInFrames} = useVideoConfig();
+  const {audioFile, fonts, layout, highlight, review, pageView, text, legend, endCard, audio} = props;
+  const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
   const resolved = props.resolved as ResolvedPage | null;
@@ -254,8 +313,14 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
     );
   }
   const {timings, pages, range} = resolved;
+  const translationLayers = useTranslationLayers(text, translationsOf(resolved));
+  // The frames before the end card: the audio fades out by their end, the last page stays to it.
+  const cardFrames = endCardFrames(endCard, fps);
+  const contentFrames = Math.max(1, durationInFrames - cardFrames);
+  const curve = volumeCurveFor(audio, resolved.audio, contentFrames, fps);
   const now = frame / fps;
-  const activeWordId = highlight.mode === 'none' ? null : wordAt(timings, now);
+  const heard = wordAt(timings, now);
+  const activeWordId = highlight.mode === 'none' ? null : heard;
   const activeWordStyle = highlight.mode === 'word' ? activeWordStyleFrom(highlight) : undefined;
   const activeProps = activeWordStyle ? {activeWordId, activeWordStyle} : {activeWordId};
   const current = pageLineAt(resolved.lines, now);
@@ -270,7 +335,7 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
     const next = pages[i + 1];
     const nextFrom = next ? Math.round(next.start * fps) : null;
     // The page stays under the next one while it turns in; the last one to the end.
-    const to = nextFrom === null ? durationInFrames : nextFrom + turnFrames;
+    const to = nextFrom === null ? contentFrames : nextFrom + turnFrames;
     const incoming = i === 0 ? 1 : progress(frame, from, turnFrames);
     const outgoing = nextFrom === null ? 0 : progress(frame, nextFrom, turnFrames);
     const wordStyle = dimmingOutside(
@@ -313,16 +378,64 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
     );
   });
 
+  const translationSize = translationLayers[0]?.fontSize ?? text.translationSize;
+  const place =
+    translationLayers.length === 0
+      ? 'none'
+      : pageTranslationPlace(text.translationPosition, geometry, height, translationSize);
+  const ayahKey = ayahKeyOf(heard) ?? ayahAt(timings, now) ?? `${timings.surah}:${timings.ayat[0]!.ayah}`;
+  // The page has no title overlay: its cards take the overlay's default serif.
+  const overlayFont = defaultOverlay.font;
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color, overflow: 'hidden'}}>
-      {layout.backgroundImage !== '' && (
-        <Img src={fileUrl(layout.backgroundImage, staticFile)} style={BACKGROUND_IMAGE_STYLE} />
-      )}
+      <MushafBackground
+        background={{
+          ...backgroundFor(props.background, layout),
+          ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
+        }}
+        audioLevel={glowLevelAt(resolved.audio, now, fps)}
+      />
       {audioFile !== '' && (
-        <Audio src={fileUrl(audioFile, staticFile)} trimBefore={Math.round(resolved.audioOffsetSeconds * fps)} />
+        <CompositionAudio
+          src={fileUrl(audioFile, staticFile)}
+          trimBefore={Math.round(resolved.audioOffsetSeconds * fps)}
+          volume={(f) => volumeAt(f, curve)}
+        />
       )}
       {leaves}
-      {isStudio && fontSetup.warning !== null && <div style={WARNING_STYLE}>Mushaf Studio: {fontSetup.warning}</div>}
+      {place !== 'none' && (
+        <div
+          data-mushaf-block="Translation"
+          data-place={place}
+          style={pageTranslationStyle(place, geometry, layout.marginX, translationSize, text.translationOffsetY)}
+        >
+          <TranslationStack layers={translationLayers} ayahKey={ayahKey} />
+        </div>
+      )}
+      <CornerLegend
+        legend={legend}
+        theme={themeSelectionFrom(props.theme, props.customTheme)}
+        fontFamily={overlayFont}
+        color={layout.color}
+        background={layout.background}
+        width={width}
+      />
+      <CompositionEndCard
+        endCard={endCard}
+        content={resolved.endCard}
+        timings={timings}
+        translations={translationLayers.map((layer) => layer.translation)}
+        reciter=""
+        from={contentFrames}
+        durationInFrames={cardFrames}
+        fontFamily={overlayFont}
+        color={layout.color}
+        background={layout.background}
+        width={width}
+        height={height}
+      />
+      {isStudio && <StudioWarnings warnings={[fontSetup.warning, resolved.audioWarning]} />}
+      {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );
 };

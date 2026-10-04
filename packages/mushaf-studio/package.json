@@ -54,6 +54,7 @@
     "test:studio": "playwright test -c test/studio/playwright.config.mts"
   },
   "peerDependencies": {
+    "@remotion/media": ">=4.0.521",
     "@remotion/studio": ">=4.0.521",
     "@remotion/transitions": ">=4.0.521",
     "@remotion/zod-types": ">=4.0.521",
@@ -64,6 +65,7 @@
     "zod": ">=4.0.0"
   },
   "devDependencies": {
+    "@remotion/media": "4.0.521",
     "@remotion/studio": "4.0.521",
     "@remotion/transitions": "4.0.521",
     "@remotion/zod-types": "4.0.521",

@@ -27,7 +27,7 @@ export const STUDIO_FPS = 30;
 export const fileUrl = (path: string, staticFile: (path: string) => string): string =>
   /^https?:\/\//i.test(path) ? path : staticFile(path);
 
-export type TextFileProp = 'translationFile' | 'glossFile' | 'transliterationFile';
+export type TextFileProp = 'translationFile' | 'glossFile' | 'transliterationFile' | `translations.${number}.file`;
 
 const SHAPES: Readonly<Record<Translation['kind'], string>> = {
   ayah: 'an ayah-by-ayah translation ({"1:1": "..."}, or any QUL shape)',

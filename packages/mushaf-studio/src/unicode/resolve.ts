@@ -1,9 +1,11 @@
 import {staticFile as remotionStaticFile} from 'remotion';
-import {readTimings, trimTimings} from '../compositions/recitation/resolve';
-import {fileUrl, loadTextFile} from '../compositions/shared';
+import {loadTranslationLayers, resolveEndCardContent, translationLayerSpecs} from '../compositions/extras';
+import {readTimings, shiftTimings, trimTimings} from '../compositions/recitation/resolve';
+import {fileUrl} from '../compositions/shared';
 import {describeValue, MushafStudioError} from '../errors';
 import {clipTimeline, type MemorizeClip} from '../memorize/timeline';
-import type {AyahTranslation, StudioTimings} from '../types';
+import type {Memorize} from '../schema';
+import type {AyahTranslation, ResolvedExtras, StudioTimings} from '../types';
 import {unicodeFontOf} from './font';
 import type {MushafAyahTextProps} from './schema';
 import {type AyahWord, type AyahWords, ayahWordsOf, loadAyahWords} from './text';
@@ -19,10 +21,16 @@ export type ResolvedAyah = {
 };
 
 /** What `calculateMetadata()` of `<MushafAyahText>` resolves once per render from the content props. */
-export type ResolvedAyahText = {
-  /** Trimmed to the range, without the ayahs the recording does not carry whole. */
+export type ResolvedAyahText = ResolvedExtras & {
+  /**
+   * Trimmed to the range, without the ayahs the recording does not carry whole; moved
+   * `audioOffsetSeconds` earlier when `audio.trimSilence` skipped the recording's leading silence.
+   */
   readonly timings: StudioTimings;
+  /** Seconds of the recording skipped before frame 0 (`audio.trimSilence`); 0 or unset: the file's own times. */
+  readonly audioOffsetSeconds?: number | undefined;
   readonly text: AyahWords;
+  /** The first translation shown (`translations[0]`), or `null`. */
   readonly translation: AyahTranslation | null;
   /** One per timed ayah, in order. */
   readonly ayahs: readonly ResolvedAyah[];
@@ -59,9 +67,15 @@ export const resolveAyahText = async (
     );
   }
   const timings = trimTimings(await readTimings(props.timingsFile, io), props.fromAyah, props.toAyah);
-  const [text, translation] = await Promise.all([
+  const keys = new Set(timings.ayat.map((a) => `${timings.surah}:${a.ayah}`));
+  const [text, translations, endCard] = await Promise.all([
     loadAyahWords(fileUrl(props.textFile, io.staticFile), {fetch: io.fetch}),
-    loadTextFile('ayah', 'translationFile', props.text.translationFile, io),
+    loadTranslationLayers(translationLayerSpecs(props.text), keys, io),
+    resolveEndCardContent(
+      props.endCard,
+      {surah: timings.surah, lastAyah: timings.ayat[timings.ayat.length - 1]!.ayah},
+      io,
+    ),
   ]);
   if (text.script !== font.script) {
     throw bad(
@@ -79,5 +93,35 @@ export const resolveAyahText = async (
     }
     return {surah: timings.surah, ayah: timing.ayah, start: timing.start, end: timing.end, words};
   });
-  return {timings, text, translation, ayahs, clips: clipTimeline(timings, props.memorize)};
+  return {
+    timings,
+    text,
+    translation: translations[0] ?? null,
+    translations,
+    ayahs,
+    clips: clipTimeline(timings, props.memorize),
+    endCard,
+  };
+};
+
+/**
+ * A resolved ayah text that starts `seconds` later in the recording (`audio.trimSilence`):
+ * `audioOffsetSeconds` grows by it, and the timings, the ayahs and the clip timeline move that much
+ * earlier. The same object for 0.
+ */
+export const skipAyahTextStart = (
+  resolved: ResolvedAyahText,
+  seconds: number,
+  memorize: Pick<Memorize, 'mode' | 'repeat' | 'pauseSeconds'>,
+): ResolvedAyahText => {
+  if (seconds === 0) return resolved;
+  const timings = shiftTimings(resolved.timings, seconds);
+  const earlier = (t: number): number => Math.round((t - seconds) * 1e6) / 1e6;
+  return {
+    ...resolved,
+    timings,
+    audioOffsetSeconds: Math.round(((resolved.audioOffsetSeconds ?? 0) + seconds) * 1e6) / 1e6,
+    ayahs: resolved.ayahs.map((ayah) => ({...ayah, start: earlier(ayah.start), end: earlier(ayah.end)})),
+    clips: clipTimeline(timings, memorize),
+  };
 };

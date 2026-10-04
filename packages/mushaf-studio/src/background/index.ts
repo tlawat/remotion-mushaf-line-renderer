@@ -2,6 +2,7 @@
 // a looping video, with blur, dim and a Ken Burns move over the whole video, and a glow behind the
 // lines that pulses with the recitation. Pure in props and frame, like the lines.
 
+export {backgroundFor} from './compat';
 export {
   backgroundBaseStyle,
   GLOW_REST,

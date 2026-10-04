@@ -336,7 +336,9 @@ describe('resolveRecitation', () => {
     };
     const fetch = fetchJson(fatiha);
     const resolved = await resolveRecitation(props({text}), {fetch, staticFile});
-    expect(resolved.translation).toBe(ayahText);
+    // Cut to the ayahs that can be shown: the fixture's 1:2 is one of them.
+    expect(resolved.translation).toEqual(ayahText);
+    expect(resolved.translations).toEqual([ayahText]);
     expect(resolved.gloss).toBe(wordText);
     expect(resolved.transliteration).toBe(wordText);
     expect(mocks.loadTranslation.mock.calls.map((call) => call[0])).toEqual([

@@ -8,6 +8,7 @@ import {
   scheduleLines,
 } from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
+import {loadTranslationLayers, resolveEndCardContent, translationLayerSpecs} from '../compositions/extras';
 import {recitationDuration} from '../compositions/recitation/calculate-metadata';
 import {
   audioOffsetFor,
@@ -20,7 +21,7 @@ import {STUDIO_FPS} from '../compositions/shared';
 import {MushafStudioError} from '../errors';
 import {doubtfulWords} from '../lines';
 import {dataSourceFrom, defaultAnimation, themeSelectionFrom} from '../schema';
-import type {DoubtReason, StudioTimings} from '../types';
+import type {AyahTranslation, DoubtReason, ResolvedExtras, StudioTimings} from '../types';
 import type {MushafPageProps} from './schema';
 
 /** When one line of the passage is the one being recited, in seconds of the composition. */
@@ -43,7 +44,7 @@ export type PageSlot = {
 };
 
 /** What `resolvePage()` gives `<MushafPage>`: the timings, the pages and when each line is current. */
-export type ResolvedPage = {
+export type ResolvedPage = ResolvedExtras & {
   /** Trimmed to the range and to the ayahs carried whole, moved `audioOffsetSeconds` earlier. */
   readonly timings: StudioTimings;
   /** Seconds of the recording skipped at the start; the `<Audio trimBefore>`. */
@@ -56,6 +57,8 @@ export type ResolvedPage = {
   readonly lines: readonly PageLineSlot[];
   /** What `doubtfulWords()` found in the range, for the Studio's review marks. */
   readonly doubtful: Readonly<Record<string, readonly DoubtReason[]>>;
+  /** The first translation shown (`translations[0]`), or `null`. */
+  readonly translation: AyahTranslation | null;
 };
 
 export type ResolvePageOptions = {
@@ -115,7 +118,7 @@ export const pageLineAt = (slots: readonly PageLineSlot[], seconds: number): Pag
 };
 
 /** Seconds a line is in place before its first word when a later ayah opens: the recitation's default. */
-const LEAD_IN_SECONDS = defaultAnimation.leadInSeconds;
+export const PAGE_LEAD_IN_SECONDS = defaultAnimation.leadInSeconds;
 
 /**
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah range
@@ -134,7 +137,7 @@ export const resolvePage = async (props: MushafPageProps, options: ResolvePageOp
   const file = await readTimings(props.timingsFile, io);
   const ranged = timingsInRange(file, props.fromAyah, props.toAyah);
   const played = playableTimings(ranged);
-  const audioOffsetSeconds = audioOffsetFor(file, played, LEAD_IN_SECONDS);
+  const audioOffsetSeconds = audioOffsetFor(file, played, PAGE_LEAD_IN_SECONDS);
   const timings = shiftTimings(played, audioOffsetSeconds);
   const theme = themeSelectionFrom(props.theme, props.customTheme);
   const data = dataSourceFrom(props.data, io.staticFile);
@@ -150,7 +153,16 @@ export const resolvePage = async (props: MushafPageProps, options: ResolvePageOp
   }
   const endSeconds = recitationDuration(timings, STUDIO_FPS) / STUDIO_FPS;
   const scheduled = schedulePages(lines, props.pageView.turnSeconds, endSeconds);
-  const wholePages = await Promise.all(scheduled.map(({page}) => getMushafLines({page, theme, data})));
+  const keys = new Set(timings.ayat.map((a) => `${timings.surah}:${a.ayah}`));
+  const [wholePages, translations, endCard] = await Promise.all([
+    Promise.all(scheduled.map(({page}) => getMushafLines({page, theme, data}))),
+    loadTranslationLayers(translationLayerSpecs(props.text), keys, io),
+    resolveEndCardContent(
+      props.endCard,
+      {surah: timings.surah, lastAyah: timings.ayat[timings.ayat.length - 1]!.ayah},
+      io,
+    ),
+  ]);
   return {
     timings,
     audioOffsetSeconds,
@@ -158,5 +170,29 @@ export const resolvePage = async (props: MushafPageProps, options: ResolvePageOp
     pages: scheduled.map((slot, i) => ({...slot, lines: wholePages[i]!})),
     lines,
     doubtful: doubtfulWords(ranged, {threshold: props.review.confidenceThreshold}),
+    translation: translations[0] ?? null,
+    translations,
+    endCard,
+  };
+};
+
+/**
+ * A resolved page that starts `seconds` later in the recording (`audio.trimSilence`):
+ * `audioOffsetSeconds` grows by it, the timings and the lines' slots move that much earlier (never
+ * before 0) and the pages are scheduled again (`schedulePages()`). The same object for 0.
+ */
+export const skipPageStart = (resolved: ResolvedPage, seconds: number, turnSeconds: number): ResolvedPage => {
+  if (seconds === 0) return resolved;
+  const timings = shiftTimings(resolved.timings, seconds);
+  const earlier = (t: number): number => Math.max(0, Math.round((t - seconds) * 1e6) / 1e6);
+  const lines = resolved.lines.map((slot) => ({...slot, start: earlier(slot.start), end: earlier(slot.end)}));
+  const endSeconds = recitationDuration(timings, STUDIO_FPS) / STUDIO_FPS;
+  const scheduled = schedulePages(lines, turnSeconds, endSeconds);
+  return {
+    ...resolved,
+    timings,
+    audioOffsetSeconds: Math.round((resolved.audioOffsetSeconds + seconds) * 1e6) / 1e6,
+    lines,
+    pages: scheduled.map((slot, i) => ({...slot, lines: resolved.pages[i]!.lines})),
   };
 };

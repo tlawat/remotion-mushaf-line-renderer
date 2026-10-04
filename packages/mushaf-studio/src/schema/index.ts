@@ -102,9 +102,46 @@ export const highlightSchema = z.object({
   occurrence: z.enum(['first', 'last']).describe('For a repeated word: follow its first or its last recitation'),
 });
 
+/** A translation layer's `font` that picks the web font of the translation's own language. */
+export const AUTO_FONT = 'auto';
+
+/**
+ * One translation of a stack (`text.translations`): its file and its type. `font` is `'auto'` (the
+ * web font of the file's language, `fontFamilyForLanguage(meta.language)`, loaded from Google Fonts:
+ * Noto Naskh Arabic for Arabic, Noto Nastaliq Urdu for Urdu, Noto Sans JP for Japanese, ...) or a
+ * CSS font family used as it is. The direction always follows the language (`directionOfLanguage()`).
+ */
+export const translationLayerSchema = z.object({
+  /** A `public/` path or an http(s) URL to an ayah-by-ayah translation; an empty one is skipped. */
+  file: z.string().describe('Ayah translation file in public/ or a URL (empty: this layer is skipped)'),
+  font: z
+    .string()
+    .describe(
+      '“auto” for the web font of the translation’s language (Arabic, Urdu, Bengali, Chinese, ...), or a CSS font family',
+    ),
+  fontSize: z.number().int().min(12).max(120).describe('Size in px'),
+  color: zColor().describe('Colour'),
+});
+
+/** At most this many stacked translations (`TranslationStack`'s limit). */
+export const MAX_TRANSLATIONS = 3;
+
+export const translationsSchema = z
+  .array(translationLayerSchema)
+  .max(MAX_TRANSLATIONS)
+  .describe(
+    'Up to three translations stacked under each other (empty: translationFile alone, with the settings above)',
+  );
+
 export const textSchema = z.object({
-  /** A `public/` path to a translation file (QUL shape or the studio envelope), or empty. */
-  translationFile: z.string().describe('Ayah translation file in public/ (empty: none)'),
+  /**
+   * A `public/` path to a translation file (QUL shape or the studio envelope), or empty. Kept for
+   * the files written before `translations`: it is the one translation, set with the
+   * `translation*` fields below, while `translations` is empty, and ignored once it is not.
+   */
+  translationFile: z
+    .string()
+    .describe('Ayah translation file in public/ (empty: none; ignored when translations is set)'),
   translationPosition: z.enum(['below', 'above', 'none']).describe('Where the ayah translation goes'),
   translationFont: z.string().describe('CSS font family of the translation'),
   translationSize: z.number().int().min(12).max(120).describe('Translation size in px'),
@@ -125,6 +162,8 @@ export const textSchema = z.object({
   glossFont: z.string().describe('CSS font family of the gloss strip'),
   glossSize: z.number().int().min(12).max(120).describe('Gloss size in px'),
   glossColor: zColor().describe('Gloss colour'),
+  /** 1-3 translations, each with its file, font, size and colour; when set, `translationFile` and its type are not used. */
+  translations: translationsSchema,
 });
 
 /** Where the word-by-word gloss goes: the strip at the bottom, under each printed word, or nowhere. */
@@ -199,6 +238,40 @@ export const overlaySchema = z.object({
   cornerSize: z.number().int().min(12).max(60).describe('Size of the corner label in px'),
 });
 
+export const LEGEND_NAMES = ['en', 'ar', 'both'] as const;
+
+/**
+ * The tajweed colours' legend in a corner (`<TajweedLegend>`): drawn only when `show` is on and the
+ * theme tells the rules apart (`themeHasTajweedColors()`); under `plain`, `normal` or `black` there
+ * is nothing to explain.
+ */
+export const legendSchema = z.object({
+  show: z.boolean().describe('Show the legend of the tajweed colours (only for a theme that colours the rules)'),
+  position: z.enum(OVERLAY_CORNERS).describe('Corner of the legend'),
+  orientation: z.enum(['row', 'column']).describe('Swatches side by side (row) or one under the other (column)'),
+  names: z.enum(LEGEND_NAMES).describe('Names of the rules: English, Arabic or both'),
+});
+
+export const END_CARD_KINDS = ['none', 'credits', 'tafsir', 'chapter-info'] as const;
+
+/**
+ * A closing card after the last ayah (`<EndCard>`), `seconds` long, added to the duration: the
+ * surah, the range, the reciter and the credits the sources ask for (`attributionLines()`), with the
+ * commentary of the last ayah recited (`'tafsir'`, from `tafsirFile`) or the surah's introduction
+ * (`'chapter-info'`, from `chapterInfoFile`). Both files are written by the panel or by
+ * `serialiseTafsir()` / `serialiseChapterInfo()`; they are read in `calculateMetadata()` only.
+ */
+export const endCardSchema = z.object({
+  show: z
+    .enum(END_CARD_KINDS)
+    .describe('A closing card: none, the credits, the tafsir of the last ayah, or the surah’s introduction'),
+  seconds: z.number().min(2).max(15).step(0.5).describe('Seconds the end card stays (added to the video)'),
+  /** A `public/` path or a URL to a tafsir file (`serialiseTafsir()`). */
+  tafsirFile: z.string().describe('Tafsir file in public/ (for the tafsir card)'),
+  /** A `public/` path or a URL to a chapter-info file (`serialiseChapterInfo()`). */
+  chapterInfoFile: z.string().describe('Surah introduction file in public/ (for the chapter-info card)'),
+});
+
 /** The surah's printed header before its first ayah: nothing, its name, or its name and basmalah (when it has one). */
 export const headerSchema = z
   .enum(['none', 'name', 'name-basmalah'])
@@ -225,6 +298,11 @@ export type MemorizeMode = (typeof MEMORIZE_MODES)[number];
 export type Memorize = z.infer<typeof memorizeSchema>;
 export type Overlay = z.infer<typeof overlaySchema>;
 export type HeaderMode = z.infer<typeof headerSchema>;
+export type TranslationLayerSettings = z.infer<typeof translationLayerSchema>;
+export type Legend = z.infer<typeof legendSchema>;
+export type LegendNames = (typeof LEGEND_NAMES)[number];
+export type EndCardKind = (typeof END_CARD_KINDS)[number];
+export type EndCardSettings = z.infer<typeof endCardSchema>;
 
 export const defaultCustomTheme: CustomTheme = {
   base: 'normal',
@@ -279,6 +357,7 @@ export const defaultText: Text = {
   glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
   glossSize: 34,
   glossColor: '#6a6a6a',
+  translations: [],
 };
 
 /** `defaultText` with the gloss in its strip at the bottom. */
@@ -296,6 +375,20 @@ export const defaultOverlay: Overlay = {
   font: 'Georgia, "Noto Serif", serif',
   corner: 'top-right',
   cornerSize: 28,
+};
+
+/** Off; when turned on: bottom left, one rule under the other, named in English and Arabic. */
+export const defaultLegend: Legend = {show: false, position: 'bottom-left', orientation: 'column', names: 'both'};
+
+/** No end card; when one is picked: five seconds. */
+export const defaultEndCard: EndCardSettings = {show: 'none', seconds: 5, tafsirFile: '', chapterInfoFile: ''};
+
+/** A new layer of `text.translations`: the language's own web font, at the translation's default size and colour. */
+export const defaultTranslationLayer: TranslationLayerSettings = {
+  file: '',
+  font: AUTO_FONT,
+  fontSize: 40,
+  color: '#4a4a4a',
 };
 
 export const defaultReview: Review = {showDoubtful: true, confidenceThreshold: 0.8, doubtColor: '#d94848'};

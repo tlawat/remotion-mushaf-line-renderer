@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {backgroundSchema, defaultBackground} from '../../background/schema';
 import {
   animationSchema,
   customThemeSchema,
@@ -35,6 +36,8 @@ export const mushafPassageSchema = z.object({
   fonts: fontsSchema,
   data: dataSchema,
   layout: layoutSchema,
+  /** No audio here: the glow stays at rest. */
+  background: backgroundSchema.describe('Behind the lines: a colour, a gradient, an image or a looping video'),
   animation: animationSchema,
   text: textSchema,
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
@@ -56,6 +59,7 @@ export const defaultMushafPassageProps: MushafPassageProps = {
   fonts: 'fallback',
   data: 'mirror',
   layout: defaultLayout,
+  background: defaultBackground,
   animation: defaultAnimation,
   text: defaultText,
   overlay: defaultOverlay,

@@ -91,6 +91,7 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
 vi.mock('../../../src/translations', () => ({
   ayahKeyOf: (id: string | null) => (id ? id.split(':').slice(0, 2).join(':') : null),
   TranslationBlock: () => null,
+  TranslationStack: () => null,
   GlossStrip: () => <div data-gloss-strip="" />,
 }));
 vi.mock('../../../src/studio', () => ({MushafStudioPanel: () => null, isInStudio: () => false}));

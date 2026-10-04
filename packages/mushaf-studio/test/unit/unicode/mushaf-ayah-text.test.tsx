@@ -24,6 +24,12 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
   MushafSurahName: (props: {surah: number}) => <span data-surah-name={props.surah} />,
 }));
 
+vi.mock('@remotion/media', () => ({
+  Audio: (props: {src: string; trimBefore?: number}) => (
+    <div data-media-audio={props.src} data-trim-before={props.trimBefore} />
+  ),
+}));
+
 // The panel is the studio tests' business (test/unit/studio); here it says where it was rendered and with what.
 vi.mock('../../../src/studio', () => ({
   MushafStudioPanel: (props: {compositionId: string; props: {textFile?: string}}) => (
@@ -226,14 +232,19 @@ describe('<MushafAyahText>', () => {
     expect(blocks.map((b) => b.dataset.ayahKey)).toEqual(['1:2', '1:3', '1:4', '1:5', '1:6', '1:7']);
     const third = root.querySelector<HTMLElement>('[data-sequence="Ayah 1:3"] .mushaf-translation')!;
     expect(third.textContent).toBe('The Entirely Merciful');
-    expect(third.style.textAlign).toBe('center');
-    expect(third.previousElementSibling!.className).toBe('mushaf-ayah-text');
+    // The stack's blocks set `text-align: start` inline; the composition's rule centres them under the ayah.
+    const stack = third.closest<HTMLElement>('.mushaf-translation-stack')!;
+    expect(stack.classList.contains('mushaf-ayah-text-translations')).toBe(true);
+    expect(root.querySelector('style')!.textContent).toContain(
+      '.mushaf-ayah-text-translations .mushaf-translation{text-align:center!important}',
+    );
+    expect(stack.previousElementSibling!.className).toBe('mushaf-ayah-text');
   });
 
   it('puts the translation above with translationPosition "above", and leaves it out with "none"', () => {
     const above = mount({text: {translationPosition: 'above'}}, withTranslation);
     const third = above.querySelector<HTMLElement>('[data-sequence="Ayah 1:3"] .mushaf-translation')!;
-    expect(third.nextElementSibling!.className).toBe('mushaf-ayah-text');
+    expect(third.closest('.mushaf-translation-stack')!.nextElementSibling!.className).toBe('mushaf-ayah-text');
     cleanup();
     expect(
       mount({text: {translationPosition: 'none'}}, withTranslation).querySelector('.mushaf-translation'),

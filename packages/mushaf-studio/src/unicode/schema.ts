@@ -1,12 +1,16 @@
 import {z} from 'zod';
+import {audioSchema, defaultAudio} from '../audio/schema';
+import {backgroundSchema, defaultBackground} from '../background/schema';
 import {
   defaultAnimation,
+  defaultEndCard,
   defaultHighlight,
   defaultLayout,
   defaultMemorize,
   defaultOverlay,
   defaultText,
   ENTRANCES,
+  endCardSchema,
   highlightSchema,
   layoutSchema,
   memorizeSchema,
@@ -54,6 +58,9 @@ export const mushafAyahTextSchema = z.object({
   layout: layoutSchema.describe(
     'Frame, colours, margins and position (lines on screen and their opacity do not apply)',
   ),
+  background: backgroundSchema.describe(
+    'Behind the ayah: a colour, a gradient, an image or a looping video, and a glow',
+  ),
   animation: ayahAnimationSchema.describe('How each ayah comes in and goes out'),
   highlight: highlightSchema.describe('What follows the recitation and how it is marked'),
   /** `'first-letters'` shows the first letter of each word to come, with a tatweel. */
@@ -61,8 +68,10 @@ export const mushafAyahTextSchema = z.object({
     'Memorisation: repeat each ayah, hide the words to come or show their first letters',
   ),
   /** The ayah translation goes under (or over) the ayah; the gloss fields do not apply. */
-  text: textSchema.describe('The ayah translation (the word-by-word fields do not apply)'),
+  text: textSchema.describe('The ayah translations (the word-by-word fields do not apply)'),
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
+  endCard: endCardSchema.describe('A closing card after the last ayah'),
+  audio: audioSchema.describe('The recitation’s loudness, fades and leading silence'),
   /** Filled by calculateMetadata; see `ResolvedAyahText`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
@@ -87,6 +96,8 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   fontSize: 96,
   lineHeight: 1.9,
   layout: {...defaultLayout, aspect: '9:16', background: '#101418', color: '#f4efe6'},
+  // The colour behind an image or a video: the dark page's.
+  background: {...defaultBackground, color: '#101418'},
   animation: {
     enter: defaultAnimation.enter,
     exit: defaultAnimation.exit,
@@ -98,5 +109,7 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   text: {...defaultText, translationColor: '#c9c1b2'},
   // The shared default title ink is the light page's; this one reads on the dark page.
   overlay: {...defaultOverlay, color: '#f4efe6'},
+  endCard: defaultEndCard,
+  audio: defaultAudio,
   resolved: null,
 };

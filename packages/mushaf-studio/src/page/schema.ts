@@ -1,16 +1,24 @@
 import {zColor} from '@remotion/zod-types';
 import {z} from 'zod';
+import {audioSchema, defaultAudio} from '../audio/schema';
+import {backgroundSchema, defaultBackground} from '../background/schema';
 import {
   customThemeSchema,
   dataSchema,
   defaultCustomTheme,
+  defaultEndCard,
   defaultHighlight,
   defaultLayout,
+  defaultLegend,
   defaultReview,
+  defaultText,
+  endCardSchema,
   fontsSchema,
   highlightSchema,
   layoutSchema,
+  legendSchema,
   reviewSchema,
+  textSchema,
   themeNameSchema,
 } from '../schema';
 
@@ -40,6 +48,25 @@ export const pageViewSchema = z.object({
 
 export type PageView = z.infer<typeof pageViewSchema>;
 
+/** Where the page's translations go: beside the page (the gutter left of it), under it, or wherever there is more room. */
+export const PAGE_TRANSLATION_POSITIONS = ['auto', 'beside', 'below', 'none'] as const;
+
+/**
+ * The page's translations: `textSchema` (one file with its type, or a stack of up to three in
+ * `translations`), placed beside or under the page. The word-by-word fields do not apply (the page
+ * is printed whole), as under `<MushafAyahText>`; `translationOffsetY` moves the block up or down.
+ */
+export const pageTextSchema = textSchema.extend({
+  translationPosition: z
+    .enum(PAGE_TRANSLATION_POSITIONS)
+    .describe('Where the translation goes: beside the page, under it, wherever there is more room (auto), or nowhere'),
+});
+
+export type PageText = z.infer<typeof pageTextSchema>;
+
+/** No translation; when one is set, wherever the frame has more room, in `defaultText`'s type. */
+export const defaultPageText: PageText = {...defaultText, translationPosition: 'auto'};
+
 /**
  * The props of `<MushafPage>`: the whole printed page a recitation is on, followed line by line.
  * Content as `<MushafRecitation>`'s (audio, timings, range, theme, fonts, data); style in the Props
@@ -61,9 +88,18 @@ export const mushafPageSchema = z.object({
   layout: layoutSchema.describe(
     'Frame, colours and side margins (the page is centred: lines on screen, their opacity and position do not apply)',
   ),
+  background: backgroundSchema.describe(
+    'Around the page: a colour, a gradient, an image or a looping video, and a glow',
+  ),
   highlight: highlightSchema.describe('What follows the recitation inside the line and how it is marked'),
   review: reviewSchema.describe('Studio only: the doubtful words of the alignment'),
   pageView: pageViewSchema.describe('The page: the current line’s mark, the border, the page number and the turn'),
+  text: pageTextSchema.describe(
+    'The ayah translations, beside or under the page (the word-by-word fields do not apply)',
+  ),
+  legend: legendSchema.describe('Legend of the tajweed colours (colour themes only)'),
+  endCard: endCardSchema.describe('A closing card after the last ayah'),
+  audio: audioSchema.describe('The recitation’s loudness, fades and leading silence'),
   /** Filled by calculateMetadata; see `ResolvedPage`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
@@ -98,8 +134,13 @@ export const defaultMushafPageProps: MushafPageProps = {
   fonts: 'fallback',
   data: 'mirror',
   layout: defaultLayout,
+  background: defaultBackground,
   highlight: defaultHighlight,
   review: defaultReview,
   pageView: defaultPageView,
+  text: defaultPageText,
+  legend: defaultLegend,
+  endCard: defaultEndCard,
+  audio: defaultAudio,
   resolved: null,
 };

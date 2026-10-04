@@ -25,6 +25,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@remotion/cli": "4.0.521",
+        "@remotion/media": "4.0.521",
         "@remotion/studio": "4.0.521",
         "@remotion/transitions": "4.0.521",
         "@remotion/zod-types": "4.0.521",
@@ -100,6 +101,7 @@
       "name": "@tlawat/mushaf-studio",
       "version": "0.1.0",
       "devDependencies": {
+        "@remotion/media": "4.0.521",
         "@remotion/studio": "4.0.521",
         "@remotion/transitions": "4.0.521",
         "@remotion/zod-types": "4.0.521",
@@ -108,6 +110,7 @@
         "zod": "4.5.4",
       },
       "peerDependencies": {
+        "@remotion/media": ">=4.0.521",
         "@remotion/studio": ">=4.0.521",
         "@remotion/transitions": ">=4.0.521",
         "@remotion/zod-types": ">=4.0.521",

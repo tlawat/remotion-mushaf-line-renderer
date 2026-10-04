@@ -1,4 +1,6 @@
 import type {LineSchedule, MushafLineData, RecitationTimingsV1} from '@tlawat/remotion-mushaf-line';
+import type {ChapterInfo} from './content/chapter-info';
+import type {Tafsir} from './content/tafsir';
 
 /**
  * Where a printed line of a passage is split into two timed segments: the line, and the first
@@ -127,8 +129,51 @@ export type WordGloss = {
 
 export type Translation = AyahTranslation | WordGloss;
 
+/**
+ * What `calculateMetadata()` measured of the recording (`analyzeAudio()`) and does with it, as plain
+ * data in the props: the gain of `audio.normalize`, the silence `audio.trimSilence` skipped, and the
+ * levels the background's glow follows.
+ */
+export type ResolvedAudio = {
+  /** `gainFor()` of the analysis under `audio.normalize`, else 1. */
+  readonly gain: number;
+  /** Seconds of leading silence skipped under `audio.trimSilence`: already in `audioOffsetSeconds` and taken off the timings. */
+  readonly trimSeconds: number;
+  /**
+   * The recording's level per frame (0-1, three decimals) from where the composition starts in it,
+   * on the recording's clock (`audioClock()`), to the last ayah's end plus a second. Filled for the
+   * background's glow only; `[]` otherwise.
+   */
+  readonly levels: readonly number[];
+};
+
+/** What the end card shows besides the credits, read from its files in `calculateMetadata()`. */
+export type ResolvedEndCard = {
+  /** The tafsir of `endCard.tafsirFile`, cut to the entry that covers the last ayah recited (none when it has none). */
+  readonly tafsir: Tafsir | null;
+  /** The surah's introduction of `endCard.chapterInfoFile`. */
+  readonly chapterInfo: ChapterInfo | null;
+};
+
+/**
+ * What the compositions' `resolved` carries beside their own content: the stacked translations,
+ * the audio's analysis, the end card's content and a background video's length. Every field is
+ * optional, so a `resolved` made without them (by an older resolver, in a test) still renders: one
+ * translation (`translation`), the audio as it is, no end card, the video looped by the browser.
+ */
+export type ResolvedExtras = {
+  /** One per layer of `text.translations` with a file (or `text.translationFile` alone), cut to the ayahs shown. */
+  readonly translations?: readonly AyahTranslation[] | undefined;
+  readonly audio?: ResolvedAudio | undefined;
+  /** Why the audio could not be analysed (`AUDIO_ANALYSIS_FAILED`): the audio then plays as it is. Shown in the Studio only. */
+  readonly audioWarning?: string | null | undefined;
+  readonly endCard?: ResolvedEndCard | undefined;
+  /** `probeVideoSeconds()` of a background video whose `videoSeconds` is 0, when the browser could read it. */
+  readonly backgroundVideoSeconds?: number | null | undefined;
+};
+
 /** What `calculateMetadata()` of `<MushafRecitation>` resolves once per render from the content props. */
-export type ResolvedRecitation = {
+export type ResolvedRecitation = ResolvedExtras & {
   /**
    * The file's timings cut to `fromAyah`..`toAyah` and to the ayahs the recording carries whole,
    * every time `audioOffsetSeconds` earlier than in the file (the sidecar's words and segments too).
@@ -146,6 +191,7 @@ export type ResolvedRecitation = {
   readonly lines: readonly MushafLineData[];
   /** One slot per line on screen, the header lines' included (`withHeaderSlots()`). */
   readonly schedule: readonly LineSchedule[];
+  /** The first translation shown (`translations[0]`), or `null`. */
   readonly translation: AyahTranslation | null;
   /** The word-by-word translation (`text.glossFile`), if any. */
   readonly gloss: WordGloss | null;

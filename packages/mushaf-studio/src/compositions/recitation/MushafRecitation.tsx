@@ -1,6 +1,9 @@
 import {enterTiming, exitTiming, MushafLine, MushafLineWindow, wordAt} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
-import {AbsoluteFill, Audio, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {volumeAt} from '../../audio/volume';
+import {backgroundFor} from '../../background/compat';
+import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {
   InterlinearGlosses,
@@ -21,14 +24,31 @@ import {
   scrollTargetPosition,
 } from '../../memorize';
 import {MushafTitleOverlay} from '../../overlay';
-import {activeWordStyleFrom, animationFrom, fontPropsFrom, scrollTimingFrom, wordStyleFrom} from '../../schema';
+import {
+  activeWordStyleFrom,
+  animationFrom,
+  fontPropsFrom,
+  scrollTimingFrom,
+  themeSelectionFrom,
+  wordStyleFrom,
+} from '../../schema';
 import {MushafStudioPanel} from '../../studio';
 import {useInStudio} from '../../studio/environment';
-import {ayahKeyOf, GlossStrip, TranslationBlock} from '../../translations';
+import {ayahKeyOf, GlossStrip, TranslationStack} from '../../translations';
 import type {ResolvedRecitation} from '../../types';
+import {endCardFrames} from '../extras';
+import {
+  CompositionAudio,
+  CompositionEndCard,
+  CornerLegend,
+  glowLevelAt,
+  StudioWarnings,
+  translationsOf,
+  useTranslationLayers,
+  volumeCurveFor,
+} from '../parts';
 import {
   ayahAt,
-  BACKGROUND_IMAGE_STYLE,
   blockGeometry,
   fileUrl,
   firstAyahKey,
@@ -37,7 +57,6 @@ import {
   leadFrames,
   linesBlockStyle,
   translationBlockStyle,
-  WARNING_STYLE,
 } from '../shared';
 import type {MushafRecitationProps} from './schema';
 
@@ -55,8 +74,11 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
  * The flagship composition: the printed lines of a recited passage follow the audio, one line at a
  * time or through a line window, with the current word highlighted, an ayah translation and a
  * word gloss (in a strip, or under each printed word), the surah's header lines before ayah 1 and a
- * title card and corner label when asked, and (in the Studio) the doubtful words marked and the
- * Mushaf panel docked.
+ * title card and corner label when asked, over its background (`background`: a colour, gradient,
+ * image or looping video, with a glow that follows the recitation's level), with up to three
+ * translations stacked, the tajweed legend in a corner and an end card after the last ayah when
+ * asked, the audio normalised and faded as `audio` says, and (in the Studio) the doubtful words
+ * marked, the fonts and audio warnings, and the Mushaf panel docked.
  *
  * Under a memorisation mode each ayah plays `memorize.repeat` times on the clip timeline (one
  * `<Audio>` per clip, the lines and words timed per clip, the window scrolling back to the ayah's
@@ -65,7 +87,8 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
  * `'blank-upcoming'` with a faint outline (opacity 0.12).
  */
 export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
-  const {audioFile, fonts, layout, animation, highlight, memorize, text, review, overlay} = props;
+  const {audioFile, fonts, layout, animation, highlight, memorize, text, review, overlay, legend, endCard, audio} =
+    props;
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
@@ -78,6 +101,11 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
     );
   }
   const {lines, schedule, timings} = resolved;
+  const translationLayers = useTranslationLayers(text, translationsOf(resolved));
+  // The frames before the end card: the audio fades out by their end, the card covers the rest.
+  const cardFrames = endCardFrames(endCard, fps);
+  const contentFrames = Math.max(1, durationInFrames - cardFrames);
+  const curve = volumeCurveFor(audio, resolved.audio, contentFrames, fps);
   // The clip timeline calculateMetadata laid out; rebuilt (the same pure function) for a `resolved` made without it.
   const clips = resolved.clips ?? clipTimeline(timings, memorize);
   const identity = isIdentityTimeline(clips);
@@ -224,15 +252,24 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
     );
   }
 
-  const showTranslation = resolved.translation !== null && text.translationPosition !== 'none';
+  const showTranslation = translationLayers.length > 0 && text.translationPosition !== 'none';
   const showGloss = text.glossPosition === 'strip' && (resolved.gloss !== null || resolved.transliteration !== null);
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color}}>
-      {layout.backgroundImage !== '' && (
-        <Img src={fileUrl(layout.backgroundImage, staticFile)} style={BACKGROUND_IMAGE_STYLE} />
-      )}
+      <MushafBackground
+        background={{
+          ...backgroundFor(props.background, layout),
+          ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
+        }}
+        audioLevel={glowLevelAt(resolved.audio, now, fps)}
+        glowY={layout.verticalAlign}
+      />
       {audioFile !== '' && identity && (
-        <Audio src={fileUrl(audioFile, staticFile)} trimBefore={Math.round(resolved.audioOffsetSeconds * fps)} />
+        <CompositionAudio
+          src={fileUrl(audioFile, staticFile)}
+          trimBefore={Math.round(resolved.audioOffsetSeconds * fps)}
+          volume={(f) => volumeAt(f, curve)}
+        />
       )}
       {audioFile !== '' &&
         !identity &&
@@ -240,14 +277,21 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
           // Frames of the file: the composition's own offset into the recording, then the clip's range.
           const trimBefore = Math.round((resolved.audioOffsetSeconds + clip.audioFrom) * fps);
           const trimAfter = Math.round((resolved.audioOffsetSeconds + clip.audioTo) * fps);
+          const from = Math.round(clip.compositionFrom * fps);
           return (
             <Sequence
               key={`${clip.ayah}/${clip.repetition}`}
-              from={Math.round(clip.compositionFrom * fps)}
+              from={from}
               durationInFrames={Math.max(1, trimAfter - trimBefore)}
               name={`Ayah ${clip.ayah} (${clip.repetition}/${repeats})`}
             >
-              <Audio src={fileUrl(audioFile, staticFile)} trimBefore={trimBefore} trimAfter={trimAfter} />
+              {/* The same gain in every clip; the fades are the composition's, at its very start and end. */}
+              <CompositionAudio
+                src={fileUrl(audioFile, staticFile)}
+                trimBefore={trimBefore}
+                trimAfter={trimAfter}
+                volume={(f) => volumeAt(from + f, curve)}
+              />
             </Sequence>
           );
         })}
@@ -256,14 +300,7 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
       </div>
       {showTranslation && (
         <div data-mushaf-block="Translation" style={translationBlockStyle(geometry, layout, text, height)}>
-          <TranslationBlock
-            translation={resolved.translation!}
-            ayahKey={ayahKey}
-            fontFamily={text.translationFont}
-            fontSize={text.translationSize}
-            color={text.translationColor}
-            direction={text.translationDirection}
-          />
+          <TranslationStack layers={translationLayers} ayahKey={ayahKey} />
         </div>
       )}
       {showGloss && (
@@ -298,7 +335,29 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
         overlay={overlay}
         background={layout.background}
       />
-      {isStudio && fontSetup.warning !== null && <div style={WARNING_STYLE}>Mushaf Studio: {fontSetup.warning}</div>}
+      <CornerLegend
+        legend={legend}
+        theme={themeSelectionFrom(props.theme, props.customTheme)}
+        fontFamily={overlay.font}
+        color={layout.color}
+        background={layout.background}
+        width={width}
+      />
+      <CompositionEndCard
+        endCard={endCard}
+        content={resolved.endCard}
+        timings={timings}
+        translations={translationLayers.map((layer) => layer.translation)}
+        reciter={overlay.reciter}
+        from={contentFrames}
+        durationInFrames={cardFrames}
+        fontFamily={overlay.font}
+        color={layout.color}
+        background={layout.background}
+        width={width}
+        height={height}
+      />
+      {isStudio && <StudioWarnings warnings={[fontSetup.warning, resolved.audioWarning]} />}
       {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );

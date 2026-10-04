@@ -36,3 +36,31 @@ design and the roadmap.
   log of edits.
 - **The app** `apps/mushaf-studio` declares the compositions with their defaults inline, ships the
   data mirror and an Al-Fatihah sample, and starts with `bun run studio`.
+- **Backgrounds in every composition**: a `background` group (`backgroundSchema`) in
+  `MushafRecitation`, `MushafAyahText`, `MushafPage` and `MushafPassage`, painted by
+  `<MushafBackground>`: the page colour, a gradient, an image or a looping muted video (its length
+  probed in `calculateMetadata()`), with blur, dim, Ken Burns and a glow that follows the
+  recitation's level. `layout.background` stays the page colour; `layout.backgroundImage` is kept
+  for saved props (`backgroundFor()`).
+- **Audio cleanup** in the three audio compositions: an `audio` group; `calculateMetadata()` runs
+  `analyzeAudio()` when `normalize`, `trimSilence` or the glow needs it and keeps the gain, the
+  silence skipped and the glow's levels in `resolved.audio`; a failed analysis plays the audio as it
+  is, with the reason in `resolved.audioWarning` shown in the Studio only. `trimSilence` adds the
+  skipped silence to `audioOffsetSeconds` and moves the timings by it (`skipRecitationStart()`,
+  `skipAyahTextStart()`, `skipPageStart()`); every `<Audio>`, each memorisation clip included, gets
+  `volume={(f) => volumeAt(f, curve)}`, faded only at the composition's start and end.
+- **`@remotion/media`'s `<Audio>` under the in-browser renderer**: the compositions render it when
+  `useRemotionEnvironment().isClientSideRendering` is set (`renderMediaOnWeb()`), `remotion`'s
+  otherwise. `@remotion/media` is a new peer dependency.
+- **Stacked translations with script fonts**: `text.translations` (up to three `{file, font,
+  fontSize, color}`) in a `<TranslationStack>`; `font: 'auto'` loads the web font of the
+  translation's language through one `useWebFonts()` call, the direction follows the language.
+  `text.translationFile` stays the one translation while `translations` is empty. Translations are
+  cut to the ayahs shown. `MushafPage` gets a `text` group, its translations beside or under the page.
+- **Tajweed legend**: a `legend` group on `MushafRecitation` and `MushafPage`, the
+  `<TajweedLegend>` in a corner, drawn only under a theme that colours the rules.
+- **End card**: an `endCard` group on the three audio compositions: `seconds` added after the last
+  ayah, the credits from `attributionLines()` (`<EndCard creditLines>`), with the tafsir of the last
+  ayah recited or the surah's introduction read in `calculateMetadata()`.
+- **The app registers `MushafPage` and the `MushafThumbnail` still**, every composition's inline
+  defaults carrying the new groups; the Mushaf panel docks over `MushafPage` too.

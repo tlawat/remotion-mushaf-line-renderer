@@ -62,6 +62,11 @@ export type EndCardProps = {
   /** The card covers the frame in this colour. */
   readonly background: string;
   readonly credits?: EndCardCredits | undefined;
+  /**
+   * The credits as lines (`attributionLines()` of the video), one under the other, in place of the
+   * line `credits` builds. Unset: `endCardCreditLine(credits)`.
+   */
+  readonly creditLines?: readonly string[] | undefined;
   /** A tafsir card for one ayah of the range, under the title. */
   readonly tafsir?:
     | {readonly tafsir: Tafsir; readonly ayahKey: string; readonly maxLines?: number | undefined}
@@ -87,6 +92,7 @@ const EndCardContent: React.FC<EndCardContentProps> = ({
   color,
   background,
   credits,
+  creditLines,
   tafsir,
   chapterInfo,
   style,
@@ -166,7 +172,9 @@ const EndCardContent: React.FC<EndCardContentProps> = ({
         data-mushaf-end-card-part="credits"
         style={{fontSize: fontSize * 0.3, opacity: 0.75, marginTop: fontSize * 0.6}}
       >
-        {endCardCreditLine(credits)}
+        {creditLines === undefined
+          ? endCardCreditLine(credits)
+          : creditLines.map((line) => <div key={line}>{line}</div>)}
       </div>
     </div>
   );
@@ -175,7 +183,7 @@ const EndCardContent: React.FC<EndCardContentProps> = ({
 /**
  * A closing card, independent of the composition it ends: the surah's name in English and Arabic,
  * the range ("1:1–7"), the reciter, an optional tafsir card of one ayah and/or chapter card, and
- * the credit line built from `credits` (`endCardCreditLine()`), centred over the frame in
+ * the credit line built from `credits` (`endCardCreditLine()`) or the lines of `creditLines`, centred over the frame in
  * `background`. It lives in its own `<Sequence>` (`from`, `durationInFrames`, named "End card") and
  * fades in over its first `fadeInSeconds`. Pure in its props and the frame.
  */

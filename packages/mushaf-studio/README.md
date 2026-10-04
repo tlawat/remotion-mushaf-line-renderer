@@ -221,7 +221,8 @@ To put the panel in a composition of your own, render it there with the composit
 ## Props
 
 The schemas' descriptions are what the Props sidebar shows; the defaults are
-`defaultMushafRecitationProps` and `defaultMushafPassageProps`. The content props (the first table)
+`defaultMushafRecitationProps`, `defaultMushafAyahTextProps`, `defaultMushafPageProps` and
+`defaultMushafPassageProps` (and `defaultMushafThumbnailProps` for the `MushafThumbnail` still). The content props (the first table)
 are what the panel sets; the groups below are style, set in the sidebar.
 
 ### `MushafRecitation`
@@ -239,8 +240,8 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `customTheme` | object                      | see below                     | A preset and a colour per part.                              |
 | `fonts`       | `'fallback'`, `'cdn'`, `'package'` | `'fallback'`           | Where the page fonts come from: QUL's CDN with the fonts packages as fallback, the CDN only, or the packages only (offline). |
 | `data`        | `'mirror'`, `'cdn'`         | `'mirror'`                    | The mushaf data: the mirror in `public/data/qpc-v4/` through `staticFile()`, or QUL's exports on Tarteel's CDN. |
-| `layout`, `animation`, `highlight`, `text`, `overlay`, `review` | objects | see below | The style groups.                            |
-| `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translation, the gloss, the doubtful words. Leave it `null`. |
+| `layout`, `background`, `animation`, `highlight`, `memorize`, `text`, `overlay`, `legend`, `endCard`, `audio`, `review` | objects | see below | The style groups.                            |
+| `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translations, the gloss, the doubtful words, the audio's analysis (`audio`, `audioWarning`), the end card's content. Leave it `null`. |
 
 ### `MushafPassage`
 
@@ -252,7 +253,7 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `slice`       | boolean   | `true`     | Hide the neighbours' words on the first and last lines. |
 | `holdSeconds` | 0.5–30    | `4`        | Seconds each line stays.                       |
 | `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'` | When `fromAyah` is 1: the surah's header lines first. |
-| `theme`, `customTheme`, `fonts`, `data`, `layout`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above. |
+| `theme`, `customTheme`, `fonts`, `data`, `layout`, `background`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above; no audio, so the background's glow stays at rest. |
 | `resolved`    |           | `null`     | Filled by `calculateMetadata()`.               |
 
 ### `MushafAyahText`
@@ -272,7 +273,26 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `animation`   | `{enter, exit, leadInSeconds}` | slide-fade, 0.4 s         | How each ayah comes in and goes out.                                        |
 | `highlight`, `text` | objects       | as for `MushafRecitation`            | The word-by-word fields of `text` do not apply.                             |
 | `overlay`     | object              | as for `MushafRecitation`, `color: '#f4efe6'` | The title card and corner label, in the dark page's ink.              |
-| `resolved`    |                     | `null`                               | Filled by `calculateMetadata()`.                                            |
+| `background`  | object              | as for `MushafRecitation`, `color: '#101418'` | Behind the ayah; see [`background`](#background).                     |
+| `endCard`, `audio` | objects        | as for `MushafRecitation`            | See [`endCard`](#endcard) and [`audio`](#audio).                            |
+| `resolved`    |                     | `null`                               | Filled by `calculateMetadata()`; `audioOffsetSeconds` is set when `audio.trimSilence` skipped a silence. |
+
+### `MushafPage`
+
+The whole printed page the recitation is on, followed line by line: every line in its place, the
+line being recited marked, the page turning to the next one just before its first word. The same
+recitation props as `MushafRecitation`; the defaults are `defaultMushafPageProps`.
+
+| Prop          | Type      | Default                   | Description                                                            |
+| ------------- | --------- | ------------------------- | ---------------------------------------------------------------------- |
+| `audioFile`, `timingsFile`, `fromAyah`, `toAyah`, `theme`, `customTheme`, `fonts`, `data` | | as for `MushafRecitation` | The recording, its timings, the range and the page's look. |
+| `layout`      | object    | as for `MushafRecitation` | The frame, the colours and the side margins; the page is centred, so the lines' window fields do not apply. |
+| `background`  | object    | as for `MushafRecitation` | Around the page; see [`background`](#background).                      |
+| `highlight`, `review` | objects | as for `MushafRecitation` | The word being heard, and the Studio's doubt marks.                 |
+| `pageView`    | `{lineHighlight, lineHighlightColor, dimOtherLines, frame, pageNumber, turn, turnSeconds}` | a gold band, a simple frame, the page number, a 0.6 s slide | The page: the current line's mark, the border, the number and the turn. |
+| `text`        | object    | `translationPosition: 'auto'` | `text`'s translation fields; `translationPosition` is `'auto'` (the room under the page when it holds three lines of translation, else the gutter beside it), `'beside'`, `'below'` or `'none'`. The word-by-word fields do not apply. |
+| `legend`, `endCard`, `audio` | objects | as for `MushafRecitation` | See below.                                             |
+| `resolved`    |           | `null`                    | Filled by `calculateMetadata()`.                                       |
 
 ### `customTheme`
 
@@ -296,9 +316,9 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `visibleLines`     | 0–7                                  | `3`         | Lines on screen at once (0: one line, replaced in place).           |
 | `neighbourOpacity` | 0–1                                  | `0.45`      | Opacity of the lines around the current one.                        |
 | `marginX`          | 0–400 px                             | `120`       | Side margins, at the composition's width.                           |
-| `background`       | colour                               | `'#fbf7ee'` | Page colour.                                                        |
+| `background`       | colour                               | `'#fbf7ee'` | Page colour: what `background.kind: 'color'` paints, and the colour of the title card, the counter and the end card. |
 | `color`            | colour                               | `'#1b1b1b'` | Ink colour (the plain theme, and every part a theme paints in `currentColor`). |
-| `backgroundImage`  | string                               | `''`        | Background image in `public/` (empty: none).                        |
+| `backgroundImage`  | string                               | `''`        | Kept for files saved before `background`: with `background.kind` `'color'` it is painted over the page colour as before, and an `'image'` with no `src` takes it. |
 | `verticalAlign`    | 0–1                                  | `0.5`       | Vertical position of the lines (0 top, 1 bottom).                   |
 | `offsetY`          | −800–800 px                          | `0`         | Move the lines up (negative) or down from there.                    |
 
@@ -326,7 +346,7 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 
 | Field                  | Type                          | Default       | Description                                                  |
 | ---------------------- | ----------------------------- | ------------- | ------------------------------------------------------------ |
-| `translationFile`      | string                        | `''`          | Ayah translation file in `public/` (empty: none).            |
+| `translationFile`      | string                        | `''`          | Ayah translation file in `public/` (empty: none). Kept for files saved before `translations`: the one translation, set with the `translation*` fields below, while `translations` is empty; ignored once it is not. |
 | `translationPosition`  | `'below'`, `'above'`, `'none'` | `'below'`    | Where the ayah translation goes.                             |
 | `translationFont`      | CSS font family               | `'Georgia, "Noto Serif", serif'` | Font of the translation (`TRANSLATION_FONT_PRESETS` has more). |
 | `translationSize`      | 12–120 px                     | `40`          | Translation size.                                            |
@@ -338,6 +358,7 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `glossFont`            | CSS font family               | `'"Noto Sans", "Helvetica Neue", Arial, sans-serif'` | Font of the gloss strip.     |
 | `glossSize`            | 12–120 px                     | `34`          | Gloss size.                                                  |
 | `glossColor`           | colour                        | `'#6a6a6a'`   | Gloss colour.                                                |
+| `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: Noto Serif for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
 
 ### `overlay`
 
@@ -362,6 +383,76 @@ and the ayah being heard (the translation block's key), and comes in as the card
 | `cornerSize`   | 12–60 px                                                 | `28`                            | Size of the label, and its distance from the edges.       |
 
 The transliterated names are `SURAH_NAMES` / `surahEnglishName()`.
+
+### `background`
+
+Behind everything, in all four compositions (`backgroundSchema`, `defaultBackground`, painted by
+`<MushafBackground>`). `layout.background` stays the page colour: the `'color'` kind paints it, and
+`background.color` only fills what an image, a video or a gradient leaves (`backgroundFor()`).
+
+| Field           | Type                                          | Default      | Description                                                       |
+| --------------- | --------------------------------------------- | ------------ | ----------------------------------------------------------------- |
+| `kind`          | `'color'`, `'image'`, `'video'`, `'gradient'` | `'color'`    | What is painted.                                                  |
+| `color`         | colour                                        | `'#fbf7ee'`  | Behind an image, a video (the bars of `contain`) or a gradient.   |
+| `src`           | string                                        | `''`         | Image or video: a path in `public/` or a URL (an empty image falls back to `layout.backgroundImage`). |
+| `fit`           | `'cover'`, `'contain'`                        | `'cover'`    | Fill the frame (cropped) or fit inside it.                        |
+| `videoSeconds`  | 0–3600                                        | `0`          | The video's length, for a frame-exact loop; 0: `calculateMetadata()` probes it (`probeVideoSeconds()`), else the browser loops it. Always muted. |
+| `blur`          | 0–40 px                                       | `0`          | Blur of the image or video.                                       |
+| `dim`           | 0–1                                           | `0`          | A black layer over the background, so light text reads.           |
+| `kenBurns`      | `'none'`, `'slow-zoom'`, `'pan-left'`, `'pan-right'` | `'none'` | A slow zoom or pan over the whole video.                      |
+| `kenBurnsScale` | 1–1.3                                         | `1.1`        | How far the Ken Burns zooms in.                                   |
+| `gradient`      | `{from, to, angle}`                           | `#0f2027` → `#2c5364`, 180° | The gradient's colours and direction.              |
+| `glow`          | `{enabled, color, strength}`                  | off, `'#c8a45c'`, `0.5` | A soft glow behind the lines that breathes with the recitation's level (`audio`'s analysis; at rest without audio). |
+
+### `audio` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
+
+The recitation cleaned up on its way out. `calculateMetadata()` analyses the recording
+(`analyzeAudio()`, browser Web Audio) when `normalize` or `trimSilence` is on or the background's
+glow is, and keeps the result in `resolved.audio` (`{gain, trimSeconds, levels}`; the levels, one
+per frame to three decimals, only for the glow). When the analysis fails (`AUDIO_ANALYSIS_FAILED`:
+no Web Audio, a file the browser cannot fetch or decode) the audio plays as it is, and the reason is
+in `resolved.audioWarning`, shown as a one-line banner in the Studio only. The `<Audio>` gets
+`volume={(f) => volumeAt(f, curve)}`; under memorisation every clip gets the same gain, and the
+fades are the composition's (at its very start, and to the frame where the end card begins). Under
+the in-browser web renderer (`renderMediaOnWeb()`) the compositions use `@remotion/media`'s
+`<Audio>`, `remotion`'s otherwise.
+
+| Field            | Type         | Default | Description                                                                 |
+| ---------------- | ------------ | ------- | --------------------------------------------------------------------------- |
+| `normalize`      | boolean      | `true`  | Bring the recitation to `targetLufs`, its true peak kept under −1 dBFS (`gainFor()`). |
+| `targetLufs`     | −23 to −9    | `-14`   | Target loudness (−14: YouTube and social media, −23: broadcast).            |
+| `fadeInSeconds`  | 0–5          | `0.3`   | Fade in from the first frame.                                               |
+| `fadeOutSeconds` | 0–5          | `1`     | Fade out to the end of the recitation.                                      |
+| `trimSilence`    | boolean      | `false` | Skip the silence before the first word (`silenceTrimSeconds()`), never past the first line's entrance: it is added to `audioOffsetSeconds` and the timings move with it. |
+| `volume`         | 0–2          | `1`     | On top of the normalisation gain.                                           |
+
+### `legend` (`MushafRecitation`, `MushafPage`)
+
+The tajweed colours' legend (`<TajweedLegend>`) in a corner, on a card of the page colour, drawn
+only when the theme tells the rules apart (`themeHasTajweedColors()`: not under `plain`, `normal`
+or `black`).
+
+| Field         | Type                                      | Default         | Description                               |
+| ------------- | ----------------------------------------- | --------------- | ----------------------------------------- |
+| `show`        | boolean                                   | `false`         | Show the legend.                          |
+| `position`    | `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` | `'bottom-left'` | Its corner.  |
+| `orientation` | `'row'`, `'column'`                       | `'column'`      | Swatches side by side or one under the other. |
+| `names`       | `'en'`, `'ar'`, `'both'`                  | `'both'`        | The rules' names: English, Arabic or both. |
+
+### `endCard` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
+
+A closing card (`<EndCard>`) for `seconds` after the last ayah, added to the duration: the surah,
+the range, the reciter (`overlay.reciter`) and the credits the sources ask for (`attributionLines()`:
+the fonts, QUD's timings when the sidecar says so, every translation shown). Its files are read in
+`calculateMetadata()` (written by `serialiseTafsir()` / `serialiseChapterInfo()`); an empty file for
+the card picked, or another surah's introduction, is `BAD_STUDIO_PROP`.
+
+| Field             | Type                                             | Default  | Description                                           |
+| ----------------- | ------------------------------------------------ | -------- | ----------------------------------------------------- |
+| `show`            | `'none'`, `'credits'`, `'tafsir'`, `'chapter-info'` | `'none'` | The credits alone, with the tafsir of the last ayah recited (`tafsirEntryFor()`, its group), or with the surah's introduction. |
+| `seconds`         | 2–15                                             | `5`      | Seconds the card stays.                               |
+| `tafsirFile`      | string                                           | `''`     | Tafsir file in `public/`, for `'tafsir'`.             |
+| `chapterInfoFile` | string                                           | `''`     | Surah introduction file in `public/`, for `'chapter-info'`. |
 
 ### `header` (`MushafRecitation` and `MushafPassage`)
 

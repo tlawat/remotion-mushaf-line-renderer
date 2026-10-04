@@ -41,6 +41,9 @@ vi.mock('../../../src/translations', () => ({
   loadTranslation: (...args: unknown[]) => mocks.loadTranslation(...args),
   ayahKeyOf: () => null,
   TranslationBlock: (props: {ayahKey: string | null}) => <div data-translation-block={props.ayahKey ?? ''} />,
+  TranslationStack: (props: {layers: readonly unknown[]; ayahKey: string | null}) => (
+    <div data-translation-stack={props.layers.length} data-translation-block={props.ayahKey ?? ''} />
+  ),
   GlossStrip: () => null,
 }));
 
@@ -54,6 +57,14 @@ type ResolvedPassage = import('../../../src/compositions/passage').ResolvedPassa
 const passage = [syntheticLine(2, 3), syntheticLine(2, 4), syntheticLine(3, 1), syntheticLine(3, 2)];
 const meta = {id: 'test', name: 'Test', language: 'en', source: 'file'};
 const ayahText = {kind: 'ayah' as const, meta, text: {'2:1': 'Alif', '2:2': 'That'}};
+/** The entries of `text` whose ayah has a word on `lines`: what the resolver keeps of a translation. */
+const pick = (
+  text: Readonly<Record<string, string>>,
+  lines: readonly {words: readonly {surah: number; ayah: number}[]}[],
+): Record<string, string> => {
+  const keys = new Set(lines.flatMap((line) => line.words.map((w) => `${w.surah}:${w.ayah}`)));
+  return Object.fromEntries(Object.entries(text).filter(([key]) => keys.has(key)));
+};
 const props = (
   changes: Partial<MushafPassageProps> = {},
   content: Partial<ResolvedPassage> = {},
@@ -106,7 +117,12 @@ describe('calculateMushafPassageMetadata', () => {
       data: expect.objectContaining({words: expect.stringContaining('data/qpc-v4/words.json.zip')}),
     });
     expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 4 * 4 * 30 + 10});
-    expect((metadata.props as MushafPassageProps).resolved).toEqual({lines: passage, translation: null});
+    expect((metadata.props as MushafPassageProps).resolved).toEqual({
+      lines: passage,
+      translation: null,
+      translations: [],
+      backgroundVideoSeconds: null,
+    });
     expect(mocks.loadTranslation).not.toHaveBeenCalled();
   });
 
@@ -139,7 +155,9 @@ describe('calculateMushafPassageMetadata', () => {
     expect('toAyah' in options).toBe(false);
     expect(options).toMatchObject({surah: 9, fromAyah: 1});
     expect(options.data).toBeUndefined();
-    expect(resolved.translation).toBe(ayahText);
+    // Cut to the passage's ayahs: the fixture's keys outside it are left out.
+    expect(resolved.translation).toEqual({...ayahText, text: pick(ayahText.text, resolved.lines)});
+    expect(resolved.translations).toEqual([resolved.translation]);
     expect(mocks.loadTranslation.mock.calls[0]![0]).toBe('/static/t.json');
     await expect(
       resolvePassage({...defaultMushafPassageProps, fromAyah: 5, toAyah: 2}, {staticFile}),

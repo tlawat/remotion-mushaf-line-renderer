@@ -1,21 +1,16 @@
 import {exitTiming, MushafLine, MushafLineWindow} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
-import {AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {backgroundFor} from '../../background/compat';
+import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {MushafTitleOverlay} from '../../overlay';
 import {animationFrom, fontPropsFrom, scrollTimingFrom} from '../../schema';
 import {useInStudio} from '../../studio/environment';
 import {ayahCount} from '../../studio/surahs';
-import {TranslationBlock} from '../../translations';
-import {
-  BACKGROUND_IMAGE_STYLE,
-  blockGeometry,
-  fileUrl,
-  firstAyahKey,
-  linesBlockStyle,
-  translationBlockStyle,
-  WARNING_STYLE,
-} from '../shared';
+import {TranslationStack} from '../../translations';
+import {StudioWarnings, translationsOf, useTranslationLayers} from '../parts';
+import {blockGeometry, firstAyahKey, linesBlockStyle, translationBlockStyle} from '../shared';
 import {passageTimeline, type ResolvedPassage} from './resolve';
 import type {MushafPassageProps} from './schema';
 
@@ -23,7 +18,8 @@ import type {MushafPassageProps} from './schema';
  * A text-only passage, no audio: each line holds `holdSeconds`, through a window (the window
  * scrolls a line every hold) or one at a time (a line leaves as the next one enters), with the
  * translation of the ayah the current line starts with; the surah's header lines first when asked
- * for and the passage starts at ayah 1, and a title card (the lines start after it) and corner label.
+ * for and the passage starts at ayah 1, and a title card (the lines start after it) and corner label,
+ * over its `background` (no audio: a glow stays at rest), with up to three translations stacked.
  */
 export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const {fonts, layout, animation, text, overlay} = props;
@@ -39,6 +35,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
     );
   }
   const {lines} = resolved;
+  const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   const {starts, holds} = passageTimeline(lines, props, fps);
   // The line on screen: the last one whose hold has begun, else the first.
   let current = 0;
@@ -91,25 +88,23 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
     );
   }
 
-  const showTranslation = resolved.translation !== null && text.translationPosition !== 'none';
+  const showTranslation = translationLayers.length > 0 && text.translationPosition !== 'none';
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color}}>
-      {layout.backgroundImage !== '' && (
-        <Img src={fileUrl(layout.backgroundImage, staticFile)} style={BACKGROUND_IMAGE_STYLE} />
-      )}
+      {/* No audio here: the glow, if any, stays at rest. */}
+      <MushafBackground
+        background={{
+          ...backgroundFor(props.background, layout),
+          ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
+        }}
+        glowY={layout.verticalAlign}
+      />
       <div data-mushaf-block="Mushaf lines" style={linesBlockStyle(geometry, layout)}>
         {linesBlock}
       </div>
       {showTranslation && (
         <div data-mushaf-block="Translation" style={translationBlockStyle(geometry, layout, text, height)}>
-          <TranslationBlock
-            translation={resolved.translation!}
-            ayahKey={firstAyahKey(lines[current])}
-            fontFamily={text.translationFont}
-            fontSize={text.translationSize}
-            color={text.translationColor}
-            direction={text.translationDirection}
-          />
+          <TranslationStack layers={translationLayers} ayahKey={firstAyahKey(lines[current])} />
         </div>
       )}
       <MushafTitleOverlay
@@ -125,7 +120,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         width={geometry.measure}
         fontProps={fontSetup.props}
       />
-      {isStudio && fontSetup.warning !== null && <div style={WARNING_STYLE}>Mushaf Studio: {fontSetup.warning}</div>}
+      {isStudio && <StudioWarnings warnings={[fontSetup.warning]} />}
     </AbsoluteFill>
   );
 };

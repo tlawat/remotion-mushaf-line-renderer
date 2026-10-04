@@ -170,3 +170,37 @@ test('MushafAyahText mounts, loads the Uthmani font and marks the recited word',
   await page.waitForTimeout(1000);
   await page.screenshot({path: test.info().outputPath('ayah-text.png'), fullPage: false});
 });
+
+test('MushafPage mounts, paints its lines and marks the line being recited', async ({page}) => {
+  const errors = await openComposition(page, 'MushafPage');
+  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 90_000});
+  // A row of the page is painted once its font is in: a box with a height, visible.
+  await expect(page.locator('.mushaf-line__row').first()).toHaveCSS('visibility', 'visible', {timeout: 120_000});
+  await expect
+    .poll(async () => (await page.locator('.mushaf-line__row').first().boundingBox())?.height ?? 0, {timeout: 60_000})
+    .toBeGreaterThan(10);
+  // Step into the recitation: by 2.5 s the first word has been heard and its line carries the band.
+  await page
+    .locator('.mushaf-line')
+    .first()
+    .click({position: {x: 5, y: 5}, force: true});
+  for (let i = 0; i < 75; i++) await page.keyboard.press('ArrowRight');
+  await expect(page.locator('[data-line-highlight="band"]').first()).toBeVisible({timeout: 30_000});
+  await expect(page.locator('[data-current="true"]')).toHaveCount(1);
+  await expect(errorOverlay(page)).toHaveCount(0);
+  const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+  expect(fatal, fatal.join('\n')).toHaveLength(0);
+  await page.screenshot({path: test.info().outputPath('page.png'), fullPage: false});
+});
+
+test('MushafThumbnail mounts', async ({page}) => {
+  const errors = await openComposition(page, 'MushafThumbnail');
+  await expect(page.locator('[data-mushaf-thumbnail]')).toBeVisible({timeout: 90_000});
+  await expect(page.locator('[data-mushaf-thumbnail-part="line"] .mushaf-line').first()).toBeVisible({
+    timeout: 90_000,
+  });
+  await expect(errorOverlay(page)).toHaveCount(0);
+  const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+  expect(fatal, fatal.join('\n')).toHaveLength(0);
+  await page.screenshot({path: test.info().outputPath('thumbnail.png'), fullPage: false});
+});

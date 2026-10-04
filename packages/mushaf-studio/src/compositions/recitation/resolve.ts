@@ -10,8 +10,9 @@ import {staticFile as remotionStaticFile} from 'remotion';
 import {describeValue, MushafStudioError} from '../../errors';
 import {applySplits, doubtfulWords} from '../../lines';
 import {clipTimeline, type MemorizeClip} from '../../memorize/timeline';
-import {dataSourceFrom, themeSelectionFrom} from '../../schema';
+import {dataSourceFrom, type Memorize, themeSelectionFrom} from '../../schema';
 import type {ResolvedRecitation, StudioTimings} from '../../types';
+import {loadTranslationLayers, resolveEndCardContent, translationLayerSpecs} from '../extras';
 import {fileUrl, headerSeconds, loadTextFile, STUDIO_FPS, surahHeaderLines, withHeaderSlots} from '../shared';
 import type {MushafRecitationProps} from './schema';
 
@@ -251,20 +252,54 @@ export const resolveRecitation = async (
       ? await surahHeaderLines(timings.surah, split[0], props.header, {theme, data})
       : [];
   const schedule = withHeaderSlots(timed, headers.length, headerSeconds(props.overlay));
-  const [translation, gloss, transliteration] = await Promise.all([
-    loadTextFile('ayah', 'translationFile', props.text.translationFile, io),
+  // The translations are cut to what can be shown: the ayahs played and those the lines start with.
+  const keys = new Set([
+    ...timings.ayat.map((a) => `${timings.surah}:${a.ayah}`),
+    ...split.flatMap((line) => line.words.map((word) => `${word.surah}:${word.ayah}`)),
+  ]);
+  const [translations, gloss, transliteration, endCard] = await Promise.all([
+    loadTranslationLayers(translationLayerSpecs(props.text), keys, io),
     loadTextFile('word', 'glossFile', props.text.glossFile, io),
     loadTextFile('word', 'transliterationFile', props.text.transliterationFile, io),
+    resolveEndCardContent(
+      props.endCard,
+      {surah: timings.surah, lastAyah: timings.ayat[timings.ayat.length - 1]!.ayah},
+      io,
+    ),
   ]);
   return {
     timings,
     audioOffsetSeconds,
     lines: headers.length === 0 ? split : [...headers, ...split],
     schedule,
-    translation,
+    translation: translations[0] ?? null,
+    translations,
     gloss,
     transliteration,
     doubtful: doubtfulWords(inRange, {threshold: props.review.confidenceThreshold}),
     clips: clipTimeline(timings, props.memorize),
+    endCard,
+  };
+};
+
+/**
+ * A resolved recitation that starts `seconds` later in the recording (`audio.trimSilence` skipping
+ * the leading silence): `audioOffsetSeconds` grows by it, and the timings, the schedule (never
+ * before 0) and the clip timeline move that much earlier. The same object for 0.
+ */
+export const skipRecitationStart = (
+  resolved: ResolvedRecitationWithClips,
+  seconds: number,
+  memorize: Pick<Memorize, 'mode' | 'repeat' | 'pauseSeconds'>,
+): ResolvedRecitationWithClips => {
+  if (seconds === 0) return resolved;
+  const timings = shiftTimings(resolved.timings, seconds);
+  const earlier = (t: number): number => Math.max(0, roundTime(t - seconds));
+  return {
+    ...resolved,
+    timings,
+    audioOffsetSeconds: roundTime(resolved.audioOffsetSeconds + seconds),
+    schedule: resolved.schedule.map((slot) => ({...slot, start: earlier(slot.start), end: earlier(slot.end)})),
+    clips: clipTimeline(timings, memorize),
   };
 };

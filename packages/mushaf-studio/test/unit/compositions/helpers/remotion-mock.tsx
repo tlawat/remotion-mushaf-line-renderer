@@ -26,7 +26,17 @@ const freshEnv = (): MockEnv => ({
 /** `from` of the nearest mocked `<Sequence>`: 0 outside one. */
 export const SequenceFrom = createContext(0);
 
+/** An `<Audio>` as the mock saw it: its props, the volume callback included. */
+export type AudioRecord = {
+  readonly src: string;
+  readonly trimBefore?: number | undefined;
+  readonly trimAfter?: number | undefined;
+  readonly volume?: ((frame: number) => number) | number | undefined;
+};
+
 export const createRemotionMock = () => {
+  /** Every `<Audio>` rendered since the last `reset()`, in render order. */
+  const audios: AudioRecord[] = [];
   const state = {
     frame: 0,
     width: 1920,
@@ -52,9 +62,10 @@ export const createRemotionMock = () => {
       <SequenceFrom.Provider value={from ?? 0}>{children}</SequenceFrom.Provider>
     </div>
   );
-  const Audio: React.FC<{src: string; trimBefore?: number}> = ({src, trimBefore}) => (
-    <div data-audio={src} data-trim-before={trimBefore} />
-  );
+  const Audio: React.FC<AudioRecord> = (props) => {
+    audios.push(props);
+    return <div data-audio={props.src} data-trim-before={props.trimBefore} data-trim-after={props.trimAfter} />;
+  };
   const Img: React.FC<{src: string; style?: React.CSSProperties}> = ({src, style}) => (
     <img data-src={src} style={style} alt="" />
   );
@@ -90,6 +101,7 @@ export const createRemotionMock = () => {
     state.fps = 30;
     state.durationInFrames = 900;
     state.env = freshEnv();
+    audios.length = 0;
   };
-  return {state, module, reset, useLocalFrame};
+  return {state, module, reset, useLocalFrame, audios};
 };

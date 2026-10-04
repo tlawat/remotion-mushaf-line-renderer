@@ -79,12 +79,35 @@ vi.mock('../../../src/translations', () => ({
   TranslationBlock: (props: {ayahKey: string | null; fontFamily: string; fontSize: number}) => (
     <div data-translation-block={props.ayahKey ?? ''} data-font={props.fontFamily} data-size={props.fontSize} />
   ),
+  TranslationStack: (props: {
+    layers: readonly {fontFamily: string; fontSize: number; direction: string; color: string}[];
+    ayahKey: string | null;
+  }) => (
+    <div data-translation-stack={props.layers.length}>
+      {props.layers.map((layer, i) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: a layer is a position.
+          key={i}
+          data-translation-block={props.ayahKey ?? ''}
+          data-font={layer.fontFamily}
+          data-size={layer.fontSize}
+          data-direction={layer.direction}
+          data-color={layer.color}
+        />
+      ))}
+    </div>
+  ),
   GlossStrip: (props: {activeWordId: string | null; translation: unknown; transliteration: unknown}) => (
     <div
       data-gloss-strip={props.activeWordId ?? ''}
       data-has-gloss={props.translation ? 'yes' : 'no'}
       data-has-transliteration={props.transliteration ? 'yes' : 'no'}
     />
+  ),
+}));
+vi.mock('@remotion/media', () => ({
+  Audio: (props: {src: string; trimBefore?: number}) => (
+    <div data-media-audio={props.src} data-trim-before={props.trimBefore} />
   ),
 }));
 vi.mock('../../../src/studio', () => ({

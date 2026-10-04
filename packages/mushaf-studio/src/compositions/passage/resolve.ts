@@ -5,14 +5,20 @@ import {MushafStudioError} from '../../errors';
 import {showsIntro} from '../../overlay';
 import {dataSourceFrom, sizeForAspect, themeSelectionFrom} from '../../schema';
 import type {AyahTranslation} from '../../types';
-import {headerCount, headerSeconds, loadTextFile, STUDIO_FPS, surahHeaderLines} from '../shared';
+import {backgroundVideoSecondsFor, loadTranslationLayers, translationLayerSpecs} from '../extras';
+import {headerCount, headerSeconds, STUDIO_FPS, surahHeaderLines} from '../shared';
 import type {MushafPassageProps} from './schema';
 
 /** What `calculateMetadata()` of `<MushafPassage>` resolves once per render from the content props. */
 export type ResolvedPassage = {
   /** The passage's lines, in reading order; the surah's header lines first when `header` put them there. */
   readonly lines: readonly MushafLineData[];
+  /** The first translation shown (`translations[0]`), or `null`. */
   readonly translation: AyahTranslation | null;
+  /** One per layer of `text.translations` with a file (or `text.translationFile` alone), cut to the passage's ayahs. */
+  readonly translations?: readonly AyahTranslation[] | undefined;
+  /** `probeVideoSeconds()` of a background video whose `videoSeconds` is 0, when the browser could read it. */
+  readonly backgroundVideoSeconds?: number | null | undefined;
 };
 
 export type ResolvePassageOptions = {
@@ -94,18 +100,26 @@ export const resolvePassage = async (
   });
   const headers =
     props.fromAyah === 1 && lines[0] ? await surahHeaderLines(props.surah, lines[0], props.header, {theme, data}) : [];
-  const translation = await loadTextFile('ayah', 'translationFile', props.text.translationFile, io);
-  return {lines: headers.length === 0 ? lines : [...headers, ...lines], translation};
+  const keys = new Set(lines.flatMap((line) => line.words.map((word) => `${word.surah}:${word.ayah}`)));
+  const translations = await loadTranslationLayers(translationLayerSpecs(props.text), keys, io);
+  return {
+    lines: headers.length === 0 ? lines : [...headers, ...lines],
+    translation: translations[0] ?? null,
+    translations,
+  };
 };
 
-/** `calculateMetadata` for `<Composition id="MushafPassage">`: `resolved`, width and height from the aspect, duration from the timeline (`passageTimeline()`). `abortSignal` reaches the fetches. */
+/** `calculateMetadata` for `<Composition id="MushafPassage">`: `resolved` (and a background video's length), width and height from the aspect, duration from the timeline (`passageTimeline()`). `abortSignal` reaches the fetches. */
 export const calculateMushafPassageMetadata: CalculateMetadataFunction<MushafPassageProps> = async ({
   props,
   abortSignal,
 }) => {
-  const resolved = await resolvePassage(props, {signal: abortSignal});
+  const [resolved, backgroundVideoSeconds] = await Promise.all([
+    resolvePassage(props, {signal: abortSignal}),
+    backgroundVideoSecondsFor(props.background, remotionStaticFile),
+  ]);
   return {
-    props: {...props, resolved},
+    props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
     ...sizeForAspect(props.layout.aspect),
     fps: STUDIO_FPS,
     durationInFrames: Math.max(

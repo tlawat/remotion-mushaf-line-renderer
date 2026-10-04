@@ -24,8 +24,11 @@ export const gradientSchema = z.object({
 
 export const backgroundSchema = z.object({
   kind: z.enum(BACKGROUND_KINDS).describe('Background: a colour, an image, a looping video or a gradient'),
-  /** Painted under everything, so it also fills the bars a `contain` image or video leaves. */
-  color: zColor().describe('Background colour (also behind an image or video that does not cover the frame)'),
+  /**
+   * Painted under an image, a video or a gradient, so it also fills the bars a `contain` image or
+   * video leaves. The `'color'` kind paints `layout.background` instead: the page colour stays there.
+   */
+  color: zColor().describe('Colour behind an image, a video or a gradient (the color kind paints layout.background)'),
   /** A `public/` path or an http(s) URL; read for `image` and `video` only. */
   src: z.string().describe('Image or video: a path in public/ or a URL (empty: the colour only)'),
   fit: z.enum(BACKGROUND_FITS).describe('Image or video: fill the frame (cover, cropped) or fit inside it (contain)'),
