@@ -29,6 +29,14 @@ test('MushafRecitation mounts and the Mushaf panel is docked', async ({page}) =>
   // calculateMetadata fetches the timings and QUL's exports, then the first page font loads behind delayRender().
   await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 90_000});
   await expect(page.locator(PANEL)).toBeVisible();
+  // The dock sits beside the Studio, never over the preview: the line's box ends before the dock.
+  await expect
+    .poll(async () => {
+      const line = await page.locator('.mushaf-line').first().boundingBox();
+      const dock = await page.locator(PANEL).boundingBox();
+      return line && dock ? Math.round(line.x + line.width) <= Math.round(dock.x) : false;
+    })
+    .toBe(true);
   for (const tab of ['Source', 'Align', 'Review', 'Lines', 'Text']) {
     await expect(page.locator(PANEL).getByText(tab, {exact: true}).first()).toBeVisible();
   }
