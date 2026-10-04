@@ -11,6 +11,8 @@ import {AbsoluteFill, Audio, Img, Sequence, staticFile, useCurrentFrame, useVide
 import {fileUrl} from '../compositions/shared';
 import {MushafStudioError} from '../errors';
 import {activeWordStyleFrom} from '../schema';
+import {MushafStudioPanel} from '../studio';
+import {useInStudio} from '../studio/environment';
 import {ayahKeyOf, TranslationBlock} from '../translations';
 import {AyahText} from './AyahText';
 import {useUnicodeFont} from './font';
@@ -83,12 +85,13 @@ export const ayahPresentationStyle = (
  * ayah is a Sequence from `leadInSeconds` before its first word to where the next one comes in,
  * centred at `layout.verticalAlign`, with the current word (or ayah) highlighted, the others dimmed
  * as `highlight` says, and its translation under it. The same timings and translation files as the
- * recitation. Renders no panel.
+ * recitation; in the Studio the Mushaf panel is docked over it, as over `<MushafRecitation>`.
  */
 export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
   const {audioFile, layout, animation, highlight, text, fontSize, lineHeight} = props;
-  const {width, fps, durationInFrames} = useVideoConfig();
+  const {width, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
+  const isStudio = useInStudio();
   const font = useUnicodeFont(props.font);
   const resolved = props.resolved as ResolvedAyahText | null;
   if (!resolved) {
@@ -188,6 +191,7 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
           </Sequence>
         );
       })}
+      {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );
 };

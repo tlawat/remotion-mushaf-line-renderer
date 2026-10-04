@@ -2,13 +2,12 @@ import type * as React from 'react';
 import {memo, useEffect, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
-import type {MushafRecitationProps} from '../compositions/recitation/schema';
 import {useInStudio} from './environment';
 import type {MushafStudioPanelProps} from './index';
 import {describeError, LOADING_LABELS, STUDIO_TABS, type StudioTab, setStudioState, useStudioState} from './store';
 import {applyPatch, patchApplied} from './studio-api';
 import {styles} from './styles';
-import {resolvedOf, type TabProps} from './tab-props';
+import {hasLines, isAyahTextProps, resolvedOf, type StudioCompositionProps, type TabProps} from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
 import {LinesTab} from './tabs/LinesTab';
 import {ReviewTab} from './tabs/ReviewTab';
@@ -174,17 +173,18 @@ const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
 /**
  * A cheap fingerprint of `resolved`: enough to notice a new resolution without comparing the data.
  * The counts alone miss a re-alignment that keeps them, so the session, the last edit and the sum
- * of the word starts are in it too.
+ * of the word starts are in it too. An ayah text has its ayahs where a recitation has its lines.
  */
-const resolvedSignature = (props: MushafRecitationProps): string => {
+const resolvedSignature = (props: StudioCompositionProps): string => {
   const resolved = resolvedOf(props);
   if (!resolved) return 'none';
-  const {timings, lines, schedule} = resolved;
+  const {timings} = resolved;
+  const schedule = hasLines(resolved) ? resolved.schedule : [];
   const last = schedule[schedule.length - 1];
   const sidecar = timings.alignment;
   const starts = timings.ayat.reduce((sum, ayah) => (ayah.words ?? []).reduce((n, word) => n + word.start, sum), 0);
   return [
-    lines.length,
+    hasLines(resolved) ? resolved.lines.length : `a${resolved.ayahs.length}`,
     schedule.length,
     last ? `${last.start}-${last.end}` : '',
     timings.surah,
@@ -197,6 +197,12 @@ const resolvedSignature = (props: MushafRecitationProps): string => {
     starts,
   ].join(':');
 };
+
+/** What one composition has and the other does not: an ayah text's file and font (its script), a recitation's lines. */
+const ownContent = (props: StudioCompositionProps): string =>
+  isAyahTextProps(props)
+    ? JSON.stringify(['ayah-text', props.textFile, props.font])
+    : JSON.stringify(['recitation', props.slice, props.review.confidenceThreshold, props.splits]);
 
 /**
  * The composition re-renders on every frame; the panel must not. Content props are compared by
@@ -212,20 +218,18 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
     x.timingsFile === y.timingsFile &&
     x.fromAyah === y.fromAyah &&
     x.toAyah === y.toAyah &&
-    x.slice === y.slice &&
     x.text.translationFile === y.text.translationFile &&
     x.text.glossFile === y.text.glossFile &&
     x.text.transliterationFile === y.text.transliterationFile &&
-    x.review.confidenceThreshold === y.review.confidenceThreshold &&
-    JSON.stringify(x.splits) === JSON.stringify(y.splits) &&
+    ownContent(x) === ownContent(y) &&
     resolvedSignature(x) === resolvedSignature(y)
   );
 };
 
 /**
- * The Mushaf panel: rendered inside a composition, it renders nothing outside the Studio (in a
- * render, a `<Player>`, on the server). In the Studio it portals a dock into `document.body`, with
- * the tabs Source, Align, Review, Lines and Text. Every change it makes goes through the same path:
+ * The Mushaf panel: rendered inside a composition (`<MushafRecitation>` or `<MushafAyahText>`), it
+ * renders nothing outside the Studio (in a render, a `<Player>`, on the server). In the Studio it
+ * portals a dock into `document.body`, with the tabs Source, Align, Review, Lines and Text. Every change it makes goes through the same path:
  * write the file(s) into `public/`, `saveDefaultProps()` on the composition, then
  * `reevaluateComposition()`. It never calls `delayRender()` and does not re-render with the frame.
  */

@@ -18,6 +18,14 @@ vi.mock('../../../src/unicode/font', async (importOriginal) => ({
   useUnicodeFont: () => font,
 }));
 
+// The panel is the studio tests' business (test/unit/studio); here it says where it was rendered and with what.
+vi.mock('../../../src/studio', () => ({
+  MushafStudioPanel: (props: {compositionId: string; props: {textFile?: string}}) => (
+    <div data-panel={props.compositionId} data-text-file={props.props.textFile} />
+  ),
+  isInStudio: () => false,
+}));
+
 const {MushafAyahText, defaultMushafAyahTextProps, resolveAyahText} = await import('../../../src/unicode');
 const {fakeFetch} = await import('../translations/helpers');
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
@@ -232,10 +240,24 @@ describe('<MushafAyahText>', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders no panel, even in the Studio', () => {
+  it('renders the panel in the Studio preview only, with the composition id and its props', () => {
+    const outside = mount();
+    expect(outside.querySelector('[data-panel]')).toBeNull();
+    expect(outside.querySelectorAll('[data-sequence]')).toHaveLength(6);
+    cleanup();
     remotion.state.isStudio = true;
-    const root = mount();
-    expect(document.querySelector('[data-mushaf-studio="panel"]')).toBeNull();
-    expect(root.querySelectorAll('[data-sequence]')).toHaveLength(6);
+    const studio = mount({textFile: 'mushaf-studio/p/text-uthmani-1-2-7.json'});
+    const panel = studio.querySelector<HTMLElement>('[data-panel]')!;
+    expect(panel.dataset.panel).toBe('MushafAyahText');
+    expect(panel.dataset.textFile).toBe('mushaf-studio/p/text-uthmani-1-2-7.json');
+    expect(studio.querySelectorAll('[data-sequence]')).toHaveLength(6);
+    cleanup();
+    // The Studio's own in-browser render: `isStudio` stays set, `isClientSideRendering` comes through the hook.
+    remotion.state.isClientSideRendering = true;
+    expect(mount().querySelector('[data-panel]')).toBeNull();
+    cleanup();
+    remotion.state.isClientSideRendering = false;
+    remotion.state.isRendering = true;
+    expect(mount().querySelector('[data-panel]')).toBeNull();
   });
 });

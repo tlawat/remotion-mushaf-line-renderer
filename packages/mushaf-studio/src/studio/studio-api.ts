@@ -18,7 +18,10 @@ import type {Review, Text} from '../schema';
 import type {LineSplit, StudioTimings} from '../types';
 import {getStudioState, setStudioState} from './store';
 
-/** What the panel changes on the composition: the content props, and the file fields of `text` and `review`. */
+/**
+ * What the panel changes on the composition: the content props, and the file fields of `text` and
+ * `review`. `slice`, `splits` and `review` are `<MushafRecitation>`'s, `textFile` `<MushafAyahText>`'s.
+ */
 export type PropsPatch = {
   readonly audioFile?: string | undefined;
   readonly timingsFile?: string | undefined;
@@ -26,6 +29,7 @@ export type PropsPatch = {
   readonly toAyah?: number | undefined;
   readonly slice?: boolean | undefined;
   readonly splits?: readonly LineSplit[] | undefined;
+  readonly textFile?: string | undefined;
   readonly text?: Partial<Text> | undefined;
   readonly review?: Partial<Review> | undefined;
 };

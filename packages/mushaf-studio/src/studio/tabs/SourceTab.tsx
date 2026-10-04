@@ -15,7 +15,7 @@ import {
 } from '../studio-api';
 import {styles} from '../styles';
 import {ayahCount, surahLabel} from '../surahs';
-import type {TabProps} from '../tab-props';
+import {freshRecording, type TabProps} from '../tab-props';
 import {Button, Field, Note, NumberInput, Section} from '../ui';
 import {usePublicFiles} from '../use-public-files';
 
@@ -69,7 +69,7 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
       const timings = timingsFromCatalogue(segments, {audio});
       const timingsFile = await writeJsonFile(projectPath(project, `${base}.timings.json`), timings);
       setStudioState({busy: 'Updating the composition...'});
-      await patchProps(compositionId, {audioFile: audio, timingsFile, fromAyah: 0, toAyah: 0, splits: []});
+      await patchProps(compositionId, {audioFile: audio, timingsFile, ...freshRecording(props)});
       // The clip is what Align works on now, not an earlier upload.
       setStudioState({uploadedAudio: null});
     });

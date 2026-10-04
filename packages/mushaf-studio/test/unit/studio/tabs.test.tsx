@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 // The tabs under jsdom, one user path each: Align (consent, the uploaded recording, the token),
-// Review (boundaries, a batch of nudges, the marker, a split that keeps the log), Lines (a split
-// patch, then another before the Root comes back) and Text (a file of the wrong kind, file names).
+// Review (boundaries, a batch of nudges, the marker, a split that keeps the log, the captions
+// export), Lines (a split patch, then another before the Root comes back) and Text (a file of the
+// wrong kind, file names, the Quran text for a recitation and for an ayah text).
 import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import fatihaText from '../../fixtures/unicode/fatiha-text.json';
 import {fatihaLines} from '../compositions/helpers/fatiha-lines';
 
 const env = vi.hoisted(() => ({
@@ -56,9 +58,20 @@ const translations = vi.hoisted(() => ({
 }));
 vi.mock('../../../src/translations', () => translations);
 
+// quran.com stays out of it: the text a fetch gives is the fixture's.
+const unicodeText = vi.hoisted(() => ({fetchQuranComText: vi.fn()}));
+vi.mock('../../../src/unicode/text', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/unicode/text')>()),
+  fetchQuranComText: unicodeText.fetchQuranComText,
+}));
+
 const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
+const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
+const {parseAyahWords, serialiseAyahWords} = await import('../../../src/unicode/text');
+const {captionsToSrt, toCaptions} = await import('../../../src/captions');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
+type MushafAyahTextProps = import('../../../src/unicode/schema').MushafAyahTextProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
 type AlignmentWord = import('../../../src/types').AlignmentWord;
 type ResolvedRecitation = import('../../../src/types').ResolvedRecitation;
@@ -190,6 +203,14 @@ const propsWith = (
   timingsFile: 'mushaf-studio/p/fatiha.timings.json',
   ...rest,
   resolved: resolvedFor(t, audioOffsetSeconds, rest.fromAyah ?? 0),
+});
+
+/** `<MushafAyahText>`'s props over the same timings: `resolved` with `timings` and the text, no lines, no offset. */
+const ayahTextProps = (t: StudioTimings): MushafAyahTextProps => ({
+  ...defaultMushafAyahTextProps,
+  audioFile: 'mushaf-studio/p/fatiha.mp3',
+  timingsFile: 'mushaf-studio/p/fatiha.timings.json',
+  resolved: {timings: t, text: parseAyahWords(fatihaText), translation: null, ayahs: []},
 });
 
 const session = (): StudioSession => ({
@@ -408,6 +429,42 @@ describe('Review', () => {
       'Short clip. The new alignment replaces the times of the 1 nudge made before; the edit log keeps it.',
     );
   });
+
+  it('exports the captions of the timings file at its own times, as SRT and as Caption[] JSON, markers on request', async () => {
+    // The composition plays ayah 3 from 2 s in; the captions follow the audio file, every ayah of it.
+    panel(propsWith(reviewTimings(), {fromAyah: 3}, 2), 'review');
+    expect(screen.getByRole('checkbox', {name: 'include ayah markers'})).toHaveProperty('checked', false);
+    fireEvent.click(screen.getByRole('button', {name: 'SRT'}));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledWith('/static/mushaf-studio/p/fatiha.timings.json');
+    expect(written(0).filePath).toBe('mushaf-studio/mushafrecitation/fatiha.srt');
+    const srt = written(0).contents as string;
+    expect(srt.startsWith('1\n00:00:00,100 --> 00:00:00,670\nٱلْحَمْدُ\n\n2\n00:00:00,670 --> 00:00:01,290\n')).toBe(true);
+    expect(srt).toBe(captionsToSrt(toCaptions(reviewTimings())));
+    expect(srt).not.toContain('۝');
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().notice).toBe(
+      'public/mushaf-studio/mushafrecitation/fatiha.srt is written: 7 cues, timed to the audio file.',
+    );
+    fireEvent.click(screen.getByRole('checkbox', {name: 'include ayah markers'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Captions JSON'}));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(2));
+    expect(written(1).filePath).toBe('mushaf-studio/mushafrecitation/fatiha.captions.json');
+    const captions = JSON.parse(written(1).contents as string) as unknown[];
+    expect(captions).toEqual(toCaptions(reviewTimings(), {markers: true}));
+    expect(captions).toHaveLength(8);
+    expect(captions[0]).toEqual({text: 'ٱلْحَمْدُ', startMs: 100, endMs: 670, timestampMs: 100, confidence: 1});
+    expect(captions[7]).toEqual({text: ' ۝٣', startMs: 7000, endMs: 7800, timestampMs: 7000, confidence: null});
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().notice).toBe(
+      'public/mushaf-studio/mushafrecitation/fatiha.captions.json is written: 8 captions, timed to the audio file.',
+    );
+    expect(screen.getByText(/Remotion's caption tooling \(@remotion\/captions\) reads/)).toBeTruthy();
+    // Exporting changes neither the timings file nor the props.
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(studio.reevaluateComposition).not.toHaveBeenCalled();
+    expect(getStudioState().error).toBeNull();
+  });
 });
 
 describe('Lines', () => {
@@ -502,5 +559,70 @@ describe('Text', () => {
     fireEvent.click(screen.getByText('Fetch transliteration'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(3));
     expect(written(2).filePath).toBe('mushaf-studio/mushafrecitation/transliteration-ur-1-2-3.json');
+  });
+
+  it("fetches the Quran text of the passage into the project and leaves a recitation's props alone", async () => {
+    unicodeText.fetchQuranComText.mockResolvedValue(parseAyahWords(fatihaText));
+    panel(propsWith(reviewTimings()), 'text');
+    expect(screen.getByText(/The printed lines need no text file/)).toBeTruthy();
+    expect(screen.getByRole('combobox', {name: 'Script'})).toHaveProperty('value', 'uthmani');
+    fireEvent.click(screen.getByText('Fetch the text of this passage'));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(unicodeText.fetchQuranComText).toHaveBeenCalledWith({chapter: 1, fromAyah: 2, toAyah: 3, script: 'uthmani'});
+    expect(written(0)).toEqual({
+      filePath: 'mushaf-studio/mushafrecitation/text-uthmani-1-2-3.json',
+      contents: serialiseAyahWords(parseAyahWords(fatihaText)),
+    });
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().notice).toMatch(
+      /^public\/mushaf-studio\/mushafrecitation\/text-uthmani-1-2-3\.json is written\./,
+    );
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(studio.reevaluateComposition).not.toHaveBeenCalled();
+    expect(getStudioState().error).toBeNull();
+  });
+
+  it("sets an ayah text's textFile to the fetched file, but not to a text in a script its font does not set", async () => {
+    unicodeText.fetchQuranComText.mockImplementation(async ({script}: {script: 'uthmani' | 'indopak'}) => ({
+      ...parseAyahWords(fatihaText),
+      script,
+    }));
+    render(
+      <MushafStudioPanel
+        compositionId="MushafAyahText"
+        props={ayahTextProps(reviewTimings())}
+        initialTab="text"
+        project="Reel"
+      />,
+    );
+    expect(screen.getByText(`Now: ${defaultMushafAyahTextProps.textFile}`)).toBeTruthy();
+    expect(screen.getByRole('combobox', {name: 'Script'})).toHaveProperty('value', 'uthmani');
+    fireEvent.click(screen.getByText('Fetch the text of this passage'));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(written(0).filePath).toBe('mushaf-studio/reel/text-uthmani-1-2-3.json');
+    expect(saved(0)).toEqual({textFile: 'mushaf-studio/reel/text-uthmani-1-2-3.json'});
+    expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().notice).toBe(
+      "public/mushaf-studio/reel/text-uthmani-1-2-3.json is written and is now the composition's textFile.",
+    );
+    expect(screen.getByText('Now: mushaf-studio/reel/text-uthmani-1-2-3.json')).toBeTruthy();
+    // IndoPak text: written and named, but the Uthmani font would not resolve it, so textFile stays.
+    fireEvent.change(screen.getByRole('combobox', {name: 'Script'}), {target: {value: 'indopak'}});
+    fireEvent.click(screen.getByText('Fetch the text of this passage'));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(2));
+    expect(unicodeText.fetchQuranComText).toHaveBeenLastCalledWith({
+      chapter: 1,
+      fromAyah: 2,
+      toAyah: 3,
+      script: 'indopak',
+    });
+    expect(written(1).filePath).toBe('mushaf-studio/reel/text-indopak-1-2-3.json');
+    expect(JSON.parse(written(1).contents as string)).toMatchObject({kind: 'quran-text', script: 'indopak'});
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1);
+    expect(getStudioState().notice).toBe(
+      'public/mushaf-studio/reel/text-indopak-1-2-3.json is written, but textFile is left as it is: font "uthmani-hafs" sets uthmani text, not indopak.',
+    );
   });
 });

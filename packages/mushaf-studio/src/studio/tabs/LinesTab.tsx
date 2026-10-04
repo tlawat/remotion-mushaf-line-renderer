@@ -5,7 +5,7 @@ import type {LineSplit} from '../../types';
 import {runStudioTask, useStudioState} from '../store';
 import {patchProps, seekTo} from '../studio-api';
 import {colors, styles} from '../styles';
-import {resolvedOf, type TabProps} from '../tab-props';
+import {hasLines, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
 import {Button, Note, range, Section} from '../ui';
 
 const MARKERS: Readonly<Record<MushafWord['kind'], string>> = {
@@ -28,7 +28,15 @@ export const LinesTab: React.FC<TabProps> = ({compositionId, props, fps}) => {
     for (const word of resolved?.timings.alignment?.words ?? []) if (!map.has(word.id)) map.set(word.id, word.text);
     return map;
   }, [resolved]);
-  if (!resolved) return <Note>No lines yet: the composition resolves them from the timings file.</Note>;
+  if (isAyahTextProps(props))
+    return (
+      <Note>
+        This composition has no printed lines: it shows one ayah at a time as Unicode text, timed by the ayahs of the
+        timings file.
+      </Note>
+    );
+  if (!resolved || !hasLines(resolved))
+    return <Note>No lines yet: the composition resolves them from the timings file.</Note>;
 
   const working = busy !== null;
   const splits: readonly LineSplit[] = props.splits;

@@ -5,6 +5,8 @@ import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/reac
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import chapterFixture from '../../fixtures/qud/chapter-1-segments.json';
 import recitationsFixture from '../../fixtures/qud/recitations.json';
+import fatihaFixture from '../../fixtures/timings/fatiha.json';
+import fatihaText from '../../fixtures/unicode/fatiha-text.json';
 
 const env = vi.hoisted(() => ({
   isStudio: true,
@@ -75,8 +77,11 @@ const {isStudioPreview} = await import('../../../src/studio/environment');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 const {patchProps} = await import('../../../src/studio/studio-api');
+const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
+const {parseAyahWords} = await import('../../../src/unicode/text');
 type StudioTimings = import('../../../src/types').StudioTimings;
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
+type MushafAyahTextProps = import('../../../src/unicode/schema').MushafAyahTextProps;
 
 const timings: StudioTimings = {
   version: 1,
@@ -104,6 +109,41 @@ const resolvedProps = (t: StudioTimings, rest: Partial<MushafRecitationProps> = 
     transliteration: null,
     doubtful: {},
   },
+});
+
+/**
+ * The committed Fatihah timings (ayahs 2-7, no sidecar) with one aligner segment and no heard words,
+ * and `<MushafAyahText>`'s props over them as `calculateMetadata()` fills them: `timings`, the
+ * text, the ayahs; no lines, no schedule, no offset.
+ */
+const fatiha: StudioTimings = {
+  ...(fatihaFixture as unknown as StudioTimings),
+  alignment: {
+    version: 1,
+    source: 'qud',
+    segments: [
+      {
+        segment: 1,
+        timeFrom: 0.3,
+        timeTo: 3.4,
+        refFrom: '1:2:1',
+        refTo: '1:2:4',
+        confidence: 0.6,
+        hasMissingWords: false,
+        hasRepeatedWords: false,
+        error: null,
+        matchedText: 'ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ',
+      },
+    ],
+    words: [],
+    edits: [],
+  },
+};
+
+const ayahTextProps = (rest: Partial<MushafAyahTextProps> = {}): MushafAyahTextProps => ({
+  ...defaultMushafAyahTextProps,
+  ...rest,
+  resolved: {timings: fatiha, text: parseAyahWords(fatihaText), translation: null, ayahs: []},
 });
 
 beforeEach(() => {
@@ -406,6 +446,50 @@ describe('<MushafStudioPanel>', () => {
     expect(screen.queryByText('Reload')).toBeNull();
     expect(screen.getByText('Slots (0)')).toBeTruthy();
     errors.mockRestore();
+  });
+
+  it("works on MushafAyahText's props: no printed lines, the Review tab from resolved.timings, its words in the captions", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ok: true, status: 200, json: async () => fatiha})),
+    );
+    const {rerender} = render(
+      <MushafStudioPanel compositionId="MushafAyahText" props={ayahTextProps()} initialTab="lines" />,
+    );
+    expect(screen.getByText(/This composition has no printed lines/)).toBeTruthy();
+    expect(linesRenders.count).toBe(1);
+    // The same content in a new object leaves the dock alone; another textFile reaches it.
+    rerender(
+      <MushafStudioPanel
+        compositionId="MushafAyahText"
+        props={JSON.parse(JSON.stringify(ayahTextProps())) as MushafAyahTextProps}
+        initialTab="lines"
+      />,
+    );
+    expect(linesRenders.count).toBe(1);
+    const props = ayahTextProps({textFile: 'mushaf-studio/p/text-uthmani-1-2-7.json'});
+    rerender(<MushafStudioPanel compositionId="MushafAyahText" props={props} initialTab="lines" />);
+    expect(linesRenders.count).toBe(2);
+    fireEvent.click(screen.getByRole('tab', {name: 'Review'}));
+    expect(screen.getByText('Segments')).toBeTruthy();
+    expect(screen.getByText('#1')).toBeTruthy();
+    expect(screen.getByText('60%')).toBeTruthy();
+    expect(screen.getByText(/Ayahs \(6\)/)).toBeTruthy();
+    expect(screen.getByText(/the threshold is the default 80% \(this composition has no review props\)/)).toBeTruthy();
+    // The captions of the committed timings, each word in the text's Unicode where the sidecar heard none.
+    fireEvent.click(screen.getByRole('button', {name: 'SRT'}));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledWith('/static/mushaf-studio/fatiha/timings.json');
+    const [write] = studio.writeStaticFile.mock.calls[0] as unknown as [{filePath: string; contents: string}];
+    expect(write.filePath).toBe('mushaf-studio/mushafayahtext/timings.srt');
+    expect(write.contents.startsWith(`1\n00:00:00,331 --> 00:00:00,901\n${fatihaText.words['1:2:1']}\n\n2\n`)).toBe(
+      true,
+    );
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().error).toBeNull();
+    fireEvent.click(screen.getByRole('tab', {name: 'Text'}));
+    expect(screen.getByText('Now: mushaf-studio/p/text-uthmani-1-2-7.json')).toBeTruthy();
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
   });
 
   it('shows a saved change before the composition comes back with it, then lets the props speak', async () => {

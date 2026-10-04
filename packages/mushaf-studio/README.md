@@ -184,9 +184,10 @@ Why it has to look like this:
 
 ## The Mushaf panel
 
-`<MushafRecitation>` renders `<MushafStudioPanel>` itself. Outside the Studio (a render, a
-`<Player>`, a server) the panel renders nothing and does nothing; it never calls `delayRender()` and
-never re-renders with the frame. In the Studio it docks over the preview with five tabs:
+`<MushafRecitation>` and `<MushafAyahText>` render `<MushafStudioPanel>` themselves. Outside the
+Studio (a render, a `<Player>`, a server) the panel renders nothing and does nothing; it never calls
+`delayRender()` and never re-renders with the frame. In the Studio it docks over the preview with
+five tabs:
 
 | Tab        | What it does                                                                                                     |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -195,6 +196,12 @@ never re-renders with the frame. In the Studio it docks over the preview with fi
 | **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align.            |
 | **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments.                        |
 | **Text**   | Ayah translations and word-by-word glosses from quran.com, or a QUL file in `public/`.                           |
+
+The Text tab also fetches the passage's Quran text (`uthmani` or `indopak`, `fetchQuranComText()`)
+into `text-<script>-<surah>-<from>-<to>.json`, and makes it the `textFile` of a `<MushafAyahText>`
+whose font sets that script. The Review tab exports the timings file's captions, timed to the audio
+file, as SRT (`captionsToSrt()`) or as the `Caption[]` JSON of `@remotion/captions` (`toCaptions()`),
+ayah markers optional.
 
 Every change goes through the same path: write the file(s) into `public/mushaf-studio/<project>/`
 (`default` for `<MushafRecitation>`; `writeStaticFile()`), save the composition's content props (`saveDefaultProps()`), then

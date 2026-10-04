@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import {useMemo, useState} from 'react';
-import {realignSession, sessionTimestamps, splitSession, timingsFromQud} from '../../qud';
+import {captionsToSrt, toCaptions} from '../../captions';
+import {DEFAULT_CONFIDENCE_THRESHOLD, realignSession, sessionTimestamps, splitSession, timingsFromQud} from '../../qud';
 import type {AlignmentEdit, AlignmentSegment, StudioTimings} from '../../types';
 import {nudgeWords, roundMs, withEdit} from '../edit-timings';
 import {getHfToken, runStudioTask, type StudioSession, setStudioState, useStudioState} from '../store';
@@ -11,11 +12,13 @@ import {
   readTimingsFile,
   reevaluate,
   seekTo,
+  slugify,
   stemOf,
+  writeFile,
   writeJsonFile,
 } from '../studio-api';
 import {colors, confidenceColor, styles} from '../styles';
-import {resolvedOf, type TabProps} from '../tab-props';
+import {audioOffsetOf, hasLines, isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
 import {Button, Disclosure, Note, NumberInput, ProgressBar, range, Section} from '../ui';
 
 /** A timed word as the editor shows it: `key` is `id#occurrence`, the handle `nudgeWord()` takes. */
@@ -95,7 +98,9 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const resolved = resolvedOf(props);
   const timings = resolved?.timings ?? null;
   const alignment = timings?.alignment ?? null;
-  const threshold = props.review.confidenceThreshold;
+  // An ayah text has no `review` props: it marks no doubtful word, and the list uses the default threshold.
+  const threshold = isAyahTextProps(props) ? DEFAULT_CONFIDENCE_THRESHOLD : props.review.confidenceThreshold;
+  const [markers, setMarkers] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState<ReadonlyMap<string, Span>>(() => new Map());
   const [splitOpen, setSplitOpen] = useState(false);
@@ -171,7 +176,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
       // The tab shows composition time: the file's times moved `audioOffsetSeconds` earlier and cut to the
       // range. The edit goes into the file itself, every time moved back; the occurrences are the same
       // in both, the cut drops whole ayahs only and the move keeps the order.
-      const offset = resolved?.audioOffsetSeconds ?? 0;
+      const offset = audioOffsetOf(resolved);
       const file = await readTimingsFile(props.timingsFile);
       // All at once: applied one by one, each sort would renumber the occurrences the next edit names.
       const nudges = [...pending].map(([key, span]) => {
@@ -181,6 +186,31 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
       setStudioState({busy: 'Writing the timings...'});
       await writeTimings(nudgeWords(file, nudges));
       setPending(new Map());
+    });
+  };
+
+  /**
+   * Writes the captions of the timings file into the project: SRT, or the `Caption[]` JSON of
+   * `@remotion/captions`. The file, as `applyEdits` reads it, not `resolved.timings` (cut to the
+   * range, and moved for a recitation): the captions follow the audio file.
+   */
+  const exportCaptions = (format: 'srt' | 'json') => {
+    const source = props.timingsFile;
+    const withMarkers = markers;
+    // An ayah text has the Unicode words of its range: a word the sidecar does not name gets them, not its id.
+    const words: Readonly<Record<string, string>> = resolved !== null && !hasLines(resolved) ? resolved.text.words : {};
+    void runStudioTask('Reading the timings file...', async () => {
+      const file = await readTimingsFile(source);
+      const captions = toCaptions(file, {markers: withMarkers, textOf: (id) => words[id] ?? null});
+      const stem = slugify(stemOf(source).replace(/\.timings$/, '')) || 'timings';
+      setStudioState({busy: 'Writing the captions...'});
+      const path =
+        format === 'srt'
+          ? await writeFile(projectPath(project, `${stem}.srt`), captionsToSrt(captions))
+          : await writeJsonFile(projectPath(project, `${stem}.captions.json`), captions);
+      setStudioState({
+        notice: `public/${path} is written: ${captions.length} ${format === 'srt' ? 'cues' : 'captions'}, timed to the audio file.`,
+      });
     });
   };
 
@@ -370,6 +400,24 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
           Applying rewrites public/{props.timingsFile} with the new times and logs the edit in its alignment sidecar.
         </Note>
       </Section>
+      <Section title="Export">
+        <div style={styles.row}>
+          <Button onClick={() => exportCaptions('srt')} disabled={working || !props.timingsFile}>
+            SRT
+          </Button>
+          <Button onClick={() => exportCaptions('json')} disabled={working || !props.timingsFile}>
+            Captions JSON
+          </Button>
+          <label style={styles.row}>
+            <input type="checkbox" checked={markers} onChange={(e) => setMarkers(e.target.checked)} />
+            <span style={styles.label}>include ayah markers</span>
+          </label>
+        </div>
+        <Note>
+          The captions of the whole timings file, timed to the audio file. The JSON is the Caption[] that Remotion's
+          caption tooling (@remotion/captions) reads.
+        </Note>
+      </Section>
       <Disclosure title="Split segments..." open={splitOpen} onToggle={() => setSplitOpen((o) => !o)}>
         <div style={styles.row}>
           <span style={styles.label}>Max verses</span>
@@ -485,8 +533,10 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         ) : null}
       </Disclosure>
       <Note>
-        Click a segment or an ayah to play it from its start; the threshold ({Math.round(threshold * 100)}%) is the
-        composition's review.confidenceThreshold in the Props sidebar.
+        Click a segment or an ayah to play it from its start;{' '}
+        {isAyahTextProps(props)
+          ? `the threshold is the default ${Math.round(threshold * 100)}% (this composition has no review props).`
+          : `the threshold (${Math.round(threshold * 100)}%) is the composition's review.confidenceThreshold in the Props sidebar.`}
       </Note>
     </div>
   );

@@ -105,6 +105,12 @@ only at stop signs) and re-align them, or re-align over boundaries you set. Doub
 words are also painted in the preview (`review.showDoubtful`), never in a render. Every edit is
 logged in the timings file, so the file says where its numbers come from.
 
+To use the timings outside the composition, export them. For `<name>.timings.json`, **SRT** writes
+`<name>.srt` into the project's folder and **Captions JSON** writes `<name>.captions.json`, the
+`Caption[]` that Remotion's caption tooling (`@remotion/captions`) reads. Both have one caption per
+word, timed to the audio file (every ayah of the timings file, whatever range the composition
+plays); the ayah markers are left out unless you tick *include ayah markers*.
+
 ### Lines
 
 The printed lines the passage resolves to, and when each is on screen. A long line can be split at
@@ -126,6 +132,12 @@ An ayah translation under (or above) the lines, and a word-by-word gloss of the 
 
 The files go to `text.translationFile`, `text.glossFile` and `text.transliterationFile`; how they
 look is in the `text` group of the Props sidebar.
+
+**Quran text** is what `MushafAyahText` sets, one ayah at a time. Pick the script (`uthmani` or
+`indopak`) and fetch the text of this passage: the panel saves it from quran.com as
+`text-<script>-<surah>-<from>-<to>.json` in the project's folder and, in `MushafAyahText`, makes it
+the `textFile` when the font sets that script (the Uthmani Hafs font sets `uthmani`). In
+`MushafRecitation`, whose printed lines need no text, it only saves the file and names it.
 
 ## The Props sidebar
 

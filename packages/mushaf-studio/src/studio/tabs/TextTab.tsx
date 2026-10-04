@@ -9,10 +9,12 @@ import {
   listQuranComTranslations,
   serialiseTranslation,
 } from '../../translations';
+import {unicodeFontOf} from '../../unicode/font';
+import {fetchQuranComText, QURAN_TEXT_SCRIPTS, type QuranTextScript, serialiseAyahWords} from '../../unicode/text';
 import {loadOnce, runStudioTask, setStudioState, useStudioState} from '../store';
 import {JSON_EXTENSIONS, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
-import {resolvedOf, type TabProps} from '../tab-props';
+import {isAyahTextProps, resolvedOf, type TabProps} from '../tab-props';
 import {Button, Field, Note, Section} from '../ui';
 import {usePublicFiles} from '../use-public-files';
 
@@ -25,12 +27,19 @@ const KIND: Readonly<Record<FileField, 'ayah' | 'word'>> = {
   transliterationFile: 'word',
 };
 
-/** Text: an ayah translation and a word gloss from quran.com into `public/`, or any file already there. */
+/**
+ * Text: the Quran text of the passage (what `<MushafAyahText>` sets), an ayah translation and a word
+ * gloss from quran.com into `public/`, or any file already there.
+ */
 export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => {
   const {quranComResources, busy} = useStudioState();
   useEffect(() => {
     void loadOnce('quranComResources', () => listQuranComTranslations({}));
   }, []);
+  // An ayah text starts on the script its font sets: a text in another one would not resolve.
+  const [script, setScript] = useState<QuranTextScript>(() =>
+    isAyahTextProps(props) ? unicodeFontOf(props.font).script : 'uthmani',
+  );
   const [language, setLanguage] = useState('en');
   const [resourceChoice, setResourceChoice] = useState(0);
   const [glossLanguage, setGlossLanguage] = useState('en');
@@ -92,6 +101,35 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
     });
   };
 
+  /**
+   * Writes the passage's text in `script` into the project. Only `<MushafAyahText>` reads it (its
+   * `textFile`), and only a text in its font's script: anything else is written and named, not set.
+   */
+  const fetchText = () => {
+    if (!passage) return;
+    const chosen = script;
+    void runStudioTask(`Fetching the ${chosen} text...`, async () => {
+      const text = await fetchQuranComText({...passage, script: chosen});
+      const path = await writeFile(projectPath(project, `text-${chosen}${suffix}.json`), serialiseAyahWords(text));
+      if (!isAyahTextProps(props)) {
+        setStudioState({
+          notice: `public/${path} is written. This composition sets the printed lines and reads no Quran text; a MushafAyahText composition reads it as its textFile.`,
+        });
+        return;
+      }
+      const font = unicodeFontOf(props.font);
+      if (font.script !== chosen) {
+        setStudioState({
+          notice: `public/${path} is written, but textFile is left as it is: font "${font.id}" sets ${font.script} text, not ${chosen}.`,
+        });
+        return;
+      }
+      setStudioState({busy: 'Updating the composition...'});
+      await patchProps(compositionId, {textFile: path});
+      setStudioState({notice: `public/${path} is written and is now the composition's textFile.`});
+    });
+  };
+
   const fetchGloss = (field: 'translation' | 'transliteration') => {
     if (!passage) return;
     const lang = slugify(glossLanguage) || 'en';
@@ -109,6 +147,32 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
   return (
     <div>
       {passage ? null : <Note>Fetching needs the timings: pick a recitation or align a recording first.</Note>}
+      <Section title="Quran text">
+        <Note>
+          {isAyahTextProps(props)
+            ? `Now: ${props.textFile || 'none'}`
+            : 'The printed lines need no text file; a MushafAyahText composition reads this one as its textFile.'}
+        </Note>
+        <Field label="Script">
+          {(id) => (
+            <select
+              id={id}
+              style={styles.input}
+              value={script}
+              onChange={(e) => setScript(e.target.value as QuranTextScript)}
+            >
+              {QURAN_TEXT_SCRIPTS.map((entry) => (
+                <option key={entry} value={entry}>
+                  {entry}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <Button variant="primary" onClick={fetchText} disabled={working || !passage}>
+          Fetch the text of this passage
+        </Button>
+      </Section>
       <Section title="Ayah translation">
         <Note>Now: {current('translationFile')}</Note>
         {quranComResources === null ? (

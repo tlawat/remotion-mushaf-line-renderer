@@ -5,7 +5,7 @@ import type {QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
 import {getHfToken, runStudioTask, setHfToken, setStudioState, useStudioState} from '../store';
 import {baseName, isUrl, patchProps, projectPath, readPublicFile, slugify, stemOf, writeJsonFile} from '../studio-api';
 import {colors, styles} from '../styles';
-import type {TabProps} from '../tab-props';
+import {freshRecording, type TabProps} from '../tab-props';
 import {Button, Field, Note, ProgressBar, Section} from '../ui';
 
 const STAGES: Readonly<Record<QudStage, string>> = {
@@ -63,7 +63,7 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
         notice: notices.length > 0 ? notices.join(' ') : null,
       });
       setStudioState({busy: 'Updating the composition...'});
-      await patchProps(compositionId, {audioFile: audio, timingsFile, fromAyah: 0, toAyah: 0, splits: []});
+      await patchProps(compositionId, {audioFile: audio, timingsFile, ...freshRecording(props)});
     });
   };
 
