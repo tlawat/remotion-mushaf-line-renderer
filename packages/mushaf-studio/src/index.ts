@@ -1,5 +1,9 @@
 // @tlawat/mushaf-studio: compositions, schemas and the Mushaf panel for Remotion Studio.
 
+// Audio
+export * from './audio';
+// Background
+export * from './background';
 // Captions
 export * from './captions';
 // Compositions

@@ -22,6 +22,8 @@ export type MushafStudioErrorCode =
   | 'BAD_STUDIO_PROP'
   /** An edit of the timings in the panel is impossible: a start after the end, a word the file does not have. */
   | 'BAD_TIMING_EDIT'
+  /** The audio could not be fetched or decoded for loudness and level analysis. */
+  | 'AUDIO_ANALYSIS_FAILED'
   /** A Studio API was called outside the Studio. */
   | 'NOT_IN_STUDIO';
 
