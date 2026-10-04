@@ -1,9 +1,6 @@
 // The render in the browser with `@remotion/web-renderer`, loaded only when the Export step needs
-// it (the encoders are most of the page's weight). The compositions play their audio with
-// Remotion's `<Audio>` (an HTML5 element), which the web renderer refuses; for the render the page
-// gives them no audio file and adds `@remotion/media`'s `<Audio>`, which it mixes into the video,
-// with the same trim the composition would apply.
-import {Audio} from '@remotion/media';
+// it (the encoders are most of the page's weight). The compositions switch to `@remotion/media`'s
+// `<Audio>` themselves under the web renderer, so they render as they are.
 import {
   canRenderMediaOnWeb,
   renderMediaOnWeb,
@@ -16,33 +13,15 @@ import {
   type MushafAyahTextProps,
   MushafRecitation,
   type MushafRecitationProps,
-  type ResolvedRecitation,
-  STUDIO_FPS,
 } from '@tlawat/mushaf-studio';
 import type * as React from 'react';
 import {compositionId, type VideoSpec} from './project';
 import type {ResolvedVideo} from './resolve';
 
-/** `<MushafRecitation>` for the web renderer: its own audio off, `@remotion/media`'s on, trimmed as the composition trims it. */
-export const RecitationForWeb: React.FC<MushafRecitationProps> = (props) => {
-  const resolved = props.resolved as ResolvedRecitation | null;
-  return (
-    <>
-      <MushafRecitation {...props} audioFile="" />
-      {props.audioFile !== '' && resolved && (
-        <Audio src={props.audioFile} trimBefore={Math.round(resolved.audioOffsetSeconds * STUDIO_FPS)} />
-      )}
-    </>
-  );
-};
+/** The compositions as the web renderer gets them: unchanged (they pick the right `<Audio>`). */
+export const RecitationForWeb: React.FC<MushafRecitationProps> = (props) => <MushafRecitation {...props} />;
 
-/** `<MushafAyahText>` for the web renderer (its audio is not trimmed). */
-export const AyahTextForWeb: React.FC<MushafAyahTextProps> = (props) => (
-  <>
-    <MushafAyahText {...props} audioFile="" />
-    {props.audioFile !== '' && <Audio src={props.audioFile} />}
-  </>
-);
+export const AyahTextForWeb: React.FC<MushafAyahTextProps> = (props) => <MushafAyahText {...props} />;
 
 /** A container and codecs this browser can encode. */
 export type WebFormat = {

@@ -18,6 +18,7 @@ import {
   type MushafThemeSelection,
   parseRecitationTimings,
   type RecitationTimings,
+  type RecitationTimingsV1,
   recitedRange,
   scheduleLines,
   slideFade,
@@ -86,7 +87,7 @@ const EXIT = {presentation: slideFade(), timing: exitTiming()};
  * carry whole and, under `cutAtSeconds`, the ayahs ending after the cut. This is the example's own
  * policy; the package only reports `complete`.
  */
-const playable = (timings: RecitationTimings, cutAtSeconds: number | null): RecitationTimings => {
+const playable = (timings: RecitationTimingsV1, cutAtSeconds: number | null): RecitationTimingsV1 => {
   const usable = timings.ayat.filter((a) => a.complete !== false);
   const ayat = cutAtSeconds === null ? usable : usable.filter((a, i) => i === 0 || a.end <= cutAtSeconds);
   if (ayat.length === 0) throw new Error('Recitation: the timings carry no complete ayah.');
@@ -97,7 +98,12 @@ export const calculateRecitationMetadata: CalculateMetadataFunction<RecitationPr
   const source: unknown =
     props.timings ?? (props.timingsFile ? await (await fetch(staticFile(props.timingsFile))).json() : null);
   if (source === null) throw new Error('Recitation: pass `timings` or a `timingsFile`.');
-  const timings = playable(parseRecitationTimings(source), props.cutAtSeconds);
+  const parsed = parseRecitationTimings(source);
+  // This composition follows one surah: a version-2 file (a recording across surahs) needs
+  // recitedRanges() and getMushafLinesForRanges() instead.
+  if (parsed.version !== 1)
+    throw new Error('Recitation: the timings cross surahs (version 2); this example reads one surah.');
+  const timings = playable(parsed, props.cutAtSeconds);
 
   // One call: the package finds the page itself; `data` points it at a mirror of QUL's exports
   // instead of Tarteel's CDN.

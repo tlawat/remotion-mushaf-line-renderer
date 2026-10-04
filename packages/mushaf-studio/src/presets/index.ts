@@ -13,7 +13,7 @@ export const LOOK_GROUPS = ['theme', 'customTheme', 'layout', 'animation', 'high
 
 /**
  * What a look sets: any field of the style groups. The file fields of `text` (`translationFile`,
- * `glossFile`, `transliterationFile`) are content and are left out of the type.
+ * `glossFile`, `transliterationFile`) and the translation layers are content and are left out of the type.
  */
 export type MushafLookPatch = {
   readonly theme?: ThemeName | undefined;
@@ -23,7 +23,9 @@ export type MushafLookPatch = {
   readonly layout?: Partial<Layout> | undefined;
   readonly animation?: Partial<Animation> | undefined;
   readonly highlight?: Partial<Highlight> | undefined;
-  readonly text?: Partial<Omit<Text, 'translationFile' | 'glossFile' | 'transliterationFile'>> | undefined;
+  readonly text?:
+    | Partial<Omit<Text, 'translationFile' | 'glossFile' | 'transliterationFile' | 'translations'>>
+    | undefined;
 };
 
 /** A named style preset. */

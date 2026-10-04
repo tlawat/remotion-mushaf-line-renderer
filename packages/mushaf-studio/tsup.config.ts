@@ -1,8 +1,7 @@
 import {defineConfig, type Options} from 'tsup';
 
 /**
- * Same output layout as the main package: dist/esm/index.mjs (+ .d.mts) and dist/cjs/index.js
- * (+ .d.ts), deterministic names, no data inside. Everything a Remotion project has already
+ * dist/esm/index.mjs (+ .d.mts), deterministic names, no data inside. Everything a Remotion project has already
  * (React, Remotion, zod, the main package) stays external.
  */
 const entry = {index: 'src/index.ts'};
@@ -31,7 +30,8 @@ const shared: Options = {
   },
 };
 
+// ESM only: @remotion/media (the <Audio> of the in-browser renderer) ships ESM only, and every
+// Remotion bundler (the Studio's webpack, Vite for a <Player>) reads ESM.
 export default defineConfig([
   {...shared, format: ['esm'], outDir: 'dist/esm', clean: true, outExtension: () => ({js: '.mjs'}), dts: {entry}},
-  {...shared, format: ['cjs'], outDir: 'dist/cjs', clean: false, outExtension: () => ({js: '.js'}), dts: {entry}},
 ]);
