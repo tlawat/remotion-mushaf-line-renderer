@@ -11,6 +11,7 @@ import {
 } from '../../translations';
 import {unicodeFontOf} from '../../unicode/font';
 import {fetchQuranComText, QURAN_TEXT_SCRIPTS, type QuranTextScript, serialiseAyahWords} from '../../unicode/text';
+import {quranTextName} from '../recording';
 import {loadOnce, runStudioTask, setStudioState, useStudioState} from '../store';
 import {JSON_EXTENSIONS, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
@@ -110,7 +111,7 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
     const chosen = script;
     void runStudioTask(`Fetching the ${chosen} text...`, async () => {
       const text = await fetchQuranComText({...passage, script: chosen});
-      const path = await writeFile(projectPath(project, `text-${chosen}${suffix}.json`), serialiseAyahWords(text));
+      const path = await writeFile(projectPath(project, quranTextName(chosen, passage)), serialiseAyahWords(text));
       if (!isAyahTextProps(props)) {
         setStudioState({
           notice: `public/${path} is written. This composition sets the printed lines and reads no Quran text; a MushafAyahText composition reads it as its textFile.`,
@@ -143,6 +144,8 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
   };
 
   const current = (field: FileField): string => props.text[field] || 'none';
+  // An ayah text paints no word gloss or transliteration: the controls would set props it ignores.
+  const words = !isAyahTextProps(props);
 
   return (
     <div>
@@ -225,38 +228,42 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
           </>
         )}
       </Section>
-      <Section title="Word by word">
-        <Note>
-          Gloss: {current('glossFile')}; transliteration: {current('transliterationFile')}
-        </Note>
-        <Field label="Language (quran.com code, en, ur, id, ...)">
-          {(id) => (
-            <input
-              id={id}
-              style={styles.input}
-              value={glossLanguage}
-              onChange={(e) => setGlossLanguage(e.target.value)}
-            />
-          )}
-        </Field>
-        <div style={styles.row}>
-          <Button onClick={() => fetchGloss('translation')} disabled={working || !passage}>
-            Fetch translation
-          </Button>
-          <Button onClick={() => fetchGloss('transliteration')} disabled={working || !passage}>
-            Fetch transliteration
-          </Button>
-          <Button onClick={() => setFile('glossFile', '')} disabled={working || !props.text.glossFile}>
-            No gloss
-          </Button>
-          <Button
-            onClick={() => setFile('transliterationFile', '')}
-            disabled={working || !props.text.transliterationFile}
-          >
-            No transliteration
-          </Button>
-        </div>
-      </Section>
+      {words ? (
+        <Section title="Word by word">
+          <Note>
+            Gloss: {current('glossFile')}; transliteration: {current('transliterationFile')}
+          </Note>
+          <Field label="Language (quran.com code, en, ur, id, ...)">
+            {(id) => (
+              <input
+                id={id}
+                style={styles.input}
+                value={glossLanguage}
+                onChange={(e) => setGlossLanguage(e.target.value)}
+              />
+            )}
+          </Field>
+          <div style={styles.row}>
+            <Button onClick={() => fetchGloss('translation')} disabled={working || !passage}>
+              Fetch translation
+            </Button>
+            <Button onClick={() => fetchGloss('transliteration')} disabled={working || !passage}>
+              Fetch transliteration
+            </Button>
+            <Button onClick={() => setFile('glossFile', '')} disabled={working || !props.text.glossFile}>
+              No gloss
+            </Button>
+            <Button
+              onClick={() => setFile('transliterationFile', '')}
+              disabled={working || !props.text.transliterationFile}
+            >
+              No transliteration
+            </Button>
+          </div>
+        </Section>
+      ) : (
+        <Note>Word glosses apply to MushafRecitation.</Note>
+      )}
       <Section title="Use a file from public/">
         {jsonFiles.length === 0 ? (
           <Note>No JSON file in public/ yet.</Note>
@@ -279,12 +286,19 @@ export const TextTab: React.FC<TabProps> = ({compositionId, props, project}) => 
               <Button onClick={() => setFile('translationFile', publicChoice)} disabled={working || !publicChoice}>
                 As translation
               </Button>
-              <Button onClick={() => setFile('glossFile', publicChoice)} disabled={working || !publicChoice}>
-                As gloss
-              </Button>
-              <Button onClick={() => setFile('transliterationFile', publicChoice)} disabled={working || !publicChoice}>
-                As transliteration
-              </Button>
+              {words ? (
+                <>
+                  <Button onClick={() => setFile('glossFile', publicChoice)} disabled={working || !publicChoice}>
+                    As gloss
+                  </Button>
+                  <Button
+                    onClick={() => setFile('transliterationFile', publicChoice)}
+                    disabled={working || !publicChoice}
+                  >
+                    As transliteration
+                  </Button>
+                </>
+              ) : null}
             </div>
           </>
         )}

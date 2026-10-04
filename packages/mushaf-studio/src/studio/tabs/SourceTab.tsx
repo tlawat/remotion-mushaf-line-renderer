@@ -2,20 +2,12 @@ import type * as React from 'react';
 import {useEffect, useMemo, useState} from 'react';
 import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../qud';
 import type {QudRecitation} from '../../qud/types';
+import {saveRecording} from '../recording';
 import {describeError, loadOnce, runStudioTask, setStudioState, useStudioState} from '../store';
-import {
-  AUDIO_EXTENSIONS,
-  fileNameFor,
-  isUrl,
-  patchProps,
-  projectPath,
-  slugify,
-  writeFile,
-  writeJsonFile,
-} from '../studio-api';
+import {AUDIO_EXTENSIONS, fileNameFor, isUrl, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
 import {ayahCount, surahLabel} from '../surahs';
-import {freshRecording, type TabProps} from '../tab-props';
+import type {TabProps} from '../tab-props';
 import {Button, Field, Note, NumberInput, Section} from '../ui';
 import {usePublicFiles} from '../use-public-files';
 
@@ -67,9 +59,14 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
         });
       }
       const timings = timingsFromCatalogue(segments, {audio});
-      const timingsFile = await writeJsonFile(projectPath(project, `${base}.timings.json`), timings);
-      setStudioState({busy: 'Updating the composition...'});
-      await patchProps(compositionId, {audioFile: audio, timingsFile, ...freshRecording(props)});
+      await saveRecording({
+        compositionId,
+        props,
+        project,
+        audioFile: audio,
+        timings,
+        timingsName: `${base}.timings.json`,
+      });
       // The clip is what Align works on now, not an earlier upload.
       setStudioState({uploadedAudio: null});
     });

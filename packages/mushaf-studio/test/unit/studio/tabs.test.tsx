@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 // The tabs under jsdom, one user path each: Align (consent, the uploaded recording, the token),
-// Review (boundaries, a batch of nudges, the marker, a split that keeps the log, the captions
+// Source and Align on an ayah text (the passage's text in the same patch, or no patch at all), Review (boundaries, a batch of nudges, the marker, a split that keeps the log, the captions
 // export), Lines (a split patch, then another before the Root comes back) and Text (a file of the
-// wrong kind, file names, the Quran text for a recitation and for an ayah text).
+// wrong kind, file names, the Quran text for a recitation and for an ayah text, no glosses on an
+// ayah text).
 import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import chapterFixture from '../../fixtures/qud/chapter-1-segments.json';
+import recitationsFixture from '../../fixtures/qud/recitations.json';
 import fatihaText from '../../fixtures/unicode/fatiha-text.json';
 import {fatihaLines} from '../compositions/helpers/fatiha-lines';
 
@@ -70,6 +73,7 @@ const {defaultMushafRecitationProps} = await import('../../../src/compositions/r
 const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
 const {parseAyahWords, serialiseAyahWords} = await import('../../../src/unicode/text');
 const {captionsToSrt, toCaptions} = await import('../../../src/captions');
+const {MushafStudioError} = await import('../../../src/errors');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 type MushafAyahTextProps = import('../../../src/unicode/schema').MushafAyahTextProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
@@ -300,12 +304,127 @@ describe('Align', () => {
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     expect(getStudioState().session).toMatchObject({audioId: 'sess-1', audio: 'mushaf-studio/p/My Take.m4a'});
     expect(getStudioState().error).toBeNull();
+    // A recitation reads no Quran text: none is fetched, the one file written is the timings.
+    expect(unicodeText.fetchQuranComText).not.toHaveBeenCalled();
+    expect(studio.writeStaticFile).toHaveBeenCalledTimes(1);
   });
 
   it('has nothing to align when the composition plays a URL and nothing was uploaded', () => {
     panel(propsWith(reviewTimings(), {audioFile: 'https://x.y/z.mp3'}), 'align');
     expect(screen.getByRole('button', {name: 'Align'})).toHaveProperty('disabled', true);
     expect(screen.getByText(/Put a recording into public\//)).toBeTruthy();
+  });
+});
+
+describe('a new recording on an ayah text', () => {
+  const ayahPanel = (tab: 'source' | 'align') =>
+    render(
+      <MushafStudioPanel
+        compositionId="MushafAyahText"
+        props={ayahTextProps(reviewTimings())}
+        initialTab={tab}
+        project="Reel"
+      />,
+    );
+  const quranComDown = () =>
+    unicodeText.fetchQuranComText.mockRejectedValue(
+      new MushafStudioError('TRANSLATION_FETCH_FAILED', 'quran.com answered 1:2-3 with HTTP 503.'),
+    );
+
+  beforeEach(() => {
+    qud.listRecitations.mockResolvedValue(recitationsFixture.recitations as never);
+    qud.getChapterSegments.mockResolvedValue(chapterFixture);
+    // The clip of the passage is ayahs 2-3 of Al-Fatihah: the old text (and the props' textFile) is another passage's.
+    qud.timingsFromCatalogue.mockReturnValue(reviewTimings());
+    qud.alignAudio.mockResolvedValue({audio_id: 'sess-1', segments: [], device: 'GPU'});
+    qud.sessionTimestamps.mockResolvedValue({audio_id: 'sess-1', segments: []});
+    qud.timingsFromQud.mockReturnValue(reviewTimings());
+    unicodeText.fetchQuranComText.mockResolvedValue(parseAyahWords(fatihaText));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        blob: async () => new Blob(['audio']),
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      })),
+    );
+  });
+
+  const textPath = 'mushaf-studio/reel/text-uthmani-1-2-3.json';
+
+  it("Source fetches the passage's text in the font's script and sets it with the timings, in one patch", async () => {
+    ayahPanel('source');
+    fireEvent.click(await screen.findByText('Use this recitation'));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(unicodeText.fetchQuranComText).toHaveBeenCalledWith({chapter: 1, fromAyah: 2, toAyah: 3, script: 'uthmani'});
+    const timingsPath = 'mushaf-studio/reel/abdul_hamid_ghraio_2025_yt-1-1-7.timings.json';
+    expect(studio.writeStaticFile.mock.calls.map((_, i) => written(i).filePath)).toEqual([
+      'mushaf-studio/reel/abdul_hamid_ghraio_2025_yt-1-1-7.mp3',
+      timingsPath,
+      textPath,
+    ]);
+    expect(written(2).contents).toBe(serialiseAyahWords(parseAyahWords(fatihaText)));
+    expect(saved(0)).toEqual({
+      audioFile: 'mushaf-studio/reel/abdul_hamid_ghraio_2025_yt-1-1-7.mp3',
+      timingsFile: timingsPath,
+      textFile: textPath,
+      fromAyah: 0,
+      toAyah: 0,
+    });
+    expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().error).toBeNull();
+  });
+
+  it('Source patches nothing when the text cannot be fetched, and says where the timings are', async () => {
+    quranComDown();
+    ayahPanel('source');
+    fireEvent.click(await screen.findByText('Use this recitation'));
+    await waitFor(() => expect(getStudioState().error).not.toBeNull());
+    expect(getStudioState().error).toBe(
+      'The timings are in public/mushaf-studio/reel/abdul_hamid_ghraio_2025_yt-1-1-7.timings.json, but the Quran text for 1:2-3 could not be fetched: quran.com answered 1:2-3 with HTTP 503; fetch it in the Text tab, then pick the timings again.',
+    );
+    expect(studio.writeStaticFile).toHaveBeenCalledTimes(2);
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(studio.reevaluateComposition).not.toHaveBeenCalled();
+    expect(getStudioState().busy).toBeNull();
+  });
+
+  it("Align fetches the passage's text and sets it with the timings, in one patch", async () => {
+    setStudioState({uploadedAudio: 'mushaf-studio/reel/take.m4a'});
+    ayahPanel('align');
+    fireEvent.click(screen.getByRole('button', {name: 'Align'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(unicodeText.fetchQuranComText).toHaveBeenCalledWith({chapter: 1, fromAyah: 2, toAyah: 3, script: 'uthmani'});
+    expect(studio.writeStaticFile.mock.calls.map((_, i) => written(i).filePath)).toEqual([
+      'mushaf-studio/reel/take.timings.json',
+      textPath,
+    ]);
+    expect(saved(0)).toEqual({
+      audioFile: 'mushaf-studio/reel/take.m4a',
+      timingsFile: 'mushaf-studio/reel/take.timings.json',
+      textFile: textPath,
+      fromAyah: 0,
+      toAyah: 0,
+    });
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().error).toBeNull();
+  });
+
+  it('Align patches nothing when the text cannot be fetched, but keeps the session and the timings', async () => {
+    quranComDown();
+    setStudioState({uploadedAudio: 'mushaf-studio/reel/take.m4a'});
+    ayahPanel('align');
+    fireEvent.click(screen.getByRole('button', {name: 'Align'}));
+    await waitFor(() => expect(getStudioState().error).not.toBeNull());
+    expect(getStudioState().error).toMatch(
+      /^The timings are in public\/mushaf-studio\/reel\/take\.timings\.json, but the Quran text for 1:2-3 could not be fetched: /,
+    );
+    expect(studio.writeStaticFile).toHaveBeenCalledTimes(1);
+    expect(written(0).filePath).toBe('mushaf-studio/reel/take.timings.json');
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(getStudioState().session).toMatchObject({audioId: 'sess-1', audio: 'mushaf-studio/reel/take.m4a'});
   });
 });
 
@@ -580,6 +699,27 @@ describe('Text', () => {
     expect(studio.saveDefaultProps).not.toHaveBeenCalled();
     expect(studio.reevaluateComposition).not.toHaveBeenCalled();
     expect(getStudioState().error).toBeNull();
+  });
+
+  it('shows no word gloss or transliteration controls on an ayah text, which paints none', () => {
+    studio.getStaticFiles.mockReturnValue([
+      {src: '/x', name: 'mushaf-studio/p/words.json', sizeInBytes: 10, lastModified: 0},
+    ]);
+    render(
+      <MushafStudioPanel compositionId="MushafAyahText" props={ayahTextProps(reviewTimings())} initialTab="text" />,
+    );
+    expect(screen.getByText('Word glosses apply to MushafRecitation.')).toBeTruthy();
+    expect(screen.queryByText('Word by word')).toBeNull();
+    expect(screen.queryByText('Fetch transliteration')).toBeNull();
+    expect(screen.queryByText('No gloss')).toBeNull();
+    expect(screen.queryByText('As gloss')).toBeNull();
+    expect(screen.queryByText('As transliteration')).toBeNull();
+    // The ayah translation still applies.
+    expect(screen.getByText('As translation')).toBeTruthy();
+    cleanup();
+    panel(propsWith(reviewTimings()), 'text');
+    expect(screen.getByText('Word by word')).toBeTruthy();
+    expect(screen.queryByText('Word glosses apply to MushafRecitation.')).toBeNull();
   });
 
   it("sets an ayah text's textFile to the fetched file, but not to a text in a script its font does not set", async () => {

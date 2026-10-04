@@ -195,16 +195,19 @@ five tabs:
 | **Align**  | Uploads the recording to the [QUD Universal Aligner](https://aligner.qud.dev) with streaming progress, then fetches the word times. Says first that the audio leaves the machine. |
 | **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align.            |
 | **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments.                        |
-| **Text**   | Ayah translations and word-by-word glosses from quran.com, or a QUL file in `public/`.                           |
+| **Text**   | Ayah translations and word-by-word glosses (`<MushafRecitation>` only) from quran.com, or a QUL file in `public/`. |
 
 The Text tab also fetches the passage's Quran text (`uthmani` or `indopak`, `fetchQuranComText()`)
 into `text-<script>-<surah>-<from>-<to>.json`, and makes it the `textFile` of a `<MushafAyahText>`
-whose font sets that script. The Review tab exports the timings file's captions, timed to the audio
+whose font sets that script. On `<MushafAyahText>`, Source and Align fetch it themselves for the new
+passage and save it with the timings in one `saveDefaultProps()`: the old text would lack the new
+ayahs and `calculateMetadata()` would throw. The Review tab exports the timings file's captions, timed to the audio
 file, as SRT (`captionsToSrt()`) or as the `Caption[]` JSON of `@remotion/captions` (`toCaptions()`),
 ayah markers optional.
 
 Every change goes through the same path: write the file(s) into `public/mushaf-studio/<project>/`
-(`default` for `<MushafRecitation>`; `writeStaticFile()`), save the composition's content props (`saveDefaultProps()`), then
+(`project` defaults to the composition's id, slugified: `mushafrecitation`, `mushafayahtext`;
+`writeStaticFile()`), save the composition's content props (`saveDefaultProps()`), then
 `reevaluateComposition()` so `calculateMetadata()` runs again. Large data never sits in the props:
 the props hold paths, and the files are fetched through `staticFile()`, so the Render dialog, the
 CLI and Lambda see the same inputs.

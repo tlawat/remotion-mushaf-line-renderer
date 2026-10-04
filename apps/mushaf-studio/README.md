@@ -53,16 +53,23 @@ Hamid Ghraio, the audio streamed from the catalogue's clip URL and the timings i
 
 | Composition        | What it is                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------- |
-| `MushafRecitation` | A recited passage: the printed lines follow the audio, word by word. The panel works on this one. |
+| `MushafRecitation` | A recited passage: the printed lines follow the audio, word by word. The panel docks here. |
+| `MushafAyahText`   | The same recitation one ayah at a time, as Unicode text in a 9:16 reel. The panel docks here too. |
 | `MushafPassage`    | A passage without audio: each line stays `holdSeconds`, then gives way to the next. Set the surah and the ayahs in the Props sidebar. |
 
 ## The Mushaf panel
 
-The panel is docked over the preview of `MushafRecitation`, with five tabs. Every change it makes
-goes the same way: it writes its files into `public/mushaf-studio/default/`, saves the
-composition's props into `src/Root.tsx`, and re-runs the composition's
-`calculateMetadata()`, so the preview, the video's duration and the Props sidebar follow. The panel
-exists in the Studio only: it is never in a rendered video.
+The panel is docked beside the preview of `MushafRecitation` and of `MushafAyahText` (not
+`MushafPassage`, which has no audio), with five tabs. Open, the dock narrows the Studio so the
+preview sits beside it rather than under it; collapsed, it is a thin strip at the edge, and the
+preview takes the room back. Every change it makes goes the same way: it writes its files into
+`public/mushaf-studio/<project>/`, where the project is the composition's id, slugified
+(`public/mushaf-studio/mushafrecitation/`, `public/mushaf-studio/mushafayahtext/`), saves the
+composition's props into `src/Root.tsx`, and re-runs the composition's `calculateMetadata()`, so the
+preview, the video's duration and the Props sidebar follow. On `MushafAyahText` a new recitation
+(from Source or Align) also fetches the Quran text of its ayahs and sets it as the `textFile` in the
+same save; if quran.com cannot be reached, nothing is saved and the status line says where the
+timings were written. The panel exists in the Studio only: it is never in a rendered video.
 
 ### Source
 
@@ -120,7 +127,8 @@ entry to undo it.
 
 ### Text
 
-An ayah translation under (or above) the lines, and a word-by-word gloss of the current word.
+An ayah translation under (or above) the lines, and a word-by-word gloss of the current word
+(`MushafRecitation` only: on `MushafAyahText` the tab shows no gloss controls).
 
 - **From quran.com**: choose a translation by language, or the per-word translation or
   transliteration for the gloss. The panel saves it as a JSON file in the project's folder, so
@@ -191,17 +199,18 @@ without QUL's CDN; the audio still comes from wherever `audioFile` points.
 
 ```
 apps/mushaf-studio/
-  src/Root.tsx                      the two compositions and their props: what the Studio saves, what the CLI renders
+  src/Root.tsx                      the three compositions and their props: what the Studio saves, what the CLI renders
   public/data/qpc-v4/               QUL's two exports (the words, the line layout), committed: data 'mirror'
   public/mushaf-studio/fatiha/      the sample the default props point at
-  public/mushaf-studio/default/     what the panel writes (below)
+  public/mushaf-studio/<project>/   what the panel writes (below): mushafrecitation/, mushafayahtext/
   out/                              rendered videos (not committed)
 ```
 
-In `public/mushaf-studio/default/` the panel writes `<reciter>-<surah>-<from>-<to>.mp3` and
-`.timings.json` for a catalogue pick, your recording and its `<name>.timings.json` after Align, and
-`translation-<id>.json` and the gloss files from the Text tab. A new pick writes new files next to
-the old ones; the props say which are in use.
+In `public/mushaf-studio/<project>/` (the composition's id, slugified) the panel writes
+`<reciter>-<surah>-<from>-<to>.mp3` and `.timings.json` for a catalogue pick, your recording and its
+`<name>.timings.json` after Align, and `translation-<id>-<surah>-<from>-<to>.json`, the gloss files
+and `text-<script>-<surah>-<from>-<to>.json` from the Text tab (or, on `MushafAyahText`, with a new
+recitation). A new pick writes new files next to the old ones; the props say which are in use.
 
 The timings file is the package's recitation timings (see
 [Following a recording](../../packages/remotion-mushaf-line-renderer/README.md#following-a-recording))

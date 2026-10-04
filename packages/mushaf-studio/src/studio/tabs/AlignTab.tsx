@@ -2,10 +2,11 @@ import type * as React from 'react';
 import {useState} from 'react';
 import {alignAudio, sessionTimestamps, timingsFromQud} from '../../qud';
 import type {QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
+import {saveRecording} from '../recording';
 import {getHfToken, runStudioTask, setHfToken, setStudioState, useStudioState} from '../store';
-import {baseName, isUrl, patchProps, projectPath, readPublicFile, slugify, stemOf, writeJsonFile} from '../studio-api';
+import {baseName, isUrl, readPublicFile, slugify, stemOf} from '../studio-api';
 import {colors, styles} from '../styles';
-import {freshRecording, type TabProps} from '../tab-props';
+import type {TabProps} from '../tab-props';
 import {Button, Field, Note, ProgressBar, Section} from '../ui';
 
 const STAGES: Readonly<Record<QudStage, string>> = {
@@ -57,13 +58,19 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
         {audio, model, device: response.device ?? device, riwayah},
       );
       const stem = slugify(stemOf(name)) || 'audio';
-      const timingsFile = await writeJsonFile(projectPath(project, `${stem}.timings.json`), timings);
+      // The session first: split and re-align work on it even when the text below cannot be fetched.
       setStudioState({
         session: {audioId: response.audio_id, align: response, audio, model, device, riwayah},
         notice: notices.length > 0 ? notices.join(' ') : null,
       });
-      setStudioState({busy: 'Updating the composition...'});
-      await patchProps(compositionId, {audioFile: audio, timingsFile, ...freshRecording(props)});
+      await saveRecording({
+        compositionId,
+        props,
+        project,
+        audioFile: audio,
+        timings,
+        timingsName: `${stem}.timings.json`,
+      });
     });
   };
 
