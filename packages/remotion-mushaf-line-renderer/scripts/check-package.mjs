@@ -35,7 +35,8 @@ for (const f of [pkg.main, pkg.module, pkg.types, ...exportFiles]) {
 if (failures.length === 0) ok(`all ${exportFiles.length + 3} files referenced from package.json exist`);
 
 // 2. sizes and charset ----------------------------------------------------------------------------
-const MAX_INDEX_BYTES = 160 * 1024;
+// A tripwire for data or fonts bundled by mistake (the layout alone is megabytes), not a budget.
+const MAX_INDEX_BYTES = 176 * 1024;
 for (const f of ['dist/esm/index.mjs', 'dist/cjs/index.js']) {
   const size = statSync(path.join(pkgDir, f)).size;
   if (size > MAX_INDEX_BYTES) fail(`${f} is ${size} bytes; the package ships code only (limit ${MAX_INDEX_BYTES})`);

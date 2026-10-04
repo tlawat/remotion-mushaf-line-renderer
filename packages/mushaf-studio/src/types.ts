@@ -1,4 +1,4 @@
-import type {LineSchedule, MushafLineData, RecitationTimings} from '@tlawat/remotion-mushaf-line';
+import type {LineSchedule, MushafLineData, RecitationTimingsV1} from '@tlawat/remotion-mushaf-line';
 
 /**
  * Where a printed line of a passage is split into two timed segments: the line, and the first
@@ -87,7 +87,7 @@ export type AlignmentSidecar = {
  * The timings file the studio reads and writes: the package's format, the three informational keys
  * the example's producers write (`audio`, `durationSeconds`, `source`), and the sidecar.
  */
-export type StudioTimings = RecitationTimings & {
+export type StudioTimings = RecitationTimingsV1 & {
   /** The recording the times refer to: a `public/` path or a URL. */
   readonly audio?: string;
   readonly durationSeconds?: number;

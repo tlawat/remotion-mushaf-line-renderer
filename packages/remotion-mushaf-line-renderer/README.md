@@ -199,6 +199,10 @@ collapse to their words of the range, centred, and the lines in between stay who
 [Slicing a line](#slicing-a-line)), or keep the whole line and mark the range with `wordStyle`, whose
 context says whether a word is `inSlice`.
 
+A passage that crosses surahs is several ranges: `getMushafLinesForRanges()` (see
+[Following a recording](#getmushaflinesforrangesranges-slice-mushaf-theme-data-promisemushaflinedata))
+joins them with the header lines between surahs.
+
 ### `getMushafLocation({surah, ayah?, mushaf?, data?}): Promise<{page, line}>`
 
 Where a surah (or one of its ayahs) is printed. `AYAH_NOT_FOUND` names the last ayah of the surah
@@ -445,6 +449,21 @@ a client for the QUD Universal Aligner's HTTP API, a Whisper script, and an offl
   ayah's end, and one that does not is fine, the package places it there itself.
 - Other keys (`audio`, `durationSeconds`, `source`) pass through untouched.
 
+A recording that crosses surahs (a juz, a hizb, a khatm) is **version 2**: no top-level `surah`, each
+ayah names its own, and `ayat` is in recitation order (surah ascending, then ayah). Each word's `id`
+must belong to its own entry's surah and ayah. Version 1 files stay valid and mean what they meant.
+
+```json
+{
+  "version": 2,
+  "ayat": [
+    {"surah": 77, "ayah": 50, "start": 0.2, "end": 6.81},
+    {"surah": 78, "ayah": 1, "start": 13.4, "end": 15.02, "words": [{"id": "78:1:1", "start": 13.4, "end": 14.1}, ...]},
+    {"surah": 78, "ayah": 2, "start": 15.6, "end": 18.3}
+  ]
+}
+```
+
 ```tsx
 const timings = parseRecitationTimings(await (await fetch(staticFile('audio/tawbah-timings.json'))).json());
 const lines = await getMushafLines({...recitedRange(timings), slice: true});
@@ -457,15 +476,48 @@ const schedule = scheduleLines(lines, timings); // [{index, start, end}, ...] in
 ))}
 ```
 
+Across surahs, the lines come from `getMushafLinesForRanges()` and the rest is the same:
+
+```tsx
+const timings = parseRecitationTimings(json); // version 1 or 2
+const lines = await getMushafLinesForRanges(recitedRanges(timings)); // header lines between surahs
+const schedule = scheduleLines(lines, timings); // headers carry no word, so they get no slot
+```
+
 ### `parseRecitationTimings(value): RecitationTimings`
 
-Validates timings read from a file or `inputProps` and returns them typed. Every field is checked and
-the message names the one at fault; a `version` other than 1 is refused with a message naming the
-version this package understands. `BAD_RECITATION_TIMINGS` on any failure.
+Validates timings read from a file or `inputProps` and returns them typed: `RecitationTimingsV1`
+(`{version: 1, surah, ayat}`) or `RecitationTimingsV2` (`{version: 2, ayat: [{surah, ayah, ...}]}`);
+`version` narrows the union. Every field is checked and the message names the one at fault (a
+version 2 file out of order, a word of another surah than its entry's); any other `version` is
+refused with a message naming the versions this package understands. `BAD_RECITATION_TIMINGS` on
+any failure.
+
+### `normalizeTimings(timings): RecitationTimingsV2`
+
+Either version as version 2, every ayah with its surah: code that reads timings handles one shape.
+A version 2 file comes back as it is; a version 1 file as a view (memoised, the input untouched).
+
+### `recitedRanges(timings): {surah, fromAyah, toAyah}[]`
+
+The ayah range of each surah the recording carries, in order, for `getMushafLinesForRanges()`. One
+range for a version 1 file.
 
 ### `recitedRange(timings): {surah, fromAyah, toAyah}`
 
-The first and last ayah of the recording, spreadable into `getMushafLines()`.
+The first and last ayah of a recording of one surah, spreadable into `getMushafLines()`. Timings
+that cross surahs have no single range: it throws `BAD_RECITATION_TIMINGS` and names
+`recitedRanges()`.
+
+### `getMushafLinesForRanges(ranges, {slice?, mushaf?, theme?, data?}): Promise<MushafLineData[]>`
+
+The lines of several ayah ranges, in order: each range's lines as `getMushafLines()` finds them,
+and between two surahs the later one's header lines as printed (its `surah_name` line, and its
+`basmallah` line except for At-Tawbah) when its range starts at ayah 1. The ends of every range are
+sliced as `slice: true` does (the default; `slice: false` keeps every line whole). A line two ranges
+share appears once: when it carries the end of one range and the start of the next, its slice is a
+word band, `{fromWordId, toWordId}`, from the first word either keeps to the last. Ranges must be in
+reading order without overlaps (`AYAH_NOT_FOUND` otherwise, as for a missing ayah).
 
 ### `scheduleLines(lines, timings, {occurrence?}): LineSchedule[]`
 
@@ -474,7 +526,8 @@ carries a timed word, in the order the lines were given. A line starts when its 
 heard: the word's own time when the file has one, else a time interpolated inside its ayah by
 position (the marker at the ayah's end); the words a line's own `slice` hides never start it. It ends
 when the next scheduled line starts, and the last line at the end of the last timed ayah. Lines with
-no timed word (headers, lines outside the recording) are left out.
+no timed word (headers, lines outside the recording) are left out. Both versions work: an ayah is
+found by its surah and number, so a version 2 recording schedules straight through a surah boundary.
 
 `occurrence` decides which recitation of a repeated word starts its line: `'first'` (default) when it
 is first heard, `'last'` its final one. Nothing is reordered, so under `'last'` a line whose first
@@ -970,8 +1023,8 @@ across package copies.
 | `BAD_THEME`                              | `theme` must be `'plain'`, a preset name or `{base, colors?, marker?}`; a base the font lacks, an entry outside 0–15 or an unknown part. |
 | `BAD_COLOR`                              | A theme colour is not a CSS colour.                                                                                                            |
 | `BAD_SLICE`                              | `slice` must be `{ayah}`, `{fromAyah, toAyah?}` or `{fromWordId, toWordId?}` with positive integers (the end not before the start), never a mix; `slice: true` only on the ayah form of `getMushafLines()`. |
-| `BAD_RECITATION_TIMINGS`                 | `parseRecitationTimings()` was given something other than `{version: 1, surah, ayat: [{ayah, start, end, complete?, words?}]}` (the message names the field), or timings of a version this package does not understand. |
-| `AYAH_NOT_FOUND`                         | `getMushafLines({surah, ...})` / `getMushafLocation()` was asked for a surah or ayah the mushaf does not have; the message names the last ayah. |
+| `BAD_RECITATION_TIMINGS`                 | `parseRecitationTimings()` was given something other than `{version: 1, surah, ayat: [{ayah, start, end, complete?, words?}]}` or `{version: 2, ayat: [{surah, ayah, start, end, complete?, words?}]}` in recitation order (the message names the field), or timings of a version this package does not understand; or `recitedRange()` was given timings that cross surahs (use `recitedRanges()`). |
+| `AYAH_NOT_FOUND`                         | `getMushafLines({surah, ...})` / `getMushafLocation()` / `getMushafLinesForRanges()` was asked for a surah or ayah the mushaf does not have (the message names the last ayah), or ranges out of reading order. |
 | `PAGE_OUT_OF_RANGE`, `LINE_OUT_OF_RANGE` | Pages are `1..604`; lines `1..15` (`1..8` on pages 1 and 2). The message names the page's line count.                                          |
 | `BAD_LINE_PROP`                          | Pass `line={MushafLineData}` or `page` + `line={number}`, and `theme` / `mushaf` / `data` only with the second form.                           |
 | `BAD_LINE_DATA`                          | `line` is not a `MushafLineData` from this package version (the message names the field). Older data must be re-resolved.                      |

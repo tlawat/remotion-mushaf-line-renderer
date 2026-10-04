@@ -245,10 +245,14 @@ export type AyahTiming = {
   readonly words?: readonly WordTiming[];
 };
 
+/** One ayah of a version 2 recording: an `AyahTiming` that names its surah. */
+export type SurahAyahTiming = AyahTiming & {
+  /** 1..114 */
+  readonly surah: number;
+};
+
 /**
- * When a recording recites each ayah and word: the input of `scheduleLines()` and `wordAt()`, and
- * what an aligner's output is converted to. Plain JSON; keys the format does not define (`audio`,
- * `source`, ...) may travel with it. `parseRecitationTimings()` validates one read from a file.
+ * Version 1 of the timings: one surah. `surah` is the surah of every ayah and word in the file.
  *
  * ```json
  * {"version": 1, "surah": 9, "ayat": [
@@ -257,7 +261,7 @@ export type AyahTiming = {
  * ]}
  * ```
  */
-export type RecitationTimings = {
+export type RecitationTimingsV1 = {
   /** Format version. `parseRecitationTimings()` throws BAD_RECITATION_TIMINGS on a mismatch. */
   readonly version: 1;
   /** 1..114 */
@@ -266,7 +270,34 @@ export type RecitationTimings = {
   readonly ayat: readonly AyahTiming[];
 };
 
-/** The ayah range of a recording, as `getMushafLines()` takes it. */
+/**
+ * Version 2 of the timings: a recording that crosses surahs (a juz, a hizb). Each ayah names its
+ * surah, and its words are words of that surah.
+ *
+ * ```json
+ * {"version": 2, "ayat": [
+ *   {"surah": 1, "ayah": 7, "start": 31.2, "end": 44.9},
+ *   {"surah": 2, "ayah": 1, "start": 51.0, "end": 55.3, "words": [{"id": "2:1:1", "start": 51.0, "end": 55.3}]}
+ * ]}
+ * ```
+ */
+export type RecitationTimingsV2 = {
+  /** Format version. `parseRecitationTimings()` throws BAD_RECITATION_TIMINGS on a mismatch. */
+  readonly version: 2;
+  /** In recitation order (`surah` ascending, then `ayah`), at least one. */
+  readonly ayat: readonly SurahAyahTiming[];
+};
+
+/**
+ * When a recording recites each ayah and word: the input of `scheduleLines()` and `wordAt()`, and
+ * what an aligner's output is converted to. Plain JSON; keys the format does not define (`audio`,
+ * `source`, ...) may travel with it. `parseRecitationTimings()` validates one read from a file.
+ * Version 1 holds one surah (`RecitationTimingsV1`), version 2 any run of surahs
+ * (`RecitationTimingsV2`); `normalizeTimings()` reads either as version 2, and `version` narrows.
+ */
+export type RecitationTimings = RecitationTimingsV1 | RecitationTimingsV2;
+
+/** The ayah range of a recording in one surah, as `getMushafLines()` takes it. */
 export type RecitedRange = {readonly surah: number; readonly fromAyah: number; readonly toAyah: number};
 
 /** Which recitation of a repeated word counts: `'first'` when it is first heard, `'last'` its final one. */
@@ -571,6 +602,15 @@ export type GetMushafLinesOptions = MushafSelection &
         readonly slice?: boolean;
       }
   );
+
+export type GetMushafLinesForRangesOptions = MushafSelection &
+  MushafDataOptions & {
+    /**
+     * Record each range on the lines it cuts, as `getMushafLines({slice: true})` does; a line two
+     * ranges share keeps the words of both. Default `true`; `false` keeps every line whole.
+     */
+    readonly slice?: boolean | undefined;
+  };
 
 export type LoadPageFontOptions = {
   readonly mushaf?: MushafId | undefined;
