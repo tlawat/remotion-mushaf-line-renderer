@@ -184,11 +184,21 @@ once; the sidebar's save button writes them into `src/Root.tsx`.
 | `animation`              | How a line comes in and goes out (`slide-fade`, `fade`, `reveal-rtl`, `none`), the seconds it is on screen before its first word, the window's scroll curve. |
 | `highlight`              | What follows the recitation (the word, the whole ayah, nothing), how the current word is marked (ink colour, a glow, a marker behind it) and in which colour, the dimming of the other words (all of them, or only those still to come), and which recitation of a repeated word moves the highlight. |
 | `text`                   | The translation and gloss files; the translation's position, font, size, colour and writing direction; the gloss's font, size and colour. |
+| `header`                 | When the passage starts at ayah 1: the surah's printed header before it, the name in its ornamental frame (`name`) or the name and the basmalah (`name-basmalah`; Al-Fatihah, whose basmalah is ayah 1, and At-Tawbah, which has none, get the name alone). The header lines come in before the first ayah line, 1.5 s apart (the intro card's seconds when it is on); a recitation that starts at once leaves them no room. `none` by default. |
+| `overlay`                | A title: an intro card (`intro`) over the first seconds, with the surah's name in its printed frame, the ayah range ("Al-Fatihah · 1:2–7 · ١:٢–٧") and the reciter; a small label in a corner (`corner`) with the surah, the ayah being heard and the reciter; or both (`both`: the label comes in as the card goes). The card stays `introSeconds`, or goes 0.3 s before the first word when the recitation starts earlier; nothing is moved for it (in `MushafPassage`, which has no audio, the lines start after it). **`reciter` is typed here**: the panel's Source tab does not fill it. Also the texts' colour and font, the corner and the label's size. |
 | `review`                 | Studio only: mark the doubtful words, the confidence threshold, the mark's colour.                |
 | `resolved`               | Filled by `calculateMetadata()` (the lines, the schedule, the timings, the translation). Leave it `null`. |
 
 `MushafPassage` has `surah`, `fromAyah`, `toAyah` (0: to the end of the surah), `slice` and
-`holdSeconds`, and the same `theme`, `fonts`, `data`, `layout`, `animation` and `text` groups.
+`holdSeconds`, and the same `header`, `theme`, `fonts`, `data`, `layout`, `animation`, `text` and
+`overlay` groups. `MushafAyahText` has the `overlay` group too (no `header`: it sets no printed lines).
+
+The surah names (header lines and the intro card) come from QUL's surah-name and `quran-common`
+fonts, which the fonts packages do not hold: under `fonts: 'fallback'` or `'cdn'` they come from
+QUL's CDN; under `fonts: 'package'` (offline) from `public/fonts/surah-names-v4/surah_names.woff2`
+and `public/fonts/quran-common/quran-common.woff2`. Those two files are not committed: run
+`bun run qul fonts 1` at the repository root (it downloads them into `example/public/fonts/`) and
+copy the two folders into `apps/mushaf-studio/public/fonts/`.
 
 ## Rendering
 
@@ -216,6 +226,47 @@ bunx remotion render MushafRecitation out/reel.mp4 --props=./reel.json
 of the `layout` group and fails the schema. Pass a group whole (copy it from `src/Root.tsx`), most
 easily from a JSON file as in the last line. `fonts: 'package'` with `data: 'mirror'` renders
 without QUL's CDN; the audio still comes from wherever `audioFile` points.
+
+## Command line
+
+`bun run make` goes from a catalogue recitation to a rendered video without opening the Studio, for
+a quick video or a batch job. It does what the Source and Text tabs do, then renders:
+
+```bash
+cd apps/mushaf-studio
+bun run make --list-reciters ghraio                                  # the catalogue, filtered
+bun run make --reciter abdul_hamid_ghraio_2025_yt --surah 112        # every ayah the catalogue has
+bun run make --reciter abdul_hamid_ghraio_2025_yt --surah 1 --from 2 --to 7 \
+  --composition MushafAyahText --translation 20 --props reel.json --out out/fatiha-reel.mp4
+bun run make --reciter abdul_hamid_ghraio_2025_yt --surah 112 --dry-run   # everything but the render
+bun run make --help
+```
+
+In order: it finds the recitation in the catalogue (an unknown slug, or one without the surah, is
+refused with the closest recitations that have it), fetches the reviewed segments of the ayahs,
+downloads the clip into `public/mushaf-studio/cli/<slug>-<surah>-<from>-<to>.mp3` (streamed from
+the catalogue if the download fails) and writes the timings next to it as `.timings.json`. With
+`--translation <id>` (a quran.com resource id) it saves that translation as
+`translation-<id>-<surah>-<from>-<to>.json`; for `MushafAyahText` it saves the Quran text in its
+font's script as `text-<script>-<surah>-<from>-<to>.json`. The props are the composition's defaults
+(the package's, not `src/Root.tsx`), then those files, then the `--props` file deep-merged
+(`{"layout": {"aspect": "1:1"}}` keeps the rest of `layout`, unlike `remotion render --props`); they
+are written beside the video as `<out>.props.json` and rendered with
+`bunx remotion render <composition> <out> --props=<that file>`, whose exit code `make` returns.
+`--dry-run` stops there and prints that command. Paths are relative to `apps/mushaf-studio`; the
+video goes to `out/<slug>-<surah>-<from>-<to>.mp4` unless `--out` says otherwise.
+
+Everything after `--` is passed to `remotion render`:
+
+```bash
+bun run make --reciter abdul_hamid_ghraio_2025_yt --surah 112 -- --concurrency=2 \
+  --browser-executable=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell
+```
+
+Behind a TLS-intercepting proxy (a sandbox, a corporate network) the renderer's browser rejects the
+certificate of QUL's CDN and, with `fonts: 'fallback'` (the default), the fonts packages take over:
+that is by design, and the video is the same. To let the browser reach the CDN anyway, pass
+`-- --ignore-certificate-errors`; to never ask it, `--props` with `{"fonts": "package"}`.
 
 ## Where the files go
 

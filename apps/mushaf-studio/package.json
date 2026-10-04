@@ -8,8 +8,9 @@
     "studio:headless": "remotion studio --no-open",
     "render": "remotion render MushafRecitation out/recitation.mp4",
     "render:passage": "remotion render MushafPassage out/passage.mp4",
-    "typecheck": "tsc --noEmit",
-    "render:ayah": "remotion render MushafAyahText out/ayah-text.mp4"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
+    "render:ayah": "remotion render MushafAyahText out/ayah-text.mp4",
+    "make": "bun scripts/make.ts"
   },
   "dependencies": {
     "@remotion/cli": "4.0.521",

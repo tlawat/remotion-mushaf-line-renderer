@@ -14,7 +14,11 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['packages/*/test/unit/**/*.test.ts', 'packages/*/test/unit/**/*.test.tsx'],
+          include: [
+            'packages/*/test/unit/**/*.test.ts',
+            'packages/*/test/unit/**/*.test.tsx',
+            'apps/*/scripts/**/*.test.ts',
+          ],
           setupFiles: ['packages/remotion-mushaf-line-renderer/test/setup.ts'],
           server: {
             deps: {
