@@ -20,7 +20,9 @@ export type MushafThemeName = 'light' | 'dark' | 'sepia' | 'black' | 'normal' | 
  * - `outline`: the thin rings the colour font draws around the small connective letters and their
  *   vowel (14). The printed page and the plain font have none, so the presets paint them
  *   `'transparent'`; `'currentColor'` shows them the way QUL's preview page does.
- * - `rules`: the seven tajweed rule colours (3-9: prolongations, ghunnah, qalqalah, ...).
+ * - `rules`: the seven tajweed rule colours (3-9): 3 necessary prolongation (6 counts), 4
+ *   prolongation at a stop, 5 natural prolongation (2 counts), 6 ghunnah, 7 heavy letters
+ *   (tafkhim), 8 qalqalah, 9 connected or separated prolongation (4-5 counts).
  * - `frame`: the ayah-end rosette's frame, curls and the ayah number inside it (13).
  * - `accent`: the petal flourishes above and below the rosette (11).
  * - `detail`: the small jewel at the top of the rosette (10).

@@ -305,7 +305,7 @@ preset (its colours come first), then recolour by **part** or by **CPAL entry**:
 | `ink`        | 0                   | The letters                                                                                       |
 | `silent`     | 1, 2, 15            | The greyed letters that are written but not pronounced                                            |
 | `outline`    | 14                  | The thin rings the colour font draws around the small connective letters and their vowel; every preset hides them (`'transparent'`), `'currentColor'` shows them as QUL's preview does |
-| `rules`      | 3, 4, 5, 6, 7, 8, 9 | The seven tajweed rule colours (prolongations, ghunnah, qalqalah, ...); 7 is the 2-vowel prolongation |
+| `rules`      | 3, 4, 5, 6, 7, 8, 9 | The seven tajweed rule colours: 3 necessary prolongation (6 counts), 4 prolongation at a stop, 5 natural prolongation (2 counts), 6 ghunnah, 7 heavy letters (tafkhim), 8 qalqalah, 9 connected or separated prolongation (4–5 counts) |
 | `frame`      | 13                  | The ayah-end rosette's frame and curls, and the ayah number inside it                             |
 | `accent`     | 11                  | The petal flourishes above and below the rosette                                                  |
 | `detail`     | 10                  | The small jewel at the top of the rosette                                                         |

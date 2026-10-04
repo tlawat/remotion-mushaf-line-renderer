@@ -144,7 +144,7 @@ Rules learned the hard way:
   | 0 | letters | `#000000` |
   | 1, 2, 15 | silent letters (grey) | `#a5a5a5` |
   | 14 | thin rings around the small connective letters and their vowel (3,065 layers over the 604 fonts, all stroked rings, no letters); not on the printed page | `#000000` |
-  | 3–9 | the tajweed rule colours (7, the 2-vowel prolongation, is by far the most used) | `#b50000 #ff7b00 #ce9e00 #09b000 #3f48e6 #2fadff #f40000` |
+  | 3–9 | the tajweed rule colours: 3 necessary prolongation, 6 counts (madd lazim); 4 prolongation at a stop, 2/4/6 (madd 'arid lissukun); 5 natural prolongation, 2 (on the small alif, waw and ya); 6 ghunnah; 7 heavy letters (tafkhim, by far the most used); 8 qalqalah; 9 connected or separated prolongation, 4–5 (muttasil/munfasil). QUL publishes no legend; read off the COLR layers against the Uthmani text of pages 1, 2, 3, 50, 300 and 301 | `#b50000 #ff7b00 #ce9e00 #09b000 #3f48e6 #2fadff #f40000` |
   | 10 | rosette jewel | `#2ca4ab` |
   | 11 | rosette petals | `#ff0080` |
   | 12 | disc behind the ayah number | `#d8e9d8` |
