@@ -25,7 +25,7 @@
     "test:types": "bun run --cwd packages/remotion-mushaf-line-renderer test:types && bun run --cwd packages/mushaf-studio test:types",
     "test:browser": "bun run --cwd packages/remotion-mushaf-line-renderer test:browser",
     "test:render": "vitest run --project render",
-    "typecheck": "bun run --cwd packages/remotion-mushaf-line-renderer typecheck && bun run --cwd packages/mushaf-studio typecheck && bun run --cwd example typecheck && bun run --cwd apps/mushaf-studio typecheck",
+    "typecheck": "bun run --cwd packages/remotion-mushaf-line-renderer typecheck && bun run --cwd packages/mushaf-studio typecheck && bun run --cwd example typecheck && bun run --cwd apps/mushaf-studio typecheck && bun run --cwd apps/mushaf-web typecheck",
     "check:package": "bun run --cwd packages/remotion-mushaf-line-renderer check:package",
     "qul": "node scripts/qul.mjs",
     "fonts": "node scripts/qul.mjs fonts 1,10,187,604",
@@ -34,7 +34,7 @@
     "fonts-packages:fill": "node scripts/fonts-package.mjs fill all --cdn",
     "check:fonts-packages": "node scripts/fonts-package.mjs check all",
     "build:studio": "bun run --cwd packages/mushaf-studio build",
-    "studio": "bun run build && bun run fonts-packages:fill && bun run --cwd apps/mushaf-studio studio",
+    "studio": "bun run build && bun run fonts-packages:fill && (bun run --cwd apps/mushaf-studio sample || true) && bun run --cwd apps/mushaf-studio studio",
     "studio:app": "bun run --cwd apps/mushaf-studio studio"
   },
   "devDependencies": {
