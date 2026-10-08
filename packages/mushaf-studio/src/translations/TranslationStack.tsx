@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {describeValue, MushafStudioError} from '../errors';
 import type {AyahTranslation} from '../types';
-import {TranslationBlock} from './TranslationBlock';
+import {type TranslationAlign, TranslationBlock} from './TranslationBlock';
 
 /** One translation of a `<TranslationStack>`, with its own type. */
 export type TranslationLayer = {
@@ -18,6 +18,8 @@ export type TranslationStackProps = {
   readonly layers: readonly TranslationLayer[];
   /** The ayah to show, `"surah:ayah"`; every layer shows the same one, `null` for none. */
   readonly ayahKey: string | null;
+  /** Where every layer's lines sit, relative to its own direction (default `'start'`). */
+  readonly align?: TranslationAlign | undefined;
   /** px between a translation and the rule, on each side (default 12). */
   readonly gap?: number | undefined;
   /** The rule's colour (default the first layer's, at `ruleOpacity`). */
@@ -44,6 +46,7 @@ export const MAX_TRANSLATION_LAYERS = 3;
 export const TranslationStack: React.FC<TranslationStackProps> = ({
   layers,
   ayahKey,
+  align,
   gap,
   ruleColor,
   ruleThickness,
@@ -89,6 +92,7 @@ export const TranslationStack: React.FC<TranslationStackProps> = ({
             fontSize={layer.fontSize}
             color={layer.color}
             direction={layer.direction}
+            align={align}
           />
         </React.Fragment>
       ))}

@@ -70,6 +70,17 @@ describe('TranslationStack', () => {
     expect(second.style.minHeight).toBe(`${30 * 1.35}px`);
   });
 
+  it('aligns every layer as `align` says, start by default, each in its own direction', () => {
+    const blocks = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLElement>('.mushaf-translation'));
+    expect(blocks(stack()).map((b) => b.style.textAlign)).toEqual(['start', 'start']);
+    cleanup();
+    const centred = blocks(stack({align: 'center'}));
+    expect(centred.map((b) => b.style.textAlign)).toEqual(['center', 'center']);
+    expect(centred.map((b) => b.style.direction)).toEqual(['ltr', 'rtl']);
+    cleanup();
+    expect(blocks(stack({align: 'end'})).map((b) => b.style.textAlign)).toEqual(['end', 'end']);
+  });
+
   it('takes the rule and the opacity from the props', () => {
     const el = stack({gap: 4, ruleColor: 'red', ruleThickness: 2, ruleOpacity: 1, opacity: 0.5, style: {width: 800}})
       .firstElementChild as HTMLElement;

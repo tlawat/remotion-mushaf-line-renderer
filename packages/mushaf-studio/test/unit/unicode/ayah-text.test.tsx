@@ -87,8 +87,71 @@ describe('<AyahText>', () => {
     expect(mount(props).outerHTML).toBe(a);
   });
 
-  it('shows the text wordText gives for a word, the marker keeping its ornament', () => {
+  it('keeps the last word and the marker together in one nowrap span, the word spans as they are', () => {
+    const root = mount({activeWordId: '1:3:2', highlightStyle: {color: 'rgb(200, 164, 92)'}});
+    const tails = root.querySelectorAll<HTMLElement>('.mushaf-ayah-tail');
+    expect(tails).toHaveLength(1);
+    const tail = tails[0]!;
+    expect(tail.tagName).toBe('SPAN');
+    expect(tail.style.whiteSpace).toBe('nowrap');
+    expect(tail.parentElement).toBe(root);
+    const [last, marker] = Array.from(tail.children) as HTMLElement[];
+    expect(tail.children).toHaveLength(2);
+    expect(last!.className).toBe('mushaf-uword mushaf-uword--word mushaf-uword--active');
+    expect(last!.dataset.location).toBe('1:3:2');
+    expect(last!.style.color).toBe('rgb(200, 164, 92)');
+    expect(marker!.className).toBe('mushaf-uword mushaf-uword--end');
+    expect(marker!.dataset.location).toBe('1:3:3');
+    expect(tail.textContent).toBe(`${WORDS[1]!.text} ٣`);
+    // The words before stay outside it, a line break possible after each.
+    expect(spans(root)[0]!.parentElement).toBe(root);
+    expect(root.textContent).toBe(`${WORDS[0]!.text} ${WORDS[1]!.text} ٣`);
+  });
+
+  it('groups nothing for an ayah without its marker, or a marker alone', () => {
+    const words = mount({words: WORDS.slice(0, 2)});
+    expect(words.querySelector('.mushaf-ayah-tail')).toBeNull();
+    expect(spans(words).every((span) => span.parentElement === words)).toBe(true);
+    expect(words.textContent).toBe(`${WORDS[0]!.text} ${WORDS[1]!.text}`);
+    cleanup();
+    const marker = mount({words: WORDS.slice(2)});
+    expect(marker.querySelector('.mushaf-ayah-tail')).toBeNull();
+    expect(marker.textContent).toBe('٣');
+  });
+
+  it('draws the cue wordText gives over the word, which stays hidden under it to keep its width', () => {
     const root = mount({wordText: (word) => (word.id === '1:3:2' ? 'ٱـ' : word.kind === 'end' ? '3' : undefined)});
-    expect(spans(root).map((span) => span.textContent)).toEqual(['ٱلرَّحْمَـٰنِ', 'ٱـ', '3']);
+    const [plain, cued, marker] = spans(root);
+    expect(plain!.textContent).toBe(WORDS[0]!.text);
+    expect(plain!.children).toHaveLength(0);
+    // The word span keeps its class and id; inside, the full word is laid out hidden, the cue over it.
+    expect(cued!.className).toBe('mushaf-uword mushaf-uword--word');
+    expect(cued!.dataset.location).toBe('1:3:2');
+    const box = cued!.firstElementChild as HTMLElement;
+    expect(cued!.children).toHaveLength(1);
+    expect(box.dataset.mushafCueBox).toBe('');
+    expect(box.style.display).toBe('inline-block');
+    expect(box.style.position).toBe('relative');
+    const [full, cue] = Array.from(box.children) as HTMLElement[];
+    expect(full!.dataset.mushafCueWord).toBe('');
+    expect(full!.textContent).toBe(WORDS[1]!.text);
+    expect(full!.style.visibility).toBe('hidden');
+    expect(cue!.dataset.mushafCue).toBe('');
+    expect(cue!.textContent).toBe('ٱـ');
+    // Over the word's right edge, where a right-to-left word starts; seen whenever the ayah is.
+    expect(cue!.style.position).toBe('absolute');
+    expect(cue!.style.top).toBe('0px');
+    expect(cue!.style.right).toBe('0px');
+    expect(cue!.style.left).toBe('');
+    expect(cue!.style.visibility).toBe('');
+    // The marker's ornament keeps its place the same way.
+    expect(marker!.querySelector<HTMLElement>('[data-mushaf-cue-word]')!.textContent).toBe('٣');
+    expect(marker!.querySelector<HTMLElement>('[data-mushaf-cue]')!.textContent).toBe('3');
+  });
+
+  it('shows a word as it is when wordText gives nothing, or the word itself', () => {
+    const root = mount({wordText: (word) => (word.id === '1:3:1' ? word.text : undefined)});
+    expect(spans(root).map((span) => span.children.length)).toEqual([0, 0, 0]);
+    expect(root.querySelector('[data-mushaf-cue]')).toBeNull();
   });
 });

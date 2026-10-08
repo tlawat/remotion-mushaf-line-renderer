@@ -1,6 +1,9 @@
 import type * as React from 'react';
 import type {AyahTranslation} from '../types';
 
+/** A translation's text alignment, relative to its direction. */
+export type TranslationAlign = 'start' | 'center' | 'end';
+
 export type TranslationBlockProps = {
   readonly translation: AyahTranslation;
   /** The ayah to show, as a key `"surah:ayah"`; nothing is painted for `null`. */
@@ -11,6 +14,11 @@ export type TranslationBlockProps = {
   readonly color: string;
   /** `'ltr'` for most languages, `'rtl'` for Urdu, Persian, ... */
   readonly direction: 'ltr' | 'rtl';
+  /**
+   * Where the lines sit: `'start'` (the default) on the side the direction reads from, `'center'`
+   * under a centred text, `'end'` on the other side.
+   */
+  readonly align?: TranslationAlign | undefined;
   /** 0-1: the block's own opacity (the composition fades it with the line it belongs to). */
   readonly opacity?: number | undefined;
   readonly style?: React.CSSProperties | undefined;
@@ -39,6 +47,7 @@ export const TranslationBlock: React.FC<TranslationBlockProps> = ({
   fontSize,
   color,
   direction,
+  align,
   opacity,
   style,
   className,
@@ -54,7 +63,7 @@ export const TranslationBlock: React.FC<TranslationBlockProps> = ({
         fontFamily,
         fontSize,
         color,
-        textAlign: 'start',
+        textAlign: align ?? 'start',
         lineHeight: TRANSLATION_LINE_HEIGHT,
         minHeight: fontSize * TRANSLATION_LINE_HEIGHT,
         opacity: opacity ?? 1,

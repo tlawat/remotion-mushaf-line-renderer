@@ -76,6 +76,21 @@ describe('TranslationBlock', () => {
     expect(el.style.opacity).toBe('0.25');
   });
 
+  it('aligns its lines as `align` says, relative to the direction, start by default', () => {
+    expect(block({align: undefined}).style.textAlign).toBe('start');
+    cleanup();
+    expect(block({align: 'start'}).style.textAlign).toBe('start');
+    cleanup();
+    expect(block({align: 'center'}).style.textAlign).toBe('center');
+    cleanup();
+    const end = block({align: 'end', direction: 'rtl'});
+    expect(end.style.textAlign).toBe('end');
+    expect(end.style.direction).toBe('rtl');
+    cleanup();
+    // A style of the caller's still goes over it.
+    expect(block({align: 'center', style: {textAlign: 'left'}}).style.textAlign).toBe('left');
+  });
+
   it('appends the className and spreads style last', () => {
     const el = block({className: 'mine', style: {color: 'red', textAlign: 'center', paddingTop: 4}});
     expect(el.className).toBe('mushaf-translation mine');
@@ -151,6 +166,21 @@ describe('GlossStrip', () => {
     expect(rows(strip({translation: null})).map((r) => r.className)).toEqual(['mushaf-gloss__transliteration']);
     cleanup();
     expect(rows(strip({translation: null, transliteration: null}))).toHaveLength(0);
+  });
+
+  it('aligns its lines as `align` says, relative to the direction, start by default', () => {
+    expect(block({align: undefined}).style.textAlign).toBe('start');
+    cleanup();
+    expect(block({align: 'start'}).style.textAlign).toBe('start');
+    cleanup();
+    expect(block({align: 'center'}).style.textAlign).toBe('center');
+    cleanup();
+    const end = block({align: 'end', direction: 'rtl'});
+    expect(end.style.textAlign).toBe('end');
+    expect(end.style.direction).toBe('rtl');
+    cleanup();
+    // A style of the caller's still goes over it.
+    expect(block({align: 'center', style: {textAlign: 'left'}}).style.textAlign).toBe('left');
   });
 
   it('appends the className and spreads style last', () => {
