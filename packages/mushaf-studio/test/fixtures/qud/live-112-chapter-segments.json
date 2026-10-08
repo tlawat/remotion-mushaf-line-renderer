@@ -1,0 +1,176 @@
+{
+  "_meta": {
+    "schema_version": 2,
+    "reference_id": "qul-text-qpc-hafs-312",
+    "reference_riwayah": "hafs",
+    "recitation_riwayah": "hafs",
+    "output_edition_id": "hafs-v20+sdk-words-v1",
+    "output_riwayah": "hafs",
+    "projection_id": null,
+    "projection_sha256": null,
+    "view_mode": "segment",
+    "source": "preload"
+  },
+  "recitation": "abdul_hamid_ghraio_2025_yt",
+  "chapter": 112,
+  "verse_from": 1,
+  "verse_to": 4,
+  "audio_url": "https://qud-technologies-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/112.mp3?start_ms=2710&end_ms=14100",
+  "clip_start": 2.71,
+  "segments": [
+    {
+      "segment": 1,
+      "time_from": 0.2,
+      "time_to": 2.615,
+      "ref_from": "112:1:1",
+      "ref_to": "112:1:4",
+      "matched_text": "قُلْ هُوَ ٱللَّهُ أَحَدٌ",
+      "confidence": 1.0,
+      "has_missing_words": false,
+      "has_repeated_words": false,
+      "kind": "quran",
+      "special_type": null,
+      "error": null,
+      "words": [
+        {
+          "word": "قُلْ",
+          "location": "112:1:1",
+          "start": 0.2,
+          "end": 0.55
+        },
+        {
+          "word": "هُوَ",
+          "location": "112:1:2",
+          "start": 0.55,
+          "end": 0.88
+        },
+        {
+          "word": "ٱللَّهُ",
+          "location": "112:1:3",
+          "start": 0.88,
+          "end": 1.6
+        },
+        {
+          "word": "أَحَدٌ",
+          "location": "112:1:4",
+          "start": 1.6,
+          "end": 2.38
+        }
+      ]
+    },
+    {
+      "segment": 2,
+      "time_from": 2.655,
+      "time_to": 4.635,
+      "ref_from": "112:2:1",
+      "ref_to": "112:2:2",
+      "matched_text": "ٱللَّهُ ٱلصَّمَدُ",
+      "confidence": 1.0,
+      "has_missing_words": false,
+      "has_repeated_words": false,
+      "kind": "quran",
+      "special_type": null,
+      "error": null,
+      "words": [
+        {
+          "word": "ٱللَّهُ",
+          "location": "112:2:1",
+          "start": 0.1,
+          "end": 0.98
+        },
+        {
+          "word": "ٱلصَّمَدُ",
+          "location": "112:2:2",
+          "start": 0.98,
+          "end": 1.93
+        }
+      ]
+    },
+    {
+      "segment": 3,
+      "time_from": 4.675,
+      "time_to": 7.335,
+      "ref_from": "112:3:1",
+      "ref_to": "112:3:4",
+      "matched_text": "لَمْ يَلِدْ وَلَمْ يُولَدْ",
+      "confidence": 1.0,
+      "has_missing_words": false,
+      "has_repeated_words": false,
+      "kind": "quran",
+      "special_type": null,
+      "error": null,
+      "words": [
+        {
+          "word": "لَمْ",
+          "location": "112:3:1",
+          "start": 0.11,
+          "end": 0.49
+        },
+        {
+          "word": "يَلِدْ",
+          "location": "112:3:2",
+          "start": 0.49,
+          "end": 1.06
+        },
+        {
+          "word": "وَلَمْ",
+          "location": "112:3:3",
+          "start": 1.06,
+          "end": 1.63
+        },
+        {
+          "word": "يُولَدْ",
+          "location": "112:3:4",
+          "start": 1.63,
+          "end": 2.56
+        }
+      ]
+    },
+    {
+      "segment": 4,
+      "time_from": 7.375,
+      "time_to": 11.19,
+      "ref_from": "112:4:1",
+      "ref_to": "112:4:5",
+      "matched_text": "وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدُۢ",
+      "confidence": 1.0,
+      "has_missing_words": false,
+      "has_repeated_words": false,
+      "kind": "quran",
+      "special_type": null,
+      "error": null,
+      "words": [
+        {
+          "word": "وَلَمْ",
+          "location": "112:4:1",
+          "start": 0.11,
+          "end": 0.65
+        },
+        {
+          "word": "يَكُن",
+          "location": "112:4:2",
+          "start": 0.65,
+          "end": 1.3
+        },
+        {
+          "word": "لَّهُۥ",
+          "location": "112:4:3",
+          "start": 1.3,
+          "end": 1.84
+        },
+        {
+          "word": "كُفُوًا",
+          "location": "112:4:4",
+          "start": 1.84,
+          "end": 2.66
+        },
+        {
+          "word": "أَحَدُۢ",
+          "location": "112:4:5",
+          "start": 2.66,
+          "end": 3.77
+        }
+      ]
+    }
+  ]
+}

@@ -48,13 +48,41 @@ const badResponse: (route: string, problem: string, value: unknown) => never = (
   );
 };
 
-const hint = (status: number | null): string => {
+const SESSION_ROUTE = /\/sessions\//;
+const CATALOGUE_ROUTE = /\/recitations\//;
+
+/** Seconds from a `Retry-After` header given in seconds (the HTTP-date form is ignored). */
+const retryAfterOf = (header: string | null): number | null =>
+  header !== null && /^\d+$/.test(header.trim()) ? Number(header) : null;
+
+const hint = (status: number | null, route: string, retryAfter: number | null): string => {
+  const retry = retryAfter === null ? 'in a moment' : `in ${retryAfter} s`;
   if (status === 402)
     return " The free GPU quota is spent: align with `device: 'CPU'`, or pass a Hugging Face token (the `token` option) to spend your own GPU quota.";
-  if (status === 404)
-    return ' Check the recitation and chapter; a session (audio_id) expires after a few hours, so align again.';
-  if (status !== null && status >= 500) return ' The service failed; try again in a moment.';
+  if (status === 404 && SESSION_ROUTE.test(route))
+    return ' A session (audio_id) expires after a few hours, so align again.';
+  if (status === 404 && CATALOGUE_ROUTE.test(route))
+    return ' Check the recitation slug and the chapter: listRecitations() names every recitation and the chapters it covers.';
+  // Cloudflare's "origin timeout": the aligner took longer than the gateway's 120 s to start answering.
+  if (status === 524)
+    return ` The aligner did not answer within the gateway's 120 s limit: it is busy, or stuck on this request. Try again ${retry}.`;
+  if (status !== null && status >= 500) return ` The service failed; try again ${retry}.`;
   return '';
+};
+
+/**
+ * What a non-API error body says, for the message: the title of a gateway's error (Cloudflare's
+ * `{title}` JSON, or an HTML page's `<title>`), else that it is not the API's error body.
+ */
+const foreignBody = (body: unknown): string => {
+  const title =
+    isRecord(body) && typeof body.title === 'string'
+      ? body.title
+      : typeof body === 'string'
+        ? /<title[^>]*>([^<]*)<\/title>/i.exec(body)?.[1]
+        : undefined;
+  const trimmed = title?.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return trimmed ? `a gateway error: "${trimmed}"` : "a body that is not the API's {code, message} error";
 };
 
 /**
@@ -83,12 +111,9 @@ const apiError = (route: string, status: number | null, body: unknown, retryAfte
   const code = error === null ? null : (error.code as string);
   const detail = error !== null && isRecord(error.detail) ? error.detail : null;
   const validation = error === null ? validationError(body) : null;
-  const said =
-    error !== null
-      ? `${code}: "${error.message}"`
-      : (validation?.said ?? "a body that is not the API's {code, message} error");
+  const said = error !== null ? `${code}: "${error.message}"` : (validation?.said ?? foreignBody(body));
+  const header = retryAfterOf(retryAfter);
   if (status === 429) {
-    const header = retryAfter !== null && /^\d+$/.test(retryAfter.trim()) ? Number(retryAfter) : null;
     const retryAfterSeconds = isNumber(detail?.retry_after_s) ? detail.retry_after_s : header;
     return new MushafStudioError(
       'QUD_RATE_LIMITED',
@@ -98,7 +123,7 @@ const apiError = (route: string, status: number | null, body: unknown, retryAfte
   }
   return new MushafStudioError(
     'QUD_HTTP',
-    `QUD ${route} failed${status === null ? '' : ` with HTTP ${status}`} (${said}).${hint(status)}`,
+    `QUD ${route} failed${status === null ? '' : ` with HTTP ${status}`} (${said}).${hint(status, route, header)}`,
     {route, status, code, detail: validation?.detail ?? detail},
   );
 };
@@ -291,6 +316,45 @@ const readTimestamps: Read<QudTimestampsResponse> = (body, route) => {
   return body as QudTimestampsResponse;
 };
 
+/**
+ * Refuses a request before it is sent: the aligner does not reject every out-of-range value (a
+ * split with `max_verses: 0` held the service for minutes, then answered with a gateway timeout).
+ */
+const refuse: (route: string, field: string, value: unknown, rule: string) => never = (route, field, value, rule) => {
+  throw new MushafStudioError(
+    'QUD_HTTP',
+    `QUD ${route} was not sent: ${field} is ${describeValue(value)}, and it must be ${rule}.`,
+    {route, status: null, code: null, field},
+  );
+};
+
+const checkSplit = (route: string, request: QudSplitRequest): void => {
+  for (const key of ['max_verses', 'max_words'] as const) {
+    const value = request[key];
+    if (value !== undefined && value !== null && !(Number.isInteger(value) && value >= 1))
+      refuse(route, key, value, 'a whole number of at least 1, or null for no limit');
+  }
+  const duration = request.max_duration;
+  if (duration !== undefined && duration !== null && !(isNumber(duration) && duration > 0))
+    refuse(route, 'max_duration', duration, 'a number of seconds above 0 (30 disables it), or null');
+  if (request.require_stop_sign !== undefined && typeof request.require_stop_sign !== 'boolean')
+    refuse(route, 'require_stop_sign', request.require_stop_sign, 'true or false');
+};
+
+const checkRealign = (route: string, request: QudRealignRequest): void => {
+  const {timestamps} = request;
+  if (!Array.isArray(timestamps) || timestamps.length === 0)
+    refuse(route, 'timestamps', timestamps, 'a non-empty array of {start, end} boundaries in seconds');
+  for (const [i, boundary] of timestamps.entries()) {
+    const start: unknown = boundary?.start;
+    const end: unknown = boundary?.end;
+    if (!isNumber(start) || start < 0)
+      refuse(route, `timestamps[${i}].start`, start, 'a number of seconds of at least 0');
+    if (!isNumber(end) || end <= start)
+      refuse(route, `timestamps[${i}].end`, end, `a number of seconds after its start (${start})`);
+  }
+};
+
 /** The form fields (and JSON keys) of the alignment options, in the API's names; the API's defaults apply to the rest. */
 const alignFields = (align: QudAlignOptions): Record<string, string | number> => {
   const fields: Record<string, string | number> = {};
@@ -389,24 +453,37 @@ export const sessionTimestamps = (
     readTimestamps,
   );
 
-/** `POST /sessions/{audioId}/split`: subdivide the session's segments. */
-export const splitSession = (
+/**
+ * `POST /sessions/{audioId}/split`: subdivide the session's segments. Rejects with `QUD_HTTP`
+ * (`details.status` null), without sending, a limit below 1 or a duration not above 0.
+ */
+export const splitSession = async (
   audioId: string,
   request: QudSplitRequest,
   options: QudClientOptions = {},
-): Promise<QudAlignResponse> =>
-  requestJson({method: 'POST', path: sessionPath(audioId, 'split'), json: request}, options, readAlign);
+): Promise<QudAlignResponse> => {
+  const call: Call = {method: 'POST', path: sessionPath(audioId, 'split'), json: request};
+  checkSplit(routeOf(call), request);
+  return requestJson(call, options, readAlign);
+};
 
-/** `POST /sessions/{audioId}/realign/stream`: re-run ASR and matching over boundaries the user supplies. */
-export const realignSession = (
+/**
+ * `POST /sessions/{audioId}/realign/stream`: re-run ASR and matching over boundaries the user
+ * supplies. Rejects with `QUD_HTTP` (`details.status` null), without sending, an empty list or a
+ * boundary that is negative or does not end after it starts.
+ */
+export const realignSession = async (
   audioId: string,
   request: QudRealignRequest,
   align: Pick<QudAlignOptions, 'onProgress' | 'signal'> = {},
   options: QudClientOptions = {},
-): Promise<QudAlignResponse> =>
-  requestStream(
-    {method: 'POST', path: sessionPath(audioId, 'realign/stream'), json: request, signal: align.signal},
-    options,
-    readAlign,
-    align.onProgress,
-  );
+): Promise<QudAlignResponse> => {
+  const call: Call = {
+    method: 'POST',
+    path: sessionPath(audioId, 'realign/stream'),
+    json: request,
+    signal: align.signal,
+  };
+  checkRealign(routeOf(call), request);
+  return requestStream(call, options, readAlign, align.onProgress);
+};
