@@ -31,11 +31,13 @@ jobs:
       - name: Format and lint (Biome)
         run: bun run check
 
-      - name: Unit tests (compiler, package, Mushaf Studio)
-        run: bun run test
-
+      # Mushaf Studio's unit tests import the renderer through its package exports (dist/), so the
+      # packages are built first.
       - name: Build the packages (the renderer, then Mushaf Studio)
         run: bun run build
+
+      - name: Unit tests (compiler, package, Mushaf Studio)
+        run: bun run test
 
       - name: Typecheck sources, tests, the example and the Mushaf Studio app (both consume the built packages)
         run: |
