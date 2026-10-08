@@ -17,7 +17,7 @@ import {unzipExport} from '../../../../scripts/lib/zip.mjs';
 import {loadLayout, resetLayoutCache} from '../../src/data/load-layout';
 import {resolveSelection} from '../../src/mushaf/registry';
 import {lineFromLayout} from '../../src/resolve/get-mushaf-line';
-import {getMushafLines, lineAyahs} from '../../src/resolve/get-mushaf-lines';
+import {getMushafLines, getMushafLinesForRanges, lineAyahs} from '../../src/resolve/get-mushaf-lines';
 
 const mirror = path.resolve(__dirname, '../../../../example/public/data/qpc-v4');
 const files = {words: path.join(mirror, 'words.json.zip'), layout: path.join(mirror, 'layout.db.zip')};
@@ -78,6 +78,38 @@ describe.skipIf(!hasMirror)('the mirrored QUL exports', () => {
     expect(tawbah[0]).toMatchObject({page: 187, line: 2});
     expect(lineAyahs(tawbah[0]!)).toEqual([1]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 60_000);
+
+  it('puts each surah header between two surahs of a recitation, as printed', async () => {
+    for (let surah = 2; surah <= 114; surah++) {
+      const lines = await getMushafLinesForRanges(
+        [
+          {surah: surah - 1, fromAyah: 1, toAyah: 1},
+          {surah, fromAyah: 1, toAyah: 1},
+        ],
+        {data: source},
+      );
+      const headers = lines.filter((line) => line.type !== 'ayah');
+      // At-Tawbah (9) is the one surah printed without a basmalah line.
+      expect(headers.map((line) => line.type)).toEqual(surah === 9 ? ['surah_name'] : ['surah_name', 'basmallah']);
+      expect(headers.every((line) => line.surahNumber === surah)).toBe(true);
+      const first = lines.findIndex((line) => line.words.some((word) => word.surah === surah));
+      // The header comes right before the surah's first line, on its page.
+      expect(lines[first - 1]).toBe(headers.at(-1));
+      expect(headers.every((line) => line.page === lines[first]!.page)).toBe(true);
+    }
+    // The last two surahs share page 604: nothing duplicated, nothing sliced.
+    const end = await getMushafLinesForRanges(
+      [
+        {surah: 113, fromAyah: 1, toAyah: 5},
+        {surah: 114, fromAyah: 1, toAyah: 6},
+      ],
+      {data: source},
+    );
+    expect(end.map((line) => `${line.page}:${line.line}`)).toEqual(
+      [7, 8, 9, 10, 11, 12, 13, 14, 15].map((l) => `604:${l}`),
+    );
+    expect(end.every((line) => line.slice === undefined)).toBe(true);
   }, 60_000);
 
   describe.skipIf(!hasNodeSqlite)('against the dev tools route', () => {

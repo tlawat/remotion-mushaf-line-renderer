@@ -182,6 +182,35 @@ resolves without a round trip.
 A complete project with three compositions, a `<Player>` page and a recitation synced to audio lives
 in [`example/`](example).
 
+## Mushaf Studio
+
+Mushaf Studio makes word-synced recitation videos with the package, without writing code. You
+pick a recitation (a reviewed one from the QUD aligner's catalogue, or your own recording aligned
+with the [QUD Universal Aligner](https://aligner.qud.dev)), check the alignment word by word, split
+long lines, pick a look, add translations, and render the video. It is a proof of concept, in two
+apps on one package:
+
+- [`apps/mushaf-studio`](apps/mushaf-studio): a ready-made Remotion project. Remotion Studio, plus a
+  Mushaf panel docked beside the preview (Source, Look, Align, Review, Lines, Text), five
+  compositions, and `bun run make` to go from a catalogue recitation to a video on the command line.
+  [README](apps/mushaf-studio/README.md): the panel, the props, rendering, privacy, licences.
+- [`apps/mushaf-web`](apps/mushaf-web): one static page that does the catalogue path in the browser,
+  with nothing to install: a recitation, a look, a translation, a `<Player>` preview, and an
+  in-browser render to a file. No own recordings, alignment or review.
+  [README](apps/mushaf-web/README.md).
+- [`packages/mushaf-studio`](packages/mushaf-studio): `@tlawat/mushaf-studio`, the compositions, Zod
+  schemas and panel both apps use, for your own Remotion project.
+  [README](packages/mushaf-studio/README.md).
+- [docs/mushaf-studio/plan.md](docs/mushaf-studio/plan.md): the design, its decisions and the roadmap.
+
+From a clone of this repository:
+
+```bash
+bun install
+bun run studio                            # build, fill the page fonts and fetch the sample (once), then the Studio
+bun run build && bun run --cwd apps/mushaf-web dev   # the web app, at http://localhost:5174
+```
+
 ## API
 
 | Export                                   | Does                                                                          |
@@ -224,8 +253,9 @@ Requires Bun ≥ 1.2 and Node ≥ 20.
 
 ```bash
 bun install
-bun run build   # build the package
+bun run build   # build the packages (the renderer, then Mushaf Studio's)
 bun run dev     # fill the fonts packages (from QUL's CDN on first run), then Remotion Studio on example/
+bun run studio  # Mushaf Studio (apps/mushaf-studio): build, fill the fonts, fetch the sample, open the Studio
 bun run test    # unit tests
 ```
 
@@ -233,9 +263,12 @@ bun run test    # unit tests
 | ---------------------------------------------------------------------------------- | ----------------------------------------- |
 | [`packages/remotion-mushaf-line-renderer`](packages/remotion-mushaf-line-renderer) | The package                               |
 | [`packages/fonts-qpc-v4`](packages/fonts-qpc-v4), [`packages/fonts-qpc-v4-tajweed`](packages/fonts-qpc-v4-tajweed) | The page fonts as npm packages (the CDN fallback) |
+| [`packages/mushaf-studio`](packages/mushaf-studio)                                 | `@tlawat/mushaf-studio`: compositions, Zod schemas and the Mushaf panel for Remotion Studio |
+| [`apps/mushaf-studio`](apps/mushaf-studio)                                         | Mushaf Studio, the ready-made Remotion project (`bun run studio`) |
+| [`apps/mushaf-web`](apps/mushaf-web)                                               | Mushaf Studio Web: the catalogue path and an in-browser render, as one static page |
 | [`example`](example)                                                               | Example Remotion project and test harness |
 | [`scripts`](scripts)                                                               | `qul` CLI: mirror and check QUL's data and fonts; the fonts packages' tool |
-| [`docs`](docs)                                                                     | Architecture and font notes               |
+| [`docs`](docs)                                                                     | Architecture and font notes; Mushaf Studio's plan |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the test suites and checks CI runs.
 

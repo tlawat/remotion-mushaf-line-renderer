@@ -56,7 +56,8 @@ and the words in reading order. `getMushafLines()` does the same for a whole pag
 an ayah range (locating the first ayah, then walking pages until every word is past the range); with
 `slice: true` it records the range on the lines it cuts. `slice.ts` holds the slicing vocabulary:
 `assertSlice()` validates a selector, `resolveSlice()` turns it into the band of word ids a line
-keeps (or `'empty'`, or `null` when it keeps everything), `sliceWords()` is the public helper.
+keeps (or `'empty'`, or `null` when it keeps everything; a word band, `{fromWordId, toWordId}`,
+resolves to itself clipped to the line), `sliceWords()` is the public helper.
 `assertLineData()` validates data coming back in through props, field by field, because it may have
 been persisted by an older version.
 
@@ -65,12 +66,26 @@ been persisted by an older version.
 Following a recording is the resolvers' job seen from the audio's side. `RecitationTimings` is the
 package's one input for it: a versioned JSON of ayah spans with optional per-word times, keyed by
 `MushafWord.id`, so a producer never touches text and the package never depends on a speech model.
-`parseRecitationTimings()` validates a file field by field, as `assertLineData()` does for line data.
-`recitedRange()` gives `getMushafLines()` its range; `scheduleLines()` turns the lines and the
-timings into `{index, start, end}` slots (a line starts at its first timed word, by `occurrence`
-for repeated words, interpolated by position when the file has no time for it, and the words a
-line's `slice` hides are skipped through `resolveSlice()`); `wordAt()` answers `activeWordId`. The
-aligners that write the file are examples in `example/tools/`, not part of the package.
+It is a union of two versions: version 1 holds one surah (`surah` at the top), version 2 any run of
+surahs (each ayah names its surah, in recitation order). `parseRecitationTimings()` validates a file
+field by field, as `assertLineData()` does for line data, version 1 exactly as it always has.
+`normalizeTimings()` reads either version as version 2 (memoised per object), and everything that
+looks an ayah up goes through one index keyed by `ayahKey(surah, ayah)`, so `scheduleLines()`,
+`wordTiming()` and `wordAt()` never confuse ayah 2 of one surah with ayah 2 of the next.
+
+`recitedRange()` gives `getMushafLines()` its range for one surah; `recitedRanges()` gives one range
+per surah, and `getMushafLinesForRanges()` (in `src/resolve/get-mushaf-lines.ts`, on the same range
+walk as `getMushafLines()`) joins them: between two surahs it inserts the later one's header lines,
+found by walking back from the line of its first ayah over the `surah_name` and `basmallah` lines
+that carry its number, and it keeps each line once, by page and line, merging the slices of the
+ranges that reach it. A line one range cuts alone on a line of its own surah gets the ayah form, as
+`slice: true` records it; anything else (two ranges, or another surah's words on the line) gets the
+word band from the first kept word to the last, since an ayah slice selects by ayah number only.
+`scheduleLines()` turns the lines and the timings into `{index, start, end}` slots (a line starts at
+its first timed word, by `occurrence` for repeated words, interpolated by position when the file has
+no time for it, and the words a line's `slice` hides are skipped through `resolveSlice()`); header
+lines carry no word, so they get no slot. `wordAt()` answers `activeWordId`. The aligners that write
+the file are examples in `example/tools/`, not part of the package.
 
 ## 5. Fonts (`src/fonts/`)
 

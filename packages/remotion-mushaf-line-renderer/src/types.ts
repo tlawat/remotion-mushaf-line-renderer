@@ -20,7 +20,9 @@ export type MushafThemeName = 'light' | 'dark' | 'sepia' | 'black' | 'normal' | 
  * - `outline`: the thin rings the colour font draws around the small connective letters and their
  *   vowel (14). The printed page and the plain font have none, so the presets paint them
  *   `'transparent'`; `'currentColor'` shows them the way QUL's preview page does.
- * - `rules`: the seven tajweed rule colours (3-9: prolongations, ghunnah, qalqalah, ...).
+ * - `rules`: the seven tajweed rule colours (3-9): 3 necessary prolongation (6 counts), 4
+ *   prolongation at a stop, 5 natural prolongation (2 counts), 6 ghunnah, 7 heavy letters
+ *   (tafkhim), 8 qalqalah, 9 connected or separated prolongation (4-5 counts).
  * - `frame`: the ayah-end rosette's frame, curls and the ayah number inside it (13).
  * - `accent`: the petal flourishes above and below the rosette (11).
  * - `detail`: the small jewel at the top of the rosette (10).
@@ -150,8 +152,9 @@ export type MushafLineData = {
    */
   readonly fontFamily: string;
   /**
-   * Which ayahs of the line to show (see `MushafSlice`). Recorded by `getMushafLines({slice: true})`;
-   * the words are never trimmed, so the printed line is still all there for the layout.
+   * Which words of the line to show: some of its ayahs or a band of its words (see `MushafSlice`).
+   * Recorded by `getMushafLines({slice: true})`; the words are never trimmed, so the printed line is
+   * still all there for the layout.
    */
   readonly slice?: MushafSlice;
   /** Present on surah_name lines (the header's surah) and basmallah lines (carried forward). */
@@ -190,15 +193,37 @@ export type WordContext = {
 };
 
 /**
- * Which ayahs of a line to show: `{ayah}` for one, `{fromAyah, toAyah}` for a range  -  open-ended
- * after `fromAyah` when `toAyah` is omitted, so one selector means the same thing on every line of
- * a passage. The rest of the line is hidden and the words that remain are centred in the measure at
- * the line's own type size. The ayah-end rosette belongs to the ayah it closes. A slice that keeps
- * every word of a line changes nothing; one that keeps none paints nothing and throws nothing.
+ * Which words of a line to show: `{ayah}` for one ayah, `{fromAyah, toAyah}` for a range of ayahs,
+ * or `{fromWordId, toWordId}` for a band of `MushafWord.wordId`s, inclusive  -  each range open-ended
+ * when its end is omitted, so one selector means the same thing on every line of a passage. The rest
+ * of the line is hidden and the words that remain are centred in the measure at the line's own type
+ * size. Under the ayah forms the ayah-end rosette belongs to the ayah it closes; a word band keeps
+ * exactly the words it names, so a line split at word `w` is two copies of it, one sliced
+ * `{fromWordId: line.words[0].wordId, toWordId: w - 1}` and one `{fromWordId: w}`. A slice that
+ * keeps every word of a line changes nothing; one that keeps none paints nothing and throws nothing.
  */
 export type MushafSlice =
-  | {readonly ayah: number; readonly fromAyah?: never; readonly toAyah?: never}
-  | {readonly fromAyah: number; readonly toAyah?: number; readonly ayah?: never};
+  | {
+      readonly ayah: number;
+      readonly fromAyah?: never;
+      readonly toAyah?: never;
+      readonly fromWordId?: never;
+      readonly toWordId?: never;
+    }
+  | {
+      readonly fromAyah: number;
+      readonly toAyah?: number;
+      readonly ayah?: never;
+      readonly fromWordId?: never;
+      readonly toWordId?: never;
+    }
+  | {
+      readonly fromWordId: number;
+      readonly toWordId?: number;
+      readonly ayah?: never;
+      readonly fromAyah?: never;
+      readonly toAyah?: never;
+    };
 
 /** When one word of the mushaf is heard: `id` is `MushafWord.id` ("surah:ayah:position"); seconds from the start of the audio. */
 export type WordTiming = {readonly id: string; readonly start: number; readonly end: number};
@@ -222,10 +247,14 @@ export type AyahTiming = {
   readonly words?: readonly WordTiming[];
 };
 
+/** One ayah of a version 2 recording: an `AyahTiming` that names its surah. */
+export type SurahAyahTiming = AyahTiming & {
+  /** 1..114 */
+  readonly surah: number;
+};
+
 /**
- * When a recording recites each ayah and word: the input of `scheduleLines()` and `wordAt()`, and
- * what an aligner's output is converted to. Plain JSON; keys the format does not define (`audio`,
- * `source`, ...) may travel with it. `parseRecitationTimings()` validates one read from a file.
+ * Version 1 of the timings: one surah. `surah` is the surah of every ayah and word in the file.
  *
  * ```json
  * {"version": 1, "surah": 9, "ayat": [
@@ -234,7 +263,7 @@ export type AyahTiming = {
  * ]}
  * ```
  */
-export type RecitationTimings = {
+export type RecitationTimingsV1 = {
   /** Format version. `parseRecitationTimings()` throws BAD_RECITATION_TIMINGS on a mismatch. */
   readonly version: 1;
   /** 1..114 */
@@ -243,7 +272,34 @@ export type RecitationTimings = {
   readonly ayat: readonly AyahTiming[];
 };
 
-/** The ayah range of a recording, as `getMushafLines()` takes it. */
+/**
+ * Version 2 of the timings: a recording that crosses surahs (a juz, a hizb). Each ayah names its
+ * surah, and its words are words of that surah.
+ *
+ * ```json
+ * {"version": 2, "ayat": [
+ *   {"surah": 1, "ayah": 7, "start": 31.2, "end": 44.9},
+ *   {"surah": 2, "ayah": 1, "start": 51.0, "end": 55.3, "words": [{"id": "2:1:1", "start": 51.0, "end": 55.3}]}
+ * ]}
+ * ```
+ */
+export type RecitationTimingsV2 = {
+  /** Format version. `parseRecitationTimings()` throws BAD_RECITATION_TIMINGS on a mismatch. */
+  readonly version: 2;
+  /** In recitation order (`surah` ascending, then `ayah`), at least one. */
+  readonly ayat: readonly SurahAyahTiming[];
+};
+
+/**
+ * When a recording recites each ayah and word: the input of `scheduleLines()` and `wordAt()`, and
+ * what an aligner's output is converted to. Plain JSON; keys the format does not define (`audio`,
+ * `source`, ...) may travel with it. `parseRecitationTimings()` validates one read from a file.
+ * Version 1 holds one surah (`RecitationTimingsV1`), version 2 any run of surahs
+ * (`RecitationTimingsV2`); `normalizeTimings()` reads either as version 2, and `version` narrows.
+ */
+export type RecitationTimings = RecitationTimingsV1 | RecitationTimingsV2;
+
+/** The ayah range of a recording in one surah, as `getMushafLines()` takes it. */
 export type RecitedRange = {readonly surah: number; readonly fromAyah: number; readonly toAyah: number};
 
 /** Which recitation of a repeated word counts: `'first'` when it is first heard, `'last'` its final one. */
@@ -306,9 +362,10 @@ export type MushafLineCommonProps = {
    */
   readonly fit?: 'line' | 'mushaf';
   /**
-   * Show only these ayahs of the line, collapsed and centred in the measure (see `MushafSlice`).
-   * Wins over `line.slice`; `null` cancels a slice the data carries. The words that remain keep the
-   * line's own type size and their printed advances  -  nothing is zoomed or re-spaced.
+   * Show only these ayahs (or this band of words) of the line, collapsed and centred in the measure
+   * (see `MushafSlice`). Wins over `line.slice`; `null` cancels a slice the data carries. The words
+   * that remain keep the line's own type size and their printed advances  -  nothing is zoomed or
+   * re-spaced.
    */
   readonly slice?: MushafSlice | null;
   /**
@@ -547,6 +604,15 @@ export type GetMushafLinesOptions = MushafSelection &
         readonly slice?: boolean;
       }
   );
+
+export type GetMushafLinesForRangesOptions = MushafSelection &
+  MushafDataOptions & {
+    /**
+     * Record each range on the lines it cuts, as `getMushafLines({slice: true})` does; a line two
+     * ranges share keeps the words of both. Default `true`; `false` keeps every line whole.
+     */
+    readonly slice?: boolean | undefined;
+  };
 
 export type LoadPageFontOptions = {
   readonly mushaf?: MushafId | undefined;

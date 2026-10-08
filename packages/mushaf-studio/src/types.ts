@@ -1,0 +1,258 @@
+import type {
+  LineSchedule,
+  MushafLineData,
+  RecitationTimingsV1,
+  RecitationTimingsV2,
+} from '@tlawat/remotion-mushaf-line';
+import type {ChapterInfo} from './content/chapter-info';
+import type {Tafsir} from './content/tafsir';
+
+/**
+ * Where a printed line of a passage is split into two timed segments: the line, and the first
+ * word (`MushafWord.wordId`) of its second segment. Applied by `applySplits()`: the line appears
+ * twice in the passage, once with the words before `atWordId` and once from it on, each a slot of
+ * its own in `scheduleLines()`.
+ */
+export type LineSplit = {
+  readonly page: number;
+  readonly line: number;
+  readonly atWordId: number;
+};
+
+/**
+ * One segment of the aligner's output, as the studio records it next to the timings: the
+ * aligner's own vocabulary, with times made recording-relative. Confidence is a property of the
+ * segment (the aligner gives none per word).
+ */
+export type AlignmentSegment = {
+  readonly segment: number;
+  /** Seconds from the start of the recording. */
+  readonly timeFrom: number;
+  readonly timeTo: number;
+  /** "surah:ayah:word" of the first and last matched word; `null` for isti'adha, basmala or no match. */
+  readonly refFrom: string | null;
+  readonly refTo: string | null;
+  /** 0-1. */
+  readonly confidence: number;
+  readonly hasMissingWords: boolean;
+  readonly hasRepeatedWords: boolean;
+  /** The aligner's error for a segment it could not match, else `null`. */
+  readonly error: string | null;
+  /** The Uthmani text the segment was matched to, else `null`. */
+  readonly matchedText: string | null;
+  /** The aligner's `kind` (`'quran'`, ...) when it gives one. */
+  readonly kind?: string;
+};
+
+/** One recited word as the aligner heard it: its id, its Uthmani text and the segment it sits in. One entry per occurrence. */
+export type AlignmentWord = {
+  readonly id: string;
+  readonly text: string;
+  readonly segment: number;
+  readonly start: number;
+  readonly end: number;
+};
+
+/** A change the user made to the timings in the panel, kept so a file says where its numbers come from. */
+export type AlignmentEdit = {
+  readonly kind: 'nudge' | 'split-segment' | 'realign' | 'trim';
+  /** ISO 8601, written by the panel (never during a render). */
+  readonly at: string;
+  readonly note: string;
+};
+
+/** Where the recitation came from when it was picked from the aligner's catalogue. */
+export type CatalogueOrigin = {
+  readonly slug: string;
+  readonly chapter: number;
+  readonly verseFrom: number;
+  readonly verseTo: number;
+  /** Seconds into the chapter audio at which the clip starts. */
+  readonly clipStart: number;
+  readonly audioUrl: string;
+};
+
+/**
+ * What a timings file keeps of `analyzeAudio()`'s measurements of its recording, under
+ * `alignment.audio`: enough for `audio.normalize` (`gainFor()`) and `audio.trimSilence`
+ * (`silenceTrimSeconds()`) without downloading the recording again. The names and units are
+ * `AudioAnalysis`'s; the glow's levels are not kept (they still need the analysis).
+ */
+export type AudioSummary = {
+  /** Integrated loudness (BS.1770), LUFS to two decimals; `null` for silence or under 0.4 s of audio. */
+  readonly lufs: number | null;
+  /** True peak, linear (1 is 0 dBFS). */
+  readonly peak: number;
+  /** Start of the first sound in the file, seconds; `null` when the file is silent. */
+  readonly firstSoundSeconds: number | null;
+  readonly durationSeconds: number;
+};
+
+/**
+ * What the studio writes next to `RecitationTimings` under the `alignment` key, which the main
+ * package ignores: enough to show confidence in the Review tab, to name words by their text, to
+ * resume a session (`audioId`) and to say how the file was made.
+ */
+export type AlignmentSidecar = {
+  readonly version: 1;
+  readonly source: 'qud' | 'qud-catalogue' | 'file' | 'manual';
+  readonly audioId?: string;
+  readonly model?: string;
+  readonly device?: string;
+  readonly riwayah?: string;
+  readonly recitation?: CatalogueOrigin;
+  readonly segments: readonly AlignmentSegment[];
+  readonly words: readonly AlignmentWord[];
+  readonly edits: readonly AlignmentEdit[];
+  /** The recording measured when the panel saved these timings (`audioSummaryOf()`); absent when it could not be. */
+  readonly audio?: AudioSummary;
+};
+
+/**
+ * What a timings file carries besides the package's format: the three informational keys the
+ * example's producers write, and the sidecar.
+ */
+export type StudioTimingsExtras = {
+  /** The recording the times refer to: a `public/` path or a URL. */
+  readonly audio?: string;
+  readonly durationSeconds?: number;
+  /** Which tool wrote the file and how. */
+  readonly source?: string;
+  readonly alignment?: AlignmentSidecar;
+};
+
+/** A timings file of one surah (version 1): what the panel writes. */
+export type StudioTimingsV1 = RecitationTimingsV1 & StudioTimingsExtras;
+
+/**
+ * A timings file that crosses surahs (version 2): every ayah names its surah. It has no top-level
+ * `surah` (`parseRecitationTimings()` refuses one); the key is declared absent so that
+ * `timings.surah` reads as `number | undefined` on a file of either version: narrow by `version`
+ * (or read `passageSpan()`) before using it.
+ */
+export type StudioTimingsV2 = RecitationTimingsV2 & StudioTimingsExtras & {readonly surah?: undefined};
+
+/**
+ * The timings file the studio reads: the package's format of either version, the three informational
+ * keys the example's producers write (`audio`, `durationSeconds`, `source`), and the sidecar. The
+ * panel writes version 1 (one surah); a version 2 file (a recording that crosses surahs) is read
+ * whole by the compositions. `version` narrows.
+ */
+export type StudioTimings = StudioTimingsV1 | StudioTimingsV2;
+
+/** Why a word is doubtful, for the Review tab and the in-preview marks. */
+export type DoubtReason = 'low-confidence' | 'missing-words' | 'segment-error' | 'incomplete-ayah' | 'repeated';
+
+/** Who or what wrote a translation and under which terms. */
+export type TranslationMeta = {
+  /** A stable id: QUL's or quran.com's resource id when known (`'qul:131'`, `'quran.com:20'`), else a name. */
+  readonly id: string;
+  readonly name: string;
+  /** ISO 639-1 where possible (`'en'`), else the source's own name. */
+  readonly language: string;
+  /** Where the data came from: `'qul'`, `'quran.com'`, `'file'`. */
+  readonly source: string;
+  readonly license?: string;
+};
+
+/** An ayah-by-ayah translation: plain text per `"surah:ayah"`, footnote markers stripped. */
+export type AyahTranslation = {
+  readonly kind: 'ayah';
+  readonly meta: TranslationMeta;
+  readonly text: Readonly<Record<string, string>>;
+};
+
+/** A word-by-word gloss (a translation or a transliteration): text per `"surah:ayah:word"`. */
+export type WordGloss = {
+  readonly kind: 'word';
+  readonly meta: TranslationMeta;
+  readonly words: Readonly<Record<string, string>>;
+};
+
+export type Translation = AyahTranslation | WordGloss;
+
+/**
+ * What `calculateMetadata()` measured of the recording (`analyzeAudio()`) and does with it, as plain
+ * data in the props: the gain of `audio.normalize`, the silence `audio.trimSilence` skipped, and the
+ * levels the background's glow follows.
+ */
+export type ResolvedAudio = {
+  /** `gainFor()` of the analysis under `audio.normalize`, else 1. */
+  readonly gain: number;
+  /** Seconds of leading silence skipped under `audio.trimSilence`: already in `audioOffsetSeconds` and taken off the timings. */
+  readonly trimSeconds: number;
+  /**
+   * The recording's level per frame (0-1, three decimals) from where the composition starts in it,
+   * on the recording's clock (`audioClock()`), to the last ayah's end plus a second. Filled for the
+   * background's glow only; `[]` otherwise.
+   */
+  readonly levels: readonly number[];
+};
+
+/** What the end card shows besides the credits, read from its files in `calculateMetadata()`. */
+export type ResolvedEndCard = {
+  /** The tafsir of `endCard.tafsirFile`, cut to the entry that covers the last ayah recited (none when it has none). */
+  readonly tafsir: Tafsir | null;
+  /** The surah's introduction of `endCard.chapterInfoFile`. */
+  readonly chapterInfo: ChapterInfo | null;
+};
+
+/**
+ * What the compositions' `resolved` carries beside their own content: the stacked translations,
+ * the audio's analysis, the end card's content and a background video's length. Every field is
+ * optional, so a `resolved` made without them (by an older resolver, in a test) still renders: one
+ * translation (`translation`), the audio as it is, no end card, the video looped by the browser.
+ */
+export type ResolvedExtras = {
+  /** One per layer of `text.translations` with a file (or `text.translationFile` alone), cut to the ayahs shown. */
+  readonly translations?: readonly AyahTranslation[] | undefined;
+  readonly audio?: ResolvedAudio | undefined;
+  /** Why the audio could not be analysed (`AUDIO_ANALYSIS_FAILED`): the audio then plays as it is. Shown in the Studio only. */
+  readonly audioWarning?: string | null | undefined;
+  /**
+   * The URL the recording plays from instead of `audioFile`: the clip the timings name
+   * (`alignment.recitation.audioUrl`) when `audioFile` is a `public/` path that is not there
+   * (`resolveAudioSource()`). `null` or absent: `audioFile` itself.
+   */
+  readonly audioSrc?: string | null | undefined;
+  readonly endCard?: ResolvedEndCard | undefined;
+  /** `probeVideoSeconds()` of a background video whose `videoSeconds` is 0, when the browser could read it. */
+  readonly backgroundVideoSeconds?: number | null | undefined;
+};
+
+/** What `calculateMetadata()` of `<MushafRecitation>` resolves once per render from the content props. */
+export type ResolvedRecitation = ResolvedExtras & {
+  /**
+   * The file's timings cut to `fromAyah`..`toAyah` and to the ayahs the recording carries whole,
+   * every time `audioOffsetSeconds` earlier than in the file (the sidecar's words and segments too).
+   * A file that crosses surahs (version 2) is not cut to the range: it keeps its version and every
+   * ayah it carries whole.
+   */
+  readonly timings: StudioTimings;
+  /**
+   * Seconds of the recording skipped before frame 0 (`<Audio trimBefore>`, in frames), so a
+   * `fromAyah` or a leading `complete: false` ayah does not open on a blank screen with the audio
+   * playing: 0 when the first ayah played is the file's first, else just enough before the first
+   * played ayah for its line to enter and sit `animation.leadInSeconds`. Already subtracted from
+   * `timings`; add it back before writing those into the file.
+   */
+  readonly audioOffsetSeconds: number;
+  /**
+   * The passage's lines, splits applied, in reading order; the surah's header lines first when
+   * `header` put them there, and, across surahs, each later surah's header lines before its ayah 1.
+   */
+  readonly lines: readonly MushafLineData[];
+  /**
+   * One slot per line on screen, the header lines' included (`withHeaderSlots()`; across surahs,
+   * `withInnerHeaderSlots()`).
+   */
+  readonly schedule: readonly LineSchedule[];
+  /** The first translation shown (`translations[0]`), or `null`. */
+  readonly translation: AyahTranslation | null;
+  /** The word-by-word translation (`text.glossFile`), if any. */
+  readonly gloss: WordGloss | null;
+  /** The word-by-word transliteration (`text.transliterationFile`), if any. */
+  readonly transliteration: WordGloss | null;
+  /** Word ids the Review tab marks, with their reasons. */
+  readonly doubtful: Readonly<Record<string, readonly DoubtReason[]>>;
+};

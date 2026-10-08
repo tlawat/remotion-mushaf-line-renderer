@@ -1,0 +1,193 @@
+{
+  "_meta": {
+    "source": "GET https://api.quran.com/api/v4/verses/by_chapter/1?words=true&word_fields=text_uthmani,text_indopak,location,char_type_name&per_page=2&page=1 and &page=2, 2026-10-03; word fields trimmed to those asked for, pagination cut to two pages (ayahs 1-4)"
+  },
+  "pages": [
+    {
+      "verses": [
+        {
+          "id": 1,
+          "verse_number": 1,
+          "verse_key": "1:1",
+          "words": [
+            {
+              "id": 1,
+              "position": 1,
+              "char_type_name": "word",
+              "text_uthmani": "بِسْمِ",
+              "text_indopak": "بِسۡمِ",
+              "location": "1:1:1"
+            },
+            {
+              "id": 2,
+              "position": 2,
+              "char_type_name": "word",
+              "text_uthmani": "ٱللَّهِ",
+              "text_indopak": "اللهِ",
+              "location": "1:1:2"
+            },
+            {
+              "id": 3,
+              "position": 3,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلرَّحْمَـٰنِ",
+              "text_indopak": "الرَّحۡمٰنِ",
+              "location": "1:1:3"
+            },
+            {
+              "id": 4,
+              "position": 4,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلرَّحِيمِ",
+              "text_indopak": "الرَّحِيۡمِ",
+              "location": "1:1:4"
+            },
+            {
+              "id": 5,
+              "position": 5,
+              "char_type_name": "end",
+              "text_uthmani": "١",
+              "text_indopak": "١",
+              "location": "1:1:5"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "verse_number": 2,
+          "verse_key": "1:2",
+          "words": [
+            {
+              "id": 1130,
+              "position": 1,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلْحَمْدُ",
+              "text_indopak": "اَلۡحَمۡدُ",
+              "location": "1:2:1"
+            },
+            {
+              "id": 1131,
+              "position": 2,
+              "char_type_name": "word",
+              "text_uthmani": "لِلَّهِ",
+              "text_indopak": "لِلّٰهِ",
+              "location": "1:2:2"
+            },
+            {
+              "id": 1132,
+              "position": 3,
+              "char_type_name": "word",
+              "text_uthmani": "رَبِّ",
+              "text_indopak": "رَبِّ",
+              "location": "1:2:3"
+            },
+            {
+              "id": 1133,
+              "position": 4,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلْعَـٰلَمِينَ",
+              "text_indopak": "الۡعٰلَمِيۡنَۙ‏",
+              "location": "1:2:4"
+            },
+            {
+              "id": 1134,
+              "position": 5,
+              "char_type_name": "end",
+              "text_uthmani": "٢",
+              "text_indopak": "٢",
+              "location": "1:2:5"
+            }
+          ]
+        }
+      ],
+      "pagination": {
+        "per_page": 2,
+        "current_page": 1,
+        "next_page": 2,
+        "total_pages": 2,
+        "total_records": 4
+      }
+    },
+    {
+      "verses": [
+        {
+          "id": 3,
+          "verse_number": 3,
+          "verse_key": "1:3",
+          "words": [
+            {
+              "id": 2953,
+              "position": 1,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلرَّحْمَـٰنِ",
+              "text_indopak": "الرَّحۡمٰنِ",
+              "location": "1:3:1"
+            },
+            {
+              "id": 2954,
+              "position": 2,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلرَّحِيمِ",
+              "text_indopak": "الرَّحِيۡمِۙ‏",
+              "location": "1:3:2"
+            },
+            {
+              "id": 2955,
+              "position": 3,
+              "char_type_name": "end",
+              "text_uthmani": "٣",
+              "text_indopak": "٣",
+              "location": "1:3:3"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "verse_number": 4,
+          "verse_key": "1:4",
+          "words": [
+            {
+              "id": 3252,
+              "position": 1,
+              "char_type_name": "word",
+              "text_uthmani": "مَـٰلِكِ",
+              "text_indopak": "مٰلِكِ",
+              "location": "1:4:1"
+            },
+            {
+              "id": 3253,
+              "position": 2,
+              "char_type_name": "word",
+              "text_uthmani": "يَوْمِ",
+              "text_indopak": "يَوۡمِ",
+              "location": "1:4:2"
+            },
+            {
+              "id": 3254,
+              "position": 3,
+              "char_type_name": "word",
+              "text_uthmani": "ٱلدِّينِ",
+              "text_indopak": "الدِّيۡنِؕ‏",
+              "location": "1:4:3"
+            },
+            {
+              "id": 3255,
+              "position": 4,
+              "char_type_name": "end",
+              "text_uthmani": "٤",
+              "text_indopak": "٤",
+              "location": "1:4:4"
+            }
+          ]
+        }
+      ],
+      "pagination": {
+        "per_page": 2,
+        "current_page": 2,
+        "next_page": null,
+        "total_pages": 2,
+        "total_records": 4
+      }
+    }
+  ]
+}

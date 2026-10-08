@@ -1,0 +1,36 @@
+{
+  "name": "mushaf-studio-app",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Mushaf Studio: a ready-made Remotion project to make word-synced recitation videos of the KFGQPC V4 mushaf in Remotion Studio, with the Mushaf panel (catalogue, alignment, review, line splits, translations).",
+  "scripts": {
+    "studio": "remotion studio",
+    "studio:headless": "remotion studio --no-open",
+    "render": "remotion render MushafRecitation out/recitation.mp4",
+    "render:passage": "remotion render MushafPassage out/passage.mp4",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
+    "render:ayah": "remotion render MushafAyahText out/ayah-text.mp4",
+    "make": "bun scripts/make.ts",
+    "sample": "bun scripts/sample.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.521",
+    "@remotion/media": "4.0.521",
+    "@remotion/studio": "4.0.521",
+    "@remotion/transitions": "4.0.521",
+    "@remotion/zod-types": "4.0.521",
+    "@tlawat/mushaf-fonts-qpc-v4": "workspace:*",
+    "@tlawat/mushaf-fonts-qpc-v4-tajweed": "workspace:*",
+    "@tlawat/mushaf-studio": "workspace:*",
+    "@tlawat/remotion-mushaf-line": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "4.0.521",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "typescript": "~5.9.3"
+  }
+}

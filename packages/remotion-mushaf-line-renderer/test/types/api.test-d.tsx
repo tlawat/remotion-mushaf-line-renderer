@@ -15,6 +15,7 @@ import {
   getMushafFontFile,
   getMushafLine,
   getMushafLines,
+  getMushafLinesForRanges,
   getMushafLocation,
   type LineSchedule,
   type LineWindowContext,
@@ -39,16 +40,23 @@ import {
   type MushafLineWindowProps,
   type MushafScrollAnchor,
   type MushafSharedFont,
+  type MushafSlice,
   MushafSurahName,
   type MushafTheme,
   type MushafThemeName,
   type MushafThemeSelection,
   type MushafWord,
+  normalizeTimings,
   parseRecitationTimings,
   type RecitationTimings,
+  type RecitationTimingsV1,
+  type RecitationTimingsV2,
+  type RecitedRange,
   recitedRange,
+  recitedRanges,
   revealRtl,
   type ScrollPositionOptions,
+  type SurahAyahTiming,
   scheduleLines,
   scrollPosition,
   sliceWords,
@@ -131,11 +139,14 @@ export const ok = (
       wordClassName={(word) => `w-${word.wordId}`}
     />
     <MushafLine line={data} activeWordId={42} />
-    {/* slice: one ayah, a range, open-ended, on either form, and null to cancel the data's slice */}
+    {/* slice: one ayah, a range, open-ended, a band of words, on either form, and null to cancel the data's slice */}
     <MushafLine line={data} slice={{ayah: 5}} />
     <MushafLine line={data} slice={{fromAyah: 5, toAyah: 7}} />
     <MushafLine line={data} slice={{fromAyah: 5}} />
+    <MushafLine line={data} slice={{fromWordId: 120, toWordId: 124}} />
+    <MushafLine line={data} slice={{fromWordId: 120}} />
     <MushafLine page={187} line={2} slice={{ayah: 1}} />
+    <MushafLine page={187} line={2} slice={{fromWordId: 13_000}} />
     <MushafLine line={data} slice={null} />
     {/* fit */}
     <MushafLine line={data} fit="line" />
@@ -167,6 +178,23 @@ export const openStart = <MushafLine line={data} slice={{toAyah: 7}} />;
 export const ayahList = <MushafLine line={data} slice={{ayahs: [5, 6]}} />;
 export const sliced: readonly MushafWord[] = sliceWords(data, {ayah: 5});
 export const ownSlice: readonly MushafWord[] = sliceWords(data);
+// @ts-expect-error a slice is ayahs or a band of words, not both
+export const ayahAndWords = <MushafLine line={data} slice={{ayah: 1, fromWordId: 3}} />;
+// @ts-expect-error ... whichever keys are mixed
+export const rangeAndWords = <MushafLine line={data} slice={{fromAyah: 1, toWordId: 3}} />;
+// @ts-expect-error a band starts somewhere
+export const openBandStart = <MushafLine line={data} slice={{toWordId: 7}} />;
+// @ts-expect-error a band is of `MushafWord.wordId`s, not of locations
+export const locationBand = <MushafLine line={data} slice={{fromWordId: '2:3:1'}} />;
+export const wordBand: MushafSlice = {fromWordId: 120, toWordId: 124};
+export const bandWords: readonly MushafWord[] = sliceWords(data, {fromWordId: 120});
+// A line split at a word is two copies of it, each with a band; persisted data takes the same shapes.
+export const splitHalves: readonly MushafLineData[] = [
+  {...data, slice: {fromWordId: 120, toWordId: 121}},
+  {...data, slice: {fromWordId: 122}},
+];
+// @ts-expect-error ... and refuses the same mixes
+export const mixedData: MushafLineData = {...data, slice: {fromAyah: 2, fromWordId: 9}};
 
 // @ts-expect-error resolved data carries its own theme
 export const themeWithData = <MushafLine line={data} theme="light" />;
@@ -337,8 +365,10 @@ export const recitation: RecitationTimings = {
     {ayah: 2, start: 9.9, end: 22.7, complete: false},
   ],
 };
-// @ts-expect-error only version 1 exists
-export const futureTimings: RecitationTimings = {version: 2, surah: 9, ayat: []};
+// @ts-expect-error version 2 names the surah on each ayah, never at the top
+export const mixedTimings: RecitationTimings = {version: 2, surah: 9, ayat: []};
+// @ts-expect-error versions 1 and 2 exist
+export const futureTimings: RecitationTimings = {version: 3, ayat: []};
 export const parsed: RecitationTimings = parseRecitationTimings(JSON.parse('{}'));
 export const range: {surah: number; fromAyah: number; toAyah: number} = recitedRange(recitation);
 export const rangeLines = getMushafLines({...recitedRange(recitation), slice: true});
@@ -350,6 +380,36 @@ export const current: string | null = wordAt(recitation, 1.5);
 export const first = wordTiming(recitation, '9:1:1');
 export const last = wordTiming(recitation, '9:1:1', 'last');
 export const follow = <MushafLine line={data} activeWordId={wordAt(recitation, 1.5)} />;
+
+// Version 2: a recording across surahs. The union narrows on `version`.
+export const juz: RecitationTimings = {
+  version: 2,
+  ayat: [
+    {surah: 1, ayah: 7, start: 0, end: 9.4},
+    {surah: 2, ayah: 1, start: 10, end: 12.5, complete: true, words: [{id: '2:1:1', start: 10, end: 12.5}]},
+  ],
+};
+// @ts-expect-error a version 2 ayah names its surah
+export const surahless: RecitationTimingsV2 = {version: 2, ayat: [{ayah: 1, start: 0, end: 1}]};
+export const juzJson: IsJson<RecitationTimingsV2> = true;
+export const surahOf = (t: RecitationTimings): number | null => (t.version === 1 ? t.surah : null);
+// @ts-expect-error `surah` is on version 1 only: narrow on `version` first
+export const unnarrowed = (t: RecitationTimings): number => t.surah;
+export const v1Only: RecitationTimingsV1 = recitation;
+export const normalized: RecitationTimingsV2 = normalizeTimings(recitation);
+export const entry: SurahAyahTiming = normalizeTimings(juz).ayat[0]!;
+export const ranges: RecitedRange[] = recitedRanges(juz);
+export const juzLines: Promise<MushafLineData[]> = getMushafLinesForRanges(recitedRanges(juz), {theme: 'light'});
+export const juzLinesDefaults = getMushafLinesForRanges(ranges);
+export const juzLinesWhole = getMushafLinesForRanges(ranges, {slice: false, data: {}, mushaf: 'qpc-v4'});
+// @ts-expect-error a range has all three of surah, fromAyah and toAyah
+export const partialRange = getMushafLinesForRanges([{surah: 2}]);
+// @ts-expect-error the page form belongs to getMushafLines()
+export const pageRange = getMushafLinesForRanges(ranges, {page: 2});
+export const juzSchedule: LineSchedule[] = scheduleLines([data], juz);
+export const juzWord: string | null = wordAt(juz, 11);
+export const juzTiming = wordTiming(juz, '2:1:1', 'last');
+export const singleRange: RecitedRange = recitedRange(juz);
 
 // A window of lines: driven by steps (one frame per line) or by a position, never both.
 export const windows = (

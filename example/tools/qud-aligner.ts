@@ -12,7 +12,7 @@ import {basename, extname} from 'node:path';
 import {
   type AyahTiming,
   parseRecitationTimings,
-  type RecitationTimings,
+  type RecitationTimingsV1,
   type WordTiming,
 } from '@tlawat/remotion-mushaf-line';
 
@@ -125,7 +125,7 @@ export type FromQudOptions = {
 export const fromQudAligner = (
   {align, timestamps}: {align: QudAlignResponse; timestamps: QudTimestampsResponse},
   {audio, source, fromAyah, toAyah}: FromQudOptions = {},
-): RecitationTimings => {
+): RecitationTimingsV1 => {
   const offsets = new Map(align.segments.map((s) => [s.segment, s.time_from]));
   const byAyah = new Map<number, WordTiming[]>();
   let surah: number | null = null;
@@ -178,6 +178,7 @@ export const fromQudAligner = (
   });
   const durationSeconds =
     toAyah === undefined ? round(Math.max(...align.segments.map((s) => s.time_to))) : ayat[ayat.length - 1]!.end;
+  // The aligner's answer is one surah (checked above): a version-1 file.
   return parseRecitationTimings({
     version: 1,
     surah,
@@ -185,7 +186,7 @@ export const fromQudAligner = (
     durationSeconds,
     source: source ?? 'aligner.qud.dev',
     ayat,
-  });
+  }) as RecitationTimingsV1;
 };
 
 const round = (seconds: number): number => Math.round(seconds * 1000) / 1000;

@@ -2,9 +2,17 @@ import {ayahKey, type CompiledLayout, indexAyahs, indexPage} from '../data/forma
 import {loadLayout} from '../data/load-layout';
 import {describeValue, MushafError} from '../errors';
 import {assertPage, type MushafDefinition, resolveSelection} from '../mushaf/registry';
-import type {GetMushafLinesOptions, GetMushafLocationOptions, MushafLineData, MushafLocation} from '../types';
+import type {
+  GetMushafLinesForRangesOptions,
+  GetMushafLinesOptions,
+  GetMushafLocationOptions,
+  MushafLineData,
+  MushafLocation,
+  MushafSlice,
+  RecitedRange,
+} from '../types';
 import {lineFromLayout} from './get-mushaf-line';
-import {resolveSlice} from './slice';
+import {resolveSlice, type SliceBand} from './slice';
 
 /** The ayahs a line carries, ascending. Empty for `surah_name` and `basmallah` lines. */
 export const lineAyahs = (line: MushafLineData): number[] => {
@@ -149,11 +157,29 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
     return indexPage(layout, page).lines.map((_, i) => lineAt(page, i + 1));
   }
 
-  const surah = assertSurah(options.surah);
-  const fromAyah = assertAyah('fromAyah', options.fromAyah ?? 1);
+  const range = assertRange(layout, def, options.surah, options.fromAyah, options.toAyah);
+  // The range, recorded on the lines it cuts — the first and/or last of the passage, when they
+  // carry words of other ayahs — so <MushafLine> shows only these ayahs there. Lines the range keeps
+  // whole carry nothing: they render as printed, and the data says so. The words stay whole always.
+  const slice = {fromAyah: range.fromAyah, toAyah: range.toAyah};
+  const sliced = (line: MushafLineData): MushafLineData =>
+    options.slice && resolveSlice(line, slice) !== null ? {...line, slice} : line;
+  return linesOfRange(layout, def, range).map((at) => sliced(lineAt(at.page, at.line)));
+};
+
+/** Validates one ayah range against the loaded data, defaults filled in. */
+const assertRange = (
+  layout: CompiledLayout,
+  def: MushafDefinition,
+  surahValue: unknown,
+  fromAyahValue: unknown,
+  toAyahValue: unknown,
+): RecitedRange & {readonly start: MushafLocation} => {
+  const surah = assertSurah(surahValue);
+  const fromAyah = assertAyah('fromAyah', fromAyahValue ?? 1);
   // Locating the first ayah first, so a missing one is reported as such rather than as a bad range.
   const start = locate(layout, def, surah, fromAyah);
-  const toAyah = options.toAyah === undefined ? lastAyahOf(layout, surah) : assertAyah('toAyah', options.toAyah);
+  const toAyah = toAyahValue === undefined ? lastAyahOf(layout, surah) : assertAyah('toAyah', toAyahValue);
   if (toAyah < fromAyah) {
     throw new MushafError('AYAH_NOT_FOUND', `toAyah (${toAyah}) is before fromAyah (${fromAyah}).`, {
       surah,
@@ -161,13 +187,16 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
       toAyah,
     });
   }
-  // The range, recorded on the lines it cuts — the first and/or last of the passage, when they
-  // carry words of other ayahs — so <MushafLine> shows only these ayahs there. Lines the range keeps
-  // whole carry nothing: they render as printed, and the data says so. The words stay whole always.
-  const range = {fromAyah, toAyah};
-  const sliced = (line: MushafLineData): MushafLineData =>
-    options.slice && resolveSlice(line, range) !== null ? {...line, slice: range} : line;
-  const out: MushafLineData[] = [];
+  return {surah, fromAyah, toAyah, start};
+};
+
+/** Where the lines carrying a word of a validated range are, in reading order. */
+const linesOfRange = (
+  layout: CompiledLayout,
+  def: MushafDefinition,
+  {surah, fromAyah, toAyah, start}: RecitedRange & {readonly start: MushafLocation},
+): MushafLocation[] => {
+  const out: MushafLocation[] = [];
   for (let page = start.page; page <= pagesOf(layout, def); page++) {
     const index = indexPage(layout, page);
     for (let line = page === start.page ? start.line : 1; line <= index.lines.length; line++) {
@@ -176,7 +205,7 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
       const runs = index.runs.filter((run) => run.start <= entry.last && run.end >= entry.first);
       const overlaps = runs.some((run) => run.surah === surah && run.ayah >= fromAyah && run.ayah <= toAyah);
       if (overlaps) {
-        out.push(sliced(lineAt(page, line)));
+        out.push({page, line});
         continue;
       }
       // Every word of this line is past the range (later surah, or a later ayah): done.
@@ -184,4 +213,141 @@ export const getMushafLines = async (options: GetMushafLinesOptions): Promise<Mu
     }
   }
   return out;
+};
+
+/**
+ * The header lines printed before a surah's first ayah, in reading order: its `surah_name` line and,
+ * when it has one, its `basmallah` line. Walks back from the line of ayah 1, onto the previous page
+ * when the header closes it.
+ */
+const headerLinesOf = (layout: CompiledLayout, def: MushafDefinition, surah: number): MushafLocation[] => {
+  const start = locate(layout, def, surah, 1);
+  const out: MushafLocation[] = [];
+  let {page, line} = start;
+  for (;;) {
+    line--;
+    if (line < 1) {
+      page--;
+      if (page < 1) break;
+      line = indexPage(layout, page).lines.length;
+    }
+    const entry = indexPage(layout, page).lines[line - 1];
+    if (entry === undefined || entry.type === 'ayah' || entry.surahNumber !== surah) break;
+    out.unshift({page, line});
+  }
+  return out;
+};
+
+type Kept = {
+  readonly data: MushafLineData;
+  /** The band of `wordId`s the ranges keep on this line, when any range reaches it. */
+  band: SliceBand | null;
+  /** The one range that reached the line, while only one has. */
+  range: RecitedRange | null;
+  ranges: number;
+};
+
+/**
+ * The lines of several ayah ranges in reading order, for a recitation that crosses surahs (a juz, a
+ * hizb): `recitedRanges(timings)` gives the ranges. Each range's lines come as `getMushafLines()`
+ * finds them, sliced like `slice: true` (default; `slice: false` keeps every line whole). Between
+ * two surahs come the later surah's header lines as printed (its `surah_name` line and its
+ * `basmallah` line, when it has one), when its range starts at ayah 1.
+ *
+ * A line two ranges share appears once: a page where one surah ends mid-page and the next begins, or
+ * a line carrying the end of one range and the start of the next. Its slice keeps both ranges' words,
+ * as a word band from the first kept word to the last (`{fromWordId, toWordId}`); a line one range
+ * cuts alone carries `{fromAyah, toAyah}`, exactly as `getMushafLines({slice: true})` records it.
+ *
+ * Ranges must be in reading order and must not overlap: each starts after the previous one ends.
+ * An empty list gives no lines.
+ */
+export const getMushafLinesForRanges = async (
+  ranges: readonly RecitedRange[],
+  options: GetMushafLinesForRangesOptions = {},
+): Promise<MushafLineData[]> => {
+  const {mushaf, theme, data} = options;
+  const resolved = resolveSelection({mushaf, theme});
+  const {def} = resolved;
+  if (!Array.isArray(ranges)) {
+    throw new MushafError(
+      'AYAH_NOT_FOUND',
+      `getMushafLinesForRanges(): ranges must be an array of {surah, fromAyah, toAyah}, got ${describeValue(ranges)}.`,
+      {ranges},
+    );
+  }
+  if (options.slice !== undefined && typeof options.slice !== 'boolean') {
+    throw new MushafError(
+      'BAD_SLICE',
+      `getMushafLinesForRanges(): slice must be true or false when given, got ${describeValue(options.slice)}.`,
+      {slice: options.slice},
+    );
+  }
+  if (ranges.length === 0) return [];
+  const layout = await loadLayout(def.dataset, data);
+  const checked = ranges.map((range, i) => {
+    if (typeof range !== 'object' || range === null) {
+      throw new MushafError(
+        'AYAH_NOT_FOUND',
+        `getMushafLinesForRanges(): ranges[${i}] must be {surah, fromAyah, toAyah}, got ${describeValue(range)}.`,
+        {index: i},
+      );
+    }
+    return assertRange(layout, def, range.surah, range.fromAyah, range.toAyah);
+  });
+  checked.forEach((range, i) => {
+    const previous = checked[i - 1];
+    if (previous && ayahKey(range.surah, range.fromAyah) <= ayahKey(previous.surah, previous.toAyah)) {
+      throw new MushafError(
+        'AYAH_NOT_FOUND',
+        `getMushafLinesForRanges(): ranges[${i}] (${range.surah}:${range.fromAyah}-${range.toAyah}) does not start after ranges[${i - 1}] (${previous.surah}:${previous.fromAyah}-${previous.toAyah}). Give the ranges in reading order, without overlaps.`,
+        {index: i},
+      );
+    }
+  });
+
+  const kept = new Map<string, Kept>();
+  const order: Kept[] = [];
+  const keep = (at: MushafLocation): Kept => {
+    const key = `${at.page}:${at.line}`;
+    let entry = kept.get(key);
+    if (!entry) {
+      entry = {data: lineFromLayout(layout, resolved, at.page, at.line), band: null, range: null, ranges: 0};
+      kept.set(key, entry);
+      order.push(entry);
+    }
+    return entry;
+  };
+  checked.forEach((range, i) => {
+    const previous = checked[i - 1];
+    if (previous && previous.surah !== range.surah && range.fromAyah === 1) {
+      for (const at of headerLinesOf(layout, def, range.surah)) keep(at);
+    }
+    for (const at of linesOfRange(layout, def, range)) {
+      const entry = keep(at);
+      for (const word of entry.data.words) {
+        if (word.surah !== range.surah || word.ayah < range.fromAyah || word.ayah > range.toAyah) continue;
+        entry.band = {
+          first: Math.min(entry.band?.first ?? word.wordId, word.wordId),
+          last: Math.max(entry.band?.last ?? word.wordId, word.wordId),
+        };
+      }
+      entry.ranges++;
+      entry.range = {surah: range.surah, fromAyah: range.fromAyah, toAyah: range.toAyah};
+    }
+  });
+
+  const sliceOf = ({data: line, band, range, ranges: count}: Kept): MushafSlice | null => {
+    const words = line.words;
+    if (band === null || range === null || words.length === 0) return null;
+    if (band.first === words[0]!.wordId && band.last === words[words.length - 1]!.wordId) return null;
+    // One range on a line of its own surah: the ayah form, as getMushafLines({slice: true}) records it.
+    if (count === 1 && words.every((word) => word.surah === range.surah))
+      return {fromAyah: range.fromAyah, toAyah: range.toAyah};
+    return {fromWordId: band.first, toWordId: band.last};
+  };
+  return order.map((entry) => {
+    const slice = options.slice === false ? null : sliceOf(entry);
+    return slice === null ? entry.data : {...entry.data, slice};
+  });
 };

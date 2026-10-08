@@ -1,0 +1,21 @@
+event: progress
+data: {"stage": "queued_gpu", "step": 1, "steps": 6}
+
+event: progress
+data: {"stage": "queued_cpu", "step": 1, "steps": 6}
+
+event: progress
+data: {"stage": "segmenting", "step": 2, "steps": 6}
+
+event: progress
+data: {"stage": "transcribing", "step": 3, "steps": 6}
+
+event: progress
+data: {"stage": "matching", "step": 4, "steps": 6}
+
+event: progress
+data: {"stage": "building", "step": 6, "steps": 6}
+
+event: result
+data: {"audio_id": "3076545b9d4849f6be0f340c232b804d", "segments": [{"segment": 1, "time_from": 0.3, "time_to": 2.7, "ref_from": "112:1:1", "ref_to": "112:1:4", "matched_text": "\u0642\u064f\u0644\u0652 \u0647\u064f\u0648\u064e \u0671\u0644\u0644\u0651\u064e\u0647\u064f \u0623\u064e\u062d\u064e\u062f\u064c", "confidence": 1.0, "has_missing_words": false, "has_repeated_words": false, "kind": "quran", "special_type": null, "error": null}, {"segment": 2, "time_from": 2.73, "time_to": 4.713, "ref_from": "112:2:1", "ref_to": "112:2:2", "matched_text": "\u0671\u0644\u0644\u0651\u064e\u0647\u064f \u0671\u0644\u0635\u0651\u064e\u0645\u064e\u062f\u064f", "confidence": 1.0, "has_missing_words": false, "has_repeated_words": false, "kind": "quran", "special_type": null, "error": null}, {"segment": 3, "time_from": 4.743, "time_to": 7.433, "ref_from": "112:3:1", "ref_to": "112:3:4", "matched_text": "\u0644\u064e\u0645\u0652 \u064a\u064e\u0644\u0650\u062f\u0652 \u0648\u064e\u0644\u064e\u0645\u0652 \u064a\u064f\u0648\u0644\u064e\u062f\u0652", "confidence": 1.0, "has_missing_words": false, "has_repeated_words": false, "kind": "quran", "special_type": null, "error": null}, {"segment": 4, "time_from": 7.463, "time_to": 11.403, "ref_from": "112:4:1", "ref_to": "112:4:5", "matched_text": "\u0648\u064e\u0644\u064e\u0645\u0652 \u064a\u064e\u0643\u064f\u0646 \u0644\u0651\u064e\u0647\u064f\u06e5 \u0643\u064f\u0641\u064f\u0648\u064b\u0627 \u0623\u064e\u062d\u064e\u062f\u064c", "confidence": 1.0, "has_missing_words": false, "has_repeated_words": false, "kind": "quran", "special_type": null, "error": null}], "device": "CPU", "_meta": {"schema_version": 2, "reference_id": "qul-text-qpc-hafs-312", "reference_riwayah": "hafs", "recitation_riwayah": "hafs", "output_edition_id": "qul-text-qpc-hafs-312", "output_riwayah": "hafs", "projection_id": null, "projection_sha256": null, "requested_model": "Base", "effective_model": "Base", "runtime": {"processing_seconds": 2.631831645965576, "queue_seconds": 0.027825414203107357, "total_seconds": 2.6596570601686835}}, "warning": "GPU quota was exhausted, so this ran on the CPU instead."}
+

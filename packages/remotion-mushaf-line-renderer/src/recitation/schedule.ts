@@ -1,3 +1,4 @@
+import {ayahKey} from '../data/format';
 import {isInSlice, resolveSlice} from '../resolve/slice';
 import type {
   AyahTiming,
@@ -7,7 +8,7 @@ import type {
   RecitationTimings,
   ScheduleLinesOptions,
 } from '../types';
-import {wordTiming} from './recitation-timings';
+import {timingsByAyah, wordTiming} from './recitation-timings';
 
 /**
  * When each line of a passage is on screen, from a recording's timings: one entry per line that
@@ -22,6 +23,8 @@ import {wordTiming} from './recitation-timings';
  *   on the lines. An end is never before its own start, so under `occurrence: 'last'` a line whose
  *   first word was repeated after the next line began collapses to nothing rather than reordering.
  * - Lines with no timed word (headers, lines outside the recording, another surah) are left out.
+ *   Timings of either version work: an ayah is looked up by surah and number, so a passage that
+ *   crosses surahs (`getMushafLinesForRanges()` with version 2 timings) schedules across the boundary.
  *
  * Interpolation shares an ayah's span evenly over its words; the word count is the highest position
  * seen for that ayah across `lines`, marker included, which is exact when every line of the ayah is
@@ -33,14 +36,14 @@ export const scheduleLines = (
   options: ScheduleLinesOptions = {},
 ): LineSchedule[] => {
   const occurrence = options.occurrence ?? 'first';
-  const byAyah = new Map<number, AyahTiming>();
-  for (const ayah of timings.ayat) byAyah.set(ayah.ayah, ayah);
+  const byAyah = timingsByAyah(timings);
 
   const counts = new Map<number, number>();
   for (const line of lines) {
     for (const word of line.words) {
-      if (word.surah !== timings.surah) continue;
-      counts.set(word.ayah, Math.max(counts.get(word.ayah) ?? 0, word.position));
+      const key = ayahKey(word.surah, word.ayah);
+      if (!byAyah.has(key)) continue;
+      counts.set(key, Math.max(counts.get(key) ?? 0, word.position));
     }
   }
 
@@ -48,7 +51,7 @@ export const scheduleLines = (
     const exact = timing.words && timing.words.length > 0 ? wordTiming(timings, word.id, occurrence) : null;
     if (exact) return exact.start;
     if (word.kind === 'end') return timing.end;
-    const count = Math.max(1, counts.get(word.ayah) ?? word.position);
+    const count = Math.max(1, counts.get(ayahKey(word.surah, word.ayah)) ?? word.position);
     const interpolated = timing.start + ((timing.end - timing.start) * (word.position - 1)) / count;
     return Math.min(timing.end, Math.max(timing.start, interpolated));
   };
@@ -58,8 +61,8 @@ export const scheduleLines = (
     const slice = resolveSlice(line, line.slice);
     let start: number | null = null;
     for (const word of line.words) {
-      if (word.surah !== timings.surah || !isInSlice(slice, word.wordId)) continue;
-      const timing = byAyah.get(word.ayah);
+      if (!isInSlice(slice, word.wordId)) continue;
+      const timing = byAyah.get(ayahKey(word.surah, word.ayah));
       if (!timing) continue;
       lastEnd = Math.max(lastEnd, timing.end);
       if (start === null) start = startOf(word, timing);

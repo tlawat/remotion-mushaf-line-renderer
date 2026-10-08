@@ -26,17 +26,25 @@ export {getMushafMetrics, MUSHAF_IDS} from './mushaf/registry';
 // Themes
 export {MUSHAF_THEME_NAMES, MUSHAF_THEMES} from './mushaf/themes';
 // Recitation timings
-export {parseRecitationTimings, recitedRange, wordAt, wordTiming} from './recitation/recitation-timings';
+export {
+  normalizeTimings,
+  parseRecitationTimings,
+  recitedRange,
+  recitedRanges,
+  wordAt,
+  wordTiming,
+} from './recitation/recitation-timings';
 export {scheduleLines} from './recitation/schedule';
 // Line data
 export {getMushafLine} from './resolve/get-mushaf-line';
-export {getMushafLines, getMushafLocation, lineAyahs} from './resolve/get-mushaf-lines';
+export {getMushafLines, getMushafLinesForRanges, getMushafLocation, lineAyahs} from './resolve/get-mushaf-lines';
 export {sliceWords} from './resolve/slice';
 // Types
 export type {
   AyahTiming,
   GetMushafFontFileOptions,
   GetMushafLineOptions,
+  GetMushafLinesForRangesOptions,
   GetMushafLinesOptions,
   GetMushafLocationOptions,
   LineSchedule,
@@ -83,9 +91,12 @@ export type {
   MushafWord,
   MushafWordKind,
   RecitationTimings,
+  RecitationTimingsV1,
+  RecitationTimingsV2,
   RecitedRange,
   ScheduleLinesOptions,
   ScrollPositionOptions,
+  SurahAyahTiming,
   WordContext,
   WordOccurrence,
   WordTiming,

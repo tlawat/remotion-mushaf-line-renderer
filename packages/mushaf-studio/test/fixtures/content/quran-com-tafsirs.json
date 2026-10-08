@@ -1,0 +1,81 @@
+{
+  "tafsirs": [
+    {
+      "id": 169,
+      "name": "Ibn Kathir (Abridged)",
+      "author_name": "Hafiz Ibn Kathir",
+      "slug": "en-tafisr-ibn-kathir",
+      "language_name": "english",
+      "translated_name": {
+        "name": "Ibn Kathir (Abridged)",
+        "language_name": "english"
+      }
+    },
+    {
+      "id": 381,
+      "name": "Tafsir Fathul Majid",
+      "author_name": "AbdulRahman Bin Hasan Al-Alshaikh",
+      "slug": "tafisr-fathul-majid-bn",
+      "language_name": "bengali",
+      "translated_name": {
+        "name": "Tafsir Fathul Majid",
+        "language_name": "english"
+      }
+    },
+    {
+      "id": 16,
+      "name": "Tafsir Muyassar",
+      "author_name": "المیسر",
+      "slug": "ar-tafsir-muyassar",
+      "language_name": "arabic",
+      "translated_name": {
+        "name": "Tafsir Muyassar",
+        "language_name": "english"
+      }
+    },
+    {
+      "id": 93,
+      "name": "Al-Tafsir al-Wasit (Tantawi)",
+      "author_name": "Waseet",
+      "slug": "ar-tafsir-al-wasit",
+      "language_name": "arabic",
+      "translated_name": {
+        "name": "Al-Tafsir al-Wasit (Tantawi)",
+        "language_name": "english"
+      }
+    },
+    {
+      "id": 14,
+      "name": "Tafsir Ibn Kathir",
+      "author_name": "Hafiz Ibn Kathir",
+      "slug": "ar-tafsir-ibn-kathir",
+      "language_name": "arabic",
+      "translated_name": {
+        "name": "Tafsir Ibn Kathir",
+        "language_name": "english"
+      }
+    },
+    {
+      "id": 168,
+      "name": "Ma'arif al-Qur'an",
+      "author_name": "Mufti Muhammad Shafi",
+      "slug": "en-tafsir-maarif-ul-quran",
+      "language_name": "english",
+      "translated_name": {
+        "name": "Ma'arif al-Qur'an",
+        "language_name": "english"
+      }
+    },
+    {
+      "id": 160,
+      "name": "Tafsir Ibn Kathir",
+      "author_name": "Hafiz Ibn Kathir",
+      "slug": "tafseer-ibn-e-kaseer-urdu",
+      "language_name": "urdu",
+      "translated_name": {
+        "name": "Tafsir Ibn Kathir",
+        "language_name": "english"
+      }
+    }
+  ]
+}

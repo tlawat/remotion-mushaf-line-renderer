@@ -1,0 +1,28 @@
+{
+  "session_not_found_404": {
+    "code": "session_not_found",
+    "message": "Session not found or expired",
+    "detail": null
+  },
+  "unknown_recitation_404": {
+    "code": "not_found",
+    "message": "No reviewed segments for this recitation and chapter. (Failed to load segments: [Errno 2] No such file or directory: '/data/inspector-bucket/reciters/no_such_reciter/timestamps/1.json.gz')",
+    "detail": null
+  },
+  "unknown_chapter_404": {
+    "code": "not_found",
+    "message": "Unknown chapter 0",
+    "detail": null
+  },
+  "cloudflare_524_json": {
+    "type": "https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-524/",
+    "title": "Error 524: A timeout occurred",
+    "status": 524,
+    "detail": "The origin web server did not return a complete response within the 120-second Proxy Read Timeout window. The connection was established, but the origin took too long to respond.",
+    "error_code": 524,
+    "error_name": "origin_response_timeout",
+    "cloudflare_error": true,
+    "retryable": true,
+    "retry_after": 120
+  }
+}
