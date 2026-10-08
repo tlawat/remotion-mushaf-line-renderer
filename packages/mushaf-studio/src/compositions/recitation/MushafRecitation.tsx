@@ -6,6 +6,7 @@ import {backgroundFor} from '../../background/compat';
 import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {
+  glossVisibilityFrom,
   InterlinearGlosses,
   interlinearExtraHeight,
   interlinearFontSize,
@@ -16,6 +17,7 @@ import {
 import {wordStarts} from '../../lines';
 import {
   audioClock,
+  clipAyahKey,
   clipTimeline,
   isIdentityTimeline,
   type MemorizeClip,
@@ -50,14 +52,15 @@ import {
 import {
   ayahAt,
   blockGeometry,
-  fileUrl,
   firstAyahKey,
   glossBlockStyle,
   headerCount,
   leadFrames,
   linesBlockStyle,
+  recordingUrl,
   translationBlockStyle,
 } from '../shared';
+import {passageSpan} from '../timings';
 import type {MushafRecitationProps} from './schema';
 
 /** The slot on screen at `frame`, by the frames the slots are in place at: the last one in place, else the first. */
@@ -83,8 +86,8 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
  * Under a memorisation mode each ayah plays `memorize.repeat` times on the clip timeline (one
  * `<Audio>` per clip, the lines and words timed per clip, the window scrolling back to the ayah's
  * first line for the next play, a "2/3" counter in a corner), and the blank modes hide the words as
- * `wordVisibility()` says. `'first-letters'` cannot cut a glyph-font word into letters: here it is
- * `'blank-upcoming'` with a faint outline (opacity 0.12).
+ * `wordVisibility()` says, their interlinear labels with them. `'first-letters'` cannot cut a
+ * glyph-font word into letters: here it is `'blank-upcoming'` with a faint outline (opacity 0.12).
  */
 export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
   const {audioFile, fonts, layout, animation, highlight, memorize, text, review, overlay, legend, endCard, audio} =
@@ -156,6 +159,7 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
 
   const slot = timeline[currentSlot(leads, frame)]!;
   const ayahKey = ayahKeyOf(heard) ?? ayahAt(timings, now) ?? firstAyahKey(lines[slot.index]);
+  const span = passageSpan(timings);
 
   let linesBlock: React.ReactNode;
   if (layout.visibleLines === 0) {
@@ -166,9 +170,9 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
       const from = Math.max(0, leads[i]! - enterFrames);
       const nextLead = leads[i + 1];
       const end = nextLead === undefined ? Math.round((current.end + 1) * fps) : Math.max(0, nextLead - enterFrames);
-      // A header line squeezed out by a recitation that starts at once has no frame of its own:
-      // stretched to its exit, it would sit over the first ayah line.
-      if (current.index < headers && end <= from) return null;
+      // A header line squeezed out by a recitation that starts at once (or goes on to the next surah
+      // at once) has no frame of its own: stretched to its exit, it would sit over the ayah line.
+      if (line.type !== 'ayah' && end <= from) return null;
       return (
         <Sequence
           // A line comes back for each play of its ayah: one Sequence per slot of the timeline, named by when it starts.
@@ -242,6 +246,8 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
         transliteration={resolved.transliteration}
         activeWordId={activeWordId}
         activeColor={highlight.mode === 'none' ? undefined : highlight.color}
+        // A label shows what its word shows: a word a blank mode hides takes its gloss with it.
+        visibilityOf={glossVisibilityFrom({memorize, clips, timings, starts, activeWordId, seconds, now})}
         fontFamily={text.glossFont}
         fontSize={labelSize}
         color={text.glossColor}
@@ -266,7 +272,7 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
       />
       {audioFile !== '' && identity && (
         <CompositionAudio
-          src={fileUrl(audioFile, staticFile)}
+          src={recordingUrl(audioFile, resolved, staticFile)}
           trimBefore={Math.round(resolved.audioOffsetSeconds * fps)}
           volume={(f) => volumeAt(f, curve)}
         />
@@ -280,14 +286,14 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
           const from = Math.round(clip.compositionFrom * fps);
           return (
             <Sequence
-              key={`${clip.ayah}/${clip.repetition}`}
+              key={`${clipAyahKey(clip)}/${clip.repetition}`}
               from={from}
               durationInFrames={Math.max(1, trimAfter - trimBefore)}
-              name={`Ayah ${clip.ayah} (${clip.repetition}/${repeats})`}
+              name={`Ayah ${clipAyahKey(clip)} (${clip.repetition}/${repeats})`}
             >
               {/* The same gain in every clip; the fades are the composition's, at its very start and end. */}
               <CompositionAudio
-                src={fileUrl(audioFile, staticFile)}
+                src={recordingUrl(audioFile, resolved, staticFile)}
                 trimBefore={trimBefore}
                 trimAfter={trimAfter}
                 volume={(f) => volumeAt(from + f, curve)}
@@ -317,9 +323,10 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
       )}
       <MushafTitleOverlay
         overlay={overlay}
-        surah={timings.surah}
-        fromAyah={timings.ayat[0]!.ayah}
-        toAyah={timings.ayat[timings.ayat.length - 1]!.ayah}
+        surah={span.from.surah}
+        fromAyah={span.from.ayah}
+        toSurah={span.to.surah}
+        toAyah={span.to.ayah}
         ayahKey={ayahKey}
         firstWordSeconds={timings.ayat[0]!.words?.[0]?.start ?? timings.ayat[0]!.start}
         background={layout.background}

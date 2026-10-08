@@ -64,12 +64,14 @@ describe('fetchChapterInfo', () => {
     expect(urls).toHaveLength(0);
   });
 
-  it('fails with TRANSLATION_FETCH_FAILED for a failed request or an answer without the fields', async () => {
+  it('fails with CONTENT_FETCH_FAILED for a failed request or an answer without the fields', async () => {
     const down = quranCom({'/chapters/1': {body: CHAPTER}});
-    expect((await rejection(fetchChapterInfo({surah: 1}, {fetch: down.fetch}))).details).toMatchObject({status: 404});
+    const failed = await rejection(fetchChapterInfo({surah: 1}, {fetch: down.fetch}));
+    expect(failed.code).toBe('CONTENT_FETCH_FAILED');
+    expect(failed.details).toMatchObject({status: 404});
     const noChapter = quranCom({'/chapters/1': {body: {chapter: {id: 1}}}, '/chapters/1/info': {body: INFO}});
     const error = await rejection(fetchChapterInfo({surah: 1}, {fetch: noChapter.fetch}));
-    expect(error.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(error.code).toBe('CONTENT_FETCH_FAILED');
     expect(error.message).toContain('name_simple, name_arabic, revelation_place');
     const noInfo = quranCom({'/chapters/1': {body: CHAPTER}, '/chapters/1/info': {body: {chapter_info: {}}}});
     expect((await rejection(fetchChapterInfo({surah: 1}, {fetch: noInfo.fetch}))).message).toContain(
@@ -134,7 +136,7 @@ describe('chapter-info files', () => {
     ];
     for (const [value, message] of cases) {
       const error = thrown(() => parseChapterInfoFile(value));
-      expect(error.code).toBe('BAD_TRANSLATION_FILE');
+      expect(error.code).toBe('BAD_CONTENT_FILE');
       expect(error.message).toContain(message);
     }
   });
@@ -145,6 +147,11 @@ describe('chapter-info files', () => {
     );
     await expect(loadChapterInfo('https://x.test/good.json', {fetch})).resolves.toEqual(SAMPLE);
     const error = await rejection(loadChapterInfo('https://x.test/bad.json', {fetch}));
+    expect(error.code).toBe('BAD_CONTENT_FILE');
     expect(error.message).toMatch(/^https:\/\/x\.test\/bad\.json: Chapter info file: kind should be/);
+    const missing = fakeFetch(() => ({status: 404, body: {}}));
+    expect((await rejection(loadChapterInfo('https://x.test/none.json', {fetch: missing.fetch}))).code).toBe(
+      'CONTENT_FETCH_FAILED',
+    );
   });
 });

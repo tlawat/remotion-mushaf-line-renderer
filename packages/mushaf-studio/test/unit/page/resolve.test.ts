@@ -176,7 +176,8 @@ describe('mushafPageSchema', () => {
   it('parses its defaults unchanged: the Fatiha sample, 16:9, a band, a simple frame, a sliding turn', () => {
     expect(mushafPageSchema.parse(defaultMushafPageProps)).toEqual(defaultMushafPageProps);
     expect(defaultMushafPageProps.timingsFile).toBe('mushaf-studio/fatiha/timings.json');
-    expect(defaultMushafPageProps.audioFile).toMatch(/abdul_hamid_ghraio_2025_yt\/1\.mp3/);
+    // The sample's recording in the app's public/, as every composition plays it (audio-source.test.ts).
+    expect(defaultMushafPageProps.audioFile).toBe('mushaf-studio/fatiha/audio.mp3');
     expect(defaultMushafPageProps.layout.aspect).toBe('16:9');
     expect(defaultPageView).toEqual({
       lineHighlight: 'band',

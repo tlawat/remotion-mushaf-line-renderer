@@ -41,7 +41,7 @@ vi.mock('../../../src/qud', () => ({listRecitations: vi.fn(async () => []), DEFA
 
 const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
-const {captionsToVtt, toCaptionCues} = await import('../../../src/captions');
+const {captionsToVtt, fromCaptions, toCaptionCues, toCaptions} = await import('../../../src/captions');
 const {chaptersFromTimings, youtubeDescription} = await import('../../../src/export');
 const {resetStudioStore, getStudioState} = await import('../../../src/studio/store');
 const {copyToClipboard, thumbnailPatchOf} = await import('../../../src/studio/publish');
@@ -164,6 +164,66 @@ describe('WebVTT', () => {
   });
 });
 
+describe('captions import', () => {
+  const importCaptions = (contents: string, name = 'fatiha.captions.json') => {
+    const input = document.querySelector<HTMLInputElement>('[data-mushaf-control="import-captions-file"]')!;
+    fireEvent.change(input, {target: {files: [new File([contents], name, {type: 'application/json'})]}});
+  };
+
+  it('reads edited captions back into the timings file at its own times, logs a re-alignment and re-resolves', async () => {
+    review(propsWith(timingsOf(2, 2)));
+    expect(screen.getByRole('button', {name: 'Import captions…'})).toHaveProperty('disabled', false);
+    const edited = toCaptions(fileTimings).map((caption, i) => (i === 1 ? {...caption, endMs: 1800} : caption));
+    importCaptions(JSON.stringify(edited));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledWith('/static/mushaf-studio/p/fatiha.timings.json');
+    expect(written(0).filePath).toBe('mushaf-studio/p/fatiha.timings.json');
+    const next = JSON.parse(written(0).contents) as StudioTimings;
+    const {alignment, ...rest} = fromCaptions(edited, fileTimings);
+    expect(next).toMatchObject(rest);
+    expect(next.ayat[0]!.words![1]).toEqual({id: '1:2:2', start: 1, end: 1.8});
+    expect(next.alignment!.edits).toEqual([{kind: 'realign', at: expect.any(String), note: 'captions import'}]);
+    expect(next.alignment!.words).toEqual(alignment!.words);
+    await waitFor(() => expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().error).toBeNull();
+    expect(getStudioState().notice).toBe(
+      'fatiha.captions.json is imported: the times of its 4 captions are in the timings file, and its edit log has the import.',
+    );
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for captions that change no time', async () => {
+    review(propsWith(timingsOf(2, 2)));
+    importCaptions(JSON.stringify(toCaptions(fileTimings, {markers: true})));
+    await waitFor(() =>
+      expect(getStudioState().notice).toBe('fatiha.captions.json changes no time: the timings file is left as it is.'),
+    );
+    expect(studio.writeStaticFile).not.toHaveBeenCalled();
+  });
+
+  it('shows why a file cannot be imported: not captions, a caption missing, a caption out of order', async () => {
+    review(propsWith(timingsOf(2, 2)));
+    importCaptions('{"captions": []}', 'notes.json');
+    await waitFor(() =>
+      expect(getStudioState().error).toMatch(/^notes\.json is not a Captions JSON: expected an array/),
+    );
+    importCaptions(JSON.stringify([...toCaptions(fileTimings).slice(0, 2), 7]));
+    await waitFor(() => expect(getStudioState().error).toMatch(/caption 2 is 7, not a caption/));
+    importCaptions(JSON.stringify(toCaptions(fileTimings).slice(1)));
+    await waitFor(() =>
+      expect(getStudioState().error).toMatch(/^fromCaptions\(\) got 3 captions, but the timings make 4/),
+    );
+    const swapped = toCaptions(fileTimings).map((caption, i) => (i === 2 ? {...caption, startMs: 500} : caption));
+    importCaptions(JSON.stringify(swapped));
+    await waitFor(() =>
+      expect(getStudioState().error).toMatch(/before caption 1 .*the words must stay in audio order/),
+    );
+    expect(studio.writeStaticFile).not.toHaveBeenCalled();
+    expect(studio.reevaluateComposition).not.toHaveBeenCalled();
+  });
+});
+
 describe('chapters and description', () => {
   it("copies the chapters of the composition's timings, from 0:00", async () => {
     const timings = timingsOf(4, 12);
@@ -276,5 +336,22 @@ describe('thumbnail', () => {
       title: '',
     });
     expect(thumbnailPatchOf(props, timingsOf(3, 2))).toEqual({surah: 1, fromAyah: 2, toAyah: 4, title: ''});
+  });
+
+  it('takes the first surah and its ayahs when the timings cross surahs', () => {
+    const crossing: StudioTimings = {
+      version: 2,
+      ayat: [
+        {surah: 113, ayah: 4, start: 0, end: 1},
+        {surah: 113, ayah: 5, start: 1, end: 2},
+        {surah: 114, ayah: 1, start: 2, end: 3},
+      ],
+    };
+    expect(thumbnailPatchOf(propsWith(timingsOf(1, 2), ''), crossing)).toEqual({
+      surah: 113,
+      fromAyah: 4,
+      toAyah: 5,
+      title: '',
+    });
   });
 });

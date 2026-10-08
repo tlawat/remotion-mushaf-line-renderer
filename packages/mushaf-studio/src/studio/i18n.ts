@@ -72,6 +72,10 @@ const EN = {
   'source.catalogueNote':
     'The clip of exactly these ayahs is downloaded into public/ with its reviewed word timings; nothing of yours is uploaded.',
   'source.use': 'Use this recitation',
+  'source.riwayahWarning':
+    'This recitation is in the {riwayah} riwayah, but the mushaf this panel renders is the Hafs print (KFGQPC V4): its words and their spelling can differ, so the words highlighted may not be the words recited, and some may stay untimed.',
+  'source.riwayahConfirm': 'Use the {riwayah} recitation with the Hafs mushaf anyway',
+  'source.riwayahConfirmFirst': 'Confirm using the {riwayah} recitation with the Hafs mushaf first.',
   'source.own': 'Own recording',
   'source.ready': 'public/{path} is ready. It stays on this machine until you press Align in the next tab.',
   'source.goToAlign': 'Go to Align',
@@ -109,6 +113,10 @@ const EN = {
   'align.model': 'Model',
   'align.device': 'Device',
   'align.riwayah': 'Riwayah',
+  'align.riwayahWarning':
+    'The mushaf this panel renders is the Hafs print (KFGQPC V4): a {riwayah} recitation can differ from it in words and their spelling, so the words the aligner hears may not match the words on the page, and some may stay untimed.',
+  'align.riwayahConfirm': 'Align the {riwayah} recitation against the Hafs mushaf anyway',
+  'align.riwayahConfirmFirst': 'Confirm aligning the {riwayah} recitation against the Hafs mushaf first.',
   'align.token': 'Hugging Face token (optional, for your own GPU quota)',
   'align.remember': 'Remember for this browser',
   'align.forget': 'Forget',
@@ -176,6 +184,9 @@ const EN = {
   'review.export': 'Export',
   'review.captionsJson': 'Captions JSON',
   'review.markers': 'include ayah markers',
+  'review.importCaptions': 'Import captions…',
+  'review.importCaptionsHint':
+    'Read a Captions JSON back (the Caption[] the Captions JSON button writes, edited in a caption editor) and write its times into the timings file.',
   'review.exportNote':
     "The captions of the whole timings file, timed to the audio file. The JSON is the Caption[] that Remotion's caption tooling (@remotion/captions) reads.",
   'review.splitTitle': 'Split segments...',
@@ -241,6 +252,16 @@ const EN = {
     one: 'public/{path} is written: {count} caption, timed to the audio file.',
     other: 'public/{path} is written: {count} captions, timed to the audio file.',
   },
+  'review.notice.captionsImported': {
+    one: '{name} is imported: the times of its {count} caption are in the timings file, and its edit log has the import.',
+    other:
+      '{name} is imported: the times of its {count} captions are in the timings file, and its edit log has the import.',
+  },
+  'review.notice.captionsUnchanged': '{name} changes no time: the timings file is left as it is.',
+  'error.captionsNotArray':
+    '{name} is not a Captions JSON: expected an array of captions ({text, startMs, endMs, ...}) like the one the Captions JSON button writes. Export it, edit its times, and import it again.',
+  'error.captionNotObject':
+    '{name}: caption {index} is {found}, not a caption {text, startMs, endMs}. Import the Captions JSON this row writes, edited without adding or removing captions.',
   'review.notice.nudgesReplaced': {
     one: 'The new alignment replaces the times of the {count} nudge made before; the edit log keeps it.',
     other: 'The new alignment replaces the times of the {count} nudges made before; the edit log keeps them.',
@@ -285,6 +306,8 @@ const EN = {
   'lines.pageNote': 'The page shows its lines as printed: click a page to seek to it. There are no splits to make.',
 
   'text.needsTimings': 'Fetching needs the timings: pick a recitation or align a recording first.',
+  'text.crossesSurahs':
+    'Fetching asks quran.com for one surah, and these timings cross surahs: fetch with a composition of each surah.',
   'text.quranText': 'Quran text',
   'text.now': 'Now: {file}',
   'text.recitationNeedsNoText':
@@ -430,6 +453,10 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.of': 'من {count}',
   'source.catalogueNote': 'يُنزَّل مقطع هذه الآيات بعينها إلى public/ مع توقيتات كلماته المراجَعة؛ ولا يُرفع شيء من ملفاتك.',
   'source.use': 'استخدم هذه التلاوة',
+  'source.riwayahWarning':
+    'هذه التلاوة برواية {riwayah}، والمصحف الذي تعرضه هذه اللوحة هو طبعة حفص (KFGQPC V4): قد تختلف الكلمات ورسمها، فلا تكون الكلماتُ المظلَّلة هي الكلماتِ المتلوّة، وقد يبقى بعضها بلا توقيت.',
+  'source.riwayahConfirm': 'استخدم تلاوة {riwayah} مع مصحف حفص على أي حال',
+  'source.riwayahConfirmFirst': 'أكّد أولًا استخدام تلاوة {riwayah} مع مصحف حفص.',
   'source.own': 'تسجيل خاص',
   'source.ready': 'الملف public/{path} جاهز. يبقى على هذا الجهاز حتى تضغط «محاذاة» في التبويب التالي.',
   'source.goToAlign': 'انتقل إلى المحاذاة',
@@ -466,6 +493,10 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'align.model': 'النموذج',
   'align.device': 'الجهاز',
   'align.riwayah': 'الرواية',
+  'align.riwayahWarning':
+    'المصحف الذي تعرضه هذه اللوحة هو طبعة حفص (KFGQPC V4): قد تختلف تلاوة {riwayah} عنها في الكلمات ورسمها، فلا تطابق الكلماتُ التي يسمعها المُحاذي كلماتِ الصفحة، وقد يبقى بعضها بلا توقيت.',
+  'align.riwayahConfirm': 'حاذِ تلاوة {riwayah} على مصحف حفص على أي حال',
+  'align.riwayahConfirmFirst': 'أكّد أولًا محاذاة تلاوة {riwayah} على مصحف حفص.',
   'align.token': 'رمز Hugging Face (اختياري، لاستخدام حصتك الخاصة من GPU)',
   'align.remember': 'تذكّره في هذا المتصفح',
   'align.forget': 'انسَه',
@@ -533,6 +564,9 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'review.export': 'التصدير',
   'review.captionsJson': 'Captions JSON',
   'review.markers': 'تضمين علامات نهاية الآيات',
+  'review.importCaptions': 'استيراد النصوص المصاحبة…',
+  'review.importCaptionsHint':
+    'يقرأ ملف Captions JSON (مصفوفة Caption[] التي يكتبها زر Captions JSON، بعد تحريرها في محرر النصوص المصاحبة) ويكتب توقيتاته في ملف التوقيتات.',
   'review.exportNote':
     'النصوص المصاحبة لملف التوقيتات كاملًا، موقّتة على ملف الصوت. وملف JSON هو مصفوفة Caption[] التي تقرؤها أدوات Remotion للنصوص المصاحبة (@remotion/captions).',
   'review.splitTitle': 'تقسيم المقاطع...',
@@ -584,6 +618,13 @@ const AR: Readonly<Record<MessageKey, Message>> = {
     'لا يحتوي الجذر على التركيب {id}: سجّل <MushafThumbnail> بالمعرّف {id} (انظر README التطبيق)، ثم اضغط زر الصورة المصغّرة مرة أخرى.',
   'review.notice.srt': 'كُتب public/{path}: عدد المقاطع النصية {count}، موقّتة على ملف الصوت.',
   'review.notice.captions': 'كُتب public/{path}: عدد النصوص المصاحبة {count}، موقّتة على ملف الصوت.',
+  'review.notice.captionsImported':
+    'استُورد {name}: صارت توقيتات نصوصه المصاحبة ({count}) في ملف التوقيتات، وسُجّل الاستيراد في سجل تعديلاته.',
+  'review.notice.captionsUnchanged': 'لا يغيّر {name} أي توقيت: بقي ملف التوقيتات كما هو.',
+  'error.captionsNotArray':
+    'ليس {name} ملف Captions JSON: المتوقع مصفوفة من النصوص المصاحبة ({text, startMs, endMs, ...}) مثل التي يكتبها زر Captions JSON. صدّره، وحرّر توقيتاته، ثم استورده مرة أخرى.',
+  'error.captionNotObject':
+    '{name}: النص المصاحب {index} هو {found}، وليس نصًا مصاحبًا {text, startMs, endMs}. استورد ملف Captions JSON الذي يكتبه هذا الصف، محرَّرًا دون إضافة نصوص أو حذفها.',
   'review.notice.nudgesReplaced':
     'تحلّ المحاذاة الجديدة محلّ توقيتات التعديلات الطفيفة السابقة (عددها {count})؛ ويحتفظ سجل التعديلات بها.',
 
@@ -626,6 +667,8 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'lines.pageNote': 'تعرض الصفحة أسطرها كما طُبعت: انقر على صفحة للانتقال إليها. لا تقسيم هنا.',
 
   'text.needsTimings': 'يحتاج الجلب إلى التوقيتات: اختر تلاوة أو حاذِ تسجيلًا أولًا.',
+  'text.crossesSurahs':
+    'يطلب الجلب من quran.com سورةً واحدة، وهذه التوقيتات تمتد عبر أكثر من سورة: اجلب من تركيب لكل سورة على حدة.',
   'text.quranText': 'نص القرآن',
   'text.now': 'الحالي: {file}',
   'text.recitationNeedsNoText':

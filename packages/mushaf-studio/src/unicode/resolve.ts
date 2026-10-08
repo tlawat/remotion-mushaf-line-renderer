@@ -1,7 +1,14 @@
+import {normalizeTimings} from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
-import {loadTranslationLayers, resolveEndCardContent, translationLayerSpecs} from '../compositions/extras';
+import {
+  loadTranslationLayers,
+  recitedPassageOf,
+  resolveEndCardContent,
+  translationLayerSpecs,
+} from '../compositions/extras';
 import {readTimings, shiftTimings, trimTimings} from '../compositions/recitation/resolve';
 import {fileUrl} from '../compositions/shared';
+import {ayahKeysOf} from '../compositions/timings';
 import {describeValue, MushafStudioError} from '../errors';
 import {clipTimeline, type MemorizeClip} from '../memorize/timeline';
 import type {Memorize} from '../schema';
@@ -23,8 +30,9 @@ export type ResolvedAyah = {
 /** What `calculateMetadata()` of `<MushafAyahText>` resolves once per render from the content props. */
 export type ResolvedAyahText = ResolvedExtras & {
   /**
-   * Trimmed to the range, without the ayahs the recording does not carry whole; moved
-   * `audioOffsetSeconds` earlier when `audio.trimSilence` skipped the recording's leading silence.
+   * Trimmed to the range (one surah's timings only: timings across surahs are used whole), without
+   * the ayahs the recording does not carry whole; moved `audioOffsetSeconds` earlier when
+   * `audio.trimSilence` skipped the recording's leading silence.
    */
   readonly timings: StudioTimings;
   /** Seconds of the recording skipped before frame 0 (`audio.trimSilence`); 0 or unset: the file's own times. */
@@ -32,7 +40,7 @@ export type ResolvedAyahText = ResolvedExtras & {
   readonly text: AyahWords;
   /** The first translation shown (`translations[0]`), or `null`. */
   readonly translation: AyahTranslation | null;
-  /** One per timed ayah, in order. */
+  /** One per timed ayah, in order, each with its own surah (timings across surahs name several). */
   readonly ayahs: readonly ResolvedAyah[];
   /** The clip timeline of `memorize` (`clipTimeline()`): one clip per ayah at its own time when ayahs play once. */
   readonly clips: readonly MemorizeClip[];
@@ -48,7 +56,8 @@ const bad = (message: string, details: Readonly<Record<string, unknown>>): Musha
 
 /**
  * Resolves the content props once: fetches and validates the timings and trims them to the ayah
- * range (as `<MushafRecitation>` does), loads the text file and the ayah translation, and pairs
+ * range (as `<MushafRecitation>` does: timings across surahs are used whole, and the text file
+ * must then hold every surah they name), loads the text file and the ayah translation, and pairs
  * every timed ayah with its words, and lays out the clip timeline of `memorize`. The text is read from `public/` only, never fetched from
  * quran.com here, so renders are offline and reproducible. Throws `BAD_STUDIO_PROP` for an empty
  * `textFile`, a text in a script the font does not set, or an ayah the text does not hold. Pure
@@ -67,15 +76,11 @@ export const resolveAyahText = async (
     );
   }
   const timings = trimTimings(await readTimings(props.timingsFile, io), props.fromAyah, props.toAyah);
-  const keys = new Set(timings.ayat.map((a) => `${timings.surah}:${a.ayah}`));
+  const keys = new Set(ayahKeysOf(timings));
   const [text, translations, endCard] = await Promise.all([
     loadAyahWords(fileUrl(props.textFile, io.staticFile), {fetch: io.fetch}),
     loadTranslationLayers(translationLayerSpecs(props.text), keys, io),
-    resolveEndCardContent(
-      props.endCard,
-      {surah: timings.surah, lastAyah: timings.ayat[timings.ayat.length - 1]!.ayah},
-      io,
-    ),
+    resolveEndCardContent(props.endCard, recitedPassageOf(timings), io),
   ]);
   if (text.script !== font.script) {
     throw bad(
@@ -83,15 +88,23 @@ export const resolveAyahText = async (
       {prop: 'textFile', file: props.textFile, script: text.script, font: props.font},
     );
   }
-  const ayahs = timings.ayat.map((timing): ResolvedAyah => {
-    const words = ayahWordsOf(text, timings.surah, timing.ayah);
+  const all = normalizeTimings(timings).ayat;
+  const surahs = [...new Set(all.map((timing) => timing.surah))];
+  const ayahs = all.map((timing): ResolvedAyah => {
+    const {surah} = timing;
+    const words = ayahWordsOf(text, surah, timing.ayah);
     if (words.length === 0) {
+      // Version 2 is used whole (no range) and the Text tab fetches one surah: the file must be merged.
+      const fix =
+        timings.version === 2
+          ? `These timings (version 2) are used whole and name surah${surahs.length === 1 ? '' : 's'} ${surahs.join(', ')}, so textFile must hold the words of every one: merge the text of surah ${surah} into it (fetchQuranComText({chapter: ${surah}, script: "${text.script}"}) per surah, their "words" in one file through serialiseAyahWords()).`
+          : `Fetch the text of surah ${surah} again (the panel’s Text tab), or narrow fromAyah/toAyah to the ayahs it holds.`;
       throw bad(
-        `textFile ${describeValue(props.textFile)} has no words for ayah ${timings.surah}:${timing.ayah}, which the timings carry. Fetch the text of surah ${timings.surah} again (the panel’s Text tab), or narrow fromAyah/toAyah to the ayahs it holds.`,
-        {prop: 'textFile', file: props.textFile, surah: timings.surah, ayah: timing.ayah},
+        `textFile ${describeValue(props.textFile)} has no words for ayah ${surah}:${timing.ayah}, which the timings carry. ${fix}`,
+        {prop: 'textFile', file: props.textFile, surah, ayah: timing.ayah},
       );
     }
-    return {surah: timings.surah, ayah: timing.ayah, start: timing.start, end: timing.end, words};
+    return {surah, ayah: timing.ayah, start: timing.start, end: timing.end, words};
   });
   return {
     timings,

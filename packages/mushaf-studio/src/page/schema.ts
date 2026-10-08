@@ -77,9 +77,19 @@ export const mushafPageSchema = z.object({
   audioFile: z.string().describe('Audio: a path in public/ or a URL'),
   /** A `public/` path to a `RecitationTimings` JSON (with or without the studio's `alignment` sidecar). */
   timingsFile: z.string().describe('Timings JSON in public/'),
-  /** 0 keeps the file's range. */
-  fromAyah: z.number().int().min(0).max(286).describe('First ayah to follow (0: as the timings say)'),
-  toAyah: z.number().int().min(0).max(286).describe('Last ayah to follow (0: as the timings say)'),
+  /** 0 keeps the file's range. A range of one surah's timings: timings across surahs (version 2) are used whole. */
+  fromAyah: z
+    .number()
+    .int()
+    .min(0)
+    .max(286)
+    .describe('First ayah to follow (0: as the timings say; timings across surahs are used whole)'),
+  toAyah: z
+    .number()
+    .int()
+    .min(0)
+    .max(286)
+    .describe('Last ayah to follow (0: as the timings say; timings across surahs are used whole)'),
   theme: themeNameSchema,
   customTheme: customThemeSchema.describe('The palette used when theme is custom'),
   fonts: fontsSchema,
@@ -119,13 +129,12 @@ export const defaultPageView: PageView = {
 
 /**
  * Defaults that work out of the box: the same Al-Fatihah sample as `<MushafRecitation>` (ayahs 2-7
- * by Abdul Hamid Ghraio from the aligner's catalogue, audio from the catalogue's clip URL, the
- * timings committed in the app's `public/`), the mushaf data from the app's mirror, the plain theme,
+ * by Abdul Hamid Ghraio from the aligner's catalogue, the audio in the app's `public/` beside the
+ * timings committed there), the mushaf data from the app's mirror, the plain theme,
  * a 16:9 frame with page 1 centred in it.
  */
 export const defaultMushafPageProps: MushafPageProps = {
-  audioFile:
-    'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+  audioFile: 'mushaf-studio/fatiha/audio.mp3',
   timingsFile: 'mushaf-studio/fatiha/timings.json',
   fromAyah: 0,
   toAyah: 0,

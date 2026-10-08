@@ -1,14 +1,21 @@
 import {
   getMushafLines,
+  getMushafLinesForRanges,
   type LineSchedule,
   type MushafLineData,
   type MushafWord,
   type RecitedRange,
   recitedRange,
+  recitedRanges,
   scheduleLines,
 } from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
-import {loadTranslationLayers, resolveEndCardContent, translationLayerSpecs} from '../compositions/extras';
+import {
+  loadTranslationLayers,
+  recitedPassageOf,
+  resolveEndCardContent,
+  translationLayerSpecs,
+} from '../compositions/extras';
 import {recitationDuration} from '../compositions/recitation/calculate-metadata';
 import {
   audioOffsetFor,
@@ -18,6 +25,7 @@ import {
   timingsInRange,
 } from '../compositions/recitation/resolve';
 import {STUDIO_FPS} from '../compositions/shared';
+import {ayahKeysOf, passageSpan} from '../compositions/timings';
 import {MushafStudioError} from '../errors';
 import {doubtfulWords} from '../lines';
 import {dataSourceFrom, defaultAnimation, themeSelectionFrom} from '../schema';
@@ -49,8 +57,13 @@ export type ResolvedPage = ResolvedExtras & {
   readonly timings: StudioTimings;
   /** Seconds of the recording skipped at the start; the `<Audio trimBefore>`. */
   readonly audioOffsetSeconds: number;
-  /** The ayahs followed: the words outside it are dimmed on the page. */
+  /** The ayahs followed: the words outside it are dimmed on the page. The first of `ranges` across surahs. */
   readonly range: RecitedRange;
+  /**
+   * Every range followed, one per surah in recitation order, for timings that cross surahs
+   * (version 2); absent for one surah's, whose one range is `range`. See `rangesOf()`.
+   */
+  readonly ranges?: readonly RecitedRange[] | undefined;
   /** The pages, in reading order, their starts never decreasing. */
   readonly pages: readonly PageSlot[];
   /** The recited lines, in reading order, by page and line number. */
@@ -71,6 +84,14 @@ export type ResolvePageOptions = {
 /** Whether a word is one of the ayahs followed: the others are dimmed, not hidden. */
 export const inRange = (word: Pick<MushafWord, 'surah' | 'ayah'>, range: RecitedRange): boolean =>
   word.surah === range.surah && word.ayah >= range.fromAyah && word.ayah <= range.toAyah;
+
+/** `inRange()` of any of `ranges`: a word of a passage across surahs. */
+export const inRanges = (word: Pick<MushafWord, 'surah' | 'ayah'>, ranges: readonly RecitedRange[]): boolean =>
+  ranges.some((range) => inRange(word, range));
+
+/** The ranges a resolved page follows: `ranges` across surahs, else its one `range`. */
+export const rangesOf = (resolved: Pick<ResolvedPage, 'range' | 'ranges'>): readonly RecitedRange[] =>
+  resolved.ranges ?? [resolved.range];
 
 /**
  * The schedule of the passage's lines (`scheduleLines()` over `passage`) by page and line number,
@@ -122,10 +143,12 @@ export const PAGE_LEAD_IN_SECONDS = defaultAnimation.leadInSeconds;
 
 /**
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah range
- * and to the ayahs the recording carries whole, moves them `audioOffsetSeconds` earlier (see
- * `audioOffsetFor()`), finds the passage's lines (`getMushafLines(recitedRange(...))`) and
- * schedules them, then loads every page they are on whole (`getMushafLines({page})`) and schedules
- * the pages (`schedulePages()`, with `pageView.turnSeconds`). Pure given `fetch`.
+ * (one surah's timings only: timings that cross surahs are used whole) and to the ayahs the
+ * recording carries whole, moves them `audioOffsetSeconds` earlier (see `audioOffsetFor()`), finds
+ * the passage's lines (`getMushafLines(recitedRange(...))`, or across surahs
+ * `getMushafLinesForRanges(recitedRanges(...))`, unsliced) and schedules them, then loads every
+ * page they are on whole (`getMushafLines({page})`) and schedules the pages (`schedulePages()`,
+ * with `pageView.turnSeconds`). Pure given `fetch`.
  */
 export const resolvePage = async (props: MushafPageProps, options: ResolvePageOptions = {}): Promise<ResolvedPage> => {
   // Wrapped, not referenced: the native fetch called as a method of another object throws in browsers.
@@ -141,32 +164,37 @@ export const resolvePage = async (props: MushafPageProps, options: ResolvePageOp
   const timings = shiftTimings(played, audioOffsetSeconds);
   const theme = themeSelectionFrom(props.theme, props.customTheme);
   const data = dataSourceFrom(props.data, io.staticFile);
-  const range = recitedRange(timings);
-  const passage = await getMushafLines({...range, theme, data});
+  // One surah: its range, as before; across surahs, one range per surah, the first as `range`.
+  const ranges = timings.version === 1 ? [recitedRange(timings)] : recitedRanges(timings);
+  const range = ranges[0]!;
+  const passage =
+    timings.version === 1
+      ? await getMushafLines({...range, theme, data})
+      : await getMushafLinesForRanges(ranges, {theme, slice: false, data});
   const lines = pageLineSlots(passage, scheduleLines(passage, timings, {occurrence: props.highlight.occurrence}));
   if (lines.length === 0) {
+    const {from, to} = passageSpan(timings);
     throw new MushafStudioError(
       'BAD_STUDIO_PROP',
-      `No line of surah ${range.surah} ayahs ${range.fromAyah}-${range.toAyah} carries a timed word; the timings and the mushaf data do not agree. Realign the recording.`,
+      timings.version === 1
+        ? `No line of surah ${range.surah} ayahs ${range.fromAyah}-${range.toAyah} carries a timed word; the timings and the mushaf data do not agree. Realign the recording.`
+        : `No line of ayahs ${from.surah}:${from.ayah}-${to.surah}:${to.ayah} carries a timed word; the timings and the mushaf data do not agree. Realign the recording.`,
       {prop: 'timingsFile', file: props.timingsFile},
     );
   }
   const endSeconds = recitationDuration(timings, STUDIO_FPS) / STUDIO_FPS;
   const scheduled = schedulePages(lines, props.pageView.turnSeconds, endSeconds);
-  const keys = new Set(timings.ayat.map((a) => `${timings.surah}:${a.ayah}`));
+  const keys = new Set(ayahKeysOf(timings));
   const [wholePages, translations, endCard] = await Promise.all([
     Promise.all(scheduled.map(({page}) => getMushafLines({page, theme, data}))),
     loadTranslationLayers(translationLayerSpecs(props.text), keys, io),
-    resolveEndCardContent(
-      props.endCard,
-      {surah: timings.surah, lastAyah: timings.ayat[timings.ayat.length - 1]!.ayah},
-      io,
-    ),
+    resolveEndCardContent(props.endCard, recitedPassageOf(timings), io),
   ]);
   return {
     timings,
     audioOffsetSeconds,
     range,
+    ...(ranges.length > 1 ? {ranges} : {}),
     pages: scheduled.map((slot, i) => ({...slot, lines: wholePages[i]!})),
     lines,
     doubtful: doubtfulWords(ranged, {threshold: props.review.confidenceThreshold}),

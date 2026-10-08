@@ -10,7 +10,8 @@
     "render:passage": "remotion render MushafPassage out/passage.mp4",
     "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
     "render:ayah": "remotion render MushafAyahText out/ayah-text.mp4",
-    "make": "bun scripts/make.ts"
+    "make": "bun scripts/make.ts",
+    "sample": "bun scripts/sample.ts"
   },
   "dependencies": {
     "@remotion/cli": "4.0.521",

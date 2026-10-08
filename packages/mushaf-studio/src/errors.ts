@@ -1,7 +1,7 @@
 /**
  * Error codes of the studio package. The main package's `MushafError` covers everything that
  * happens to a line; these cover what happens around it: the aligner, the catalogue, the
- * translation files and the panel's own inputs.
+ * translation and content files, project files and the panel's own inputs.
  */
 export type MushafStudioErrorCode =
   /** The aligner or the catalogue answered with an error; `details.status` and `details.code` carry theirs. */
@@ -16,6 +16,18 @@ export type MushafStudioErrorCode =
   | 'BAD_TRANSLATION_FILE'
   /** A translation source could not be fetched. */
   | 'TRANSLATION_FETCH_FAILED'
+  /**
+   * A tafsir or a surah introduction (chapter info) could not be fetched: the request failed, the
+   * source answered in a shape the client does not know, or it has nothing for the range asked for.
+   */
+  | 'CONTENT_FETCH_FAILED'
+  /** A tafsir or chapter-info file is not the envelope its loader reads (another version or kind, a bad field). */
+  | 'BAD_CONTENT_FILE'
+  /**
+   * A project file (`project.json`) cannot be imported: not JSON, another version, props that fail
+   * the composition's schema, props for the other kind of composition, or files `public/` lacks.
+   */
+  | 'BAD_PROJECT_FILE'
   /** A line split names a line that is not in the passage or a word that is not on that line. */
   | 'BAD_LINE_SPLIT'
   /** A composition prop is out of range or inconsistent (the Zod schema catches most; this covers the rest). */

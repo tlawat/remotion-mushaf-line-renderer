@@ -189,7 +189,7 @@ describe('the keyboard, as data', () => {
     expect(doubtfulReviewWords(words, t, 0.4).map((w) => w.key)).toEqual(['1:5:1#0']);
     // Without a sidecar: the ayahs' words, grouped by ayah.
     const {alignment: _alignment, ...bare} = t;
-    expect(reviewWords(bare).map((w) => w.group)).toEqual(['a2', 'a2', 'a3', 'a3', 'a3', 'a4', 'a5']);
+    expect(reviewWords(bare).map((w) => w.group)).toEqual(['a1:2', 'a1:2', 'a1:3', 'a1:3', 'a1:3', 'a1:4', 'a1:5']);
     expect(doubtfulReviewWords(reviewWords(bare), bare, 0.8).map((w) => w.key)).toEqual(['1:5:1#0']);
   });
 
@@ -307,5 +307,41 @@ describe('the Review tab keyboard', () => {
     expect(studio.seek).toHaveBeenLastCalledWith(30);
     key(']');
     expect(screen.getByLabelText('1:2:2 start')).toHaveProperty('value', '1.02');
+  });
+});
+
+/** 113:1-2 then 114:1-2, without a sidecar: the same ayah numbers in two surahs; 114:1 is incomplete. */
+const acrossSurahs = (): StudioTimings => ({
+  version: 2,
+  ayat: [
+    {surah: 113, ayah: 1, start: 0, end: 1, words: [{id: '113:1:1', start: 0, end: 1}]},
+    {surah: 113, ayah: 2, start: 1, end: 2, words: [{id: '113:2:1', start: 1, end: 2}]},
+    {surah: 114, ayah: 1, start: 3, end: 4, complete: false, words: [{id: '114:1:1', start: 3, end: 4}]},
+    {surah: 114, ayah: 2, start: 4, end: 5, words: [{id: '114:2:1', start: 4, end: 5}]},
+  ],
+});
+
+describe('timings across surahs', () => {
+  it('groups the words by surah and ayah, and takes only the incomplete ayah of its own surah as doubtful', () => {
+    const t = acrossSurahs();
+    const words = reviewWords(t);
+    expect(words.map((w) => w.group)).toEqual(['a113:1', 'a113:2', 'a114:1', 'a114:2']);
+    expect(doubtfulReviewWords(words, t, 0.8).map((w) => w.key)).toEqual(['114:1:1#0']);
+  });
+
+  it('lists each ayah under its own surah and opens only the row asked', () => {
+    const base = props();
+    render(
+      <MushafStudioPanel
+        compositionId="MushafRecitation"
+        props={{...base, resolved: {...base.resolved, timings: acrossSurahs()}}}
+        initialTab="review"
+      />,
+    );
+    const rows = [...review().querySelectorAll<HTMLElement>('li')].filter((row) => row.querySelector('strong'));
+    expect(rows.map((row) => row.querySelector('strong')!.textContent)).toEqual(['113:1', '113:2', '114:1', '114:2']);
+    fireEvent.click(rows[2]!.querySelector('button')!);
+    expect(document.querySelector('[data-word-key="114:1:1#0"]')).not.toBeNull();
+    expect(document.querySelector('[data-word-key="113:1:1#0"]')).toBeNull();
   });
 });

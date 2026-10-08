@@ -5,6 +5,7 @@ export {SURAH_NAMES, surahEnglishName} from './surah-names';
 export {
   arabicIndicDigits,
   ayahRangeText,
+  ayahSpanText,
   INTRO_CLEARANCE_SECONDS,
   INTRO_FADE_SECONDS,
   introEndSeconds,
@@ -17,4 +18,5 @@ export {
   type MushafTitleOverlayProps,
   showsCorner,
   showsIntro,
+  surahSpanName,
 } from './TitleOverlay';

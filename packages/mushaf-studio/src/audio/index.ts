@@ -7,6 +7,7 @@ export {
   analyzeAudio,
   analyzeSamples,
   clearAudioAnalysisCache,
+  forgetAudioAnalysis,
 } from './analyze';
 export {
   applyBiquad,
@@ -20,6 +21,7 @@ export {
   truePeak,
 } from './loudness';
 export {type AudioSettings, audioSchema, defaultAudio} from './schema';
+export {audioSummaryFrom, audioSummaryOf, withAudioSummary} from './summary';
 export {
   gainFor,
   levelAt,

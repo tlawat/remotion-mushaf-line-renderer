@@ -1,6 +1,7 @@
 // Step 1: a reviewed recitation from the QUD catalogue, a surah it covers and the ayahs to show.
 // The chapter's timings go into the memory store; the audio streams from the catalogue's clip URL.
-import {listRecitations, type QudRecitation, surahEnglishName} from '@tlawat/mushaf-studio';
+// The page is the Hafs print, so a recitation in another riwayah loads only once the user confirms.
+import {isHafsRecitation, listRecitations, type QudRecitation, surahEnglishName} from '@tlawat/mushaf-studio';
 import * as React from 'react';
 import {memoryFiles} from '../memory-files';
 import {pickRecitation, setRange, type WebProject} from '../project';
@@ -19,6 +20,8 @@ export const RecitationStep: React.FC<RecitationStepProps> = ({project, update})
   const [surah, setSurah] = React.useState(0);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  /** The slug of the recitation in another riwayah the user confirmed using on the Hafs mushaf. */
+  const [confirmedSlug, setConfirmedSlug] = React.useState<string | null>(null);
   const request = React.useRef(0);
   const live = React.useRef(true);
   // Set on mount too: StrictMode mounts, unmounts and mounts again.
@@ -45,6 +48,8 @@ export const RecitationStep: React.FC<RecitationStepProps> = ({project, update})
 
   const groups = React.useMemo(() => groupByReciter(catalogue ?? []), [catalogue]);
   const recitation = catalogue?.find((entry) => entry.slug === slug);
+  /** Whether `entry` may load: a Hafs recitation, or one the user confirmed. */
+  const allowed = (entry: QudRecitation): boolean => isHafsRecitation(entry) || confirmedSlug === entry.slug;
 
   const load = (entry: QudRecitation, chapter: number) => {
     const id = ++request.current;
@@ -68,13 +73,19 @@ export const RecitationStep: React.FC<RecitationStepProps> = ({project, update})
     setSlug(next);
     const entry = catalogue?.find((e) => e.slug === next);
     if (!entry) return;
-    if (surah !== 0 && entry.chapters.includes(surah)) load(entry, surah);
-    else setSurah(0);
+    if (surah !== 0 && entry.chapters.includes(surah)) {
+      if (allowed(entry)) load(entry, surah);
+    } else setSurah(0);
   };
 
   const onSurah = (next: number) => {
     setSurah(next);
-    if (recitation && next !== 0) load(recitation, next);
+    if (recitation && next !== 0 && allowed(recitation)) load(recitation, next);
+  };
+
+  const onConfirm = (entry: QudRecitation, checked: boolean) => {
+    setConfirmedSlug(checked ? entry.slug : null);
+    if (checked && surah !== 0 && entry.chapters.includes(surah)) load(entry, surah);
   };
 
   const picked = project.recitation;
@@ -115,6 +126,23 @@ export const RecitationStep: React.FC<RecitationStepProps> = ({project, update})
           ))}
         </select>
       </label>
+      {recitation && !isHafsRecitation(recitation) && (
+        <div className="riwayah-warning">
+          <p className="warning" role="alert">
+            This recitation is in the {recitation.riwayah} riwayah, but the mushaf drawn here is the Hafs print (KFGQPC
+            V4): its words and their spelling can differ, so the words highlighted may not be the words recited, and
+            some may stay untimed.
+          </p>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={confirmedSlug === recitation.slug}
+              onChange={(event) => onConfirm(recitation, event.target.checked)}
+            />
+            <span>Use the {recitation.riwayah} recitation with the Hafs mushaf anyway</span>
+          </label>
+        </div>
+      )}
       <label className="field">
         <span>Surah</span>
         <select value={surah} onChange={(event) => onSurah(Number(event.target.value))} disabled={!recitation}>

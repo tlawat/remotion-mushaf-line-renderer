@@ -8,6 +8,7 @@
   --accent: #1f6f5c;
   --accent-text: #ffffff;
   --error: #a3261b;
+  --warning: #8a5300;
   --focus: #2a62d4;
   --radius: 10px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -26,6 +27,7 @@
     --accent: #5cc2a6;
     --accent-text: #0e1a17;
     --error: #ff8a7f;
+    --warning: #f0c060;
     --focus: #8fb2ff;
   }
 }
@@ -144,6 +146,11 @@ a {
 .error {
   color: var(--error);
   overflow-wrap: anywhere;
+}
+
+.warning {
+  color: var(--warning);
+  margin: 4px 0;
 }
 
 .field {

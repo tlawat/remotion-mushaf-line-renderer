@@ -1,4 +1,5 @@
-import {ayahRangeText} from '../overlay';
+import {type AyahRef, compareAyahs, surahOfAyah} from '../compositions/timings';
+import {ayahSpanText} from '../overlay';
 import type {StudioTimings} from '../types';
 
 /** The attribution of the mushaf's fonts, which every video shows. */
@@ -35,7 +36,7 @@ export const attributionLines = (options: AttributionOptions): readonly string[]
 };
 
 export type YoutubeDescriptionOptions = AttributionOptions & {
-  /** The surah's name as the title shows it ("Al-Fatihah"). */
+  /** The surah's name as the title shows it ("Al-Fatihah"; `surahSpanName()` across surahs). */
   readonly surahName: string;
   /** The reciter's name; the first line leaves it out when empty. */
   readonly reciter: string;
@@ -46,7 +47,8 @@ export type YoutubeDescriptionOptions = AttributionOptions & {
 /**
  * A description to paste into YouTube: what is recited and by whom, the chapters (YouTube reads
  * them from the description), and the credits of `attributionLines()`. Sections are separated by a
- * blank line; the text ends with a newline. The range is the lowest to the highest ayah timed.
+ * blank line; the text ends with a newline. The range is the lowest to the highest ayah timed,
+ * across surahs from the first surah's to the last's ("Al-Falaq – An-Nas 113:4–114:2").
  *
  * ```text
  * Al-Fatihah 1:2–7, recited by Mishary Alafasy
@@ -61,8 +63,10 @@ export type YoutubeDescriptionOptions = AttributionOptions & {
  */
 export const youtubeDescription = (options: YoutubeDescriptionOptions): string => {
   const {timings} = options;
-  const ayahs = timings.ayat.map((ayah) => ayah.ayah);
-  const range = ayahs.length === 0 ? '' : ` ${ayahRangeText(timings.surah, Math.min(...ayahs), Math.max(...ayahs))}`;
+  const ayahs = timings.ayat
+    .map((ayah, i): AyahRef => ({surah: surahOfAyah(timings, i), ayah: ayah.ayah}))
+    .sort(compareAyahs);
+  const range = ayahs.length === 0 ? '' : ` ${ayahSpanText(ayahs[0]!, ayahs[ayahs.length - 1]!)}`;
   const reciter = options.reciter.trim();
   const title = `${options.surahName}${range}${reciter === '' ? '' : `, recited by ${reciter}`}`;
   const sections = [title];

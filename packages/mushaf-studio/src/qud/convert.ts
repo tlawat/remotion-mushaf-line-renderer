@@ -3,7 +3,7 @@
 // flags, each word's Uthmani text, the session). Pure: no clock, no network.
 import {type AyahTiming, parseRecitationTimings, type WordTiming} from '@tlawat/remotion-mushaf-line';
 import {describeValue, MushafStudioError} from '../errors';
-import type {AlignmentSegment, AlignmentSidecar, AlignmentWord, CatalogueOrigin, StudioTimings} from '../types';
+import type {AlignmentSegment, AlignmentSidecar, AlignmentWord, CatalogueOrigin, StudioTimingsV1} from '../types';
 import type {QudAlignResponse, QudChapterSegments, QudSegment, QudTimestampsResponse, QudWord} from './types';
 
 /** Seconds the ayah-end marker stays current after the ayah's last word, unless the next ayah starts sooner. */
@@ -159,7 +159,7 @@ const assemble = (
   heard: readonly Heard[],
   options: Pick<FromQudOptions, 'audio' | 'fromAyah' | 'toAyah'>,
   sidecar: Omit<AlignmentSidecar, 'version' | 'segments' | 'words' | 'edits'>,
-): StudioTimings => {
+): StudioTimingsV1 => {
   const {surah, ayat} = timeAyat(heard, options);
   const alignment: AlignmentSidecar = {
     version: 1,
@@ -203,7 +203,7 @@ const assemble = (
 export const timingsFromQud = (
   {align, timestamps}: {readonly align: QudAlignResponse; readonly timestamps: QudTimestampsResponse},
   options: FromQudOptions = {},
-): StudioTimings => {
+): StudioTimingsV1 => {
   if (timestamps.audio_id !== undefined && timestamps.audio_id !== align.audio_id)
     return badResponse(
       `the timestamps belong to session ${timestamps.audio_id}, the alignment to ${align.audio_id}`,
@@ -227,7 +227,7 @@ export const timingsFromQud = (
 export const timingsFromCatalogue = (
   chapter: QudChapterSegments,
   options: Pick<FromQudOptions, 'audio'> = {},
-): StudioTimings => {
+): StudioTimingsV1 => {
   const recitation: CatalogueOrigin = {
     slug: chapter.recitation,
     chapter: chapter.chapter,

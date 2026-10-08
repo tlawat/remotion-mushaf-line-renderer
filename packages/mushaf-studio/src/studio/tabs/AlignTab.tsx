@@ -49,14 +49,19 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
   const [model, setModel] = useState<QudModel>(session?.model ?? 'Base');
   const [device, setDevice] = useState<QudDevice>(session?.device ?? 'GPU');
   const [riwayah, setRiwayah] = useState<QudRiwayah>(session?.riwayah ?? 'hafs');
+  /** The riwayah the user confirmed aligning against the Hafs mushaf; another one asks again. */
+  const [confirmedRiwayah, setConfirmedRiwayah] = useState<QudRiwayah | null>(null);
   const [token, setToken] = useState(() => getHfToken());
   const [remembered, setRemembered] = useState(() => isHfTokenRemembered());
   // The recording the user just put into public/ wins over whatever the composition plays, a downloaded clip included.
   const audio = uploadedAudio ?? (isUrl(props.audioFile) || !props.audioFile ? null : props.audioFile);
   const working = busy !== null;
+  // The page is the Hafs print: another riwayah aligns only once the user has said it may not match.
+  const otherRiwayah = riwayah !== 'hafs';
+  const confirmed = !otherRiwayah || confirmedRiwayah === riwayah;
 
   const align = () => {
-    if (!audio) return;
+    if (!audio || !confirmed) return;
     const client = {token: token || null};
     void runStudioTask(tNow('align.busy.reading'), async () => {
       const blob = await readPublicFile(audio);
@@ -156,6 +161,22 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
             )}
           </Field>
         </div>
+        {otherRiwayah ? (
+          <div data-mushaf-control="riwayah-warning">
+            <p role="alert" style={{...styles.note, color: colors.warning}}>
+              {t('align.riwayahWarning', {riwayah})}
+            </p>
+            <label style={styles.row}>
+              <input
+                type="checkbox"
+                data-mushaf-control="riwayah-confirm"
+                checked={confirmedRiwayah === riwayah}
+                onChange={(e) => setConfirmedRiwayah(e.target.checked ? riwayah : null)}
+              />
+              <span style={styles.label}>{t('align.riwayahConfirm', {riwayah})}</span>
+            </label>
+          </div>
+        ) : null}
         <Field label={t('align.token')}>
           {(id) => (
             <input
@@ -200,7 +221,12 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
       </Section>
       <Section title={t('align.title')}>
         <Note>{t('align.consent')}</Note>
-        <Button variant="primary" onClick={align} disabled={working || !audio}>
+        <Button
+          variant="primary"
+          onClick={align}
+          disabled={working || !audio || !confirmed}
+          title={confirmed ? undefined : t('align.riwayahConfirmFirst')}
+        >
           {t('align.button')}
         </Button>
         {progress ? (

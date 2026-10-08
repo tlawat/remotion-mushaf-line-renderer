@@ -5,6 +5,7 @@
 import {cleanup, render} from '@testing-library/react';
 import React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {falaqNas, falaqNasLinesFor, PAGE_604} from '../compositions/helpers/falaq-nas';
 import {createRemotionMock} from '../compositions/helpers/remotion-mock';
 import {fetchJson, staticFile, surah2Timings, syntheticMushafLines} from './helpers';
 
@@ -14,7 +15,7 @@ vi.mock('remotion', async (importOriginal) => ({
   ...remotion.module,
 }));
 
-const mocks = vi.hoisted(() => ({loadPageFont: vi.fn(), getMushafLines: vi.fn()}));
+const mocks = vi.hoisted(() => ({loadPageFont: vi.fn(), getMushafLines: vi.fn(), getMushafLinesForRanges: vi.fn()}));
 type LineData = import('@tlawat/remotion-mushaf-line').MushafLineData;
 type LineProps = import('@tlawat/remotion-mushaf-line').MushafLineProps & {line: LineData};
 vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
@@ -49,6 +50,7 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
     ...actual,
     MushafLine,
     getMushafLines: (options: unknown) => mocks.getMushafLines(options),
+    getMushafLinesForRanges: (ranges: unknown, options: unknown) => mocks.getMushafLinesForRanges(ranges, options),
     loadPageFont: (options: unknown) => mocks.loadPageFont(options),
   };
 });
@@ -153,6 +155,25 @@ describe('<MushafPage>: the page', () => {
     expect(slot(root, 2, 1).style.opacity).toBe('');
     expect(slot(root, 3, 3).style.opacity).toBe(String(OUTSIDE_OPACITY));
     expect(Object.values(wordStyles(root, 3, 4)).every((style) => style?.opacity === OUTSIDE_OPACITY)).toBe(true);
+  });
+
+  it('follows a recitation across surahs: what neither surah recites is dimmed, An-Nas’s header is not', async () => {
+    mocks.getMushafLines.mockImplementation(async (options: {page?: number}) =>
+      options.page === 604 ? PAGE_604 : syntheticMushafLines(options as never),
+    );
+    mocks.getMushafLinesForRanges.mockImplementation(async (ranges: Parameters<typeof falaqNasLinesFor>[0]) =>
+      falaqNasLinesFor(ranges),
+    );
+    const p: MushafPageProps = {...defaultMushafPageProps, timingsFile: 'falaq-nas.json', audioFile: 'audio.mp3'};
+    const resolved = await resolvePage(p, {fetch: fetchJson(falaqNas), staticFile});
+    at(14);
+    const root = mount({...p, resolved});
+    expect(Object.values(wordStyles(root, 604, 8)).every((style) => style?.opacity === OUTSIDE_OPACITY)).toBe(true);
+    expect(Object.values(wordStyles(root, 604, 10)).every((style) => style?.opacity !== OUTSIDE_OPACITY)).toBe(true);
+    expect(Object.values(wordStyles(root, 604, 13)).every((style) => style?.opacity !== OUTSIDE_OPACITY)).toBe(true);
+    expect(slot(root, 604, 11).style.opacity).toBe('');
+    expect(slot(root, 604, 12).style.opacity).toBe('');
+    expect(slot(root, 604, 13).dataset.current).toBe('true');
   });
 
   it('highlights the word being heard', async () => {

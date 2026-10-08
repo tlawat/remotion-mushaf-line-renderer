@@ -1,4 +1,10 @@
-import type {AyahTiming, MushafWord, RecitationTimingsV1, WordContext} from '@tlawat/remotion-mushaf-line';
+import {
+  type AyahTiming,
+  type MushafWord,
+  normalizeTimings,
+  type RecitationTimings,
+  type WordContext,
+} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {interpolateColors} from 'remotion';
 import {clipAt, type MemorizeClip} from '../memorize/timeline';
@@ -63,8 +69,9 @@ export type WordStyleOptions = {
    * The timings themselves, for `dimUpcomingOnly` on a word `timingsIndex` does not know (a file
    * without per-word times, a word the aligner missed, the ayah-end marker): such a word is upcoming
    * until its ayah starts, the marker until its ayah ends. Without them an unknown word is never dimmed.
+   * Either version: across surahs, an ayah is found by its own surah.
    */
-  readonly timings?: RecitationTimingsV1 | undefined;
+  readonly timings?: RecitationTimings | undefined;
   /** The word `wordAt()` names on this frame, for `mode: 'ayah'`; `null` between words. */
   readonly activeWordId: string | null;
   /**
@@ -127,7 +134,7 @@ export const wordStyleFrom = (
   const audioTime = options.audioTime ?? ((seconds: number) => seconds);
   const memorize = options.memorize?.settings.mode === 'off' ? undefined : options.memorize;
   const ayahTimings = new Map<string, AyahTiming>();
-  for (const ayah of timings?.ayat ?? []) ayahTimings.set(`${timings!.surah}:${ayah.ayah}`, ayah);
+  for (const ayah of timings ? normalizeTimings(timings).ayat : []) ayahTimings.set(`${ayah.surah}:${ayah.ayah}`, ayah);
   /** When a word is first heard: its own time, else its ayah's start (the marker: its ayah's end), else unknown. */
   const startOf = (word: MushafWord): number | undefined => {
     const own = timingsIndex[word.id];

@@ -21,6 +21,24 @@ export const ayahRangeText = (
   return digits === 'latin' ? text : arabicIndicDigits(text);
 };
 
+/**
+ * The range from one ayah to another, across surahs when they differ: `"113:4–114:2"`; within one
+ * surah it is `ayahRangeText()` (`"1:2–7"`, `"1:2"`). `'arabic'` writes the same in Arabic-Indic digits.
+ */
+export const ayahSpanText = (
+  from: {readonly surah: number; readonly ayah: number},
+  to: {readonly surah: number; readonly ayah: number},
+  digits: 'latin' | 'arabic' = 'latin',
+): string => {
+  if (from.surah === to.surah) return ayahRangeText(from.surah, from.ayah, to.ayah, digits);
+  const text = `${from.surah}:${from.ayah}–${to.surah}:${to.ayah}`;
+  return digits === 'latin' ? text : arabicIndicDigits(text);
+};
+
+/** The transliterated name of a surah, or of the first and last of a passage across surahs: `"Al-Falaq – An-Nas"`. */
+export const surahSpanName = (fromSurah: number, toSurah: number = fromSurah): string =>
+  fromSurah === toSurah ? surahEnglishName(fromSurah) : `${surahEnglishName(fromSurah)} – ${surahEnglishName(toSurah)}`;
+
 /** How long before the first word the intro card is gone, when the recitation starts inside `introSeconds`. */
 export const INTRO_CLEARANCE_SECONDS = 0.3;
 /** The intro card's fade-out, at most: a shorter card fades over its whole length. */
@@ -50,9 +68,12 @@ export const showsIntro = (title: Overlay['title']): boolean => title === 'intro
 export const showsCorner = (title: Overlay['title']): boolean => title === 'corner' || title === 'both';
 
 export type MushafTitleCardProps = {
+  /** The passage: its first surah and ayah, and its last ayah, of `toSurah` when it crosses surahs. */
   readonly surah: number;
   readonly fromAyah: number;
   readonly toAyah: number;
+  /** The last ayah's surah, for a passage across surahs (version 2 timings); `surah` when left out. */
+  readonly toSurah?: number | undefined;
   /** Shown under the range when not empty. */
   readonly reciter: string;
   readonly color: string;
@@ -73,11 +94,15 @@ export type MushafTitleCardProps = {
 /**
  * The intro card: the surah name in its printed frame (`<MushafSurahName framed>`), the range in
  * Latin and Arabic-Indic digits ("Al-Fatihah · 1:2–7 · ١:٢–٧"), and the reciter, centred on the
- * page colour over the whole frame, fading out to `endSeconds`. Nothing after that. Pure in its
- * props and the frame.
+ * page colour over the whole frame, fading out to `endSeconds`. Nothing after that. A passage
+ * across surahs is framed under its first surah's name and names both ends
+ * ("Al-Falaq – An-Nas · 113:4–114:2 · ١١٣:٤–١١٤:٢"). Pure in its props and the frame.
  */
 export const MushafTitleCard: React.FC<MushafTitleCardProps> = (props) => {
   const {surah, fromAyah, toAyah, reciter, color, font, background, endSeconds, fontSize, lineHeight, width} = props;
+  const toSurah = props.toSurah ?? surah;
+  const from = {surah, ayah: fromAyah};
+  const to = {surah: toSurah, ayah: toAyah};
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const opacity = introOpacity(frame, fps, endSeconds);
@@ -104,9 +129,9 @@ export const MushafTitleCard: React.FC<MushafTitleCardProps> = (props) => {
         <MushafSurahName surah={surah} framed fontSize={fontSize} lineHeight={lineHeight} {...props.fontProps} />
       </div>
       <div data-mushaf-overlay-part="range" style={{fontSize: textSize, lineHeight: 1.3}}>
-        {surahEnglishName(surah)} · {ayahRangeText(surah, fromAyah, toAyah)} ·{' '}
+        {surahSpanName(surah, toSurah)} · {ayahSpanText(from, to)} ·{' '}
         <span dir="rtl" style={{unicodeBidi: 'isolate'}}>
-          {ayahRangeText(surah, fromAyah, toAyah, 'arabic')}
+          {ayahSpanText(from, to, 'arabic')}
         </span>
       </div>
       {reciter !== '' && (
@@ -119,8 +144,8 @@ export const MushafTitleCard: React.FC<MushafTitleCardProps> = (props) => {
 };
 
 export type MushafCornerLabelProps = {
-  /** The surah named when `ayahKey` is `null`. */
-  readonly surah: number;
+  /** The surah named when `ayahKey` is `null`; with neither, the label names no surah. */
+  readonly surah: number | undefined;
   /** "surah:ayah" of the ayah being heard (or shown), `null` for none yet. */
   readonly ayahKey: string | null;
   readonly reciter: string;
@@ -158,8 +183,10 @@ export const MushafCornerLabel: React.FC<MushafCornerLabelProps> = ({
 }) => {
   if (opacity <= 0) return null;
   const keySurah = ayahKey === null ? Number.NaN : Number(ayahKey.split(':')[0]);
-  const parts = [surahEnglishName(Number.isInteger(keySurah) ? keySurah : surah)];
+  const named = Number.isInteger(keySurah) ? keySurah : surah;
+  const parts = named === undefined ? [] : [surahEnglishName(named)];
   if (ayahKey !== null) parts.push(ayahKey);
+  if (parts.length === 0 && reciter === '') return null;
   if (reciter !== '') parts.push(reciter);
   return (
     <div
@@ -182,10 +209,17 @@ export const MushafCornerLabel: React.FC<MushafCornerLabelProps> = ({
 
 export type MushafTitleOverlayProps = {
   readonly overlay: Overlay;
-  /** The passage: its surah and first and last ayahs, for the card. */
-  readonly surah: number;
+  /**
+   * The passage, for the card: its first surah and ayah, and its last ayah, of `toSurah` when it
+   * crosses surahs (`passageSpan()` of the timings gives both ends). `undefined` (the `surah` of
+   * timings across surahs, which have none): the card names no surah and no range, and the corner
+   * label names the surah of `ayahKey` alone.
+   */
+  readonly surah: number | undefined;
   readonly fromAyah: number;
   readonly toAyah: number;
+  /** The last ayah's surah, for a passage across surahs (version 2 timings); `surah` when left out. */
+  readonly toSurah?: number | undefined;
   /** For the corner label: the ayah being heard, as the translation block names it. */
   readonly ayahKey: string | null;
   /** Seconds at which the first word is heard, or `null` without audio (see `introEndSeconds()`). */
@@ -207,16 +241,18 @@ export const MushafTitleOverlay: React.FC<MushafTitleOverlayProps> = (props) => 
   const {overlay} = props;
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const intro = showsIntro(overlay.title);
+  // A card names its passage: without a surah to name, there is none (and the corner label shows at once).
+  const intro = showsIntro(overlay.title) && props.surah !== undefined;
   const endSeconds = introEndSeconds(overlay.introSeconds, props.firstWordSeconds);
   const cardOpacity = intro ? introOpacity(frame, fps, endSeconds) : 0;
   return (
     <>
-      {intro && (
+      {intro && props.surah !== undefined && (
         <MushafTitleCard
           surah={props.surah}
           fromAyah={props.fromAyah}
           toAyah={props.toAyah}
+          toSurah={props.toSurah}
           reciter={overlay.reciter}
           color={overlay.color}
           font={overlay.font}

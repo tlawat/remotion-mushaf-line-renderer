@@ -25,6 +25,7 @@ import type {TranslationLayer} from '../translations/TranslationStack';
 import type {AyahTranslation, ResolvedAudio, ResolvedEndCard, StudioTimings} from '../types';
 import {isAutoFont, type TranslationLayerSpec, type TranslationTextProps, translationLayerSpecs} from './extras';
 import {WARNING_STYLE} from './shared';
+import {passageSpan, surahOfAyah} from './timings';
 
 // ---------------------------------------------------------------------------------------------
 // Translations
@@ -269,7 +270,8 @@ export type CompositionEndCardProps = {
 /**
  * The composition's end card (`<EndCard>`) over the frames `calculateMetadata()` added: the surah,
  * the range recited, the reciter, the credits, and the tafsir of the last ayah or the surah's
- * introduction when `endCard.show` asks for them. Nothing for `'none'`.
+ * introduction when `endCard.show` asks for them. Nothing for `'none'`. A recitation across surahs
+ * ends on its last surah: the card names it and the ayahs of it recited (`<EndCard>` names one surah).
  */
 export const CompositionEndCard: React.FC<CompositionEndCardProps> = ({
   endCard,
@@ -286,12 +288,15 @@ export const CompositionEndCard: React.FC<CompositionEndCardProps> = ({
   height,
 }) => {
   if (endCard.show === 'none' || durationInFrames <= 0) return null;
-  const first = timings.ayat[0]!.ayah;
-  const last = timings.ayat[timings.ayat.length - 1]!.ayah;
+  const {to} = passageSpan(timings);
+  // The first ayah recited of the last surah: the file's first, for one surah.
+  const firstIndex = timings.ayat.findIndex((_, i) => surahOfAyah(timings, i) === to.surah);
+  const first = timings.ayat[firstIndex]!.ayah;
+  const last = to.ayah;
   const tafsir = endCard.show === 'tafsir' ? (content?.tafsir ?? null) : null;
   return (
     <EndCard
-      surah={timings.surah}
+      surah={to.surah}
       fromAyah={first}
       toAyah={last}
       reciter={reciter}
@@ -303,7 +308,7 @@ export const CompositionEndCard: React.FC<CompositionEndCardProps> = ({
       color={color}
       background={background}
       creditLines={endCardCreditLines(timings, translations)}
-      tafsir={tafsir ? {tafsir, ayahKey: `${timings.surah}:${last}`, maxLines: 8} : null}
+      tafsir={tafsir ? {tafsir, ayahKey: `${to.surah}:${last}`, maxLines: 8} : null}
       chapterInfo={endCard.show === 'chapter-info' ? (content?.chapterInfo ?? null) : null}
     />
   );

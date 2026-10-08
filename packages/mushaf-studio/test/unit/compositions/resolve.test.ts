@@ -27,6 +27,7 @@ const {
   calculateMushafRecitationMetadata,
   defaultMushafRecitationProps,
   playableTimings,
+  readTimings,
   recitationDuration,
   resolveRecitation,
   shiftTimings,
@@ -37,6 +38,7 @@ const {isMushafStudioError} = await import('../../../src/errors');
 const {isMushafError} = await import('@tlawat/remotion-mushaf-line');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
+type StudioTimingsV1 = import('../../../src/types').StudioTimingsV1;
 
 const staticFile = (path: string) => `/static/${path}`;
 const fetchJson = (body: unknown, status = 200) =>
@@ -237,7 +239,7 @@ describe('resolveRecitation', () => {
   });
 
   it('computes the audio offset from the first ayah played, never negative', () => {
-    const file = fatiha as unknown as StudioTimings;
+    const file = fatiha as unknown as StudioTimingsV1;
     expect(audioOffsetFor(file, timingsInRange(file, 0, 0), 0.4)).toBe(0);
     expect(audioOffsetFor(file, timingsInRange(file, 0, 3), 0.4)).toBe(0);
     expect(audioOffsetFor(file, timingsInRange(file, 3, 0), 0.4)).toBe(2.633);
@@ -493,7 +495,8 @@ describe('calculateMushafRecitationMetadata', () => {
 });
 
 describe('timings across surahs', () => {
-  it('refuses a version-2 timings file with BAD_STUDIO_PROP, naming the way out', async () => {
+  // Resolved through every composition in cross-surah.test.ts.
+  it('reads a version-2 timings file as it is, the sidecar checked as for one surah', async () => {
     const v2 = {
       version: 2,
       ayat: [
@@ -501,12 +504,13 @@ describe('timings across surahs', () => {
         {surah: 2, ayah: 1, start: 5, end: 7},
       ],
     };
-    const error = await rejection(resolveRecitation(props(), {fetch: fetchJson(v2), staticFile}));
+    expect(await readTimings('t.json', {fetch: fetchJson(v2), staticFile})).toEqual(v2);
+    const error = await rejection(
+      readTimings('t.json', {fetch: fetchJson({...v2, alignment: {version: 2}}), staticFile}),
+    );
     expect(isMushafStudioError(error)).toBe(true);
     expect(error.code).toBe('BAD_STUDIO_PROP');
-    expect(error.message).toContain('crosses surahs (version 2)');
-    expect(error.message).toContain('getMushafLinesForRanges()');
-    expect(mocks.getMushafLines).not.toHaveBeenCalled();
+    expect(error.message).toContain('"alignment" sidecar');
   });
 });
 

@@ -87,6 +87,7 @@ const {MushafStudioError} = await import('../../../src/errors');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 type MushafAyahTextProps = import('../../../src/unicode/schema').MushafAyahTextProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
+type StudioTimingsV1 = import('../../../src/types').StudioTimingsV1;
 type AlignmentWord = import('../../../src/types').AlignmentWord;
 type ResolvedRecitation = import('../../../src/types').ResolvedRecitation;
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
@@ -101,7 +102,7 @@ const word = (id: string, text: string, segment: number, start: number, end: num
 });
 
 /** Two segments: ayah 2, then ayah 3 recited with its first word twice, complete, with its end marker 1:3:3. */
-const reviewTimings = (): StudioTimings => ({
+const reviewTimings = (): StudioTimingsV1 => ({
   version: 1,
   surah: 1,
   audio: 'mushaf-studio/p/fatiha.mp3',
@@ -174,7 +175,7 @@ const reviewTimings = (): StudioTimings => ({
 });
 
 /** The file's times moved `offset` seconds earlier, as `resolveRecitation()` hands them to the composition. */
-const shifted = (t: StudioTimings, offset: number): StudioTimings => {
+const shifted = (t: StudioTimingsV1, offset: number): StudioTimingsV1 => {
   const move = (seconds: number) => Math.round((seconds - offset) * 1e6) / 1e6;
   return {
     ...t,
@@ -193,7 +194,7 @@ const shifted = (t: StudioTimings, offset: number): StudioTimings => {
 };
 
 /** `resolved` as `calculateMetadata()` fills it: the file cut to `fromAyah` and moved `audioOffsetSeconds` earlier. */
-const resolvedFor = (t: StudioTimings, audioOffsetSeconds = 0, fromAyah = 0): ResolvedRecitation => ({
+const resolvedFor = (t: StudioTimingsV1, audioOffsetSeconds = 0, fromAyah = 0): ResolvedRecitation => ({
   timings: shifted({...t, ayat: t.ayat.filter((a) => a.ayah >= fromAyah)}, audioOffsetSeconds),
   audioOffsetSeconds,
   lines: fatihaLines(2, 3),
@@ -208,7 +209,7 @@ const resolvedFor = (t: StudioTimings, audioOffsetSeconds = 0, fromAyah = 0): Re
 });
 
 const propsWith = (
-  t: StudioTimings,
+  t: StudioTimingsV1,
   rest: Partial<MushafRecitationProps> = {},
   audioOffsetSeconds = 0,
 ): MushafRecitationProps => ({
@@ -329,6 +330,35 @@ describe('Align', () => {
     panel(propsWith(reviewTimings(), {audioFile: 'https://x.y/z.mp3'}), 'align');
     expect(screen.getByRole('button', {name: 'Align'})).toHaveProperty('disabled', true);
     expect(screen.getByText(/Put a recording into public\//)).toBeTruthy();
+  });
+
+  it('warns that the mushaf is the Hafs print for another riwayah, and aligns only once the user confirms', async () => {
+    const timings = reviewTimings();
+    qud.alignAudio.mockResolvedValue({audio_id: 'sess-w', segments: [], device: 'GPU'});
+    qud.sessionTimestamps.mockResolvedValue({audio_id: 'sess-w', segments: []});
+    qud.timingsFromQud.mockReturnValue(timings);
+    panel(propsWith(timings), 'align');
+    const button = screen.getByRole('button', {name: 'Align'});
+    expect(button).toHaveProperty('disabled', false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Riwayah'), {target: {value: 'warsh'}});
+    expect(screen.getByRole('alert').textContent).toMatch(/Hafs print \(KFGQPC V4\): a warsh recitation/);
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.click(button);
+    expect(qud.alignAudio).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('checkbox', {name: 'Align the warsh recitation against the Hafs mushaf anyway'});
+    fireEvent.click(confirm);
+    expect(button).toHaveProperty('disabled', false);
+    // Another riwayah asks again; back to Hafs needs nothing.
+    fireEvent.change(screen.getByLabelText('Riwayah'), {target: {value: 'qalun'}});
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Riwayah'), {target: {value: 'warsh'}});
+    expect(button).toHaveProperty('disabled', false);
+    fireEvent.click(button);
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(qud.alignAudio.mock.calls[0]![2]).toMatchObject({riwayah: 'warsh'});
+    fireEvent.change(screen.getByLabelText('Riwayah'), {target: {value: 'hafs'}});
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
 
@@ -458,6 +488,43 @@ describe('Source', () => {
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(saved(0)).toEqual({audioFile: 'mushaf-studio/p/old.mp3'});
     await waitFor(() => expect(getStudioState().uploadedAudio).toBeNull());
+  });
+
+  it('warns that the mushaf is the Hafs print for a recitation in another riwayah, and uses it only once confirmed', async () => {
+    const hafs = recitationsFixture.recitations[0]!;
+    const warsh = {...hafs, slug: 'warsh_1', riwayah: "Warsh A'n Nafi'"};
+    const qalon = {...hafs, slug: 'qalon_1', riwayah: "Qalon A'n Nafi'"};
+    qud.listRecitations.mockResolvedValue([hafs, warsh, qalon] as never);
+    qud.getChapterSegments.mockResolvedValue(chapterFixture);
+    qud.timingsFromCatalogue.mockReturnValue(reviewTimings());
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ok: true, status: 200, arrayBuffer: async () => new Uint8Array([1]).buffer})),
+    );
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
+    const button = await screen.findByRole('button', {name: 'Use this recitation'});
+    expect(button).toHaveProperty('disabled', false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: 'warsh_1'}});
+    expect(screen.getByRole('alert').textContent).toMatch(
+      /in the Warsh A'n Nafi' riwayah, but the mushaf this panel renders is the Hafs print/,
+    );
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.click(button);
+    expect(qud.getChapterSegments).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('checkbox', {name: "Use the Warsh A'n Nafi' recitation with the Hafs mushaf anyway"}),
+    );
+    expect(button).toHaveProperty('disabled', false);
+    // Another recitation in another riwayah asks again; a Hafs one needs nothing.
+    fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: 'qalon_1'}});
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: hafs.slug}});
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: 'warsh_1'}});
+    fireEvent.click(button);
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(qud.getChapterSegments.mock.calls[0]![0]).toMatchObject({slug: 'warsh_1'});
   });
 });
 

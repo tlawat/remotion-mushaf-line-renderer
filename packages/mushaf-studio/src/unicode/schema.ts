@@ -81,13 +81,12 @@ export type AyahAnimation = z.infer<typeof ayahAnimationSchema>;
 
 /**
  * Defaults that work out of the box: the same Al-Fatihah sample as `<MushafRecitation>` (ayahs 2-7
- * by Abdul Hamid Ghraio from the aligner's catalogue, audio from the catalogue's clip URL, the
- * timings committed in the app's `public/`) with its Uthmani text beside them; a 9:16 reel, light
+ * by Abdul Hamid Ghraio from the aligner's catalogue, the audio in the app's `public/` beside the
+ * timings committed there) with its Uthmani text beside them; a 9:16 reel, light
  * text on a dark page, the current word in gold.
  */
 export const defaultMushafAyahTextProps: MushafAyahTextProps = {
-  audioFile:
-    'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+  audioFile: 'mushaf-studio/fatiha/audio.mp3',
   timingsFile: 'mushaf-studio/fatiha/timings.json',
   fromAyah: 0,
   toAyah: 0,

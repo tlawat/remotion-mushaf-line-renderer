@@ -107,6 +107,14 @@ const analysisCache = (): Map<string, Promise<AudioAnalysis>> => {
 /** Forgets every cached analysis (tests; the panel after it rewrites a file under the same URL). */
 export const clearAudioAnalysisCache = (): void => analysisCache().clear();
 
+/** Forgets the cached analyses of `url` at every fps, so the next `analyzeAudio()` of it reads the file again. */
+export const forgetAudioAnalysis = (url: string): void => {
+  const cache = analysisCache();
+  // Keys are `fps|threshold|url`; neither of the first two holds a `|`, the URL may.
+  for (const key of [...cache.keys()])
+    if (key.slice(key.indexOf('|', key.indexOf('|') + 1) + 1) === url) cache.delete(key);
+};
+
 /**
  * Fetches, decodes and measures the audio at `url` (a URL, as `fileUrl()` gives it): loudness,
  * true peak, duration, where the first sound is and a level per frame at `options.fps`. For

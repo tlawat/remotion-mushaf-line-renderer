@@ -10,7 +10,8 @@ import {
   type MushafDataSource,
   type MushafLineData,
   type MushafThemeSelection,
-  type RecitationTimingsV1,
+  normalizeTimings,
+  type RecitationTimings,
   sliceWords,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
@@ -23,9 +24,28 @@ import type {Translation} from '../types';
 /** The compositions' frame rate: what the Root declares, and what `durationInFrames` is counted in. */
 export const STUDIO_FPS = 30;
 
+/** Whether a content prop is an http(s) URL rather than a `public/` path. */
+export const isHttpUrl = (path: string): boolean => /^https?:\/\//i.test(path);
+
 /** A `public/` path through `staticFile()`; an http(s) URL as it is (`staticFile()` refuses those). */
 export const fileUrl = (path: string, staticFile: (path: string) => string): string =>
-  /^https?:\/\//i.test(path) ? path : staticFile(path);
+  isHttpUrl(path) ? path : staticFile(path);
+
+/**
+ * The URL a composition plays its recording from: `resolved.audioSrc` when `calculateMetadata()`
+ * found `audioFile` missing from `public/` and fell back to the clip the timings name
+ * (`resolveAudioSource()`), else `audioFile` through `fileUrl()`.
+ *
+ * `<Audio src={recordingUrl(audioFile, resolved, staticFile)} />`
+ */
+export const recordingUrl = (
+  audioFile: string,
+  resolved: {readonly audioSrc?: string | null | undefined} | null | undefined,
+  staticFile: (path: string) => string,
+): string => {
+  const src = resolved?.audioSrc;
+  return typeof src === 'string' && src !== '' ? src : fileUrl(audioFile, staticFile);
+};
 
 export type TextFileProp = 'translationFile' | 'glossFile' | 'transliterationFile' | `translations.${number}.file`;
 
@@ -75,12 +95,13 @@ export const firstAyahKey = (line: MushafLineData | undefined): string | null =>
  * The translation key of the ayah being recited at `seconds`: the last ayah of the file whose
  * `start` is at or before it, `null` before the first. A pause between ayahs keeps the previous one
  * current until the next starts, like `wordAt()` does for words; unlike it, this needs no per-word
- * times, so the translation follows the audio even for a file that only times its ayahs.
+ * times, so the translation follows the audio even for a file that only times its ayahs. Timings of
+ * either version: across surahs, the key names the ayah's own surah.
  */
-export const ayahAt = (timings: RecitationTimingsV1, seconds: number): string | null => {
-  let current: number | null = null;
-  for (const ayah of timings.ayat) if (ayah.start <= seconds) current = ayah.ayah;
-  return current === null ? null : `${timings.surah}:${current}`;
+export const ayahAt = (timings: RecitationTimings, seconds: number): string | null => {
+  let current: {readonly surah: number; readonly ayah: number} | null = null;
+  for (const ayah of normalizeTimings(timings).ayat) if (ayah.start <= seconds) current = ayah;
+  return current === null ? null : `${current.surah}:${current.ayah}`;
 };
 
 /**
@@ -158,6 +179,58 @@ export const withHeaderSlots = (
   for (let k = 0; k < headers; k++)
     slots.push({index: k, start: startOf(k), end: Math.max(startOf(k), startOf(k + 1))});
   return [...slots, ...schedule.map((slot) => ({...slot, index: slot.index + headers}))];
+};
+
+/**
+ * A schedule of a passage across surahs (`scheduleLines()` of version 2 timings over `lines`) with a
+ * slot for every header line it left out (a surah's name and basmalah lines carry no timed word),
+ * wherever it is in `lines`. A run of `n` header lines before a timed line starts `spacingSeconds`
+ * apart, the last one `spacingSeconds` before the timed line, never after it, never before the slot
+ * before the run, and never before the end of the ayah recited before the timed line's first ayah
+ * (the previous surah's last one: its header comes in as the reciter finishes it). Each header
+ * slot ends where the next slot starts, and the slot before the run now ends where the run starts.
+ * A run at the start is placed from 0, as `withHeaderSlots()` places it. Header lines with no timed
+ * line after them, and ayah lines without a timed word, stay out. Starts never decrease.
+ */
+export const withInnerHeaderSlots = (
+  schedule: readonly LineSchedule[],
+  lines: readonly MushafLineData[],
+  timings: RecitationTimings,
+  spacingSeconds: number,
+): readonly LineSchedule[] => {
+  const ayat = normalizeTimings(timings).ayat;
+  const order = new Map(ayat.map((ayah, i) => [`${ayah.surah}:${ayah.ayah}`, i]));
+  /** When the ayah recited before the first timed ayah of `line` ends; 0 when it is the first. */
+  const endBefore = (line: MushafLineData): number => {
+    for (const word of sliceWords(line)) {
+      const i = order.get(`${word.surah}:${word.ayah}`);
+      if (i !== undefined) return i > 0 ? ayat[i - 1]!.end : 0;
+    }
+    return 0;
+  };
+  const slots = new Map(schedule.map((slot) => [slot.index, slot]));
+  const out: LineSchedule[] = [];
+  let run: number[] = [];
+  lines.forEach((line, index) => {
+    const slot = slots.get(index);
+    if (slot === undefined) {
+      if (line.type !== 'ayah') run.push(index);
+      return;
+    }
+    if (run.length > 0) {
+      const previous = out[out.length - 1];
+      const floor = Math.min(slot.start, Math.max(previous?.start ?? 0, endBefore(line)));
+      const startOf = (k: number): number =>
+        Math.min(slot.start, Math.max(floor, slot.start - (run.length - k) * spacingSeconds));
+      if (previous) out[out.length - 1] = {...previous, end: Math.max(previous.start, startOf(0))};
+      for (const [k, header] of run.entries()) {
+        out.push({index: header, start: startOf(k), end: Math.max(startOf(k), startOf(k + 1))});
+      }
+      run = [];
+    }
+    out.push(slot);
+  });
+  return out;
 };
 
 /** A background image fills the frame, cropped to it, under everything. */

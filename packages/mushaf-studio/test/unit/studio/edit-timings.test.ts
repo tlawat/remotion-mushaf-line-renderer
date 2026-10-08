@@ -2,7 +2,7 @@ import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {describe, expect, it} from 'vitest';
 import {isMushafStudioError} from '../../../src/errors';
 import {nudgeWord, nudgeWords, roundMs, withEdit} from '../../../src/studio/edit-timings';
-import type {AlignmentWord, StudioTimings} from '../../../src/types';
+import type {AlignmentWord, StudioTimings, StudioTimingsV1} from '../../../src/types';
 
 const AT = '2026-10-03T12:00:00.000Z';
 
@@ -14,7 +14,7 @@ const word = (id: string, text: string, segment: number, start: number, end: num
   end,
 });
 
-const timings = (): StudioTimings => ({
+const timings = (): StudioTimingsV1 => ({
   version: 1,
   surah: 1,
   audio: 'mushaf-studio/default/fatiha.mp3',
@@ -121,7 +121,7 @@ describe('nudgeWord', () => {
 
   it('addresses a repeated word by its occurrence', () => {
     const base = timings();
-    const repeated: StudioTimings = {
+    const repeated: StudioTimingsV1 = {
       ...base,
       ayat: [
         base.ayat[0]!,
@@ -180,6 +180,16 @@ describe('nudgeWord', () => {
     expect(() => nudgeWord(untimed, {id: '1:2:1', occurrenceIndex: 0, start: 0, end: 1})).toThrow(
       /ayah 2 has no per-word times/,
     );
+    const crossing: StudioTimings = {
+      version: 2,
+      ayat: [
+        {surah: 1, ayah: 7, start: 0, end: 1, words: [{id: '1:7:1', start: 0, end: 1}]},
+        {surah: 2, ayah: 1, start: 1, end: 2, words: [{id: '2:1:1', start: 1, end: 2}]},
+      ],
+    };
+    expect(() => nudgeWord(crossing, {id: '1:7:1', occurrenceIndex: 0, start: 0, end: 0.5, at: AT})).toThrow(
+      /version 2 \(they cross surahs\); the panel edits a file of one surah/,
+    );
   });
 
   it('starts a manual sidecar when the file has none', () => {
@@ -206,7 +216,7 @@ describe('nudgeWord', () => {
 });
 
 /** Ayah 3 recited with its first word twice, no marker, no `complete` flag. */
-const repeated = (): StudioTimings => {
+const repeated = (): StudioTimingsV1 => {
   const base = timings();
   return {
     ...base,
@@ -231,7 +241,7 @@ const repeated = (): StudioTimings => {
 };
 
 /** Ayah 3 complete, with the end marker `timingsFromQud()` emits (1:3:3, held 0.8 s after the last word). */
-const withMarker = (): StudioTimings => {
+const withMarker = (): StudioTimingsV1 => {
   const base = timings();
   return {
     ...base,

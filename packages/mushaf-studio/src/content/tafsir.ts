@@ -12,6 +12,7 @@ import {
   quranComUrl,
 } from '../translations/quran-com';
 import type {TranslationMeta} from '../types';
+import {withContentErrors} from './content-errors';
 import {htmlToParagraphs} from './html';
 
 /**
@@ -74,7 +75,7 @@ export const tafsirEntryLabel = (entry: TafsirEntry): string =>
 export const listQuranComTafsirs = (
   query: {readonly language?: string | undefined} = {},
   options: QuranComOptions = {},
-): Promise<readonly QuranComResource[]> => listQuranComResources('tafsirs', query, options);
+): Promise<readonly QuranComResource[]> => withContentErrors(() => listQuranComResources('tafsirs', query, options));
 
 /**
  * `GET /tafsirs/{tafsirId}/by_chapter/{surah}`, page by page: the tafsir's commentaries of the
@@ -86,7 +87,7 @@ export const listQuranComTafsirs = (
  * so the entries are rebuilt as such groups: an entry is kept when it overlaps the range, whole,
  * and paging stops once the group holding `toAyah` is closed. The resource list is read alongside
  * for the language (`'und'` when it cannot be). Checks the id and the range first
- * (`BAD_STUDIO_PROP`); a failed request or an unknown tafsir is `TRANSLATION_FETCH_FAILED`, and so
+ * (`BAD_STUDIO_PROP`); a failed request or an unknown tafsir is `CONTENT_FETCH_FAILED`, and so
  * is a range with no commentary.
  */
 export const fetchQuranComTafsir = async (
@@ -116,43 +117,46 @@ export const fetchQuranComTafsir = async (
     (list) => list.find((r) => r.id === tafsirId),
     () => undefined,
   );
-  await fetchQuranComPages(
-    {
-      chapter: surah,
-      what: 'the commentary',
-      field: 'tafsirs',
-      url: (page) =>
-        quranComUrl(options, `/tafsirs/${tafsirId}/by_chapter/${surah}`, {per_page: QURAN_COM_PER_PAGE, page}),
-    },
-    (rows, url) => {
-      for (const row of rows) {
-        if (!isRecord(row) || typeof row.verse_key !== 'string' || typeof row.text !== 'string') {
-          badQuranComResponse(url, '{tafsirs: [{verse_key, text}]}', row);
-          continue;
+  // A failed page, or a row in a shape the client does not know, is CONTENT_FETCH_FAILED.
+  await withContentErrors(() =>
+    fetchQuranComPages(
+      {
+        chapter: surah,
+        what: 'the commentary',
+        field: 'tafsirs',
+        url: (page) =>
+          quranComUrl(options, `/tafsirs/${tafsirId}/by_chapter/${surah}`, {per_page: QURAN_COM_PER_PAGE, page}),
+      },
+      (rows, url) => {
+        for (const row of rows) {
+          if (!isRecord(row) || typeof row.verse_key !== 'string' || typeof row.text !== 'string') {
+            badQuranComResponse(url, '{tafsirs: [{verse_key, text}]}', row);
+            continue;
+          }
+          const key = ayahOf(row.verse_key);
+          if (!key || key[0] !== surah) continue;
+          const ayah = key[1];
+          const paragraphs = htmlToParagraphs(row.text);
+          const open = groups[groups.length - 1];
+          if (paragraphs.length === 0) {
+            if (open) open.to = ayah;
+            continue;
+          }
+          // A new commentary closes the open group: once that group ends at or after `toAyah`, the range is read.
+          if (open && open.to >= last) return true;
+          groups.push({from: ayah, to: ayah, paragraphs});
         }
-        const key = ayahOf(row.verse_key);
-        if (!key || key[0] !== surah) continue;
-        const ayah = key[1];
-        const paragraphs = htmlToParagraphs(row.text);
-        const open = groups[groups.length - 1];
-        if (paragraphs.length === 0) {
-          if (open) open.to = ayah;
-          continue;
-        }
-        // A new commentary closes the open group: once that group ends at or after `toAyah`, the range is read.
-        if (open && open.to >= last) return true;
-        groups.push({from: ayah, to: ayah, paragraphs});
-      }
-      return false;
-    },
-    options,
+        return false;
+      },
+      options,
+    ),
   );
   const entries: TafsirEntry[] = groups
     .filter((group) => group.to >= first && group.from <= last)
     .map((group) => ({from: `${surah}:${group.from}`, to: `${surah}:${group.to}`, paragraphs: group.paragraphs}));
   if (entries.length === 0) {
     throw new MushafStudioError(
-      'TRANSLATION_FETCH_FAILED',
+      'CONTENT_FETCH_FAILED',
       `quran.com has no commentary of ${quranComRangeLabel(surah, fromAyah, toAyah)} in tafsir ${tafsirId}: check the tafsir id (listQuranComTafsirs() lists them) and the ayah range.`,
       {tafsirId, surah, fromAyah, toAyah},
     );
@@ -174,7 +178,7 @@ export const fetchQuranComTafsir = async (
 // Files
 
 const fail = (problem: string, details: Readonly<Record<string, unknown>> = {}): never => {
-  throw new MushafStudioError('BAD_TRANSLATION_FILE', `Tafsir file: ${problem}`, details);
+  throw new MushafStudioError('BAD_CONTENT_FILE', `Tafsir file: ${problem}`, details);
 };
 
 const META_FIELDS = ['id', 'name', 'language', 'source', 'license'] as const;
@@ -183,7 +187,7 @@ const META_FIELDS = ['id', 'name', 'language', 'source', 'license'] as const;
 export const parseContentMeta = (value: unknown, where: string): TranslationMeta => {
   if (!isRecord(value)) {
     throw new MushafStudioError(
-      'BAD_TRANSLATION_FILE',
+      'BAD_CONTENT_FILE',
       `${where}: meta should be an object {id, name, language, source}; found ${describeValue(value)}.`,
     );
   }
@@ -193,7 +197,7 @@ export const parseContentMeta = (value: unknown, where: string): TranslationMeta
     if (v === undefined && field === 'license') continue;
     if (typeof v !== 'string') {
       throw new MushafStudioError(
-        'BAD_TRANSLATION_FILE',
+        'BAD_CONTENT_FILE',
         `${where}: meta.${field} should be a string; found ${describeValue(v)}.`,
         {field},
       );
@@ -231,7 +235,7 @@ const parseEntry = (value: unknown, index: number): TafsirEntry => {
 
 /**
  * Reads the tafsir envelope `serialiseTafsir()` writes (`{version: 1, kind: 'tafsir', meta,
- * entries: [{from, to, paragraphs}]}`). Throws `BAD_TRANSLATION_FILE` naming what is wrong: another
+ * entries: [{from, to, paragraphs}]}`). Throws `BAD_CONTENT_FILE` naming what is wrong: another
  * version or kind, a meta field that is not a string, an entry that is not an ayah range of one
  * surah, paragraphs that are not strings.
  */
@@ -269,23 +273,25 @@ export const serialiseTafsir = (tafsir: Tafsir): string => {
 
 /**
  * Fetches and parses a tafsir file (a `staticFile()` URL or any URL). For `calculateMetadata()`.
- * A failed request is `TRANSLATION_FETCH_FAILED`; a file that is not the envelope is
- * `BAD_TRANSLATION_FILE`, its message prefixed with the URL.
+ * A failed request is `CONTENT_FETCH_FAILED`; a file that is not the envelope is
+ * `BAD_CONTENT_FILE`, its message prefixed with the URL.
  */
 export const loadTafsir = async (
   url: string,
   options: {readonly fetch?: typeof fetch | undefined} = {},
 ): Promise<Tafsir> => {
-  const body = await fetchJson(
-    url,
-    'Check that the file exists (in public/ for a staticFile() path) and that the path in the props is right.',
-    options,
+  const body = await withContentErrors(() =>
+    fetchJson(
+      url,
+      'Check that the file exists (in public/ for a staticFile() path) and that the path in the props is right.',
+      options,
+    ),
   );
   try {
     return parseTafsirFile(body);
   } catch (error) {
-    if (isMushafStudioError(error) && error.code === 'BAD_TRANSLATION_FILE') {
-      throw new MushafStudioError('BAD_TRANSLATION_FILE', `${url}: ${error.message}`, {...error.details, url});
+    if (isMushafStudioError(error) && error.code === 'BAD_CONTENT_FILE') {
+      throw new MushafStudioError('BAD_CONTENT_FILE', `${url}: ${error.message}`, {...error.details, url});
     }
     throw error;
   }

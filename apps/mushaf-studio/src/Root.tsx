@@ -49,8 +49,7 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         durationInFrames={300}
         defaultProps={{
-          audioFile:
-            'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+          audioFile: 'mushaf-studio/fatiha/audio.mp3',
           timingsFile: 'mushaf-studio/fatiha/timings.json',
           fromAyah: 0,
           toAyah: 0,
@@ -300,8 +299,7 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         durationInFrames={300}
         defaultProps={{
-          audioFile:
-            'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+          audioFile: 'mushaf-studio/fatiha/audio.mp3',
           timingsFile: 'mushaf-studio/fatiha/timings.json',
           fromAyah: 0,
           toAyah: 0,
@@ -413,8 +411,7 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         durationInFrames={300}
         defaultProps={{
-          audioFile:
-            'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+          audioFile: 'mushaf-studio/fatiha/audio.mp3',
           timingsFile: 'mushaf-studio/fatiha/timings.json',
           fromAyah: 0,
           toAyah: 0,

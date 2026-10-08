@@ -2,8 +2,10 @@
 // the stacked translations, the audio's cleanup (its analysis, gain, silence trim and levels), the
 // end card's content and a background video's length. Run in `calculateMetadata()` and the
 // resolvers, never during a frame; the frames read the plain data these put in `resolved`.
-import {analyzeAudio} from '../audio/analyze';
+import type {RecitationTimings} from '@tlawat/remotion-mushaf-line';
+import {type AudioAnalysis, analyzeAudio} from '../audio/analyze';
 import type {AudioSettings} from '../audio/schema';
+import {audioSummaryFrom} from '../audio/summary';
 import {gainFor, silenceTrimSeconds} from '../audio/volume';
 import {probeVideoSeconds} from '../background/MushafBackground';
 import type {Background} from '../background/schema';
@@ -12,8 +14,8 @@ import {loadTafsir, tafsirEntryFor} from '../content/tafsir';
 import {describeValue, isMushafStudioError, MushafStudioError} from '../errors';
 import type {EndCardSettings, Text} from '../schema';
 import {AUTO_FONT} from '../schema';
-import type {AyahTranslation, ResolvedAudio, ResolvedEndCard} from '../types';
-import {fileUrl, loadTextFile} from './shared';
+import type {AlignmentSidecar, AyahTranslation, ResolvedAudio, ResolvedEndCard} from '../types';
+import {fileUrl, isHttpUrl, loadTextFile} from './shared';
 
 type Io = {
   readonly fetch: typeof fetch;
@@ -131,6 +133,97 @@ export const needsAudioAnalysis = (
   background: Pick<Background, 'glow'>,
 ): boolean => audioFile !== '' && (audio.normalize || audio.trimSilence || glowIsOn(background));
 
+/** The default sample's recording in `public/`: what the compositions' `audioFile` is out of the box. */
+export const SAMPLE_AUDIO_FILE = 'mushaf-studio/fatiha/audio.mp3';
+
+/**
+ * The repository's command that downloads the sample's recording to `SAMPLE_AUDIO_FILE`. It exists in
+ * this repository's app only, so the warning names it for the sample alone.
+ */
+export const SAMPLE_COMMAND = 'bun run --cwd apps/mushaf-studio sample';
+
+/**
+ * Whether the server answers 404 for `url` (a `HEAD`, or a one-byte `GET` where `HEAD` is not
+ * allowed). Any other answer, or no answer, counts as there: the file then plays (or fails) as it
+ * always did. An abort passes through.
+ */
+const isMissing = async (url: string, request: typeof fetch, signal: AbortSignal | undefined): Promise<boolean> => {
+  const ask = (method: 'HEAD' | 'GET') =>
+    request(url, {
+      method,
+      cache: 'no-store',
+      ...(method === 'GET' ? {headers: {Range: 'bytes=0-0'}} : {}),
+      ...(signal ? {signal} : {}),
+    });
+  try {
+    let response = await ask('HEAD');
+    if (response.status === 405 || response.status === 501) {
+      response = await ask('GET');
+      await response.body?.cancel().catch(() => undefined);
+    }
+    return response.status === 404;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return false;
+  }
+};
+
+export type AudioSourceOptions = {
+  readonly audioFile: string;
+  /** The timings file's sidecar (`timings.alignment`): its catalogue clip is the fallback. */
+  readonly sidecar?: Pick<AlignmentSidecar, 'recitation'> | undefined;
+  readonly staticFile: (path: string) => string;
+  /** For the probe of `audioFile`; `globalThis.fetch` by default. */
+  readonly fetch?: typeof fetch | undefined;
+  readonly signal?: AbortSignal | undefined;
+};
+
+/** Where the recording plays from, and why when it is not `audioFile` (`resolveAudioSource()`). */
+export type AudioSource = {
+  /** The URL to play instead of `audioFile`, or `null` for `audioFile` itself. */
+  readonly src: string | null;
+  /** For the Studio: `audioFile` is missing, the clip plays instead, and how to download it. */
+  readonly warning: string | null;
+};
+
+const AUDIO_FILE_AS_IS: AudioSource = {src: null, warning: null};
+
+/**
+ * The recording's source when `audioFile` is a `public/` path that is not there (the server answers
+ * 404) and the timings name the catalogue clip they were made of (`alignment.recitation.audioUrl`):
+ * that clip, with a warning that says the file is missing and how to get it: `SAMPLE_COMMAND` for the
+ * sample's recording, else the clip to save as `public/<audioFile>` (a project made from the npm
+ * package has no such command).
+ * The default sample's recording is the reciter's and is not committed, so a fresh checkout streams
+ * it until `bun run sample` has downloaded it. `audioFile` itself (`src: null`, no request made)
+ * for an empty `audioFile`, a URL, or timings without a clip URL; also when the file is there or
+ * the server cannot be asked. For `calculateMetadata()`: it makes a request.
+ */
+export const resolveAudioSource = async (options: AudioSourceOptions): Promise<AudioSource> => {
+  const {audioFile} = options;
+  const clip = options.sidecar?.recitation?.audioUrl;
+  if (audioFile === '' || isHttpUrl(audioFile) || typeof clip !== 'string' || !isHttpUrl(clip)) {
+    return AUDIO_FILE_AS_IS;
+  }
+  const request = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init));
+  let url: string;
+  try {
+    url = options.staticFile(audioFile);
+  } catch {
+    // A path `staticFile()` refuses (`./a.mp3`): the composition reports it where it plays the file.
+    return AUDIO_FILE_AS_IS;
+  }
+  if (!(await isMissing(url, request, options.signal))) return AUDIO_FILE_AS_IS;
+  const fix =
+    audioFile === SAMPLE_AUDIO_FILE
+      ? `Download it once with \`${SAMPLE_COMMAND}\``
+      : `Download that clip once and save it as public/${audioFile}`;
+  return {
+    src: clip,
+    warning: `audioFile ${describeValue(audioFile)} is not in public/ (HTTP 404), so the clip the timings name streams instead (${clip}). ${fix}, or point audioFile at your recording.`,
+  };
+};
+
 export type AudioCleanupOptions = {
   readonly audioFile: string;
   readonly audio: AudioSettings;
@@ -147,35 +240,68 @@ export type AudioCleanupOptions = {
   readonly fps: number;
   readonly staticFile: (path: string) => string;
   readonly signal?: AbortSignal | undefined;
+  /**
+   * The timings file's sidecar (`timings.alignment`): its `audio` summary stands in for the analysis
+   * when the glow is off, and its catalogue clip plays when `audioFile` is missing (`resolveAudioSource()`).
+   */
+  readonly sidecar?: Pick<AlignmentSidecar, 'recitation' | 'audio'> | undefined;
+  /** For the probe of `audioFile`; `globalThis.fetch` by default. */
+  readonly fetch?: typeof fetch | undefined;
+};
+
+/** What `resolveAudioCleanup()` resolves: the cleanup, the Studio's warning, and the URL to play instead of `audioFile`. */
+export type AudioCleanup = {
+  readonly audio: ResolvedAudio;
+  /** Why the audio plays from `src`, why it could not be analysed, or both; `null` for neither. Studio only. */
+  readonly warning: string | null;
+  /** `resolveAudioSource()`'s: the clip the timings name when `audioFile` is missing, else `null`. Becomes `resolved.audioSrc`. */
+  readonly src: string | null;
+};
+
+const joinWarnings = (...warnings: readonly (string | null)[]): string | null => {
+  const present = warnings.filter((warning): warning is string => warning !== null && warning !== '');
+  return present.length === 0 ? null : present.join(' ');
 };
 
 const round3 = (value: number): number => Math.round(value * 1000) / 1000;
 
 /**
- * Analyses the recording when something needs it (`needsAudioAnalysis()`) and says what to do with
- * it: the gain that brings it to `audio.targetLufs` (`gainFor()`, under `normalize`), the seconds of
- * leading silence to skip (`silenceTrimSeconds()`, under `trimSilence`, never past `latestSeconds`)
- * and, for the glow, one level per frame from the composition's new start (three decimals). An
- * analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a file the browser cannot fetch or
- * decode) is not an error: the audio plays as it is, and `warning` says why. Any other failure
- * (an abort) passes through.
+ * Finds where the recording plays from (`resolveAudioSource()`: the timings' catalogue clip when
+ * `audioFile` is missing from `public/`), analyses it when something needs it
+ * (`needsAudioAnalysis()`) and says what to do with it: the gain that brings it to
+ * `audio.targetLufs` (`gainFor()`, under `normalize`), the seconds of leading silence to skip
+ * (`silenceTrimSeconds()`, under `trimSilence`, never past `latestSeconds`) and, for the glow, one
+ * level per frame from the composition's new start (three decimals). With the glow off, the
+ * sidecar's `audio` summary (written when the panel saved the timings) stands in for the analysis,
+ * so nothing is downloaded. An analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a
+ * file the browser cannot fetch or decode) is not an error: the audio plays as it is, and `warning`
+ * says why. Any other failure (an abort) passes through.
  */
-export const resolveAudioCleanup = async (
-  options: AudioCleanupOptions,
-): Promise<{readonly audio: ResolvedAudio; readonly warning: string | null}> => {
+export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise<AudioCleanup> => {
   const {audio, background, fps} = options;
-  if (!needsAudioAnalysis(options.audioFile, audio, background)) return {audio: NO_AUDIO_ANALYSIS, warning: null};
-  let analysis: Awaited<ReturnType<typeof analyzeAudio>>;
-  try {
-    analysis = await analyzeAudio(fileUrl(options.audioFile, options.staticFile), {
-      fps,
-      ...(options.signal ? {signal: options.signal} : {}),
-    });
-  } catch (error) {
-    if (isMushafStudioError(error) && error.code === 'AUDIO_ANALYSIS_FAILED') {
-      return {audio: NO_AUDIO_ANALYSIS, warning: error.message};
+  const source = await resolveAudioSource(options);
+  const cleanup = (resolved: ResolvedAudio, warning: string | null): AudioCleanup => ({
+    audio: resolved,
+    warning: joinWarnings(source.warning, warning),
+    src: source.src,
+  });
+  if (!needsAudioAnalysis(options.audioFile, audio, background)) return cleanup(NO_AUDIO_ANALYSIS, null);
+  const summary = glowIsOn(background) ? null : audioSummaryFrom(options.sidecar?.audio);
+  let analysis: Pick<AudioAnalysis, 'lufs' | 'peak' | 'firstSoundSeconds' | 'levels'>;
+  if (summary !== null) {
+    analysis = {...summary, levels: []};
+  } else {
+    try {
+      analysis = await analyzeAudio(source.src ?? fileUrl(options.audioFile, options.staticFile), {
+        fps,
+        ...(options.signal ? {signal: options.signal} : {}),
+      });
+    } catch (error) {
+      if (isMushafStudioError(error) && error.code === 'AUDIO_ANALYSIS_FAILED') {
+        return cleanup(NO_AUDIO_ANALYSIS, error.message);
+      }
+      throw error;
     }
-    throw error;
   }
   const gain = audio.normalize ? gainFor(analysis, audio.targetLufs) : 1;
   const trimSeconds = audio.trimSilence
@@ -190,7 +316,7 @@ export const resolveAudioCleanup = async (
     const count = Math.max(0, Math.ceil((options.endSeconds - trimSeconds + 1) * fps));
     levels = analysis.levels.slice(from, from + count).map(round3);
   }
-  return {audio: {gain, trimSeconds, levels}, warning: null};
+  return cleanup({gain, trimSeconds, levels}, null);
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -208,14 +334,33 @@ const emptyFile = (prop: 'tafsirFile' | 'chapterInfoFile', show: string): Mushaf
   );
 
 /**
+ * What the end card's content is chosen by: the surah and number of the last ayah recited, and,
+ * for a recitation that crosses surahs, every surah recited (`surah` alone otherwise).
+ */
+export type RecitedPassage = {
+  readonly surah: number;
+  readonly lastAyah: number;
+  readonly surahs?: readonly number[] | undefined;
+};
+
+/** The `RecitedPassage` of timings of either version: `surahs` only when they cross surahs. */
+export const recitedPassageOf = (timings: RecitationTimings): RecitedPassage => {
+  const last = timings.ayat[timings.ayat.length - 1]!.ayah;
+  if (timings.version === 1) return {surah: timings.surah, lastAyah: last};
+  const surahs = [...new Set(timings.ayat.map((ayah) => ayah.surah))];
+  return {surah: surahs[surahs.length - 1]!, lastAyah: last, ...(surahs.length > 1 ? {surahs} : {})};
+};
+
+/**
  * The end card's content: for `'tafsir'`, the tafsir file cut to the entry that covers the last ayah
  * recited (`tafsirEntryFor()`); for `'chapter-info'`, the surah's introduction, which must be the
- * surah recited. `BAD_STUDIO_PROP` for a missing file or another surah's introduction; the loaders'
- * own errors (`TRANSLATION_FETCH_FAILED`, `BAD_TRANSLATION_FILE`) pass through.
+ * surah recited (one of them, for a recitation across surahs). `BAD_STUDIO_PROP` for a missing file
+ * or another surah's introduction; the loaders' own errors (`CONTENT_FETCH_FAILED` for a request
+ * that fails, `BAD_CONTENT_FILE` for a file that is not the envelope) pass through.
  */
 export const resolveEndCardContent = async (
   endCard: EndCardSettings,
-  recited: {readonly surah: number; readonly lastAyah: number},
+  recited: RecitedPassage,
   io: Pick<Io, 'fetch' | 'staticFile'>,
 ): Promise<ResolvedEndCard> => {
   if (endCard.show === 'tafsir') {
@@ -227,11 +372,13 @@ export const resolveEndCardContent = async (
   if (endCard.show === 'chapter-info') {
     if (endCard.chapterInfoFile === '') throw emptyFile('chapterInfoFile', endCard.show);
     const info = await loadChapterInfo(fileUrl(endCard.chapterInfoFile, io.staticFile), {fetch: io.fetch});
-    if (info.surah !== recited.surah) {
+    const surahs = recited.surahs ?? [recited.surah];
+    if (!surahs.includes(info.surah)) {
+      const one = surahs.length === 1;
       throw new MushafStudioError(
         'BAD_STUDIO_PROP',
-        `endCard.chapterInfoFile ${describeValue(endCard.chapterInfoFile)} introduces surah ${info.surah}, but surah ${recited.surah} is recited. Fetch surah ${recited.surah}'s introduction.`,
-        {prop: 'endCard.chapterInfoFile', surah: info.surah, recited: recited.surah},
+        `endCard.chapterInfoFile ${describeValue(endCard.chapterInfoFile)} introduces surah ${info.surah}, but ${one ? `surah ${recited.surah} is recited. Fetch surah ${recited.surah}'s introduction.` : `surahs ${surahs.join(', ')} are recited. Fetch the introduction of one of them.`}`,
+        {prop: 'endCard.chapterInfoFile', surah: info.surah, recited: one ? recited.surah : surahs},
       );
     }
     return {tafsir: null, chapterInfo: info};

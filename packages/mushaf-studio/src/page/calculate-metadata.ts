@@ -9,7 +9,9 @@ import type {MushafPageProps} from './schema';
 /**
  * The audio cleanup of a resolved page (`resolveAudioCleanup()`): its gain, levels and the silence
  * skipped (never past the first line's lead-in), the timings and pages moved by that silence
- * (`skipPageStart()`). With the reason in `audioWarning` when the audio could not be analysed.
+ * (`skipPageStart()`). With the reason in `audioWarning` when the audio could not be analysed, and
+ * in `audioSrc` the clip the timings name when `audioFile` is missing from `public/`
+ * (`resolveAudioSource()`).
  */
 export const withPageAudio = async (
   props: MushafPageProps,
@@ -17,7 +19,7 @@ export const withPageAudio = async (
   options: {readonly fps: number; readonly signal?: AbortSignal | undefined},
 ): Promise<ResolvedPage> => {
   const {timings} = resolved;
-  const {audio, warning} = await resolveAudioCleanup({
+  const {audio, warning, src} = await resolveAudioCleanup({
     audioFile: props.audioFile,
     audio: props.audio,
     background: props.background,
@@ -27,8 +29,14 @@ export const withPageAudio = async (
     fps: options.fps,
     staticFile,
     signal: options.signal,
+    sidecar: timings.alignment,
   });
-  return {...skipPageStart(resolved, audio.trimSeconds, props.pageView.turnSeconds), audio, audioWarning: warning};
+  return {
+    ...skipPageStart(resolved, audio.trimSeconds, props.pageView.turnSeconds),
+    audio,
+    audioWarning: warning,
+    audioSrc: src,
+  };
 };
 
 /**

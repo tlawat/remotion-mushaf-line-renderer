@@ -1,12 +1,13 @@
 // The Review tab's words and its keyboard: which words are doubtful, which one `j` and `k` move to,
 // and what each key does. Pure, so the tab only wires them to its state.
+import {surahOfAyah} from '../compositions/timings';
 import type {StudioTimings} from '../types';
 import {isDoubtfulSegment} from './doubts';
 
 /**
  * A timed word as the Review tab shows it. `key` is `id#occurrence` (the occurrence among the words
  * of the same id, from 0), the handle `nudgeWords()` takes; `group` is the list row it sits in:
- * `s<segment>` for a word the aligner's sidecar names, else `a<ayah>`.
+ * `s<segment>` for a word the aligner's sidecar names, else `a<surah>:<ayah>` (`ayahGroup()`).
  */
 export type ReviewWord = {
   readonly key: string;
@@ -19,6 +20,12 @@ export type ReviewWord = {
 };
 
 export const wordKey = (id: string, occurrence: number): string => `${id}#${occurrence}`;
+
+/**
+ * The Review tab's row of an ayah: `a<surah>:<ayah>`, by surah too, so the rows of timings across
+ * surahs (113:1 and 114:1) are not one.
+ */
+export const ayahGroup = (surah: number, ayah: number): string => `a${surah}:${ayah}`;
 
 export const parseWordKey = (key: string): {id: string; occurrence: number} => {
   const hash = key.lastIndexOf('#');
@@ -43,13 +50,14 @@ export const reviewWords = (timings: StudioTimings): readonly ReviewWord[] => {
       const {id, text, start, end} = word;
       return {key: wordKey(id, occurrence), id, occurrence, text, start, end, group: `s${word.segment}`};
     });
-  return timings.ayat.flatMap((ayah) =>
-    (ayah.words ?? []).map((word) => {
+  return timings.ayat.flatMap((ayah, index) => {
+    const group = ayahGroup(surahOfAyah(timings, index), ayah.ayah);
+    return (ayah.words ?? []).map((word) => {
       const occurrence = next(word.id);
       const {id, start, end} = word;
-      return {key: wordKey(id, occurrence), id, occurrence, text: id, start, end, group: `a${ayah.ayah}`};
-    }),
-  );
+      return {key: wordKey(id, occurrence), id, occurrence, text: id, start, end, group};
+    });
+  });
 };
 
 /**
@@ -66,8 +74,13 @@ export const doubtfulReviewWords = (
       .filter((segment) => isDoubtfulSegment(segment, threshold))
       .map((segment) => `s${segment.segment}`),
   );
-  const incomplete = new Set(timings.ayat.filter((ayah) => ayah.complete === false).map((ayah) => ayah.ayah));
-  const ayahOf = (id: string): number => Number(id.split(':')[1]);
+  const incomplete = new Set(
+    timings.ayat.flatMap((ayah, index) =>
+      ayah.complete === false ? [`${surahOfAyah(timings, index)}:${ayah.ayah}`] : [],
+    ),
+  );
+  /** "113:1:2" → "113:1". */
+  const ayahOf = (id: string): string => id.split(':').slice(0, 2).join(':');
   return words
     .filter((word) => segments.has(word.group) || incomplete.has(ayahOf(word.id)))
     .map((word, index) => ({word, index}))

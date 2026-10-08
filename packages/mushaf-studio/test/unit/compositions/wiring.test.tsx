@@ -84,6 +84,7 @@ type ResolvedRecitationWithClips = import('../../../src/compositions/recitation'
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
 type MushafPageProps = import('../../../src/page').MushafPageProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
+type StudioTimingsV1 = import('../../../src/types').StudioTimingsV1;
 type AyahTranslation = import('../../../src/types').AyahTranslation;
 
 const meta = (language: string, name = `Translation ${language}`) => ({
@@ -125,7 +126,7 @@ const INFO = (surah: number) => ({
 /** The fixture `seconds` later: room for a leading silence to skip. */
 const later = (seconds: number): StudioTimings => {
   const move = (t: number) => Math.round((t + seconds) * 1000) / 1000;
-  const timings = fatiha as unknown as StudioTimings;
+  const timings = fatiha as unknown as StudioTimingsV1;
   return {
     ...timings,
     ayat: timings.ayat.map((a) => ({
@@ -137,8 +138,23 @@ const later = (seconds: number): StudioTimings => {
   };
 };
 
+/** The catalogue clip a timings file was made of (`alignment.recitation.audioUrl`). */
+const CLIP = 'https://cdn.test/fatiha.mp3?start_ms=2909&end_ms=30695';
+const withClip = {
+  ...fatiha,
+  alignment: {
+    version: 1,
+    source: 'qud-catalogue',
+    recitation: {slug: 'r', chapter: 1, verseFrom: 1, verseTo: 7, clipStart: 2.909, audioUrl: CLIP},
+    segments: [],
+    words: [],
+    edits: [],
+  },
+};
+
 const FILES: Record<string, unknown> = {
   'timings.json': fatiha,
+  'clip.json': withClip,
   'late.json': later(3),
   'surah2.json': surah2Timings,
   'text.json': fatihaText,
@@ -415,6 +431,46 @@ describe('audio', () => {
     mount(<MushafPage {...defaultMushafPageProps} audioFile="audio.mp3" resolved={page} />);
     expect(mocks.mediaAudios).toHaveLength(1);
   });
+
+  it('plays the clip the timings name when audioFile is not in public/, in every composition and every clip', async () => {
+    const missing = {audioFile: 'missing.mp3', timingsFile: 'clip.json'};
+    const props = recitationProps(missing);
+    const resolved = await resolvedOf(props);
+    expect(resolved.audioSrc).toBe(CLIP);
+    expect(resolved.audioWarning).toContain('"missing.mp3" is not in public/');
+    expect(mocks.analyzeAudio).toHaveBeenCalledWith(CLIP, expect.objectContaining({fps: 30}));
+    mount(<MushafRecitation {...props} resolved={resolved} />);
+    expect(remotion.audios.map((a) => a.src)).toEqual([CLIP]);
+    cleanup();
+    remotion.audios.length = 0;
+    const memorize = {...defaultMushafRecitationProps.memorize, mode: 'repeat' as const, repeat: 2};
+    const repeated = recitationProps({...missing, memorize});
+    remotion.state.durationInFrames = 1800;
+    mount(<MushafRecitation {...repeated} resolved={await resolvedOf(repeated)} />);
+    expect(remotion.audios.length).toBeGreaterThan(1);
+    expect(new Set(remotion.audios.map((a) => a.src))).toEqual(new Set([CLIP]));
+    cleanup();
+    remotion.audios.length = 0;
+    const ayahProps: MushafAyahTextProps = {...defaultMushafAyahTextProps, ...missing, textFile: 'text.json'};
+    const ayahText = (await calculateMushafAyahTextMetadata(metadataArgs(ayahProps))).props!.resolved;
+    expect(ayahText.audioSrc).toBe(CLIP);
+    mount(<MushafAyahText {...ayahProps} resolved={ayahText} />);
+    expect(remotion.audios.map((a) => a.src)).toEqual([CLIP]);
+    cleanup();
+    remotion.audios.length = 0;
+    const pageProps: MushafPageProps = {...defaultMushafPageProps, ...missing};
+    const page = (await calculateMushafPageMetadata(metadataArgs(pageProps))).props!.resolved;
+    expect(page.audioSrc).toBe(CLIP);
+    mount(<MushafPage {...pageProps} resolved={page} />);
+    expect(remotion.audios.map((a) => a.src)).toEqual([CLIP]);
+  });
+
+  it('plays audioFile itself when the timings name no clip', async () => {
+    const resolved = await resolvedOf(recitationProps({audioFile: 'missing.mp3'}));
+    expect(resolved.audioSrc).toBeNull();
+    mount(<MushafRecitation {...recitationProps({audioFile: 'missing.mp3'})} resolved={resolved} />);
+    expect(remotion.audios.map((a) => a.src)).toEqual(['https://studio.test/missing.mp3']);
+  });
 });
 
 describe('stacked translations', () => {
@@ -621,6 +677,13 @@ describe('end card', () => {
     await expect(
       resolvedOf(recitationProps({endCard: endCard({show: 'chapter-info', chapterInfoFile: 'info-2.json'})})),
     ).rejects.toThrow(/introduces surah 2, but surah 1 is recited/);
+  });
+
+  it('lets the loaders’ content errors through, coded as content', async () => {
+    const missing = resolvedOf(recitationProps({endCard: endCard({show: 'tafsir', tafsirFile: 'none.json'})}));
+    await expect(missing).rejects.toMatchObject({code: 'CONTENT_FETCH_FAILED'});
+    const notTafsir = resolvedOf(recitationProps({endCard: endCard({show: 'tafsir', tafsirFile: 'en.json'})}));
+    await expect(notTafsir).rejects.toMatchObject({code: 'BAD_CONTENT_FILE'});
   });
 
   it('ends a page the same way', async () => {

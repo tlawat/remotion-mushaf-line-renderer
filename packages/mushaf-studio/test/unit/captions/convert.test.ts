@@ -10,7 +10,7 @@ import {
   timingsFromCatalogue,
   timingsFromQud,
 } from '../../../src/qud';
-import type {StudioTimings} from '../../../src/types';
+import type {StudioTimings, StudioTimingsV1} from '../../../src/types';
 
 const deepFreeze = <T>(value: T): T => {
   if (typeof value === 'object' && value !== null) {
@@ -29,19 +29,24 @@ const chapter = fixture<QudChapterSegments>('chapter-1-segments.json');
 
 // Frozen: neither direction may touch its input. Al-Fatihah, ayahs 2-7: 25 heard words and an
 // ayah-end marker after each of the six ayahs.
-const qud = deepFreeze(timingsFromQud({align, timestamps}, {audio: 'mushaf-studio/fatiha/audio.mp3'}));
-const catalogue = deepFreeze(timingsFromCatalogue(chapter));
+/** The aligner's timings are of one surah: version 1, narrowed. */
+const v1 = (timings: StudioTimings): StudioTimingsV1 => {
+  if (timings.version !== 1) throw new Error(`expected version 1 timings, got version ${timings.version}`);
+  return timings;
+};
+const qud = deepFreeze(v1(timingsFromQud({align, timestamps}, {audio: 'mushaf-studio/fatiha/audio.mp3'})));
+const catalogue = deepFreeze(v1(timingsFromCatalogue(chapter)));
 
 /** The `word`-th token of segment `segment`'s matched_text in the align fixture. */
 const textOf = (segment: number, word: number): string => align.segments[segment]!.matched_text!.split(' ')[word]!;
 
-const withoutSidecar = (timings: StudioTimings): StudioTimings => {
+const withoutSidecar = (timings: StudioTimingsV1): StudioTimingsV1 => {
   const {alignment: _, ...rest} = timings;
   return deepFreeze(rest);
 };
 
 /** `timings` with the words of `ayah` taken out, as a file timed by ayah would have it. */
-const withoutWords = (timings: StudioTimings, ayah: number): StudioTimings =>
+const withoutWords = (timings: StudioTimingsV1, ayah: number): StudioTimingsV1 =>
   deepFreeze({
     ...timings,
     ayat: timings.ayat.map((a) => {
@@ -58,7 +63,7 @@ const spaced = (words: readonly string[]): string[] => words.map((word, i) => (i
 const word = (caption: Caption): string => caption.text.trimStart();
 
 /** The manual sidecar the panel's first edit starts on a file that had none: no segments, no words. */
-const withManualSidecar = (timings: StudioTimings): StudioTimings =>
+const withManualSidecar = (timings: StudioTimingsV1): StudioTimingsV1 =>
   deepFreeze({
     ...withoutSidecar(timings),
     alignment: {

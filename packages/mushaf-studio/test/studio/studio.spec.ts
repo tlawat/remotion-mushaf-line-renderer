@@ -1,7 +1,8 @@
 // Studio smoke suite: the end-user app's Studio, headless. Proves that the compositions resolve
 // and mount without Remotion's error overlay, that the Mushaf panel docks itself, and that the
 // Props sidebar offers the schema's controls. It does not call the aligner or quran.com.
-import {writeFileSync} from 'node:fs';
+import {existsSync, readFileSync, writeFileSync} from 'node:fs';
+import path from 'node:path';
 import {expect, type Page, test} from '@playwright/test';
 
 const PANEL = '[data-mushaf-studio="panel"]';
@@ -144,6 +145,86 @@ test('MushafRecitation mounts and the Mushaf panel is docked', async ({page}) =>
   expect(later.wordWidth ?? 0).toBeGreaterThan(40);
   expect(painted.row?.[3] ?? 0).toBeGreaterThan(10);
   await page.screenshot({path: test.info().outputPath('recitation.png'), fullPage: false});
+});
+
+/** A file of the app's `public/`, from the suite's own folder (the config's `testDir`). */
+const appPublicFile = (file: string): string =>
+  path.join(test.info().project.testDir, '../../../../apps/mushaf-studio/public', file);
+
+test("MushafRecitation's Review tab draws the waveform, seeks from it and lists the sample's segments", async ({
+  page,
+}) => {
+  // The recording is not committed: `bun run --cwd apps/mushaf-studio sample` downloads it (CI does, before this suite).
+  expect(
+    existsSync(appPublicFile('mushaf-studio/fatiha/audio.mp3')),
+    'public/mushaf-studio/fatiha/audio.mp3 is missing: run `bun run --cwd apps/mushaf-studio sample` first',
+  ).toBe(true);
+  const sample = JSON.parse(readFileSync(appPublicFile('mushaf-studio/fatiha/timings.json'), 'utf8')) as {
+    alignment: {segments: {confidence: number}[]};
+  };
+  const segments = sample.alignment.segments.length;
+  expect(segments).toBeGreaterThan(0);
+
+  const errors = await openComposition(page, 'MushafRecitation');
+  await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
+  const panel = page.locator(PANEL);
+  await panel.getByRole('tab', {name: 'Review'}).click();
+  await expect(panel.getByRole('tab', {name: 'Review'})).toHaveAttribute('aria-selected', 'true');
+  const review = panel.locator('[data-mushaf-review]');
+  await expect(review).toBeVisible();
+
+  // The segment list: one row per segment of the sample's alignment, none of them doubtful.
+  await expect(review.locator('li[data-segment]')).toHaveCount(segments, {timeout: 60_000});
+  await expect(review.locator('li[data-segment][data-doubtful="true"]')).toHaveCount(0);
+
+  // The waveform: decoded from public/ and painted, so some pixel is not transparent and the peaks
+  // stand out from the background.
+  const canvas = review.locator('canvas[data-mushaf-waveform="canvas"]');
+  await expect(canvas).toBeVisible();
+  /** The canvas's pixels: how many are not transparent, and how many colours they have (2 is enough). */
+  const paintOf = () =>
+    canvas.evaluate((element: HTMLCanvasElement) => {
+      const context = element.getContext('2d');
+      if (!context) return {painted: 0, colors: 0};
+      const {data} = context.getImageData(0, 0, element.width, element.height);
+      let painted = 0;
+      const colors = new Set<number>();
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 0) continue;
+        painted++;
+        if (colors.size < 2) colors.add((data[i]! << 16) | (data[i + 1]! << 8) | data[i + 2]!);
+      }
+      return {painted, colors: colors.size};
+    });
+  await expect
+    .poll(async () => (await paintOf()).colors, {timeout: 120_000, message: 'the waveform canvas was never painted'})
+    .toBe(2);
+  expect((await paintOf()).painted).toBeGreaterThan(0);
+
+  // A click on the waveform seeks the Studio: its time display (the frame under the timecode) changes.
+  const frameDisplay = page.locator('button[aria-label="Show timeline ticks as frames"]').first();
+  await expect(frameDisplay).toBeVisible();
+  const frameOf = async () => Number((await frameDisplay.textContent())?.trim() ?? Number.NaN);
+  const before = await frameOf();
+  expect(Number.isInteger(before)).toBe(true);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  await canvas.click({position: {x: Math.round(box!.width * 0.7), y: Math.round(box!.height / 2)}});
+  await expect.poll(frameOf, {timeout: 30_000, message: 'the Studio frame did not move'}).not.toBe(before);
+  await expect(review.locator('[data-mushaf-waveform="cursor"]')).toHaveCount(1);
+
+  // The doubt markers: the sample has no doubtful segment, so the timeline names none (a marker is
+  // named "⚠ 62% 1:3:1–1:3:2"), and no <Sequence> of theirs complained.
+  const markers = await page.evaluate(
+    () => document.body.innerText.split('\n').filter((line) => /\u26a0 \d+%/.test(line)).length,
+  );
+  expect(markers).toBe(0);
+  const sequenceErrors = errors.filter((e) => /Sequence|durationInFrames/.test(e));
+  expect(sequenceErrors, sequenceErrors.join('\n')).toHaveLength(0);
+  await expect(errorOverlay(page)).toHaveCount(0);
+  const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+  expect(fatal, fatal.join('\n')).toHaveLength(0);
+  await page.screenshot({path: test.info().outputPath('review.png'), fullPage: false});
 });
 
 test('MushafPassage mounts', async ({page}) => {

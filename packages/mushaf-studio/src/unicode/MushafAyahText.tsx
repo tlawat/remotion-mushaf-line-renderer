@@ -23,11 +23,13 @@ import {
   useTranslationLayers,
   volumeCurveFor,
 } from '../compositions/parts';
-import {ayahAt, fileUrl} from '../compositions/shared';
+import {ayahAt, recordingUrl} from '../compositions/shared';
+import {passageSpan} from '../compositions/timings';
 import {MushafStudioError} from '../errors';
 import {
   audioClock,
   clipAt,
+  clipAyahKey,
   clipTimeline,
   firstLetterOf,
   isIdentityTimeline,
@@ -47,11 +49,6 @@ import {useUnicodeFont} from './font';
 import type {ResolvedAyah, ResolvedAyahText} from './resolve';
 import type {AyahAnimation, MushafAyahTextProps} from './schema';
 import type {AyahWord} from './text';
-
-/** The class of the translations under the ayah, and the rule that centres them as the ayah is. */
-const CENTRED = 'mushaf-ayah-text-translations';
-// `<TranslationBlock>` sets `text-align: start` inline; under a centred ayah its text is centred too.
-const CENTRED_RULE = `.${CENTRED} .mushaf-translation{text-align:center!important}`;
 
 /** `slideFade()`'s travel for one line, as a share of its line box, and how much of it an exit takes. */
 const SLIDE_SHARE = 0.28;
@@ -116,8 +113,9 @@ export const ayahPresentationStyle = (
  * Under a memorisation mode each ayah plays `memorize.repeat` times on the clip timeline (one
  * `<Audio>` per clip, the ayah on screen through all its plays, the highlight restarting with each,
  * a "2/3" counter in a corner); the blank modes hide words (opacity 0, so nothing reflows) and
- * `'first-letters'` shows each word to come as its first letter and a tatweel (`firstLetterOf()`),
- * the ayah-end marker kept as a cue.
+ * `'first-letters'` shows each word to come as its first letter and a tatweel (`firstLetterOf()`)
+ * over the full word, hidden, so the lines break where the full text's do; the ayah-end marker is
+ * kept as a cue.
  */
 export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
   const {audioFile, layout, animation, highlight, memorize, text, fontSize, lineHeight, overlay, endCard, audio} =
@@ -187,16 +185,22 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
       return hidden ? {...style, ...hidden} : style;
     };
   };
-  // The first-letter cue for a word to come; the marker keeps its number.
+  // The first-letter cue for a word to come, drawn over the full word, hidden (`<AyahText wordText>`);
+  // the marker keeps its number.
   const wordTextFor =
     memorize.mode === 'first-letters'
       ? (ayah: ResolvedAyah) =>
           (word: AyahWord): string | undefined =>
             word.kind === 'word' && visibilityOf(ayah, word) === 'first-letter' ? firstLetterOf(word.text) : undefined
       : undefined;
-  /** Where an ayah's first play starts on the composition's clock: its own start when ayahs play once. */
+  /**
+   * Where an ayah's first play starts on the composition's clock: its own start when ayahs play once.
+   * A clip of timings across surahs names its surah, so 114:1 is not taken for 113:1.
+   */
   const startOnTimeline = (ayah: ResolvedAyah): number =>
-    clips.find((c) => c.ayah === ayah.ayah && c.repetition === 1)?.compositionFrom ?? ayah.start;
+    clips.find((c) => c.repetition === 1 && c.ayah === ayah.ayah && (c.surah ?? ayah.surah) === ayah.surah)
+      ?.compositionFrom ?? ayah.start;
+  const span = passageSpan(timings);
 
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color}}>
@@ -208,10 +212,9 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
         audioLevel={glowLevelAt(resolved.audio, now, fps)}
         glowY={layout.verticalAlign}
       />
-      {showTranslation && <style>{CENTRED_RULE}</style>}
       {audioFile !== '' && identity && (
         <CompositionAudio
-          src={fileUrl(audioFile, staticFile)}
+          src={recordingUrl(audioFile, resolved, staticFile)}
           trimBefore={audioOffsetFrames}
           volume={(f) => volumeAt(f, curve)}
         />
@@ -224,14 +227,14 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
           const from = Math.round(c.compositionFrom * fps);
           return (
             <Sequence
-              key={`${c.ayah}/${c.repetition}`}
+              key={`${clipAyahKey(c)}/${c.repetition}`}
               from={from}
               durationInFrames={Math.max(1, trimAfter - trimBefore)}
-              name={`Ayah ${c.ayah} (${c.repetition}/${repeats})`}
+              name={`Ayah ${clipAyahKey(c)} (${c.repetition}/${repeats})`}
             >
               {/* The same gain in every clip; the fades are the composition's, at its very start and end. */}
               <CompositionAudio
-                src={fileUrl(audioFile, staticFile)}
+                src={recordingUrl(audioFile, resolved, staticFile)}
                 trimBefore={trimBefore}
                 trimAfter={trimAfter}
                 volume={(f) => volumeAt(from + f, curve)}
@@ -248,7 +251,8 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
         const end = next ? Math.round((startOnTimeline(next) - animation.leadInSeconds) * fps) : contentFrames;
         const duration = Math.max(1, end - from);
         const block = showTranslation ? (
-          <TranslationStack layers={translationLayers} ayahKey={key} className={CENTRED} />
+          // Centred, as the ayah over (or under) it is.
+          <TranslationStack layers={translationLayers} ayahKey={key} align="center" />
         ) : null;
         return (
           <Sequence key={key} from={from} durationInFrames={duration} premountFor={fps} name={`Ayah ${key}`}>
@@ -292,9 +296,10 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
       })}
       <MushafTitleOverlay
         overlay={overlay}
-        surah={timings.surah}
-        fromAyah={timings.ayat[0]!.ayah}
-        toAyah={timings.ayat[timings.ayat.length - 1]!.ayah}
+        surah={span.from.surah}
+        fromAyah={span.from.ayah}
+        toSurah={span.to.surah}
+        toAyah={span.to.ayah}
         ayahKey={ayahKeyOf(heard) ?? ayahAt(timings, now)}
         firstWordSeconds={timings.ayat[0]!.words?.[0]?.start ?? timings.ayat[0]!.start}
         background={layout.background}

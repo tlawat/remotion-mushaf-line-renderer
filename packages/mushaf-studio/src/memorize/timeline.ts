@@ -2,6 +2,7 @@ import type {TransitionTiming} from '@remotion/transitions';
 import {
   type LineSchedule,
   type MushafLineData,
+  normalizeTimings,
   type RecitationTimings,
   scrollPosition,
   sliceWords,
@@ -14,6 +15,11 @@ import type {Memorize} from '../schema';
  * `repetition` counts from 1 to the timeline's repeats.
  */
 export type MemorizeClip = {
+  /**
+   * The ayah's surah, on the clips of timings that cross surahs (version 2), where an ayah number
+   * alone is ambiguous. Absent for one surah's timings (version 1): the file's surah.
+   */
+  readonly surah?: number;
   readonly ayah: number;
   readonly repetition: number;
   readonly audioFrom: number;
@@ -53,13 +59,15 @@ export const clipTimeline = (
   const clips: MemorizeClip[] = [];
   // Seconds the composition has gained on the recording so far: the extra plays and their pauses.
   let shift = 0;
-  timings.ayat.forEach((ayah, i) => {
-    const next = timings.ayat[i + 1];
+  const {ayat} = normalizeTimings(timings);
+  ayat.forEach((ayah, i) => {
+    const next = ayat[i + 1];
     const audioFrom = ayah.start;
     const audioTo = Math.max(audioFrom, next === undefined ? ayah.end : Math.min(ayah.end, next.start));
     const length = audioTo - audioFrom;
     for (let repetition = 1; repetition <= repeats; repetition++) {
       clips.push({
+        ...(timings.version === 2 ? {surah: ayah.surah} : {}),
         ayah: ayah.ayah,
         repetition,
         audioFrom,
@@ -75,6 +83,13 @@ export const clipTimeline = (
   });
   return clips;
 };
+
+/**
+ * A clip's ayah as `"surah:ayah"`, or `"ayah"` for a clip of one surah's timings (no `surah`): a
+ * stable name for a `<Sequence>` key, unique with `repetition`.
+ */
+export const clipAyahKey = (clip: Pick<MemorizeClip, 'surah' | 'ayah'>): string =>
+  clip.surah === undefined ? `${clip.ayah}` : `${clip.surah}:${clip.ayah}`;
 
 /** Whether a timeline plays the recording as it is (one clip per ayah, at its own time). */
 export const isIdentityTimeline = (clips: readonly MemorizeClip[]): boolean =>
@@ -139,7 +154,10 @@ export const repeatCounterText = (clip: MemorizeClip | null, repeats: number): s
  * the clip's ayah (`sliceWords()`, so a slice or a split line counts only its own words), their
  * times cut to the clip and moved to where it plays. A line still on screen from the clip before
  * (an ayah that starts mid-line, or the next play of an ayah on one line) continues that slot
- * instead of coming in again. The same schedule for an identity timeline.
+ * instead of coming in again. A slot of a line without words after the leading ones (a later
+ * surah's header lines, in a passage across surahs) comes once, just before the first play of the
+ * line after it, the recording's gap before that ayah kept as it is. The same schedule for an
+ * identity timeline.
  */
 export const scheduleForClips = (
   schedule: readonly LineSchedule[],
@@ -149,17 +167,43 @@ export const scheduleForClips = (
 ): readonly LineSchedule[] => {
   if (isIdentityTimeline(clips)) return schedule;
   const out: LineSchedule[] = schedule.filter((slot) => slot.index < headers).map((slot) => ({...slot}));
-  const timed = schedule.filter((slot) => slot.index >= headers);
-  const ayahsOf = new Map<number, ReadonlySet<number>>();
-  for (const slot of timed) {
+  // A word's ayah as the clips name theirs: with its surah when they carry one (timings across surahs).
+  const bySurah = clips[0]?.surah !== undefined;
+  const ayahsOf = new Map<number, ReadonlySet<string>>();
+  // The header slots between two surahs, by the index of the timed slot they go before.
+  const before = new Map<number, LineSchedule[]>();
+  const timed: LineSchedule[] = [];
+  let waiting: LineSchedule[] = [];
+  for (const slot of schedule) {
+    if (slot.index < headers) continue;
     const line = lines[slot.index];
-    ayahsOf.set(slot.index, new Set(line ? sliceWords(line).map((word) => word.ayah) : []));
+    const ayahs = new Set(line ? sliceWords(line).map((word) => clipAyahKey(bySurah ? word : {ayah: word.ayah})) : []);
+    if (ayahs.size === 0) {
+      waiting.push(slot);
+      continue;
+    }
+    ayahsOf.set(slot.index, ayahs);
+    if (waiting.length > 0) before.set(slot.index, waiting);
+    waiting = [];
+    timed.push(slot);
   }
   for (const clip of clips) {
     const clamp = (t: number) => Math.min(clip.audioTo, Math.max(clip.audioFrom, t));
     const at = (t: number) => roundTime(clip.compositionFrom + clamp(t) - clip.audioFrom);
+    const key = clipAyahKey(clip);
     for (const slot of timed) {
-      if (!ayahsOf.get(slot.index)?.has(clip.ayah)) continue;
+      if (!ayahsOf.get(slot.index)?.has(key)) continue;
+      const headed = before.get(slot.index);
+      if (headed !== undefined) {
+        before.delete(slot.index);
+        // The gap before the clip is the recording's: the header keeps its time against the clip's start.
+        const shift = clip.compositionFrom - clip.audioFrom;
+        for (const header of headed) {
+          const floor = out[out.length - 1]?.start ?? 0;
+          const start = Math.max(floor, roundTime(header.start + shift));
+          out.push({index: header.index, start, end: Math.max(start, roundTime(header.end + shift))});
+        }
+      }
       const start = at(slot.start);
       const end = Math.max(start, at(slot.end));
       const last = out[out.length - 1];

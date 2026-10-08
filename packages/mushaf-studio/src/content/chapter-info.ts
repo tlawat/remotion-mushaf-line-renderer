@@ -10,6 +10,7 @@ import {
   quranComUrl,
 } from '../translations/quran-com';
 import type {TranslationMeta} from '../types';
+import {withContentErrors} from './content-errors';
 import {htmlToParagraphs} from './html';
 import {orderedMeta, parseContentMeta} from './tafsir';
 
@@ -54,14 +55,21 @@ const isPlace = (value: unknown): value is RevelationPlace => value === 'makkah'
  * reduced to plain paragraphs, as a `ChapterInfo` with `meta.id` `quran.com-chapter-info:<surah>`.
  * quran.com answers a language it has no introduction in with its English one; `meta.language`
  * says which came. Checks the surah first (`BAD_STUDIO_PROP`); a failed request or an answer
- * without these fields is `TRANSLATION_FETCH_FAILED`.
+ * without these fields is `CONTENT_FETCH_FAILED`.
  */
 export const fetchChapterInfo = async (
   query: {readonly surah: number; readonly language?: string | undefined},
   options: QuranComOptions = {},
 ): Promise<ChapterInfo> => {
+  assertQuranComRange(query.surah, undefined, undefined);
+  return withContentErrors(() => readChapterInfo(query, options));
+};
+
+const readChapterInfo = async (
+  query: {readonly surah: number; readonly language?: string | undefined},
+  options: QuranComOptions,
+): Promise<ChapterInfo> => {
   const {surah} = query;
-  assertQuranComRange(surah, undefined, undefined);
   const language = query.language ?? 'en';
   const chapterUrl = quranComUrl(options, `/chapters/${surah}`, {language});
   const infoUrl = quranComUrl(options, `/chapters/${surah}/info`, {language});
@@ -113,7 +121,7 @@ export const fetchChapterInfo = async (
 // Files
 
 const fail = (problem: string, details: Readonly<Record<string, unknown>> = {}): never => {
-  throw new MushafStudioError('BAD_TRANSLATION_FILE', `Chapter info file: ${problem}`, details);
+  throw new MushafStudioError('BAD_CONTENT_FILE', `Chapter info file: ${problem}`, details);
 };
 
 const field = <T>(value: Record<string, unknown>, name: string, test: (v: unknown) => v is T, what: string): T => {
@@ -128,7 +136,7 @@ const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every(isS
 
 /**
  * Reads the chapter-info envelope `serialiseChapterInfo()` writes (`{version: 1, kind:
- * 'chapter-info', meta, surah, ...}`). Throws `BAD_TRANSLATION_FILE` naming the field that is
+ * 'chapter-info', meta, surah, ...}`). Throws `BAD_CONTENT_FILE` naming the field that is
  * missing or wrong.
  */
 export const parseChapterInfoFile = (value: unknown): ChapterInfo => {
@@ -181,23 +189,25 @@ export const serialiseChapterInfo = (info: ChapterInfo): string => {
 
 /**
  * Fetches and parses a chapter-info file (a `staticFile()` URL or any URL). For
- * `calculateMetadata()`. A failed request is `TRANSLATION_FETCH_FAILED`; a file that is not the
- * envelope is `BAD_TRANSLATION_FILE`, its message prefixed with the URL.
+ * `calculateMetadata()`. A failed request is `CONTENT_FETCH_FAILED`; a file that is not the
+ * envelope is `BAD_CONTENT_FILE`, its message prefixed with the URL.
  */
 export const loadChapterInfo = async (
   url: string,
   options: {readonly fetch?: typeof fetch | undefined} = {},
 ): Promise<ChapterInfo> => {
-  const body = await fetchJson(
-    url,
-    'Check that the file exists (in public/ for a staticFile() path) and that the path in the props is right.',
-    options,
+  const body = await withContentErrors(() =>
+    fetchJson(
+      url,
+      'Check that the file exists (in public/ for a staticFile() path) and that the path in the props is right.',
+      options,
+    ),
   );
   try {
     return parseChapterInfoFile(body);
   } catch (error) {
-    if (isMushafStudioError(error) && error.code === 'BAD_TRANSLATION_FILE') {
-      throw new MushafStudioError('BAD_TRANSLATION_FILE', `${url}: ${error.message}`, {...error.details, url});
+    if (isMushafStudioError(error) && error.code === 'BAD_CONTENT_FILE') {
+      throw new MushafStudioError('BAD_CONTENT_FILE', `${url}: ${error.message}`, {...error.details, url});
     }
     throw error;
   }

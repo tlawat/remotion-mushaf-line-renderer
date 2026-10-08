@@ -20,7 +20,9 @@ export const enterSeconds = (fps: number): number => enterTiming().getDurationIn
 /**
  * The audio cleanup of a resolved recitation (`resolveAudioCleanup()`): its gain, levels and the
  * silence skipped, the timings moved by that silence (`skipRecitationStart()`), never past the
- * first line's entrance. With the reason in `audioWarning` when the audio could not be analysed.
+ * first line's entrance. With the reason in `audioWarning` when the audio could not be analysed,
+ * and in `audioSrc` the clip the timings name when `audioFile` is missing from `public/`
+ * (`resolveAudioSource()`).
  */
 export const withRecitationAudio = async (
   props: MushafRecitationProps,
@@ -28,7 +30,7 @@ export const withRecitationAudio = async (
   options: {readonly fps: number; readonly signal?: AbortSignal | undefined},
 ): Promise<ResolvedRecitationWithClips> => {
   const {timings, schedule} = resolved;
-  const {audio, warning} = await resolveAudioCleanup({
+  const {audio, warning, src} = await resolveAudioCleanup({
     audioFile: props.audioFile,
     audio: props.audio,
     background: props.background,
@@ -38,8 +40,14 @@ export const withRecitationAudio = async (
     fps: options.fps,
     staticFile,
     signal: options.signal,
+    sidecar: timings.alignment,
   });
-  return {...skipRecitationStart(resolved, audio.trimSeconds, props.memorize), audio, audioWarning: warning};
+  return {
+    ...skipRecitationStart(resolved, audio.trimSeconds, props.memorize),
+    audio,
+    audioWarning: warning,
+    audioSrc: src,
+  };
 };
 
 /**

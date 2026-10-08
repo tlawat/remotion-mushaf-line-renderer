@@ -9,7 +9,9 @@ import type {MushafAyahTextProps} from './schema';
 /**
  * The audio cleanup of a resolved ayah text (`resolveAudioCleanup()`): its gain, levels and the
  * silence skipped (never past the first ayah's lead-in), the timings moved by that silence
- * (`skipAyahTextStart()`). With the reason in `audioWarning` when the audio could not be analysed.
+ * (`skipAyahTextStart()`). With the reason in `audioWarning` when the audio could not be analysed,
+ * and in `audioSrc` the clip the timings name when `audioFile` is missing from `public/`
+ * (`resolveAudioSource()`).
  */
 export const withAyahTextAudio = async (
   props: MushafAyahTextProps,
@@ -17,7 +19,7 @@ export const withAyahTextAudio = async (
   options: {readonly fps: number; readonly signal?: AbortSignal | undefined},
 ): Promise<ResolvedAyahText> => {
   const {timings} = resolved;
-  const {audio, warning} = await resolveAudioCleanup({
+  const {audio, warning, src} = await resolveAudioCleanup({
     audioFile: props.audioFile,
     audio: props.audio,
     background: props.background,
@@ -27,8 +29,14 @@ export const withAyahTextAudio = async (
     fps: options.fps,
     staticFile,
     signal: options.signal,
+    sidecar: timings.alignment,
   });
-  return {...skipAyahTextStart(resolved, audio.trimSeconds, props.memorize), audio, audioWarning: warning};
+  return {
+    ...skipAyahTextStart(resolved, audio.trimSeconds, props.memorize),
+    audio,
+    audioWarning: warning,
+    audioSrc: src,
+  };
 };
 
 /**

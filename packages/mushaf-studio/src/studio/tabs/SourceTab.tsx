@@ -1,11 +1,12 @@
 import type * as React from 'react';
 import {useEffect, useMemo, useState} from 'react';
 import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../qud';
+import {isHafsRecitation} from '../../qud/riwayah';
 import type {QudRecitation} from '../../qud/types';
 import {saveRecording} from '../recording';
 import {describeError, loadOnce, runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
 import {AUDIO_EXTENSIONS, fileNameFor, isUrl, patchProps, projectPath, slugify, writeFile} from '../studio-api';
-import {styles} from '../styles';
+import {colors, styles} from '../styles';
 import {ayahCount, surahLabel} from '../surahs';
 import type {TabProps} from '../tab-props';
 import {Button, Field, Note, NumberInput, Section} from '../ui';
@@ -32,6 +33,8 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
   const [chapterChoice, setChapterChoice] = useState(0);
   const [verses, setVerses] = useState<{readonly from: number; readonly to: number} | null>(null);
   const [publicChoice, setPublicChoice] = useState('');
+  /** The slug of the recitation in another riwayah the user confirmed using on the Hafs mushaf; another one asks again. */
+  const [confirmedSlug, setConfirmedSlug] = useState<string | null>(null);
   const audioFiles = usePublicFiles(AUDIO_EXTENSIONS);
   const groups = useMemo(() => groupByReciter(catalogue ?? []), [catalogue]);
 
@@ -41,9 +44,12 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
   const from = Math.max(1, Math.min(verses?.from ?? 1, count));
   const to = Math.max(from, Math.min(verses?.to ?? count, count));
   const working = busy !== null;
+  // The page is the Hafs print: a recitation in another riwayah is used only once the user has said it may not match.
+  const otherRiwayah = recitation !== undefined && !isHafsRecitation(recitation);
+  const confirmed = !otherRiwayah || confirmedSlug === recitation.slug;
 
   const useRecitation = () => {
-    if (!recitation) return;
+    if (!recitation || !confirmed) return;
     const query = {slug: recitation.slug, chapter, verseFrom: from, verseTo: to};
     void runStudioTask(tNow('source.busy.segments'), async () => {
       const segments = await getChapterSegments(query);
@@ -151,7 +157,28 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
               <span style={styles.label}>{t('source.of', {count})}</span>
             </div>
             <Note>{t('source.catalogueNote')}</Note>
-            <Button variant="primary" onClick={useRecitation} disabled={working || !recitation}>
+            {otherRiwayah ? (
+              <div data-mushaf-control="riwayah-warning">
+                <p role="alert" style={{...styles.note, color: colors.warning}}>
+                  {t('source.riwayahWarning', {riwayah: recitation.riwayah})}
+                </p>
+                <label style={styles.row}>
+                  <input
+                    type="checkbox"
+                    data-mushaf-control="riwayah-confirm"
+                    checked={confirmedSlug === recitation.slug}
+                    onChange={(e) => setConfirmedSlug(e.target.checked ? recitation.slug : null)}
+                  />
+                  <span style={styles.label}>{t('source.riwayahConfirm', {riwayah: recitation.riwayah})}</span>
+                </label>
+              </div>
+            ) : null}
+            <Button
+              variant="primary"
+              onClick={useRecitation}
+              disabled={working || !recitation || !confirmed}
+              title={confirmed ? undefined : t('source.riwayahConfirmFirst', {riwayah: recitation?.riwayah ?? ''})}
+            >
               {t('source.use')}
             </Button>
           </>

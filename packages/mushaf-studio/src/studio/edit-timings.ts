@@ -3,7 +3,7 @@
 import type {AyahTiming, WordTiming} from '@tlawat/remotion-mushaf-line';
 import {MushafStudioError} from '../errors';
 import {MARKER_HOLD_SECONDS} from '../qud/convert';
-import type {AlignmentEdit, AlignmentSidecar, AlignmentWord, StudioTimings} from '../types';
+import type {AlignmentEdit, AlignmentSidecar, AlignmentWord, StudioTimings, StudioTimingsV1} from '../types';
 
 /** One word's new times. `occurrenceIndex` counts the occurrences of `id` in its ayah's words, from 0. */
 export type WordNudge = {
@@ -106,7 +106,7 @@ type Resolved = {
   readonly end: number;
 };
 
-const resolve = (timings: StudioTimings, nudge: WordNudge): Resolved => {
+const resolve = (timings: StudioTimingsV1, nudge: WordNudge): Resolved => {
   const {id, occurrenceIndex} = nudge;
   const start = roundMs(nudge.start);
   const end = roundMs(nudge.end);
@@ -143,10 +143,17 @@ const resolve = (timings: StudioTimings, nudge: WordNudge): Resolved => {
  * end marker follows its last recited word unless it was nudged itself, the ayah's `start` and
  * `end` become the hull of its words, and one `nudge` entry (dated by the first nudge's `at`) is
  * appended to the edit log. Pure; an empty list returns the input. Throws `BAD_TIMING_EDIT` as
- * `nudgeWord()` does, before anything is changed; the last of two nudges of the same word wins.
+ * `nudgeWord()` does, before anything is changed, and for a file that crosses surahs (version 2);
+ * the last of two nudges of the same word wins.
  */
 export const nudgeWords = (timings: StudioTimings, nudges: readonly WordNudge[]): StudioTimings => {
   if (nudges.length === 0) return timings;
+  if (timings.version !== 1)
+    throw new MushafStudioError(
+      'BAD_TIMING_EDIT',
+      `nudgeWord(): these timings have version ${timings.version} (they cross surahs); the panel edits a file of one surah (version 1). Edit the times in the file itself, or align each surah to a file of its own.`,
+      {version: timings.version},
+    );
   const resolved = nudges.map((nudge) => resolve(timings, nudge));
   const byAyah = new Map<number, Map<number, Resolved>>();
   for (const entry of resolved) {

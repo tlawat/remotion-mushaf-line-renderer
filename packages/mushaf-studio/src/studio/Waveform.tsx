@@ -82,11 +82,14 @@ const draw = (
 };
 
 /**
- * The waveform of `audioFile` over `view` (composition seconds). Decodes the recording once per URL
- * (the store keeps it); a click seeks the Studio to the time under the pointer.
+ * The waveform of `audioFile` over `view` (composition seconds), or of `src` when the composition
+ * plays that instead (`resolved.audioSrc`). Decodes the recording once per URL (the store keeps
+ * it); a click seeks the Studio to the time under the pointer.
  */
 export const Waveform: React.FC<{
   readonly audioFile: string;
+  /** The URL the composition plays instead of `audioFile` (`resolved.audioSrc`); `null` or absent for `audioFile`. */
+  readonly src?: string | null | undefined;
   /** Seconds of the recording before the composition's frame 0 (`audioOffsetSeconds`). */
   readonly offset: number;
   readonly view: WaveformView;
@@ -95,9 +98,9 @@ export const Waveform: React.FC<{
   readonly selected: number | null;
   readonly fps: number;
   readonly onSeek: (seconds: number) => void;
-}> = ({audioFile, offset, view, segments, threshold, selected, fps, onSeek}) => {
+}> = ({audioFile, src, offset, view, segments, threshold, selected, fps, onSeek}) => {
   const t = useT();
-  const url = audioFile ? audioUrlOf(audioFile) : '';
+  const url = audioFile ? (src ? src : audioUrlOf(audioFile)) : '';
   const entry = useStudioState().waveforms[url];
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {

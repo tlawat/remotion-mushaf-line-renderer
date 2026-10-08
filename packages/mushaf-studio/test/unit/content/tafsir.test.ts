@@ -150,20 +150,20 @@ describe('fetchQuranComTafsir', () => {
     expect(urls).toHaveLength(0);
   });
 
-  it('fails with TRANSLATION_FETCH_FAILED for an unknown tafsir, a range without commentary or a bad shape', async () => {
+  it('fails with CONTENT_FETCH_FAILED for an unknown tafsir, a range without commentary or a bad shape', async () => {
     const unknown = quranCom({'/resources/tafsirs': {body: RESOURCES}});
     const missing = await rejection(fetchQuranComTafsir({tafsirId: 169, surah: 2}, {fetch: unknown.fetch}));
-    expect(missing.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(missing.code).toBe('CONTENT_FETCH_FAILED');
     expect(missing.details).toMatchObject({status: 404});
 
     const {fetch} = routes({body: {...CHAPTER_2, pagination: {next_page: null}}});
     const empty = await rejection(fetchQuranComTafsir({tafsirId: 169, surah: 2, fromAyah: 20, toAyah: 25}, {fetch}));
-    expect(empty.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(empty.code).toBe('CONTENT_FETCH_FAILED');
     expect(empty.message).toContain('no commentary of 2:20-25 in tafsir 169');
 
     const broken = routes({body: {tafsirs: [{verse_key: '2:1'}]}});
     const shape = await rejection(fetchQuranComTafsir({tafsirId: 169, surah: 2}, {fetch: broken.fetch}));
-    expect(shape.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(shape.code).toBe('CONTENT_FETCH_FAILED');
     expect(shape.message).toContain('{tafsirs: [{verse_key, text}]}');
   });
 
@@ -179,7 +179,7 @@ describe('fetchQuranComTafsir', () => {
           },
     );
     const error = await rejection(fetchQuranComTafsir({tafsirId: 169, surah: 2}, {fetch: endless.fetch}));
-    expect(error.code).toBe('TRANSLATION_FETCH_FAILED');
+    expect(error.code).toBe('CONTENT_FETCH_FAILED');
     expect(error.message).toContain('the commentary would be cut short');
     expect(error.details).toMatchObject({chapter: 2, pageLimit: 12});
   });
@@ -239,7 +239,7 @@ describe('tafsir files', () => {
     ];
     for (const [value, message] of cases) {
       const error = thrown(() => parseTafsirFile(value));
-      expect(error.code).toBe('BAD_TRANSLATION_FILE');
+      expect(error.code).toBe('BAD_CONTENT_FILE');
       expect(error.message).toContain(message);
     }
   });
@@ -250,8 +250,12 @@ describe('tafsir files', () => {
     );
     await expect(loadTafsir('https://x.test/good.json', {fetch})).resolves.toEqual(SAMPLE);
     const error = await rejection(loadTafsir('https://x.test/bad.json', {fetch}));
-    expect(error.code).toBe('BAD_TRANSLATION_FILE');
+    expect(error.code).toBe('BAD_CONTENT_FILE');
     expect(error.message).toMatch(/^https:\/\/x\.test\/bad\.json: Tafsir file: kind should be "tafsir"/);
     expect(error.details).toMatchObject({url: 'https://x.test/bad.json'});
+    const missing = fakeFetch(() => ({status: 404, body: {}}));
+    const failed = await rejection(loadTafsir('https://x.test/none.json', {fetch: missing.fetch}));
+    expect(failed.code).toBe('CONTENT_FETCH_FAILED');
+    expect(failed.details).toMatchObject({url: 'https://x.test/none.json', status: 404});
   });
 });

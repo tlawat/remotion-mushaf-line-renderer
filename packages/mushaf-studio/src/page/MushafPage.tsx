@@ -24,7 +24,8 @@ import {
   useTranslationLayers,
   volumeCurveFor,
 } from '../compositions/parts';
-import {ayahAt, fileUrl} from '../compositions/shared';
+import {ayahAt, recordingUrl} from '../compositions/shared';
+import {passageSpan} from '../compositions/timings';
 import {MushafStudioError} from '../errors';
 import {wordStarts} from '../lines';
 import {arabicIndicDigits} from '../overlay';
@@ -41,7 +42,7 @@ import {useInStudio} from '../studio/environment';
 import {ayahKeyOf, TranslationStack} from '../translations';
 import {LINES_PER_PAGE, type PageGeometry, pageGeometry, rowOf} from './geometry';
 import {PageFrame} from './PageFrame';
-import {inRange, type PageLineSlot, type PageSlot, pageLineAt, type ResolvedPage} from './resolve';
+import {inRanges, type PageLineSlot, type PageSlot, pageLineAt, type ResolvedPage, rangesOf} from './resolve';
 import type {MushafPageProps, PageText, PageView} from './schema';
 
 /** Opacity of the words of the page outside the ayahs followed, and of another surah's header. */
@@ -49,15 +50,15 @@ export const OUTSIDE_OPACITY = 0.35;
 
 type WordStyle = (word: MushafWord, context: WordContext) => React.CSSProperties | undefined;
 
-/** `style` with the words outside the range dimmed to `OUTSIDE_OPACITY`: still there to read, not followed. */
+/** `style` with the words outside the ranges dimmed to `OUTSIDE_OPACITY`: still there to read, not followed. */
 const dimmingOutside =
-  (style: WordStyle, range: RecitedRange): WordStyle =>
+  (style: WordStyle, ranges: readonly RecitedRange[]): WordStyle =>
   (word, context) =>
-    inRange(word, range) ? style(word, context) : {...style(word, context), opacity: OUTSIDE_OPACITY};
+    inRanges(word, ranges) ? style(word, context) : {...style(word, context), opacity: OUTSIDE_OPACITY};
 
-/** A header line belongs to the passage when it heads the surah recited; another surah's is dimmed with its words. */
-const headerOutside = (line: MushafLineData, range: RecitedRange): boolean =>
-  line.type !== 'ayah' && line.surahNumber !== undefined && line.surahNumber !== range.surah;
+/** A header line belongs to the passage when it heads a surah recited; another surah's is dimmed with its words. */
+const headerOutside = (line: MushafLineData, ranges: readonly RecitedRange[]): boolean =>
+  line.type !== 'ayah' && line.surahNumber !== undefined && !ranges.some((range) => range.surah === line.surahNumber);
 
 /** 0 → 1 over `frames` from `at`, eased in and out; 1 at once for no frames. */
 const progress = (frame: number, at: number, frames: number): number =>
@@ -111,7 +112,8 @@ type PageLeafProps = {
   readonly pageView: PageView;
   readonly background: string;
   readonly current: PageLineSlot | null;
-  readonly range: RecitedRange;
+  /** The ranges followed (`rangesOf()`): one per surah recited. */
+  readonly ranges: readonly RecitedRange[];
   readonly wordStyle: WordStyle;
   readonly activeProps: {readonly activeWordId: string | null; readonly activeWordStyle?: React.CSSProperties};
   readonly fontProps: FontProps;
@@ -160,7 +162,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
   pageView,
   background,
   current,
-  range,
+  ranges,
   wordStyle,
   activeProps,
   fontProps,
@@ -191,7 +193,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
         {slot.lines.map((line) => {
           const isCurrent = currentHere?.line === line.line;
           const dimOther = current !== null && !isCurrent ? pageView.dimOtherLines : 1;
-          const opacity = dimOther * (headerOutside(line, range) ? OUTSIDE_OPACITY : 1);
+          const opacity = dimOther * (headerOutside(line, ranges) ? OUTSIDE_OPACITY : 1);
           return (
             <div
               key={line.line}
@@ -312,7 +314,8 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
       {prop: 'resolved'},
     );
   }
-  const {timings, pages, range} = resolved;
+  const {timings, pages} = resolved;
+  const ranges = rangesOf(resolved);
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   // The frames before the end card: the audio fades out by their end, the last page stays to it.
   const cardFrames = endCardFrames(endCard, fps);
@@ -349,7 +352,7 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
         isStudio,
         sequenceFrom: from,
       }),
-      range,
+      ranges,
     );
     const nextLine = next?.lines[0];
     return (
@@ -367,7 +370,7 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
             pageView={pageView}
             background={layout.background}
             current={current}
-            range={range}
+            ranges={ranges}
             wordStyle={wordStyle}
             activeProps={activeProps}
             fontProps={fontSetup.props}
@@ -383,7 +386,8 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
     translationLayers.length === 0
       ? 'none'
       : pageTranslationPlace(text.translationPosition, geometry, height, translationSize);
-  const ayahKey = ayahKeyOf(heard) ?? ayahAt(timings, now) ?? `${timings.surah}:${timings.ayat[0]!.ayah}`;
+  const opening = passageSpan(timings).from;
+  const ayahKey = ayahKeyOf(heard) ?? ayahAt(timings, now) ?? `${opening.surah}:${opening.ayah}`;
   // The page has no title overlay: its cards take the overlay's default serif.
   const overlayFont = defaultOverlay.font;
   return (
@@ -397,7 +401,7 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
       />
       {audioFile !== '' && (
         <CompositionAudio
-          src={fileUrl(audioFile, staticFile)}
+          src={recordingUrl(audioFile, resolved, staticFile)}
           trimBefore={Math.round(resolved.audioOffsetSeconds * fps)}
           volume={(f) => volumeAt(f, curve)}
         />

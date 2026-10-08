@@ -38,13 +38,26 @@ export const mushafRecitationSchema = z.object({
   audioFile: z.string().describe('Audio: a path in public/ or a URL'),
   /** A `public/` path to a `RecitationTimings` JSON (with or without the studio's `alignment` sidecar). */
   timingsFile: z.string().describe('Timings JSON in public/'),
-  /** 0 keeps the file's range. */
-  fromAyah: z.number().int().min(0).max(286).describe('First ayah to show (0: as the timings say)'),
-  toAyah: z.number().int().min(0).max(286).describe('Last ayah to show (0: as the timings say)'),
+  /** 0 keeps the file's range. A range of one surah's timings: timings across surahs (version 2) are used whole. */
+  fromAyah: z
+    .number()
+    .int()
+    .min(0)
+    .max(286)
+    .describe('First ayah to show (0: as the timings say; timings across surahs are used whole)'),
+  toAyah: z
+    .number()
+    .int()
+    .min(0)
+    .max(286)
+    .describe('Last ayah to show (0: as the timings say; timings across surahs are used whole)'),
   /** Show only the recited ayahs on the first and last lines. */
   slice: z.boolean().describe('Hide the neighbours’ words on the first and last lines'),
   splits: z.array(lineSplitSchema).describe('Printed lines split into two timed segments'),
-  /** Only when the recitation starts at ayah 1: the surah's printed header lines before it. */
+  /**
+   * Only when the recitation starts at ayah 1: the surah's printed header lines before it. Across
+   * surahs, each later surah's header lines come between the two surahs as printed, whatever this says.
+   */
   header: headerSchema,
   theme: themeNameSchema,
   customTheme: customThemeSchema,
@@ -72,13 +85,12 @@ export type MushafRecitationProps = z.infer<typeof mushafRecitationSchema>;
 
 /**
  * Defaults that work out of the box: Al-Fatihah (ayahs 2-7) by Abdul Hamid Ghraio from the
- * aligner's catalogue, the audio streamed from the catalogue's clip URL and the timings committed
- * in the app's `public/`; the mushaf data from the mirror the app ships; plain theme, a three-line
- * window.
+ * aligner's catalogue, the audio in the app's `public/` (downloaded by `bun run sample`; the
+ * catalogue's clip streams until then) beside the timings committed there; the mushaf data from
+ * the mirror the app ships; plain theme, a three-line window.
  */
 export const defaultMushafRecitationProps: MushafRecitationProps = {
-  audioFile:
-    'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+  audioFile: 'mushaf-studio/fatiha/audio.mp3',
   timingsFile: 'mushaf-studio/fatiha/timings.json',
   fromAyah: 0,
   toAyah: 0,

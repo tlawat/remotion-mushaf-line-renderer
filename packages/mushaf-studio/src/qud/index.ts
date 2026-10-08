@@ -14,6 +14,7 @@ export {
   splitSession,
 } from './client';
 export {type FromQudOptions, MARKER_HOLD_SECONDS, timingsFromCatalogue, timingsFromQud} from './convert';
+export {isHafsRecitation} from './riwayah';
 export type * from './types';
 
 /** Segments under this confidence are flagged by default. */

@@ -130,6 +130,28 @@ describe('<App>', () => {
     expect(screen.getByRole('link', {name: /What you may publish/}).getAttribute('href')).toMatch(/licensing\.md$/);
   });
 
+  it('loads a recitation in another riwayah only once the user confirms it on the Hafs mushaf', async () => {
+    network.getChapterSegments.mockClear();
+    render(<App />);
+    const reciter = screen.getByLabelText('Reciter') as HTMLSelectElement;
+    await waitFor(() => expect(reciter.value).toBe(DEFAULT_SLUG));
+    expect(screen.queryByText(/the mushaf drawn here is the Hafs print/)).toBeNull();
+    fireEvent.change(reciter, {target: {value: 'abdulbasit_abdulsamad_warsh_qdc'}});
+    const warning = screen.getByText(/in the Warsh A'n Nafi' riwayah, but the mushaf drawn here is the Hafs print/);
+    expect(warning.getAttribute('role')).toBe('alert');
+    fireEvent.change(screen.getByLabelText('Surah'), {target: {value: '1'}});
+    expect(network.getChapterSegments).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('checkbox', {name: "Use the Warsh A'n Nafi' recitation with the Hafs mushaf anyway"}),
+    );
+    await screen.findByTestId('player');
+    expect(network.getChapterSegments).toHaveBeenCalledWith({slug: 'abdulbasit_abdulsamad_warsh_qdc', chapter: 1}, {});
+    // Another riwayah asks again.
+    fireEvent.change(reciter, {target: {value: 'ahmed_deban_qalon_mp3quran'}});
+    expect(network.getChapterSegments).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/in the Qalon A'n Nafi' riwayah/)).toBeTruthy();
+  });
+
   it('says so when the catalogue cannot be loaded, and loads it on Try again', async () => {
     network.listRecitations.mockRejectedValueOnce(new Error('offline'));
     render(<App />);

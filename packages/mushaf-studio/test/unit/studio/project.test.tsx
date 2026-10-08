@@ -68,7 +68,7 @@ const errorOf = (run: () => unknown): string => {
   try {
     run();
   } catch (error) {
-    expect(isMushafStudioError(error) && error.code).toBe('BAD_STUDIO_PROP');
+    expect(isMushafStudioError(error) && error.code).toBe('BAD_PROJECT_FILE');
     return (error as Error).message;
   }
   throw new Error('did not throw');
@@ -251,6 +251,24 @@ describe('the Project menu', () => {
     studio.getStaticFiles.mockReturnValue(ayahText.files.map(entry));
     importFile(JSON.stringify(ayahText));
     await waitFor(() => expect(getStudioState().error).toMatch(/^The project was saved from MushafAyahText/));
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+  });
+
+  it('fails every refusal with BAD_PROJECT_FILE', async () => {
+    const {importProject} = await import('../../../src/studio/ProjectMenu');
+    const codeOf = (text: string) =>
+      importProject('MushafRecitation', defaultMushafRecitationProps, text).then(
+        () => 'imported',
+        (error: unknown) => (isMushafStudioError(error) ? error.code : 'other'),
+      );
+    expect(await codeOf('{not json')).toBe('BAD_PROJECT_FILE');
+    studio.getStaticFiles.mockReturnValue([]);
+    expect(await codeOf(JSON.stringify(project.projectFileOf('MushafRecitation', recitation)))).toBe(
+      'BAD_PROJECT_FILE',
+    );
+    const ayahText = project.projectFileOf('MushafAyahText', defaultMushafAyahTextProps);
+    studio.getStaticFiles.mockReturnValue(ayahText.files.map(entry));
+    expect(await codeOf(JSON.stringify(ayahText))).toBe('BAD_PROJECT_FILE');
     expect(studio.saveDefaultProps).not.toHaveBeenCalled();
   });
 });

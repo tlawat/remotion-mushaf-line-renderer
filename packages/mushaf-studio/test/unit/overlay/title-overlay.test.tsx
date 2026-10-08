@@ -110,6 +110,21 @@ describe('<MushafTitleOverlay>', () => {
     expect(corner(c)).toBeNull();
   });
 
+  it('names both ends of a passage across surahs, framed under the first surah’s name', () => {
+    const c = at(0, base({overlay: overlay({title: 'intro'}), surah: 113, fromAyah: 4, toSurah: 114, toAyah: 2}));
+    expect(intro(c)!.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('113');
+    expect(part(c, 'range')!.textContent).toBe('Al-Falaq – An-Nas · 113:4–114:2 · ١١٣:٤–١١٤:٢');
+  });
+
+  it('shows no card without a surah to name, the corner label at once with the surah heard', () => {
+    const c = at(0, base({overlay: overlay({title: 'both'}), surah: undefined, ayahKey: '114:1'}));
+    expect(intro(c)).toBeNull();
+    expect(corner(c)!.textContent).toBe('An-Nas · 114:1');
+    expect(corner(c)!.style.opacity).toBe('');
+    cleanup();
+    expect(corner(at(0, base({overlay: overlay({title: 'corner'}), surah: undefined, ayahKey: null})))).toBeNull();
+  });
+
   it('is gone once introSeconds have passed', () => {
     const p = base({overlay: overlay({title: 'intro', introSeconds: 3})});
     expect(intro(at(89, p))).not.toBeNull();

@@ -8,6 +8,7 @@ export {
   audioClock,
   audioTimeAt,
   clipAt,
+  clipAyahKey,
   clipTimeline,
   isIdentityTimeline,
   type MemorizeClip,

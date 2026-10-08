@@ -9,3 +9,5 @@ public/mushaf-studio/**/*.flac
 public/mushaf-studio/**/*.ogg
 public/mushaf-studio/**/*.opus
 public/mushaf-studio/**/*.webm
+# What `bun run sample` leaves when a download is cut off (audio.mp3.part): part of the recording.
+public/mushaf-studio/**/*.part

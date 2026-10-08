@@ -134,9 +134,9 @@ describe('<MushafAyahText>', () => {
   });
 
   it('plays the audio, a URL as it is and a public/ path through staticFile()', () => {
-    expect(mount().querySelector<HTMLElement>('[data-audio]')!.dataset.audio).toBe(
-      defaultMushafAyahTextProps.audioFile,
-    );
+    // An explicit URL: the default `audioFile` may be either.
+    const url = 'https://media.test/fatiha/audio.mp3';
+    expect(mount({audioFile: url}).querySelector<HTMLElement>('[data-audio]')!.dataset.audio).toBe(url);
     cleanup();
     expect(
       mount({audioFile: 'mushaf-studio/fatiha/audio.mp3'}).querySelector<HTMLElement>('[data-audio]')!.dataset.audio,
@@ -232,11 +232,12 @@ describe('<MushafAyahText>', () => {
     expect(blocks.map((b) => b.dataset.ayahKey)).toEqual(['1:2', '1:3', '1:4', '1:5', '1:6', '1:7']);
     const third = root.querySelector<HTMLElement>('[data-sequence="Ayah 1:3"] .mushaf-translation')!;
     expect(third.textContent).toBe('The Entirely Merciful');
-    // The stack's blocks set `text-align: start` inline; the composition's rule centres them under the ayah.
+    // Centred as the ayah is, through the stack's `align`: no style rule of the composition's own.
+    expect(blocks.every((b) => b.style.textAlign === 'center')).toBe(true);
     const stack = third.closest<HTMLElement>('.mushaf-translation-stack')!;
-    expect(stack.classList.contains('mushaf-ayah-text-translations')).toBe(true);
-    expect(root.querySelector('style')!.textContent).toContain(
-      '.mushaf-ayah-text-translations .mushaf-translation{text-align:center!important}',
+    expect(stack.className).toBe('mushaf-translation-stack');
+    expect(Array.from(root.querySelectorAll('style')).some((s) => s.textContent?.includes('mushaf-translation'))).toBe(
+      false,
     );
     expect(stack.previousElementSibling!.className).toBe('mushaf-ayah-text');
   });

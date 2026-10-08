@@ -14,6 +14,7 @@ export {MushafPage, OUTSIDE_OPACITY, turnStyle} from './MushafPage';
 export {PageFrame, type PageFrameProps} from './PageFrame';
 export {
   inRange,
+  inRanges,
   PAGE_LEAD_IN_SECONDS,
   type PageLineSlot,
   type PageSlot,
@@ -21,6 +22,7 @@ export {
   pageLineSlots,
   type ResolvedPage,
   type ResolvePageOptions,
+  rangesOf,
   resolvePage,
   schedulePages,
   skipPageStart,

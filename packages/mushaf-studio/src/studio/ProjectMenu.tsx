@@ -9,6 +9,7 @@ import {
   PROJECT_FILE_NAME,
   projectFileOf,
   projectFits,
+  readFileText,
   validateProjectFile,
 } from './project';
 import {runStudioTask, setStudioState, t as tNow, useStudioState, useT} from './store';
@@ -42,30 +43,19 @@ export const importProject = async (compositionId: string, props: StudioComposit
   }
   const project = validateProjectFile(json);
   if (!projectFits(project, props))
-    throw new MushafStudioError('BAD_STUDIO_PROP', tNow('project.otherKind', {composition: project.compositionId}), {
+    throw new MushafStudioError('BAD_PROJECT_FILE', tNow('project.otherKind', {composition: project.compositionId}), {
       compositionId: project.compositionId,
     });
   const missing = missingProjectFiles(project, staticFileList());
   if (missing.length > 0)
     throw new MushafStudioError(
-      'BAD_STUDIO_PROP',
+      'BAD_PROJECT_FILE',
       tNow('project.missing', {count: missing.length, files: missing.map((f) => `public/${f}`).join(', ')}),
       {missing},
     );
   await patchProps(compositionId, project.props as PropsPatch);
   return project;
 };
-
-/** A file's text: `Blob.text()` where the browser has it, a FileReader otherwise. */
-const readText = (file: Blob): Promise<string> =>
-  typeof file.text === 'function'
-    ? file.text()
-    : new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result ?? ''));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsText(file);
-      });
 
 export const ProjectMenu: React.FC<{
   readonly compositionId: string;
@@ -88,7 +78,7 @@ export const ProjectMenu: React.FC<{
   const onImport = (file: File) => {
     setOpen(false);
     void runStudioTask(tNow('project.busy.import'), async () => {
-      const imported = await importProject(compositionId, props, await readText(file));
+      const imported = await importProject(compositionId, props, await readFileText(file));
       setStudioState({notice: tNow('project.imported', {name: file.name, count: imported.files.length})});
     });
   };

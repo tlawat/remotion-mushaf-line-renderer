@@ -3,6 +3,14 @@
 export type {ResolvedRecitation} from '../../types';
 export {STUDIO_FPS} from '../shared';
 export {
+  type AyahRef,
+  ayahKeysOf,
+  crossesSurahs,
+  type PassageSpan,
+  passageSpan,
+  surahOfAyah,
+} from '../timings';
+export {
   calculateMushafRecitationMetadata,
   enterSeconds,
   recitationDuration,

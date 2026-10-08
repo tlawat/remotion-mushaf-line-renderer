@@ -1,6 +1,7 @@
 // The studio's word timings as Remotion captions and back, so that a caption editor (the Studio's,
 // or any tool that reads `Caption[]`) can be used on them. Pure: no clock, no network.
 import {type AyahTiming, parseRecitationTimings, type WordTiming} from '@tlawat/remotion-mushaf-line';
+import {mapAyat, surahOfAyah} from '../compositions/timings';
 import {describeValue, MushafStudioError} from '../errors';
 import type {AlignmentWord, StudioTimings} from '../types';
 
@@ -120,14 +121,15 @@ export const toCaptionCues = (timings: StudioTimings, options: ToCaptionsOptions
   for (const slot of slotsOf(timings)) {
     if (slot.marker && options.markers !== true) continue;
     const ayah = timings.ayat[slot.ayahIndex]!;
+    const surah = surahOfAyah(timings, slot.ayahIndex);
     const cue = (id: string, word: string, score: number | null): CaptionCue => {
       const startMs = toMs(slot.start);
       const text = cues.length === 0 ? word : ` ${word}`;
       const caption = {text, startMs, endMs: toMs(slot.end), timestampMs: startMs, confidence: score};
-      return {caption, id, surah: timings.surah, ayah: ayah.ayah};
+      return {caption, id, surah, ayah: ayah.ayah};
     };
     if (slot.wordIndex === null) {
-      const key = `${timings.surah}:${ayah.ayah}`;
+      const key = `${surah}:${ayah.ayah}`;
       cues.push(cue(key, key, null));
       continue;
     }
@@ -260,7 +262,7 @@ export const fromCaptions = (captions: readonly Caption[], base: StudioTimings):
       list[slot.wordIndex] = {id: marker.id, start: before.end, end: Math.max(before.end, marker.end)};
     }
   }
-  const ayat = base.ayat.map((ayah, a): AyahTiming => {
+  const edited = mapAyat(base, (ayah, a): AyahTiming => {
     const span = spans.get(a);
     if (span !== undefined) return {...ayah, ...span};
     const list = editedWords.get(a);
@@ -277,7 +279,7 @@ export const fromCaptions = (captions: readonly Caption[], base: StudioTimings):
     sidecar === undefined || heard.size === 0
       ? sidecar
       : {...sidecar, words: sidecar.words.map((w, i) => ({...w, ...heard.get(i)}))};
-  const result: StudioTimings = {...base, ayat, ...(alignment === undefined ? {} : {alignment})};
+  const result: StudioTimings = {...edited, ...(alignment === undefined ? {} : {alignment})};
   try {
     parseRecitationTimings(result);
   } catch (error) {

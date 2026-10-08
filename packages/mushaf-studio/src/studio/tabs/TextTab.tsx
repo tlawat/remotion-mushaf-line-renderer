@@ -1,4 +1,4 @@
-import {recitedRange} from '@tlawat/remotion-mushaf-line';
+import {recitedRanges} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {useEffect, useMemo, useState} from 'react';
 import {staticFile} from 'remotion';
@@ -120,13 +120,18 @@ const moved = (layers: readonly TranslationLayer[], from: number, to: number): T
  */
 export const TextTab: React.FC<TabProps> = (tabProps) => <TranslationsAndText {...tabProps} />;
 
-/** The passage the timings time, the props' range where they set one: what the fetches ask quran.com for. */
+/**
+ * The passage the timings time, the props' range where they set one: what the fetches ask quran.com
+ * for. `null` without timings, and for timings that cross surahs (the fetches ask for one surah).
+ */
 const passageOf = (props: TabProps['props']) => {
   const timings = resolvedOf(props)?.timings ?? null;
   if (!timings) return null;
-  const range = recitedRange(timings);
+  const ranges = recitedRanges(timings);
+  const range = ranges[0];
+  if (!range || ranges.length !== 1) return null;
   return {
-    chapter: timings.surah,
+    chapter: range.surah,
     fromAyah: props.fromAyah > 0 ? props.fromAyah : range.fromAyah,
     toAyah: props.toAyah > 0 ? props.toAyah : range.toAyah,
   };
@@ -368,7 +373,7 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
 
   return (
     <div>
-      {passage ? null : <Note>{t('text.needsTimings')}</Note>}
+      {passage ? null : <Note>{t(resolvedOf(props)?.timings ? 'text.crossesSurahs' : 'text.needsTimings')}</Note>}
       <Section title={t('text.quranText')}>
         <Note>
           {isAyahTextProps(props)

@@ -477,6 +477,12 @@
         "end": 27.559
       }
     ],
-    "edits": []
+    "edits": [],
+    "audio": {
+      "lufs": -18.79,
+      "peak": 0.437768,
+      "firstSoundSeconds": 0.06,
+      "durationSeconds": 27.808417
+    }
   }
 }

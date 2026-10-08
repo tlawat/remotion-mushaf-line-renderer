@@ -6,6 +6,7 @@ import {cleanup, render} from '@testing-library/react';
 import React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import fatiha from '../../fixtures/timings/fatiha.json';
+import {FALAQ_NAS_LINES, falaqNas} from './helpers/falaq-nas';
 import {fatihaLines} from './helpers/fatiha-lines';
 import {createRemotionMock} from './helpers/remotion-mock';
 
@@ -118,12 +119,14 @@ vi.mock('../../../src/studio', () => ({
 const {MushafRecitation, defaultMushafRecitationProps} = await import('../../../src/compositions/recitation');
 const {scheduleLines, scrollPosition} = await import('@tlawat/remotion-mushaf-line');
 const {registerMushafFonts} = await import('../../../src/fonts');
-const {withHeaderSlots} = await import('../../../src/compositions/shared');
+const {withHeaderSlots, withInnerHeaderSlots} = await import('../../../src/compositions/shared');
+const {clipTimeline} = await import('../../../src/memorize');
 const {defaultOverlay} = await import('../../../src/schema');
 const {syntheticLine} = await import('../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/compositions/recitation').ResolvedRecitation;
 type StudioTimings = import('../../../src/types').StudioTimings;
+type StudioTimingsV1 = import('../../../src/types').StudioTimingsV1;
 
 class Boundary extends React.Component<{children: React.ReactNode}, {error: Error | null}> {
   override state = {error: null as Error | null};
@@ -135,7 +138,7 @@ class Boundary extends React.Component<{children: React.ReactNode}, {error: Erro
   }
 }
 
-const timings = fatiha as unknown as StudioTimings;
+const timings = fatiha as unknown as StudioTimingsV1;
 const lines = fatihaLines();
 const meta = {id: 'test', name: 'Test', language: 'en', source: 'file'};
 const ayahText = {kind: 'ayah' as const, meta, text: {'1:2': 'Praise', '1:3': 'Merciful'}};
@@ -217,7 +220,8 @@ describe('<MushafRecitation>', () => {
   it('plays the audio and shows the window in one Sequence, inset by the margins', () => {
     const c = mount(props());
     expect(c.querySelector<HTMLElement>('[data-audio]')?.dataset).toMatchObject({
-      audio: defaultMushafRecitationProps.audioFile,
+      // The default audioFile is the sample's recording in public/, through staticFile().
+      audio: `/static/${defaultMushafRecitationProps.audioFile}`,
       trimBefore: '0',
     });
     const seq = sequences(c);
@@ -610,5 +614,73 @@ describe('<MushafRecitation>', () => {
       </Boundary>,
     );
     expect(container.querySelector<HTMLElement>('[data-error]')!.dataset.error).toContain('`resolved` is null');
+  });
+});
+
+describe('<MushafRecitation> across surahs', () => {
+  const v2 = falaqNas as unknown as StudioTimings;
+  const content = {
+    timings: v2,
+    lines: FALAQ_NAS_LINES,
+    schedule: withInnerHeaderSlots(scheduleLines(FALAQ_NAS_LINES, v2), FALAQ_NAS_LINES, v2, 1.5),
+  };
+
+  it('names both surahs in the intro card, and the surah heard in the corner label', () => {
+    remotion.state.frame = 0;
+    const card = mount(props({overlay: overlay({title: 'intro'})}, content)).querySelector<HTMLElement>(
+      '[data-mushaf-overlay="intro"]',
+    )!;
+    expect(card.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('113');
+    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe(
+      'Al-Falaq – An-Nas · 113:4–114:2 · ١١٣:٤–١١٤:٢',
+    );
+    cleanup();
+    const p = props({overlay: overlay({title: 'corner'})}, content);
+    remotion.state.frame = 150; // 5 s: 113:5
+    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Falaq · 113:5');
+    cleanup();
+    remotion.state.frame = 420; // 14 s: 114:1
+    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('An-Nas · 114:1');
+  });
+
+  it('shows An-Nas’s header lines between the two surahs, one at a time', () => {
+    const c = mount(props({layout: layout({visibleLines: 0})}, content));
+    expect(lineMocks(c).map((l) => `${l.dataset.page}/${l.dataset.line}`)).toEqual([
+      '604/9',
+      '604/10',
+      '604/11',
+      '604/12',
+      '604/13',
+      '604/14',
+    ]);
+    const names = sequences(c).map((seq) => seq.dataset.sequence);
+    expect(names).toContain('p604 l11 (surah_name)');
+    expect(names).toContain('p604 l12 (basmallah)');
+  });
+
+  it('names each play of an ayah by its surah when ayahs repeat, every key its own', () => {
+    const memorize = {...defaultMushafRecitationProps.memorize, mode: 'repeat' as const, repeat: 2, pauseSeconds: 0.5};
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const c = mount(
+        props({memorize}, {...content, clips: clipTimeline(v2, memorize)} as Partial<ResolvedRecitation>),
+      );
+      const audio = sequences(c)
+        .map((seq) => seq.dataset.sequence!)
+        .filter((name) => name.startsWith('Ayah '));
+      expect(audio).toEqual([
+        'Ayah 113:4 (1/2)',
+        'Ayah 113:4 (2/2)',
+        'Ayah 113:5 (1/2)',
+        'Ayah 113:5 (2/2)',
+        'Ayah 114:1 (1/2)',
+        'Ayah 114:1 (2/2)',
+        'Ayah 114:2 (1/2)',
+        'Ayah 114:2 (2/2)',
+      ]);
+      expect(error.mock.calls.flat().join(' ')).not.toContain('same key');
+    } finally {
+      error.mockRestore();
+    }
   });
 });

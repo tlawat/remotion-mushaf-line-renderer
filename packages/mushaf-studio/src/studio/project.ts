@@ -75,14 +75,14 @@ const invalid = (
   params: MessageParams = {},
   details: Readonly<Record<string, unknown>> = {},
 ): never => {
-  throw new MushafStudioError('BAD_STUDIO_PROP', t('project.invalid', {problem: t(problem, params)}), details);
+  throw new MushafStudioError('BAD_PROJECT_FILE', t('project.invalid', {problem: t(problem, params)}), details);
 };
 
 /**
  * A project file read back, checked: version 1, a composition id, props that pass the schema of
  * the composition they are for (`<MushafAyahText>`'s when they carry `textFile`, else
  * `<MushafRecitation>`'s) and a list of files. `files` is completed with what the props point to,
- * so a hand-edited list cannot hide a file. Throws a `BAD_STUDIO_PROP` error that names the problem.
+ * so a hand-edited list cannot hide a file. Throws a `BAD_PROJECT_FILE` error that names the problem.
  */
 export const validateProjectFile = (value: unknown): ProjectFile => {
   if (!isRecord(value)) return invalid('project.notObject');
@@ -137,3 +137,14 @@ export const downloadText = (name: string, text: string, type = 'application/jso
   // After the click has been handled: revoking at once can cancel the download in some browsers.
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
+
+/** A picked file's text: `Blob.text()` where the browser has it, a FileReader otherwise. Browser only. */
+export const readFileText = (file: Blob): Promise<string> =>
+  typeof file.text === 'function'
+    ? file.text()
+    : new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ''));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });

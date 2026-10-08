@@ -1,11 +1,13 @@
 import type * as React from 'react';
 import {useMemo, useState} from 'react';
+import {surahOfAyah} from '../../compositions/timings';
 import {DEFAULT_CONFIDENCE_THRESHOLD, realignSession, sessionTimestamps, splitSession, timingsFromQud} from '../../qud';
 import type {AlignmentEdit, AlignmentSegment, StudioTimings} from '../../types';
 import {CompareTimings} from '../Compare';
 import {isDoubtfulSegment} from '../doubts';
 import {nudgeWords, roundMs, withEdit} from '../edit-timings';
 import {
+  ayahGroup,
   doubtfulReviewWords,
   parseWordKey,
   REVIEW_SHORTCUTS,
@@ -397,6 +399,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         <Section title={t('review.waveform')}>
           <Waveform
             audioFile={props.audioFile}
+            src={resolved?.audioSrc}
             offset={offset}
             view={view}
             segments={segments}
@@ -494,8 +497,9 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         onToggle={() => toggle('ayahs')}
       >
         <ul style={styles.list}>
-          {timings.ayat.map((ayah) => {
-            const key = `a${ayah.ayah}`;
+          {timings.ayat.map((ayah, index) => {
+            const surah = surahOfAyah(timings, index);
+            const key = ayahGroup(surah, ayah.ayah);
             const open = expanded.has(key);
             const seen = new Map<string, number>();
             const ayahWords: ReviewWord[] = (ayah.words ?? []).map((word) => {
@@ -527,7 +531,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
                     {open ? '▾' : '▸'}
                   </Button>
                   <strong>
-                    {timings.surah}:{ayah.ayah}
+                    {surah}:{ayah.ayah}
                   </strong>
                   <span style={{color: colors.muted}}>{range(ayah.start, ayah.end, unit)}</span>
                   <span style={{color: colors.muted}}>{t('review.wordCount', {count: ayahWords.length})}</span>
@@ -560,7 +564,15 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         </div>
         <Note>{t('review.applyNote', {file: props.timingsFile})}</Note>
       </Section>
-      <ExportRow props={props} project={project} />
+      <ExportRow
+        props={props}
+        project={project}
+        writeTimings={async (next) => {
+          await writeTimings(next);
+          // The nudges were made on the times the import replaced.
+          setPending(new Map());
+        }}
+      />
       <Disclosure title={t('compare.title')} open={compareOpen} onToggle={() => setCompareOpen((o) => !o)}>
         <CompareTimings
           timingsFile={isUrl(props.timingsFile) ? '' : props.timingsFile}
