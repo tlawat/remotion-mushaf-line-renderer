@@ -2,7 +2,8 @@
 // <MushafRecitation> under the memorisation modes and with interlinear glosses, mounted under jsdom
 // with `remotion` and the package's line components mocked (as in recitation.test.tsx): the clip
 // timeline's audio, the lines and words timed per clip, the counter, the word visibility per mode,
-// and the line slots that grow for the glosses.
+// the line slots that grow for the glosses, and (with the window mock rendering the package's DOM
+// contract) the glosses hidden with their words.
 import {cleanup, render} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import fatiha from '../../fixtures/timings/fatiha.json';
@@ -11,6 +12,8 @@ import {createRemotionMock} from './helpers/remotion-mock';
 
 const remotion = createRemotionMock();
 const delays = vi.hoisted(() => ({delayed: 0, open: new Set<number>()}));
+/** `rows`: the window mock renders each line's row and words as the package does, for the glosses to measure. */
+const contract = vi.hoisted(() => ({rows: false}));
 vi.mock('remotion', async (importOriginal) => {
   const actual = await importOriginal<typeof import('remotion')>();
   const Audio = (props: {src: string; trimBefore?: number; trimAfter?: number}) => (
@@ -83,7 +86,25 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         )}
         data-active-word-id={props.activeWordId ?? ''}
         data-word-styles={wordStyles(props, props.lines, frame)}
-      />
+      >
+        {contract.rows &&
+          props.lines.map((line) => (
+            <div key={line.line} className="mushaf-line" data-page={line.page} data-line={line.line}>
+              {/* Every word 100 px wide, right to left from the row's right edge. */}
+              <div className="mushaf-line__row" data-rect="0,1200" style={{visibility: 'visible'}}>
+                {line.words.map((word, i) => (
+                  <span
+                    key={word.id}
+                    className="mushaf-word"
+                    data-location={word.id}
+                    data-kind={word.kind}
+                    data-rect={`${1100 - i * 100},100`}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+      </div>
     );
   };
   return {...actual, MushafLine, MushafLineWindow, MushafSurahName: () => null};
@@ -144,6 +165,7 @@ beforeEach(() => {
   registerMushafFonts({});
   delays.delayed = 0;
   delays.open.clear();
+  contract.rows = false;
 });
 afterEach(() => {
   cleanup();
@@ -277,5 +299,73 @@ describe('<MushafRecitation> interlinear glosses', () => {
     const extra = interlinearExtraHeight(2, interlinearFontSize(text.glossSize, 98));
     expect(Number(line.dataset.lineHeight)).toBe(216 + extra);
     expect(JSON.parse(line.dataset.style!)).toEqual({transform: `translateY(${-extra / 2}px)`});
+  });
+});
+
+describe('<MushafRecitation> interlinear glosses under a memorisation mode', () => {
+  const text = {...defaultMushafRecitationProps.text, glossPosition: 'interlinear' as const};
+  const glosses = {
+    kind: 'word' as const,
+    meta,
+    words: {'1:2:1': 'praise', '1:2:2': 'to Allah', '1:2:4': 'worlds', '1:3:1': 'the Most Merciful'},
+  };
+  const label = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`[data-interlinear-label="${id}"]`)!;
+  const mountWithRows = (mode: Memorize['mode']) => {
+    contract.rows = true;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const [left = 0, width = 0] = ((this as HTMLElement).dataset?.rect ?? '0,0').split(',').map(Number);
+      return {left, width, right: left + width, top: 0, bottom: 10, height: 10, x: left, y: 0, toJSON: () => ({})};
+    });
+    return mount(props({text, memorize: memorize({mode, ...three})}, {gloss: glosses}));
+  };
+
+  it('blank-upcoming hides the label of a word to come and shows a recited one, on the first play only', () => {
+    // 1.5 s: ayah 2's first play, word 2 being recited (from 0.901), word 4 to come (1.941).
+    at(1.5);
+    const c = mountWithRows('blank-upcoming');
+    const words = stylesOf(windowOf(c));
+    expect(words['1:2:4']).toEqual({opacity: 0});
+    expect(label(c, '1:2:4').style.opacity).toBe('0');
+    expect(label(c, '1:2:4').dataset.visibility).toBe('hidden');
+    expect(label(c, '1:3:1').style.opacity).toBe('0');
+    // Recited: shown, as its word is.
+    expect(words['1:2:1']).toBeNull();
+    expect(label(c, '1:2:1').style.opacity).toBe('');
+    expect(label(c, '1:2:1').dataset.visibility).toBeUndefined();
+    // The active word: shown, in the highlight colour.
+    expect(windowOf(c).dataset.activeWordId).toBe('1:2:2');
+    expect(label(c, '1:2:2').dataset.active).toBe('true');
+    expect(label(c, '1:2:2').style.opacity).toBe('');
+    expect(label(c, '1:2:2').style.color).not.toBe('');
+    expect(delays.open.size).toBe(0);
+    cleanup();
+    // The second play reveals everything, the labels with the words.
+    at(3.891 + 1.2);
+    const second = mountWithRows('blank-upcoming');
+    for (const id of ['1:2:1', '1:2:2', '1:2:4', '1:3:1']) expect(label(second, id).style.opacity).toBe('');
+  });
+
+  it('first-letters leaves a faint label under a faint word', () => {
+    at(1.5);
+    const c = mountWithRows('first-letters');
+    expect(stylesOf(windowOf(c))['1:2:4']).toEqual({opacity: 0.12});
+    expect(label(c, '1:2:4').style.opacity).toBe('0.12');
+    expect(label(c, '1:2:4').dataset.visibility).toBe('faint');
+    expect(label(c, '1:2:1').style.opacity).toBe('');
+  });
+
+  it('with memorize off (or repeat) every label is shown as before', () => {
+    at(1.5);
+    for (const mode of ['off', 'repeat'] as const) {
+      const c = mountWithRows(mode);
+      const all = Array.from(c.querySelectorAll<HTMLElement>('[data-interlinear-label]'));
+      expect(all.map((l) => l.dataset.interlinearLabel).sort()).toEqual(['1:2:1', '1:2:2', '1:2:4', '1:3:1']);
+      for (const l of all) {
+        expect(l.style.opacity).toBe('');
+        expect(l.dataset.visibility).toBeUndefined();
+      }
+      expect(label(c, '1:2:4').textContent).toBe('worlds');
+      cleanup();
+    }
   });
 });

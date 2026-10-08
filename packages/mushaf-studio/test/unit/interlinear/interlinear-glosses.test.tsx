@@ -176,6 +176,42 @@ describe('<InterlinearGlosses>', () => {
     expect(label(container, '1:2:1')!.style.color).toBe('');
   });
 
+  it('hides a label with its word under a memorisation mode, keeps its place, and leaves the active one alone', () => {
+    const shown = render(
+      <InterlinearGlosses {...props} activeWordId="1:2:1" activeColor="#c8a45c">
+        <FakeLine visible />
+      </InterlinearGlosses>,
+    ).container;
+    const placed = ['1:2:1', '1:2:2', '1:2:4'].map((id) => boxOf(shown, id));
+    cleanup();
+    const visibility = {'1:2:1': 'shown', '1:2:2': 'faint', '1:2:4': 'hidden'} as const;
+    const {container} = render(
+      <InterlinearGlosses
+        {...props}
+        activeWordId="1:2:1"
+        activeColor="#c8a45c"
+        visibilityOf={(id) => visibility[id as keyof typeof visibility] ?? 'shown'}
+      >
+        <FakeLine visible />
+      </InterlinearGlosses>,
+    );
+    expect(label(container, '1:2:4')!.style.opacity).toBe('0');
+    expect(label(container, '1:2:4')!.dataset.visibility).toBe('hidden');
+    expect(label(container, '1:2:4')!.textContent).toBe('worlds');
+    expect(label(container, '1:2:2')!.style.opacity).toBe('0.12');
+    expect(label(container, '1:2:2')!.dataset.visibility).toBe('faint');
+    // The active word is shown: its label keeps the highlight colour and no opacity.
+    expect(label(container, '1:2:1')!.style.opacity).toBe('');
+    expect(label(container, '1:2:1')!.dataset.visibility).toBeUndefined();
+    expect(label(container, '1:2:1')!.style.color).toBe('rgb(200, 164, 92)');
+    // Paint only: the same boxes, the same fitted size, and the render released.
+    expect(['1:2:1', '1:2:2', '1:2:4'].map((id) => boxOf(container, id))).toEqual(placed);
+    expect(label(container, '1:2:2')!.querySelector<HTMLElement>('[data-interlinear-fit]')!.style.fontSize).toBe(
+      '14px',
+    );
+    expect(handles.open.size).toBe(0);
+  });
+
   it('re-measures when the lines change, and drops the labels of a line that left', () => {
     const view = render(
       <InterlinearGlosses {...props}>

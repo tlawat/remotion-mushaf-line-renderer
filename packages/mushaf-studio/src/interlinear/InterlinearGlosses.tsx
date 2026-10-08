@@ -2,9 +2,11 @@ import type * as React from 'react';
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useDelayRender} from 'remotion';
+import {visibilityStyle} from '../memorize/visibility';
 import type {WordGloss} from '../types';
 import {fitLabelSize, interlinearRowHeight, type LabelPlacement, placeLabels} from './layout';
 import {isRowVisible, measureRow, ROW_SELECTOR, rowNameOf} from './measure';
+import type {GlossVisibility} from './visibility';
 
 export type InterlinearGlossesProps = {
   /** The word-by-word translation; `null` leaves its label row out. */
@@ -14,6 +16,12 @@ export type InterlinearGlossesProps = {
   /** The word being recited (`MushafWord.id`): its label alone takes `activeColor`. `null` for none. */
   readonly activeWordId: string | null;
   readonly activeColor?: string | undefined;
+  /**
+   * What each word shows under a memorisation mode (`glossVisibilityFrom()`): a hidden word's label
+   * is hidden too (opacity 0, keeping its place and its fit), a faint word's equally faint. Omitted:
+   * every label is shown.
+   */
+  readonly visibilityOf?: GlossVisibility | undefined;
   readonly fontFamily: string;
   /** px: `interlinearFontSize()`. */
   readonly fontSize: number;
@@ -73,7 +81,8 @@ const FIT_KEY = 'data-interlinear-fit';
  * `MutationObserver` for a row that becomes visible or changes while this component does not
  * re-render) and portals the labels into the row itself, so they move with whatever moves the line:
  * the window's scroll, an entrance, a slot. Words a slice hides, the ayah-end markers and words
- * without a gloss get no label. A `delayRender()` handle is held from the first render until every
+ * without a gloss get no label; under a memorisation mode a label shows what its word shows
+ * (`visibilityOf`), painted over the placement so nothing is re-measured. A `delayRender()` handle is held from the first render until every
  * mounted row is measured and every label fitted, so no frame is captured without them; a row that
  * is not laid out (zero width) is skipped, not waited for. Deterministic: positions come from the
  * layout alone.
@@ -83,6 +92,7 @@ export const InterlinearGlosses: React.FC<InterlinearGlossesProps> = ({
   transliteration,
   activeWordId,
   activeColor,
+  visibilityOf,
   fontFamily,
   fontSize,
   color,
@@ -193,11 +203,13 @@ export const InterlinearGlosses: React.FC<InterlinearGlossesProps> = ({
         const lines = texts(placement.id);
         if (lines.every((line) => line === '')) return null;
         const active = activeColor !== undefined && placement.id === activeWordId;
+        const visibility = visibilityOf?.(placement.id) ?? 'shown';
         return (
           <div
             key={placement.id}
             data-interlinear-label={placement.id}
             data-active={active ? 'true' : undefined}
+            data-visibility={visibility === 'shown' ? undefined : visibility}
             style={{
               position: 'absolute',
               top: 0,
@@ -205,6 +217,7 @@ export const InterlinearGlosses: React.FC<InterlinearGlossesProps> = ({
               width: placement.width,
               textAlign: 'center',
               ...(active ? {color: activeColor} : {}),
+              ...visibilityStyle(visibility),
             }}
           >
             {lines.map((line, row) => {
