@@ -65,7 +65,7 @@ export const QUL_FONTS: readonly QulFontResource[] = [
     cdnUrl: `${CDN}/quran_fonts/v1-optimized/{format}/p{page}.{format}?v=3.1`,
     formats: ['woff2', 'ttf'],
     supported: false,
-    notes: 'Needs the V1 word script and the 15-line V1 layout export (QUL mushaf layout 2).',
+    notes: 'Needs the V1 word script and the 15-line V1 layout export (QUL mushaf layout 15).',
   },
   {
     id: 'qpc-v2',
