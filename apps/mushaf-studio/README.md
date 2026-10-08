@@ -33,8 +33,10 @@ button and the CLI always render the same thing. The compositions and the panel 
 - For rendering, Chrome Headless Shell: Remotion downloads it on the first render, or ahead of time
   with `bunx remotion browser ensure` (run in this folder). On Linux it needs the usual Chromium
   system libraries.
-- A network connection: the page fonts come from QUL's CDN (and from the fonts packages when it
-  fails), the catalogue and the aligner from `aligner.qud.dev`, translations from `api.quran.com`.
+- A network connection for the first start (the page fonts and the sample's recording) and for the
+  panel: the page fonts come from QUL's CDN (and from the fonts packages when it fails), the
+  catalogue and the aligner from `aligner.qud.dev`, translations from `api.quran.com`. See
+  [Offline](#offline) for what works without one.
 
 ## Install and start
 
@@ -42,24 +44,65 @@ From the repository root:
 
 ```bash
 bun install
-bun run build                 # the two packages the app imports, into packages/*/dist
-bun run fonts-packages:fill   # once: the page fonts (about 94 MB) from QUL's CDN into the fonts packages
-bun run studio                # Remotion Studio on this project, in your browser
+bun run studio
 ```
 
-The Root imports both fonts packages (the fallback when QUL's CDN fails), so their `fonts/` folders
-must be filled before the Studio can bundle the project; `fonts-packages:fill` checks every file
-against the packages' manifests and only downloads what is missing.
+`bun run studio` does four things in order:
 
-The Studio opens on `MushafRecitation` with the committed sample: Al-Fatihah 1:2-7 recited by Abdul
-Hamid Ghraio, the audio streamed from the catalogue's clip URL and the timings in
-`public/mushaf-studio/fatiha/timings.json`. Press play.
+1. `bun run build`: the two packages the app imports, into `packages/*/dist`.
+2. `bun run fonts-packages:fill`: the page fonts (about 94 MB, the first time) from QUL's CDN into
+   the fonts packages. The Root imports both fonts packages (the fallback when QUL's CDN fails), so
+   their `fonts/` folders must be filled before the Studio can bundle the project. It checks every
+   file against the packages' manifests and only downloads what is missing.
+3. `bun run --cwd apps/mushaf-studio sample`: the sample's recording (about 650 KB, the first time)
+   into `public/`. A failed download does not stop the start.
+4. Remotion Studio on this project, in your browser.
+
+Once the first start has filled the fonts and fetched the recording, `bun run studio:app` starts the
+Studio alone.
+
+The Studio opens on `MushafRecitation` with the sample: Al-Fatihah 1:2-7 recited by Abdul Hamid
+Ghraio, the timings committed in `public/mushaf-studio/fatiha/timings.json` and the audio in
+`public/mushaf-studio/fatiha/audio.mp3`. Press play.
+
+The recording belongs to its reciter, so it is not in the repository (`.gitignore` keeps it out):
+`sample` downloads the clip the timings name (`alignment.recitation.audioUrl`) once, with a two-minute
+timeout and one retry, and does nothing when the file is already there. While the file is missing,
+the compositions stream that clip instead and the Studio says so in a notice, with the command to
+run; a render streams it too. The timings also carry the clip's loudness (`alignment.audio`), so
+normalising it needs no download; the background's glow still analyses the audio itself.
+`bun run --cwd apps/mushaf-studio sample --help` lists the options (another timings file, another
+destination, a URL of your own, `--force`).
+
+### Offline
+
+Without a network, `bun run studio` still starts once the fonts packages are filled: the build needs
+no network, and `fonts-packages:fill` downloads nothing when every file is in place. The sample step
+prints why the download failed (`Could not download ...`) and the Studio starts anyway. Then:
+
+- The page fonts come from the fonts packages after QUL's CDN fails (`fonts: 'fallback'`), and the
+  mushaf data from the committed mirror (`data: 'mirror'`). The lines draw.
+- Once `public/mushaf-studio/fatiha/audio.mp3` is there, the sample plays. Before that, the notice
+  says the file is missing, and the clip it falls back to cannot be reached either: run `sample`
+  once you are online.
+- Loudness normalisation uses the summary in the timings, so it needs no download. The glow, which
+  needs the recording's levels, analyses the recording itself.
+- The surah-name and juz fonts (the header lines, the intro card) come from QUL's CDN unless
+  `fonts` is `package` and the two files are in `public/fonts/` (see below).
+- The panel's catalogue, Align and the quran.com fetches fail with a message in the status line.
 
 | Composition        | What it is                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------- |
 | `MushafRecitation` | A recited passage: the printed lines follow the audio, word by word. The panel docks here. |
 | `MushafAyahText`   | The same recitation one ayah at a time, as Unicode text in a 9:16 reel. The panel docks here too. |
+| `MushafPage`       | The whole printed page the recitation is on, the line being recited marked, turning to the next page. The panel docks here too. |
 | `MushafPassage`    | A passage without audio: each line stays `holdSeconds`, then gives way to the next. Set the surah and the ayahs in the Props sidebar. |
+| `MushafThumbnail`  | A still at 1280×720: the surah's framed name, its opening line, a title and a subtitle. Review's **Thumbnail** sets it to the passage. |
+
+The three recitation compositions also read timings that cross surahs (version 2 of the timings
+format, for a juz or a hizb): the file is used whole, and each later surah's printed header comes
+between the surahs. The panel writes one surah's timings; such a file comes from another producer
+(see [Following a recording](../../packages/remotion-mushaf-line-renderer/README.md#following-a-recording)).
 
 ## The Mushaf panel
 
@@ -84,7 +127,9 @@ Where the recitation comes from.
   reviewed segments with their word times, downloads the catalogue's clip of exactly that range,
   writes both into the project's folder and points `audioFile` and `timingsFile` at them (if the
   download fails, `audioFile` streams the clip from the catalogue instead). Nothing is uploaded and
-  there is nothing to align; go to Review.
+  there is nothing to align; go to Review. A recitation in another riwayah than Hafs (Warsh, Qalun,
+  Shu'bah) shows a warning first, since the page is the Hafs print and its words can differ: **Use
+  this recitation** waits until you tick the box that confirms it.
 - **Own recording.** Pick an audio file, or one already in `public/`. The panel copies it into the
   project's folder and sets `audioFile`. It stays on your machine until you press Align.
 
@@ -118,7 +163,9 @@ times every word. You choose the model (`Base` or `Large`), the device (GPU or C
 (Hafs, Warsh, Qalun, Shu'bah); progress shows as it runs (queued, segmenting, transcribing,
 matching, recovering, building). The panel then writes the timings file: the ayahs and words with
 their times (a word the reciter repeated comes back once per recitation) and, next to them, the
-aligner's segments with their confidence.
+aligner's segments with their confidence and the recording's loudness, so `audio.normalize` needs no
+second download. Another riwayah than Hafs shows the same warning as in Source, and **Align** waits
+for the box to be ticked.
 
 Use is free: a daily GPU quota, then the CPU, rate limited. A Hugging Face token spends your own GPU
 quota; the panel keeps it for the browser tab only and never writes it to a file or to the props.
@@ -145,6 +192,12 @@ word, timed to the audio file (every ayah of the timings file, whatever range th
 plays); the ayah markers are left out unless you tick *include ayah markers*. **VTT (words)** writes
 `<name>.vtt` (WebVTT, one cue per word) and **VTT (ayahs)** `<name>.ayahs.vtt` (one cue per ayah),
 both aligned to the start of the line, so Arabic sits on the right.
+
+To fix the times in a caption editor instead, export **Captions JSON**, edit its times (not its
+captions: none added, none removed), then **Import captions…** and pick the edited file. The panel
+puts its times into the timings file, logs the import among the edits, writes the file and updates
+the preview. A file that changes no time leaves the timings as they are; a file that does not fit
+them is refused, with the reason in the status line.
 
 To publish on YouTube: **Copy chapters** copies the chapters of the video (`0:00 Al-Fatihah 1:2`,
 ...) to the clipboard; a passage too short for YouTube (fewer than 3 chapters 10 s apart) has none,
@@ -209,7 +262,8 @@ once; the sidebar's save button writes them into `src/Root.tsx`.
 | `background`             | What is behind the lines: the page colour (`color` kind, `layout.background`), a gradient, an image or a looping, muted video from `public/` or a URL, with blur, a darkening layer and a slow Ken Burns zoom or pan; and a glow behind the lines that breathes with the recitation. |
 | `animation`              | How a line comes in and goes out (`slide-fade`, `fade`, `reveal-rtl`, `none`), the seconds it is on screen before its first word, the window's scroll curve. |
 | `highlight`              | What follows the recitation (the word, the whole ayah, nothing), how the current word is marked (ink colour, a glow, a marker behind it) and in which colour, the dimming of the other words (all of them, or only those still to come), and which recitation of a repeated word moves the highlight. |
-| `text`                   | The translation and gloss files; the translation's position, font, size, colour and writing direction; the gloss's font, size and colour. `translations` stacks up to three translations, each with its file, font (`auto`: the web font of its language, Arabic, Urdu, Bengali, Chinese, ...), size and colour; while it is empty, `translationFile` is the one translation. |
+| `memorize`               | Memorisation (`MushafRecitation`, `MushafAyahText`): each ayah played `repeat` times with a counter, and the words still to come (or all but the recited ones) hidden for the first plays; `first-letters` shows each upcoming word's first letter in `MushafAyahText`. The glosses under the words (`glossPosition: interlinear`) hide and fade with them. |
+| `text`                   | The translation and gloss files; the translation's position, font, size, colour and writing direction; the gloss's font, size and colour, and where the gloss goes (`glossPosition`: a strip at the bottom, under each printed word, or nowhere). `translations` stacks up to three translations, each with its file, font (`auto`: the web font of its language, Arabic, Urdu, Bengali, Chinese, ...), size and colour; while it is empty, `translationFile` is the one translation. |
 | `header`                 | When the passage starts at ayah 1: the surah's printed header before it, the name in its ornamental frame (`name`) or the name and the basmalah (`name-basmalah`; Al-Fatihah, whose basmalah is ayah 1, and At-Tawbah, which has none, get the name alone). The header lines come in before the first ayah line, 1.5 s apart (the intro card's seconds when it is on); a recitation that starts at once leaves them no room. `none` by default. |
 | `overlay`                | A title: an intro card (`intro`) over the first seconds, with the surah's name in its printed frame, the ayah range ("Al-Fatihah · 1:2–7 · ١:٢–٧") and the reciter; a small label in a corner (`corner`) with the surah, the ayah being heard and the reciter; or both (`both`: the label comes in as the card goes). The card stays `introSeconds`, or goes 0.3 s before the first word when the recitation starts earlier; nothing is moved for it (in `MushafPassage`, which has no audio, the lines start after it). **`reciter` is typed here**: the panel's Source tab does not fill it. Also the texts' colour and font, the corner and the label's size. |
 | `legend`                 | The tajweed colours' legend in a corner (English, Arabic or both names, in a row or a column), shown only under a theme that colours the rules (`MushafRecitation`, `MushafPage`). |
@@ -375,9 +429,13 @@ otherwise needs the King Fahd Complex's permission.
 - **The panel cannot reach the aligner or the catalogue** (a CORS error in the browser console):
   open the Studio at `http://localhost:<port>`. The aligner accepts browser requests from
   `localhost` origins, not from a LAN address or a tunnel.
-- **No sound, or a render that times out on the audio**: the committed sample (and a catalogue
-  pick whose download failed) streams its clip from a Hugging Face Space, which can be asleep or
-  down. Wait and reload, or pick the recitation again in the Source tab, which downloads the clip
-  into `public/`.
+- **No sound, or a render that times out on the audio**: the sample's recording is not in `public/`
+  yet (the Studio's notice says so), or a catalogue pick's download failed, so the clip streams from
+  a Hugging Face Space, which can be asleep or down. Run
+  `bun run --cwd apps/mushaf-studio sample` (it retries once; the Space can take over a minute to
+  wake), or pick the recitation again in the Source tab, which downloads the clip into `public/`.
+- **The panel asks to confirm a riwayah**: the catalogue recitation, or the riwayah picked in Align,
+  is not Hafs, and the page is the Hafs print. Words and their spelling can differ, so some words may
+  be highlighted wrongly or stay untimed. Tick the box to go on anyway.
 - **The aligner says the quota is spent** (`QUD_RATE_LIMITED`): the free GPU quota and the CPU rate
   limit are both used up; retry after the time the panel shows, or give a Hugging Face token.

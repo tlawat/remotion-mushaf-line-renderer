@@ -64,3 +64,60 @@ design and the roadmap.
   ayah recited or the surah's introduction read in `calculateMetadata()`.
 - **The app registers `MushafPage` and the `MushafThumbnail` still**, every composition's inline
   defaults carrying the new groups; the Mushaf panel docks over `MushafPage` too.
+- **Recitations that cross surahs.** `MushafRecitation`, `MushafAyahText` and `MushafPage` read
+  version 2 timings (`StudioTimings` is `StudioTimingsV1 | StudioTimingsV2`). Such a file is used
+  whole: `fromAyah` and `toAyah` do not cut it. Its lines come from `getMushafLinesForRanges()`, each
+  later surah's printed header between the two surahs. The intro card, the chapters, the
+  description and the captions name both surahs; `MushafPage` dims by every range. The panel
+  writes version 1; it reviews a version 2 file, but a nudge is `BAD_TIMING_EDIT` and the Text tab
+  fetches for one surah only. New helpers: `passageSpan()`, `crossesSurahs()`, `surahOfAyah()`,
+  `ayahKeysOf()`, `surahSpanName()`, `ayahSpanText()`.
+- **Captions import.** Review's export row has **Import captions…**: it reads a `Caption[]` JSON (the
+  file **Captions JSON** writes, edited in a caption editor) back into the timings with
+  `fromCaptions()`, logs a `realign` edit noted `captions import`, writes the file and re-evaluates
+  the composition. A file that changes no time is not written. A file that is not an array of
+  captions is `BAD_TIMING_EDIT`, named in the status line.
+- **Riwayah guard.** The page is the Hafs print (KFGQPC V4). A catalogue recitation in another
+  riwayah (`isHafsRecitation()` is false) and Align with another riwayah show a warning, in English
+  and Arabic. **Use this recitation** and **Align** stay disabled until a checkbox confirms it. The
+  web app asks the same before it loads the recitation.
+- **Error codes.** `CONTENT_FETCH_FAILED` (a tafsir or a surah introduction could not be fetched),
+  `BAD_CONTENT_FILE` (a tafsir or chapter-info file is not its envelope) and `BAD_PROJECT_FILE` (a
+  `project.json` that cannot be imported). The tafsir and chapter-info loaders used
+  `TRANSLATION_FETCH_FAILED` and `BAD_TRANSLATION_FILE`, the project import `BAD_STUDIO_PROP`.
+- **QUD client checked against the live service.** The catalogue and an alignment of surah 112
+  agree on the 4 ayahs and the word ids, within 0.3 s; the answers are replayed as fixtures
+  (`test/fixtures/qud/live-*`). Fixes: `splitSession()` and `realignSession()` refuse bad values
+  before sending (`QUD_HTTP`, `details.status` `null`), since a split with `max_verses: 0` held the
+  service for minutes. Error messages name a gateway's error (Cloudflare's 524 page) and give
+  `Retry-After`. The 404 hint matches the route: an expired session, or a wrong slug or chapter.
+- **The sample's recording is local.** The defaults' `audioFile` is `mushaf-studio/fatiha/audio.mp3`.
+  `bun run --cwd apps/mushaf-studio sample` downloads it once (two-minute timeout, one retry, a
+  `.part` file until it is complete); the root `bun run studio` runs it first. The file is not
+  committed.
+- **A missing recording falls back to its clip.** When `audioFile` is a `public/` path the server
+  answers 404 for, and the timings name their catalogue clip (`alignment.recitation.audioUrl`),
+  `calculateMetadata()` sets `resolved.audioSrc` to the clip, the compositions play it, and the
+  Studio shows a warning that names the missing file and the fix.
+- **Loudness is kept in the timings.** Source and Align measure a new recording and write the result
+  to `alignment.audio` (`{lufs, peak, firstSoundSeconds, durationSeconds}`, `audioSummaryOf()`).
+  With the glow off, `normalize` and `trimSilence` use it, so the recording is not downloaded
+  again. The sample's timings carry it.
+- **The ayah-end marker never starts a line.** `<AyahText>` puts an ayah's last word and its marker
+  in one `span.mushaf-ayah-tail` with `white-space: nowrap`.
+- **First letters keep the layout.** In `'first-letters'` the cue is drawn over the word, which
+  stays laid out but hidden, so the lines break where the full text's do.
+- **Translation alignment.** `<TranslationBlock>` and `<TranslationStack>` take `align` (`'start'`,
+  the default, `'center'` or `'end'`). `MushafAyahText` passes `'center'`.
+- **Glosses follow memorisation.** Under the blank and first-letter modes, an interlinear gloss
+  hides with its word (opacity 0, layout kept) or goes faint with it (0.12):
+  `glossVisibilityFrom()`, `<InterlinearGlosses visibilityOf>`. The active word's gloss is
+  highlighted as before.
+- **CI.** After the render suite, CI builds `apps/mushaf-web`, downloads the sample's recording and
+  runs the Studio smoke suite (`test:studio`, which now covers the Review tab). The root
+  `bun run typecheck` checks `apps/mushaf-web` too.
+- **In-browser render test.** `bun run --cwd apps/mushaf-web test:render-web` builds the web app,
+  renders Al-Ikhlas in Chromium with `@remotion/web-renderer` and checks the file it offers: a video
+  and an audio track, the length the page said, the recitation audible (in Chromium: a 13 s WebM,
+  1920×1080, VP9 and Opus). QUD's answers and the clip are downloaded once into
+  `test-results/web-render/`; the CDNs are live. Without the downloads the test skips.

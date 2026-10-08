@@ -15,7 +15,9 @@ no own recordings, no alignment, no review, no line splits. For those, use the S
    recitations, grouped by reciter, then a surah and an ayah range. The page fetches the surah's
    segments with their word times (`getChapterSegments`) and converts them with
    `timingsFromCatalogue`. The audio streams from the catalogue's clip URL. Changing the range needs no
-   new request: it is the composition's `fromAyah` / `toAyah`.
+   new request: it is the composition's `fromAyah` / `toAyah`. A recitation in another riwayah than
+   Hafs loads only after you tick a box under its warning: the page is the Hafs print, and its words
+   can differ.
 2. **Look.** The package's `MUSHAF_LOOKS` as cards. A card applies the look (`applyLook`) over the
    composition's defaults.
 3. **Text.** An ayah translation from [quran.com](https://quran.com), chosen by language, shown under
@@ -75,8 +77,25 @@ from any folder of any static host: GitHub Pages, Netlify, Cloudflare Pages, an 
 CDNs all send CORS headers for any origin.
 
 The tests run with the repository's unit suite (`bunx vitest run --project unit apps/mushaf-web`).
-They cover the memory store and its `fetch`, the props each step builds, and a jsdom render of the
-page with the network mocked.
+They cover the memory store and its `fetch`, the props each step builds, the riwayah confirmation,
+and a jsdom render of the page with the network mocked. The root `bun run typecheck` checks the app
+and its tests, and CI builds it.
+
+The web render suite proves the Export step finishes a real render:
+
+```bash
+bun run --cwd apps/mushaf-web test:render-web
+```
+
+It builds the page, serves it on port 4179 and, in Chromium with WebCodecs, renders Al-Ikhlas (four
+ayahs, about 13 s) with `@remotion/web-renderer`. It checks the file the page offers: a video and an
+audio track, the length the page said, the recitation audible (in Chromium: a WebM, 1920×1080, 30
+fps, VP9 and Opus). The render takes about half a minute. QUD's answers and the clip are downloaded
+once into `test-results/web-render/` and served from there (QUD can be slow, and headless Chromium
+cannot fetch the clip through a proxy); Tarteel's CDN and QUL's CDN are live. Without those
+downloads the test skips and says why. It runs a full Chromium, not the headless shell, since the
+render needs WebCodecs' `VideoEncoder`: `MUSHAF_WEB_CHROMIUM`, else `/opt/pw-browsers/chromium`,
+else Playwright's own. It is not part of CI.
 
 ## Limits
 
@@ -97,7 +116,7 @@ page with the network mocked.
   `VITE_REMOTION_LICENSE_KEY=<key> bun run --cwd apps/mushaf-web build`.
 - **The catalogue only.** Only the QUD catalogue's reviewed recitations are offered: no uploads,
   alignment or timing fixes. Riwayahs other than Hafs are listed, but the mushaf drawn is the Hafs
-  KFGQPC V4 print.
+  KFGQPC V4 print, so the page asks you to confirm one before it loads it.
 
 ## What you may publish
 

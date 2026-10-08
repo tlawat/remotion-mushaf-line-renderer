@@ -4,17 +4,19 @@ Compositions, Zod schemas and a Studio panel for making word-synced recitation v
 V4 mushaf inside [Remotion Studio](https://www.remotion.dev/docs/studio), built on
 [`@tlawat/remotion-mushaf-line`](../remotion-mushaf-line-renderer).
 
-- **Two compositions.** `<MushafRecitation>`: the printed lines of a recited passage follow the
-  audio, word by word, with an ayah translation and a word gloss. `<MushafPassage>`: a passage
-  without audio, one line after the other.
+- **Five compositions.** `<MushafRecitation>`: the printed lines of a recited passage follow the
+  audio, word by word, with ayah translations and a word gloss. `<MushafAyahText>`: the same
+  recitation one ayah at a time as Unicode text, for reels. `<MushafPage>`: the whole printed page,
+  the recited line marked. `<MushafPassage>`: a passage without audio, one line after the other.
+  `<MushafThumbnail>`: a still for the video's thumbnail. A recitation may cross surahs.
 - **Every option in the Props sidebar.** Theme, fonts, layout, animation, highlighting and text are
   Zod schemas, so the Studio shows them as typed controls, saves them to your Root file and passes
   them to the Render dialog and the CLI.
 - **A Mushaf panel** docked over the preview, in the Studio only: pick a recitation from the QUD
-  aligner's catalogue or align your own recording, review the doubtful words, split long lines,
-  fetch translations.
-- **Usable without the compositions.** The QUD client, the translation loaders, the line splitting
-  and the QUL font catalogue are plain functions.
+  aligner's catalogue or align your own recording, pick a look, review the doubtful words, split
+  long lines, fetch translations, export and import captions.
+- **Usable without the compositions.** The QUD client, the translation loaders, the line splitting,
+  the captions converters and the QUL font catalogue are plain functions.
 
 For a ready-made project that needs no code, see [`apps/mushaf-studio`](../../apps/mushaf-studio). The
 design and its roadmap are in [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md).
@@ -36,20 +38,26 @@ design and its roadmap are in [docs/mushaf-studio/plan.md](../../docs/mushaf-stu
 In an existing Remotion project:
 
 ```bash
-npm i @tlawat/mushaf-studio @tlawat/remotion-mushaf-line @remotion/studio @remotion/zod-types zod
+npm i @tlawat/mushaf-studio @tlawat/remotion-mushaf-line @remotion/studio @remotion/zod-types @remotion/media zod
 ```
 
 Remotion's packages are released together and must all be the version of `remotion` in your
-project, 4.0.521 or newer: `@remotion/studio`, `@remotion/zod-types`, and `@remotion/transitions`
-(which the main package needs too). If npm picks a newer one, pin it to yours:
+project, 4.0.521 or newer: `@remotion/studio`, `@remotion/zod-types`, `@remotion/media` (the
+`<Audio>` of the in-browser renderer) and `@remotion/transitions` (which the main package needs too).
+If npm picks a newer one, pin it to yours:
 
 ```bash
 npm i @remotion/studio@"$(npm pkg get dependencies.remotion | tr -d '"')" \
       @remotion/zod-types@"$(npm pkg get dependencies.remotion | tr -d '"')" \
+      @remotion/media@"$(npm pkg get dependencies.remotion | tr -d '"')" \
       @remotion/transitions@"$(npm pkg get dependencies.remotion | tr -d '"')"
 ```
 
 `zod` must be 4 or newer; React 18 or newer.
+
+The package is ESM only (`dist/esm/index.mjs` and its `.d.mts` types): `@remotion/media` ships ESM
+only, and every Remotion bundler (the Studio's webpack, Vite for a `<Player>`) reads ESM. A CommonJS
+`require()` cannot load it; use `import`.
 
 Optional: the page fonts as npm packages, for when QUL's CDN is unreachable (43 MB and 51 MB, and
 they go into every bundle you build):
@@ -92,13 +100,13 @@ export const RemotionRoot: React.FC = () => (
     fps={30}
     durationInFrames={300}
     defaultProps={{
-      audioFile:
-        'https://hetchyy-quranic-universal-aligner.hf.space/preload-audio/abdul_hamid_ghraio_2025_yt/1.mp3?start_ms=2909&end_ms=30695',
+      audioFile: 'mushaf-studio/fatiha/audio.mp3',
       timingsFile: 'mushaf-studio/fatiha/timings.json',
       fromAyah: 0,
       toAyah: 0,
       slice: true,
       splits: [],
+      header: 'none',
       theme: 'plain',
       customTheme: {
         base: 'normal',
@@ -124,6 +132,19 @@ export const RemotionRoot: React.FC = () => (
         verticalAlign: 0.5,
         offsetY: 0,
       },
+      background: {
+        kind: 'color',
+        color: '#fbf7ee',
+        src: '',
+        fit: 'cover',
+        videoSeconds: 0,
+        blur: 0,
+        dim: 0,
+        kenBurns: 'none',
+        kenBurnsScale: 1.1,
+        gradient: {from: '#0f2027', to: '#2c5364', angle: 180},
+        glow: {enabled: false, color: '#c8a45c', strength: 0.5},
+      },
       animation: {enter: 'slide-fade', exit: 'slide-fade', leadInSeconds: 0.4, scroll: 'ease'},
       highlight: {
         mode: 'word',
@@ -133,6 +154,7 @@ export const RemotionRoot: React.FC = () => (
         dimUpcomingOnly: false,
         occurrence: 'first',
       },
+      memorize: {mode: 'off', repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1},
       text: {
         translationFile: '',
         translationPosition: 'below',
@@ -146,7 +168,21 @@ export const RemotionRoot: React.FC = () => (
         glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
         glossSize: 34,
         glossColor: '#6a6a6a',
+        translations: [],
+        glossPosition: 'strip',
       },
+      overlay: {
+        title: 'none',
+        introSeconds: 3,
+        reciter: '',
+        color: '#1b1b1b',
+        font: 'Georgia, "Noto Serif", serif',
+        corner: 'top-right',
+        cornerSize: 28,
+      },
+      legend: {show: false, position: 'bottom-left', orientation: 'column', names: 'both'},
+      endCard: {show: 'none', seconds: 5, tafsirFile: '', chapterInfoFile: ''},
+      audio: {normalize: true, targetLufs: -14, fadeInSeconds: 0.3, fadeOutSeconds: 1, trimSilence: false, volume: 1},
       review: {showDoubtful: true, confidenceThreshold: 0.8, doubtColor: '#d94848'},
       resolved: null,
     }}
@@ -168,45 +204,63 @@ Why it has to look like this:
   checks your Root, give the project a Prettier config in your style (the app's
   [`.prettierrc.json`](../../apps/mushaf-studio/.prettierrc.json) matches this repository's Biome
   settings).
-- The literal above is `defaultMushafRecitationProps` written out. `MushafPassage` is declared the
-  same way with `mushafPassageSchema`, `calculateMushafPassageMetadata` and
-  `defaultMushafPassageProps`; [`apps/mushaf-studio/src/Root.tsx`](../../apps/mushaf-studio/src/Root.tsx)
-  has both.
+- The literal above is `defaultMushafRecitationProps` written out. `MushafAyahText`, `MushafPage` and
+  `MushafPassage` are declared the same way (`mushafAyahTextSchema`, `calculateMushafAyahTextMetadata`,
+  `defaultMushafAyahTextProps`, and so on), and `MushafThumbnail` as a `<Still>`;
+  [`apps/mushaf-studio/src/Root.tsx`](../../apps/mushaf-studio/src/Root.tsx) has all five.
 - `width`, `height` and `durationInFrames` are placeholders: `calculateMetadata()` sets the size from
   `layout.aspect` and the duration from the timings.
 - `registerMushafFonts()` runs once, at module level. Leave it out (and use `fonts: 'cdn'`) if you
   do not install the fonts packages.
-- The defaults point at two things the app keeps in its `public/` folder: the sample timings
-  (`public/mushaf-studio/fatiha/timings.json`) and the mirror of QUL's data
-  (`public/data/qpc-v4/words.json.zip` and `layout.db.zip`, for `data: 'mirror'`). Copy both from
+- The defaults point at three things in the app's `public/` folder: the sample timings
+  (`public/mushaf-studio/fatiha/timings.json`), the sample recording
+  (`public/mushaf-studio/fatiha/audio.mp3`, not committed: `bun run --cwd apps/mushaf-studio sample`
+  downloads it) and the mirror of QUL's data (`public/data/qpc-v4/words.json.zip` and
+  `layout.db.zip`, for `data: 'mirror'`). Copy them from
   [`apps/mushaf-studio/public`](../../apps/mushaf-studio/public) into your project's `public/`, or
-  pick a recitation in the panel (it writes its own timings) and set `data` to `'cdn'`.
+  pick a recitation in the panel (it writes its own audio and timings) and set `data` to `'cdn'`.
+  While the recording is missing, the compositions play the clip the timings name (see
+  [`audio`](#audio-mushafrecitation-mushafayahtext-mushafpage)).
 
 ## The Mushaf panel
 
-`<MushafRecitation>` and `<MushafAyahText>` render `<MushafStudioPanel>` themselves. Outside the
-Studio (a render, a `<Player>`, a server) the panel renders nothing and does nothing; it never calls
-`delayRender()` and never re-renders with the frame. In the Studio it docks over the preview with
-five tabs:
+`<MushafRecitation>`, `<MushafAyahText>` and `<MushafPage>` render `<MushafStudioPanel>` themselves
+(`<MushafPassage>` has no audio, and no panel). Outside the Studio (a render, the Studio's in-browser
+render, a `<Player>`, a server) the panel renders nothing and does nothing: it shows only when
+`useRemotionEnvironment()` says `isStudio && !isRendering && !isClientSideRendering`. It never calls
+`delayRender()` and never re-renders with the frame. In the Studio it docks beside the preview with
+six tabs:
 
 | Tab        | What it does                                                                                                     |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
 | **Source** | The QUD catalogue's reviewed recitations (reciter, riwayah, style, chapters), or a recording of your own.          |
+| **Look**   | One-click style presets (`MUSHAF_LOOKS`, `applyLook()`): theme, layout, animation, highlighting and text placement, never the content; **Undo** puts back the last look's changes. |
 | **Align**  | Uploads the recording to the [QUD Universal Aligner](https://aligner.qud.dev) with streaming progress, then fetches the word times. Says first that the audio leaves the machine. |
-| **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align.            |
-| **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments.                        |
-| **Text**   | Ayah translations and word-by-word glosses (`<MushafRecitation>` only) from quran.com, or a QUL file in `public/`. |
+| **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align. Exports captions and imports them back. |
+| **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments. On `<MushafPage>`, the pages. |
+| **Text**   | Ayah translations and word-by-word glosses (`<MushafRecitation>` only) from quran.com, or a QUL file in `public/`; the end card's tafsir or surah introduction. |
+
+**The riwayah guard.** The page is the Hafs print (KFGQPC V4); another riwayah can differ from it
+in words and spelling. A catalogue recitation in another riwayah (`isHafsRecitation()` is false),
+or Align with another riwayah picked, shows a warning, and **Use this recitation** or **Align**
+stays disabled until a checkbox confirms it.
 
 The Text tab also fetches the passage's Quran text (`uthmani` or `indopak`, `fetchQuranComText()`)
 into `text-<script>-<surah>-<from>-<to>.json`, and makes it the `textFile` of a `<MushafAyahText>`
 whose font sets that script. On `<MushafAyahText>`, Source and Align fetch it themselves for the new
 passage and save it with the timings in one `saveDefaultProps()`: the old text would lack the new
-ayahs and `calculateMetadata()` would throw. The Review tab exports the timings file's captions, timed to the audio
-file, as SRT (`captionsToSrt()`) or as the `Caption[]` JSON of `@remotion/captions` (`toCaptions()`),
-ayah markers optional.
+ayahs and `calculateMetadata()` would throw.
+
+The Review tab exports the timings file's captions, timed to the audio file, as SRT
+(`captionsToSrt()`), WebVTT (`captionsToVtt()`, by word or by ayah) or the `Caption[]` JSON of
+`@remotion/captions` (`toCaptions()`), ayah markers optional. **Import captions…** reads that JSON
+back after you edit it in a caption editor: `fromCaptions()` puts its times into the timings file,
+the import is logged as a `realign` edit noted `captions import`, and the composition is
+re-evaluated. A file that changes no time is not written; one with captions added or removed is
+`BAD_TIMING_EDIT`.
 
 Every change goes through the same path: write the file(s) into `public/mushaf-studio/<project>/`
-(`project` defaults to the composition's id, slugified: `mushafrecitation`, `mushafayahtext`;
+(`project` defaults to the composition's id, slugified: `mushafrecitation`, `mushafayahtext`, `mushafpage`;
 `writeStaticFile()`), save the composition's content props (`saveDefaultProps()`), then
 `reevaluateComposition()` so `calculateMetadata()` runs again. Large data never sits in the props:
 the props hold paths, and the files are fetched through `staticFile()`, so the Render dialog, the
@@ -229,19 +283,19 @@ are what the panel sets; the groups below are style, set in the sidebar.
 
 | Prop          | Type                        | Default                       | Description                                                  |
 | ------------- | --------------------------- | ----------------------------- | ------------------------------------------------------------ |
-| `audioFile`   | string                      | the catalogue clip of 1:1-7   | Audio: a path in `public/` or an https URL.                  |
-| `timingsFile` | string                      | `'mushaf-studio/fatiha/timings.json'` | Timings JSON in `public/` (see [Data contract](#data-contract)). |
-| `fromAyah`    | 0–286                       | `0`                           | First ayah to show (0: as the timings say).                  |
-| `toAyah`      | 0–286                       | `0`                           | Last ayah to show (0: as the timings say).                   |
+| `audioFile`   | string                      | `'mushaf-studio/fatiha/audio.mp3'` | Audio: a path in `public/` or an https URL. A `public/` path the server answers 404 for plays the clip the timings name instead (`resolved.audioSrc`), with a warning in the Studio. |
+| `timingsFile` | string                      | `'mushaf-studio/fatiha/timings.json'` | Timings JSON in `public/`, version 1 or 2 (see [Data contract](#data-contract)). |
+| `fromAyah`    | 0–286                       | `0`                           | First ayah to show (0: as the timings say). Timings across surahs are used whole. |
+| `toAyah`      | 0–286                       | `0`                           | Last ayah to show (0: as the timings say). Timings across surahs are used whole. |
 | `slice`       | boolean                     | `true`                        | Hide the neighbours' words on the first and last lines.      |
 | `splits`      | `{page, line, atWordId}[]`  | `[]`                          | Printed lines split into two timed segments; `atWordId` is the `MushafWord.wordId` that starts the second. |
-| `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'`            | When the recitation starts at ayah 1: the surah's header lines before it (see [`header`](#header-mushafrecitation-and-mushafpassage)). |
+| `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'`            | When the recitation starts at ayah 1: the surah's header lines before it (see [`header`](#header-mushafrecitation-and-mushafpassage)). Across surahs, each later surah's header lines come between the two surahs as printed, whatever this says. |
 | `theme`       | `'plain'`, `'light'`, `'dark'`, `'sepia'`, `'black'`, `'normal'`, `'p1'`–`'p5'`, `'custom'` | `'plain'` | Colour theme of the mushaf line; `'custom'` uses `customTheme`. |
 | `customTheme` | object                      | see below                     | A preset and a colour per part.                              |
 | `fonts`       | `'fallback'`, `'cdn'`, `'package'` | `'fallback'`           | Where the page fonts come from: QUL's CDN with the fonts packages as fallback, the CDN only, or the packages only (offline). |
 | `data`        | `'mirror'`, `'cdn'`         | `'mirror'`                    | The mushaf data: the mirror in `public/data/qpc-v4/` through `staticFile()`, or QUL's exports on Tarteel's CDN. |
 | `layout`, `background`, `animation`, `highlight`, `memorize`, `text`, `overlay`, `legend`, `endCard`, `audio`, `review` | objects | see below | The style groups.                            |
-| `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translations, the gloss, the doubtful words, the audio's analysis (`audio`, `audioWarning`), the end card's content. Leave it `null`. |
+| `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translations, the gloss, the doubtful words, the audio's analysis (`audio`, `audioWarning`), the URL to play instead of a missing `audioFile` (`audioSrc`), the end card's content. Leave it `null`. |
 
 ### `MushafPassage`
 
@@ -271,7 +325,8 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `lineHeight`  | 1–2.5               | `1.9`                                | Line height in multiples of the size.                                       |
 | `layout`      | object              | `aspect: '9:16'`, dark page          | As for `MushafRecitation`; `visibleLines` and `neighbourOpacity` do not apply. |
 | `animation`   | `{enter, exit, leadInSeconds}` | slide-fade, 0.4 s         | How each ayah comes in and goes out.                                        |
-| `highlight`, `text` | objects       | as for `MushafRecitation`            | The word-by-word fields of `text` do not apply.                             |
+| `highlight`, `text` | objects       | as for `MushafRecitation`            | The word-by-word fields of `text` do not apply. The translation is centred under the ayah. |
+| `memorize`    | object              | as for `MushafRecitation`            | See [`memorize`](#memorize-mushafrecitation-mushafayahtext); here `'first-letters'` shows each upcoming word's first letter. |
 | `overlay`     | object              | as for `MushafRecitation`, `color: '#f4efe6'` | The title card and corner label, in the dark page's ink.              |
 | `background`  | object              | as for `MushafRecitation`, `color: '#101418'` | Behind the ayah; see [`background`](#background).                     |
 | `endCard`, `audio` | objects        | as for `MushafRecitation`            | See [`endCard`](#endcard) and [`audio`](#audio).                            |
@@ -342,6 +397,21 @@ recitation props as `MushafRecitation`; the defaults are `defaultMushafPageProps
 | `dimUpcomingOnly` | boolean                                  | `false`     | Dim only the words still to come.                               |
 | `occurrence`      | `'first'`, `'last'`                      | `'first'`   | For a repeated word: follow its first or its last recitation.   |
 
+### `memorize` (`MushafRecitation`, `MushafAyahText`)
+
+Memorisation (hifz). Every mode but `'off'` plays each ayah `repeat` times before the next,
+`pauseSeconds` apart, with a "2/3" counter in a corner; the duration grows to match. The blank modes
+hide words on the first `revealAfterRepeats` plays. The interlinear glosses follow their words: a
+hidden word's gloss is hidden too (its place kept), a faint word's gloss is faint
+(`glossVisibilityFrom()`).
+
+| Field                | Type                                                                     | Default | Description                                                |
+| -------------------- | ------------------------------------------------------------------------ | ------- | ---------------------------------------------------------- |
+| `mode`               | `'off'`, `'first-letters'`, `'blank-upcoming'`, `'blank-all'`, `'repeat'` | `'off'` | `'blank-upcoming'` hides the words still to come; `'blank-all'` every word but the active one and those already recited in this play; `'first-letters'` shows an upcoming word's first letter and a tatweel over the word, which keeps its place (Unicode text only: on the printed lines it is `'blank-upcoming'` with a faint outline, opacity 0.12); `'repeat'` repeats without hiding. |
+| `repeat`             | 1–10                                                                     | `3`     | Plays of each ayah before the next.                        |
+| `pauseSeconds`       | 0–5                                                                      | `0.5`   | Seconds of silence between two plays of an ayah.           |
+| `revealAfterRepeats` | 1–10                                                                     | `1`     | Plays that hide the text; the later ones show it.          |
+
 ### `text`
 
 | Field                  | Type                          | Default       | Description                                                  |
@@ -358,6 +428,7 @@ recitation props as `MushafRecitation`; the defaults are `defaultMushafPageProps
 | `glossFont`            | CSS font family               | `'"Noto Sans", "Helvetica Neue", Arial, sans-serif'` | Font of the gloss strip.     |
 | `glossSize`            | 12–120 px                     | `34`          | Gloss size.                                                  |
 | `glossColor`           | colour                        | `'#6a6a6a'`   | Gloss colour.                                                |
+| `glossPosition`        | `'strip'`, `'interlinear'`, `'none'` | `'strip'` | `MushafRecitation` only: the gloss in a strip at the bottom, under each printed word (`<InterlinearGlosses>`, capped to 0.3 of the line's type size, shrunk to fit its word), or nowhere. |
 | `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: Noto Serif for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
 
 ### `overlay`
@@ -406,10 +477,14 @@ Behind everything, in all four compositions (`backgroundSchema`, `defaultBackgro
 
 ### `audio` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
 
-The recitation cleaned up on its way out. `calculateMetadata()` analyses the recording
-(`analyzeAudio()`, browser Web Audio) when `normalize` or `trimSilence` is on or the background's
-glow is, and keeps the result in `resolved.audio` (`{gain, trimSeconds, levels}`; the levels, one
-per frame to three decimals, only for the glow). When the analysis fails (`AUDIO_ANALYSIS_FAILED`:
+The recitation cleaned up on its way out. `calculateMetadata()` first checks that `audioFile` is
+there: a `public/` path the server answers 404 for, with timings that name their catalogue clip
+(`alignment.recitation.audioUrl`), plays that clip instead (`resolved.audioSrc`), and the Studio
+shows a warning that names the missing file and the fix. It then analyses the recording (`analyzeAudio()`, browser Web Audio) when
+`normalize` or `trimSilence` is on or the background's glow is, and keeps the result in
+`resolved.audio` (`{gain, trimSeconds, levels}`; the levels, one per frame to three decimals, only
+for the glow). With the glow off, the timings' `alignment.audio` summary stands in for the analysis
+and nothing is downloaded. When the analysis fails (`AUDIO_ANALYSIS_FAILED`:
 no Web Audio, a file the browser cannot fetch or decode) the audio plays as it is, and the reason is
 in `resolved.audioWarning`, shown as a one-line banner in the Studio only. The `<Audio>` gets
 `volume={(f) => volumeAt(f, curve)}`; under memorisation every clip gets the same gain, and the
@@ -481,11 +556,22 @@ is left out. In `MushafPassage` each holds that long, after the intro card. Unde
 
 ### The timings file
 
-`timingsFile` names a JSON file in the main package's recitation timings format, version 1 (see
+`timingsFile` names a JSON file in the main package's recitation timings format (see
 [Following a recording](../remotion-mushaf-line-renderer/README.md#following-a-recording)): the
 recited ayahs and their words with times in seconds, word ids `"surah:ayah:position"`, every
 occurrence of a repeated word in audio order, and the ayah-end marker timed as the word after the
 ayah's last one. Any producer works; the package validates the file with `parseRecitationTimings()`.
+
+Both versions work. Version 1 (`{version: 1, surah, ayat}`) is one surah; it is what the panel
+writes. Version 2 (`{version: 2, ayat: [{surah, ayah, start, end, words?}]}`, no top-level `surah`)
+is a recording that crosses surahs, such as a juz. `MushafRecitation`, `MushafAyahText` and
+`MushafPage` use a version 2 file whole: `fromAyah` and `toAyah` do not cut it. Its lines come from
+`getMushafLinesForRanges()`, with each later surah's printed header between the surahs. The intro
+card, the chapters, the description and the captions name both surahs. The type is `StudioTimings`
+(`StudioTimingsV1 | StudioTimingsV2`): narrow on `version` before reading `surah`, or use
+`passageSpan()` (the first and last ayah), `crossesSurahs()` and `surahOfAyah()`. In the panel, the
+Review tab lists a version 2 file by surah and ayah, but a nudge is `BAD_TIMING_EDIT`, and the Text
+tab fetches for one surah only: for `MushafAyahText`, the text file must hold every surah.
 
 The studio adds one top-level key, `alignment`, which the main package passes through untouched
 (the type is `StudioTimings`):
@@ -526,7 +612,8 @@ The studio adds one top-level key, `alignment`, which the main package passes th
 | `recitation`      | Where a catalogue pick came from: `slug`, `chapter`, `verseFrom`, `verseTo`, `clipStart` (seconds into the chapter audio), `audioUrl`. |
 | `segments`        | The aligner's segments, recording-relative: `timeFrom`, `timeTo`, `refFrom`/`refTo` (`null` for an isti'adha, a basmala or no match), `confidence` (0–1, per segment: the aligner gives none per word), `hasMissingWords`, `hasRepeatedWords`, `error`, `matchedText`, `kind`. |
 | `words`           | Every recited word with its Uthmani `text` and its `segment`, one entry per occurrence.         |
-| `edits`           | What was changed by hand in the panel (`nudge`, `split-segment`, `realign`, `trim`), with a time and a note. |
+| `edits`           | What was changed by hand in the panel (`nudge`, `split-segment`, `realign`, `trim`), with a time and a note. A captions import is a `realign` noted `captions import`. |
+| `audio`           | The recording measured when the panel saved the timings (`audioSummaryOf()`): `lufs`, `peak`, `firstSoundSeconds`, `durationSeconds`. With the glow off, `audio.normalize` and `audio.trimSilence` use it, so the recording is not downloaded again. Absent when the recording could not be measured. |
 
 A word is doubtful (`doubtfulWords()`, the Review tab, the marks in the preview) when its segment's
 confidence is under `review.confidenceThreshold`, when its segment reports missing words or an
@@ -580,13 +667,28 @@ const timings = timingsFromCatalogue(chapter);
 | `alignAudio(blob, fileName, options?)`          | Uploads a recording and aligns it (`onProgress` for the streaming stages). The audio leaves the machine. |
 | `alignUrl(url, options?)`                       | The same for a URL the aligner downloads itself.                                           |
 | `sessionTimestamps(audioId)`                    | Per-word times for a session's segments.                                                   |
-| `splitSession(audioId, request)`                | Subdivides a session's segments (by verses, words, duration, or only at stop signs).      |
-| `realignSession(audioId, {timestamps})`         | Re-runs recognition and matching over boundaries you give.                                 |
+| `splitSession(audioId, request)`                | Subdivides a session's segments (by verses, words, duration, or only at stop signs). A limit under 1 or a duration not above 0 is refused before sending (the service does not refuse every bad value). |
+| `realignSession(audioId, {timestamps})`         | Re-runs recognition and matching over boundaries you give. An empty list, or a boundary that is negative or ends before it starts, is refused before sending. |
 | `timingsFromQud({align, timestamps}, options?)` | An alignment as `StudioTimings` (validated through `parseRecitationTimings()`).            |
 | `timingsFromCatalogue(chapter, options?)`       | A catalogue chapter as `StudioTimings`.                                                    |
+| `isHafsRecitation(recitation)`                  | Whether a catalogue recitation is in the Hafs riwayah, the mushaf's own (an empty label counts as Hafs). |
 | `DEFAULT_QUD_API`, `MARKER_HOLD_SECONDS`, `DEFAULT_CONFIDENCE_THRESHOLD` | `https://aligner.qud.dev/api/v1`; 0.8 s the ayah-end marker stays current; 0.8. |
 
-A Hugging Face `token` (option) spends the caller's own GPU quota; the client never stores it.
+A Hugging Face `token` (option) spends the caller's own GPU quota; the client never stores it. The
+client was checked against the live service (the catalogue and an alignment of surah 112 agree on
+the word ids, within 0.3 s); its answers are replayed in the tests (`test/fixtures/qud/live-*`). An
+error message names a gateway's error page (Cloudflare's 524 when the aligner takes over 120 s to
+answer), gives `Retry-After`, and its hint follows the route: an expired session, or a wrong slug or
+chapter.
+
+### Captions
+
+| Export                                       | Does                                                                                     |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `toCaptions(timings, options?)`              | One `Caption` (`@remotion/captions`) per word, timed to the audio file; ayah markers optional. |
+| `fromCaptions(captions, base)`               | The timings with the captions' times: the round trip of an edit in a caption editor. The same count as `toCaptions()` made, or `BAD_TIMING_EDIT`. |
+| `captionsToSrt(captions)`                    | The captions as SRT.                                                                     |
+| `captionsToVtt(captions, options?)`          | The captions as WebVTT: a cue per word, or per ayah (`lines: 'ayah'`, from the cues of `toCaptionCues()`). |
 
 ### Translations
 
@@ -653,21 +755,26 @@ stays a `MushafError` of the main package.
 
 | Code                       | When                                                                                   |
 | -------------------------- | -------------------------------------------------------------------------------------- |
-| `QUD_HTTP`                 | The aligner or the catalogue answered with an error (`details.status`, `details.code`). |
+| `QUD_HTTP`                 | The aligner or the catalogue answered with an error (`details.status`, `details.code`), or a request was refused before sending (`details.status` `null`, `details.field`). |
 | `QUD_RATE_LIMITED`         | The GPU quota and the CPU rate limit are both spent (`details.retryAfterSeconds`).     |
 | `QUD_BAD_RESPONSE`         | The aligner's answer is not in the expected shape.                                     |
 | `QUD_NO_MATCH`             | The aligner matched nothing, words of two surahs, or nothing in the range kept.        |
 | `BAD_TRANSLATION_FILE`     | A translation file is in none of the shapes above.                                     |
 | `TRANSLATION_FETCH_FAILED` | A translation source could not be fetched.                                             |
+| `CONTENT_FETCH_FAILED`     | A tafsir or a surah introduction could not be fetched, came in an unknown shape, or has nothing for the range. |
+| `BAD_CONTENT_FILE`         | A tafsir or chapter-info file is not the envelope its loader reads.                     |
+| `BAD_PROJECT_FILE`         | A `project.json` cannot be imported: not JSON, another version, props that fail the schema or are for another kind of composition, files `public/` lacks. |
 | `BAD_LINE_SPLIT`           | A split names a line not in the passage or a word not on that line.                    |
 | `BAD_STUDIO_PROP`          | A prop is out of range or inconsistent beyond what the schema catches.                 |
+| `BAD_TIMING_EDIT`          | An edit of the timings is impossible: a start after its end, a word the file lacks, a nudge of a version 2 file, captions that do not fit the file. |
+| `AUDIO_ANALYSIS_FAILED`    | The audio could not be fetched or decoded for the analysis; the audio then plays as it is (`resolved.audioWarning`). |
 | `NOT_IN_STUDIO`            | A Studio API was called outside the Studio.                                            |
 
 ## Roadmap
 
-A text-only Unicode layout for reels, the QPC V1 and V2 page layouts, captions interop with the
-Studio's caption editor, an optional server side for the aligner and project files: see
-[docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md#7-roadmap-after-the-proof-of-concept).
+Open: the QPC V1, QPC V2 and Indopak layouts, the Warsh and Qalun riwayahs, and a server-side proxy
+for the aligner. See
+[docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md#7-roadmap).
 
 ## Licences
 

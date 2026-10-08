@@ -1,7 +1,8 @@
 # Mushaf Studio: extending Remotion Studio with the package's features
 
-Status: proof of concept, built on branch `claude/jolly-dijkstra-ov8av6`. This page is the plan that
-the work follows and the record of the decisions behind it. The companion page,
+Status: proof of concept, built on branch `claude/jolly-dijkstra-ov8av6`; the definition of done
+below is met, and the roadmap (section 7) says what is done since and what is open. This page is the
+plan that the work follows and the record of the decisions behind it. The companion page,
 [agent-guidelines.md](agent-guidelines.md), is the quality framework every contributor (human or
 agent) works under.
 
@@ -20,8 +21,9 @@ without writing code, while keeping every piece usable from code by developers:
 - render from the Studio's own Render button, or from the CLI, deterministically.
 
 Distribution: one npm package that developers drop into their own Remotion project
-(`@tlawat/mushaf-studio`), and one ready-made Remotion project (`apps/mushaf-studio`) that end users
-start with `bun run studio`.
+(`@tlawat/mushaf-studio`), one ready-made Remotion project (`apps/mushaf-studio`) that end users
+start with `bun run studio`, and one static page (`apps/mushaf-web`) that does the catalogue path
+and the render in the browser.
 
 ## 2. What Remotion Studio lets us extend (facts, verified against 4.0.521)
 
@@ -65,18 +67,33 @@ defaults, not a pre-registered root.
 ## 4. Architecture
 
 ```
-packages/remotion-mushaf-line-renderer    the package: + word-range slices ({fromWordId, toWordId})
-packages/mushaf-studio                    @tlawat/mushaf-studio
+packages/remotion-mushaf-line-renderer    the renderer: word-range slices ({fromWordId, toWordId}), timings version 1 and 2
+packages/fonts-qpc-v4, fonts-qpc-v4-tajweed   the page fonts as npm packages (the CDN fallback)
+packages/mushaf-studio                    @tlawat/mushaf-studio, ESM only
   src/compositions/recitation             <MushafRecitation>, its Zod schema, defaults, calculateMetadata
   src/compositions/passage                <MushafPassage>: a text-only passage, no audio
-  src/schema                              shared Zod fragments (theme, fonts, layout, animation, highlight, text)
-  src/qud                                 browser client for the aligner and the catalogue; conversion to RecitationTimings
-  src/translations                        QUL format parsers, quran.com fetchers, <AyahTranslation>, <WordGloss>
-  src/lines                               splitLineAt(), applySplits(), lowConfidenceWords()
-  src/studio                              the panel (portal, tabs), its store, the Studio API wrappers
-  src/fonts                               QUL font catalogue (resource ids, CDN URLs) and translation font presets
-apps/mushaf-studio                        the end-user project: Root with the compositions inline, `bun run studio`
-docs/mushaf-studio                        this plan, the agent guidelines, user docs
+  src/compositions/{shared,extras,parts,timings}   what the compositions share: file loading, the audio source and cleanup, the end card, timings of either version
+  src/unicode                             <MushafAyahText>: one ayah at a time as Unicode text, its fonts and text files
+  src/page                                <MushafPage>: the whole printed page, the recited line marked, the page turn
+  src/schema                              shared Zod fragments (theme, fonts, data, layout, animation, highlight, text, memorize, review, overlay)
+  src/background                          <MushafBackground>: colour, gradient, image, looping video, Ken Burns, the glow
+  src/audio                               analyzeAudio(), loudness, the volume curve, the summary kept in the timings
+  src/overlay                             the title card, the corner label, surah names, range texts
+  src/memorize                            memorisation: repeated clips, word visibility, first letters, the counter
+  src/interlinear                         glosses under each printed word: measure, lay out, follow memorisation
+  src/content                             tafsir, surah introductions, the tajweed legend, the end card, script fonts
+  src/captions                            Caption[] both ways, SRT, WebVTT
+  src/export                              YouTube chapters and description, the <MushafThumbnail> still
+  src/presets                             MUSHAF_LOOKS: one-click looks, applyLook()
+  src/qud                                 browser client for the aligner and the catalogue; conversion to timings; the riwayah check
+  src/translations                        QUL format parsers, quran.com fetchers, <TranslationBlock>, <TranslationStack>, <GlossStrip>
+  src/lines                               splitLineAt(), applySplits(), doubtfulWords()
+  src/fonts                               QUL font catalogue (resource ids, CDN URLs), the fonts registry
+  src/studio                              the panel (dock, six tabs, project menu, waveform), its store, i18n (en, ar), the Studio API wrappers
+  src/types.ts, src/errors.ts             StudioTimings and the resolved shapes; MushafStudioError and its codes
+apps/mushaf-studio                        the end-user project: Root with the compositions inline, `bun run studio`, scripts/make.ts (`bun run make`), scripts/sample.ts (`bun run sample`)
+apps/mushaf-web                           the static page: catalogue, look, translation, <Player> preview, in-browser render (`@remotion/web-renderer`)
+docs/mushaf-studio                        this plan, the agent guidelines, licensing, the layouts research, a visual recap (day-one.html)
 ```
 
 ### 4.1 Data model: props are the single source of truth
@@ -95,10 +112,11 @@ inputs.
 
 ### 4.2 Timings and the alignment sidecar
 
-`RecitationTimings` (the package's version-1 format) stays the only timing input. The studio writes
-it with one extra top-level key the package ignores, `alignment`: the aligner's segments with their
-confidence and flags, each word's Uthmani text, the session id, model and device, and a log of
-manual edits. Low confidence is a segment property (QUD gives none per word); a word is doubtful
+`RecitationTimings` (the package's format) stays the only timing input: version 1 for one surah,
+version 2 for a recording that crosses surahs (each ayah names its surah; the compositions use such
+a file whole). The panel writes version 1 with one extra top-level key the package ignores,
+`alignment`: the aligner's segments with their confidence and flags, each word's Uthmani text, the
+session id, model and device, the recording's loudness (`audio`), and a log of manual edits. Low confidence is a segment property (QUD gives none per word); a word is doubtful
 when its segment's confidence is under the threshold, when its segment reports missing words or an
 error, or when its ayah is `complete: false`.
 
@@ -112,13 +130,17 @@ slice. Nothing in the renderer changes.
 
 ### 4.4 The panel
 
-`<MushafStudioPanel>` is rendered inside the composition. Outside the Studio it renders nothing. In
-the Studio it portals a dock into `document.body` with tabs: **Source** (catalogue, own audio),
-**Align** (QUD, with streaming progress), **Review** (segments and words with confidence, seek on
-click, nudge, split, re-align), **Lines** (the resolved lines and their slots, split a line), **Text**
-(translations and glosses). Its state lives in a module store (`useSyncExternalStore`), not in
-React state tied to frames, so playback does not re-render it. Every mutation goes through the same
-path: write file(s) to `public/`, then `saveDefaultProps`, then `reevaluateComposition`.
+`<MushafStudioPanel>` is rendered inside `MushafRecitation`, `MushafAyahText` and `MushafPage`.
+Outside the Studio it renders nothing. In the Studio it portals a dock into `document.body` with six
+tabs: **Source** (catalogue, own audio; a confirmation for a riwayah other than Hafs), **Look**
+(one-click style presets, undo), **Align** (QUD, with streaming progress; the same confirmation),
+**Review** (segments and words with confidence, a waveform, seek on click, nudge, split, re-align;
+export captions, chapters, a description and a thumbnail; import captions), **Lines** (the resolved
+lines and their slots, split a line; the pages on `MushafPage`), **Text** (translations, glosses,
+the Quran text, the end card's tafsir or surah introduction). Its state lives in a module store
+(`useSyncExternalStore`), not in React state tied to frames, so playback does not re-render it.
+Every mutation goes through the same path: write file(s) to `public/`, then `saveDefaultProps`, then
+`reevaluateComposition`.
 
 ### 4.5 Fonts
 
@@ -126,46 +148,47 @@ Today: the two QUL font sets of the V4 mushaf (plain, tajweed colour) with the t
 custom palettes, exposed in the schema with colour pickers per part. The font catalogue module
 records the other QUL fonts (QPC V1, V2 page fonts; Uthmani Hafs, Nastaleeq, Indopak, Digital
 Khatt Unicode fonts; surah-name fonts v1, v2, v4; quran-common) with resource ids and public CDN
-URLs where they exist, so the next step (a Unicode-text layout for non-mushaf framing, then the V1
-and V2 page layouts) has its data in one place. See the roadmap.
+URLs where they exist. `MushafAyahText` uses the Uthmani Hafs font from it; the V1 and V2 page
+layouts (see the roadmap) will find their fonts there.
 
-## 5. Workstreams
+## 5. Workstreams (done)
 
-| # | Workstream | Owner | Depends on |
-| --- | --- | --- | --- |
-| 0 | Plan, guidelines, package scaffold with the module contracts | lead | — |
-| 1 | Package: word-range slices (`fromWordId`/`toWordId`), tests, docs | agent | 0 |
-| 2 | QUD client (catalogue, align stream, timestamps, split, realign) + conversion + tests | agent | 0 |
-| 3 | Translations: QUL parsers, quran.com fetchers, loaders, components + tests | agent | 0 |
-| 4 | Compositions: `MushafRecitation`, `MushafPassage`, schemas, calculateMetadata + tests | agent | 0 (1, 3 by contract) |
-| 5 | Studio panel: dock, tabs, store, Studio API wrappers | agent | 0 (2, 3, 4 by contract) |
-| 6 | App template, READMEs, CLI script, workspace and CI wiring | agent | 0 |
-| 7 | QA: reviews against the guidelines, Studio smoke test with Playwright, fix loops | agents + lead | 1–6 |
+Done: 0 plan and scaffold, 1 word-range slices, 2 QUD client, 3 translations, 4 compositions, 5 the panel, 6 the app and CI, 7 QA.
 
-Contracts are the stub files the scaffold ships: an agent implements its module's exported
-signatures as given; changing a signature is a change of contract and goes through the lead.
+## 6. Definition of done for the proof of concept (met)
 
-## 6. Definition of done for the proof of concept
+Met: the checks pass, the Studio opens on the sample, the panel picks, reviews, splits and translates, and the smoke test mounts it.
 
-- `bun run check && bun run test && bun run build && bun run test:types && bun run typecheck` pass.
-- `apps/mushaf-studio`: `bun run studio` opens the Studio; `MushafRecitation` renders with the
-  committed sample; the panel shows the catalogue; picking a catalogue chapter writes audio and
-  timings into `public/` and updates the Root; the Review tab marks low-confidence segments;
-  splitting a line adds a slot; fetching a translation shows it under the lines.
-- A headless smoke test (Playwright against the Studio) proves the composition mounts without an
-  error overlay and the panel is present.
-- Docs: this plan, the guidelines, the package README (developer path), the app README (user path).
+## 7. Roadmap
 
-## 7. Roadmap after the proof of concept
+### Done
 
-1. **Unicode text layouts**: a `MushafAyahText` composition for reels framing (one ayah centred,
-   Uthmani Hafs or Indopak font from QUL, text from quran.com by location), sharing the timings,
-   highlighting and translation modules.
-2. **QPC V1 and V2 page layouts**: QUL publishes both font sets on the CDN; their word scripts and
-   line layouts are separate exports. The package's registry is already multi-mushaf by design; the
-   data job is to pin and mirror those exports and extend the invariants.
-3. **Captions interop**: export the word timings as Remotion `Caption[]` (which carries
-   `confidence`) so the Studio's own caption editor can be used on them, and import edits back.
-4. **A real server side for the aligner**: an optional sidecar that proxies QUD with the user's
-   Hugging Face token (quota) and caches sessions, so large files do not go through the browser.
-5. **Project files**: save and load a whole project (props + files) as one JSON, for sharing.
+- **Unicode text layout**: `MushafAyahText`, one ayah at a time in QUL's Uthmani Hafs font, for reels.
+- **The page view**: `MushafPage`, the whole printed page with the recited line marked and the turn.
+- **Captions interop**: SRT, WebVTT and `Caption[]` out; `Caption[]` back in from the Review tab.
+- **Project files**: `project.json` export and import, with its files and `BAD_PROJECT_FILE`.
+- **Looks**: `MUSHAF_LOOKS` and the Look tab, with undo.
+- **Backgrounds and audio cleanup**: image, video, gradient, glow; loudness, fades, silence trim.
+- **Memorisation and interlinear glosses**: repeats, blanks, first letters; glosses that follow them.
+- **Title, legend, end card, thumbnail, chapters, description**: the publishing extras.
+- **The web app**: `apps/mushaf-web`, the catalogue path and an in-browser render, with a render test.
+- **The CLI**: `bun run make`, a catalogue recitation to a video without the Studio.
+- **Recitations across surahs**: version 2 timings in the three recitation compositions.
+- **The riwayah guard**: a confirmation before a non-Hafs recitation meets the Hafs page.
+- **A local sample**: `bun run sample`, a fallback to the clip, loudness kept in the timings.
+- **CI**: the web app build and the Studio smoke suite run on every push.
+
+### Open
+
+- **QPC V1, QPC V2 and Indopak layouts.** Facts and a design are in
+  [layouts-research.md](layouts-research.md). Next step: the `qul data --dataset qpc-v1|qpc-v2`
+  command that builds a `CompiledLayout` from quran.com v4 and QUL's previews, with the invariants as
+  its gate; Indopak then needs a justified line mode.
+- **Warsh and Qalun.** The catalogue and the aligner know these riwayahs; the page is Hafs only, so
+  the panel asks before it times one against it. Next step: find a Warsh and a Qalun print with a
+  word-level line layout and page fonts, and add them as datasets the way the research note does
+  for V1 and V2.
+- **A server-side proxy for the aligner.** An optional sidecar that forwards to QUD with the user's
+  Hugging Face token (quota), caches sessions, and keeps large files out of the browser. Next step:
+  a small Bun server in `apps/mushaf-studio` that the QUD client's `api` option points at, which
+  also refuses the requests the service hangs on.

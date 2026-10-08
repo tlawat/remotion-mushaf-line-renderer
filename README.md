@@ -184,23 +184,32 @@ in [`example/`](example).
 
 ## Mushaf Studio
 
-Mushaf Studio uses the package inside Remotion Studio without writing code: a ready-made Remotion
-project in which you pick a recitation (a reviewed one from the QUD aligner's catalogue, or your own
-recording aligned with the [QUD Universal Aligner](https://aligner.qud.dev)), check the alignment
-word by word, split long lines, add a translation, and style and render the video from the Studio. It
-is a proof of concept. From a clone of this repository:
+Mushaf Studio makes word-synced recitation videos with the package, without writing code. You
+pick a recitation (a reviewed one from the QUD aligner's catalogue, or your own recording aligned
+with the [QUD Universal Aligner](https://aligner.qud.dev)), check the alignment word by word, split
+long lines, pick a look, add translations, and render the video. It is a proof of concept, in two
+apps on one package:
+
+- [`apps/mushaf-studio`](apps/mushaf-studio): a ready-made Remotion project. Remotion Studio, plus a
+  Mushaf panel docked beside the preview (Source, Look, Align, Review, Lines, Text), five
+  compositions, and `bun run make` to go from a catalogue recitation to a video on the command line.
+  [README](apps/mushaf-studio/README.md): the panel, the props, rendering, privacy, licences.
+- [`apps/mushaf-web`](apps/mushaf-web): one static page that does the catalogue path in the browser,
+  with nothing to install: a recitation, a look, a translation, a `<Player>` preview, and an
+  in-browser render to a file. No own recordings, alignment or review.
+  [README](apps/mushaf-web/README.md).
+- [`packages/mushaf-studio`](packages/mushaf-studio): `@tlawat/mushaf-studio`, the compositions, Zod
+  schemas and panel both apps use, for your own Remotion project.
+  [README](packages/mushaf-studio/README.md).
+- [docs/mushaf-studio/plan.md](docs/mushaf-studio/plan.md): the design, its decisions and the roadmap.
+
+From a clone of this repository:
 
 ```bash
-bun install && bun run build
-bun run fonts-packages:fill   # once: the page fonts the project falls back to
-bun run studio                # Remotion Studio on apps/mushaf-studio, in your browser
+bun install
+bun run studio                            # build, fill the page fonts and fetch the sample (once), then the Studio
+bun run build && bun run --cwd apps/mushaf-web dev   # the web app, at http://localhost:5174
 ```
-
-- [apps/mushaf-studio/README.md](apps/mushaf-studio/README.md): using it (the Mushaf panel, the
-  props, rendering, privacy, licences).
-- [packages/mushaf-studio/README.md](packages/mushaf-studio/README.md): `@tlawat/mushaf-studio`, the
-  compositions, Zod schemas and panel, to use in your own Remotion project.
-- [docs/mushaf-studio/plan.md](docs/mushaf-studio/plan.md): the design, its decisions and the roadmap.
 
 ## API
 
@@ -246,7 +255,7 @@ Requires Bun ≥ 1.2 and Node ≥ 20.
 bun install
 bun run build   # build the packages (the renderer, then Mushaf Studio's)
 bun run dev     # fill the fonts packages (from QUL's CDN on first run), then Remotion Studio on example/
-bun run studio  # Mushaf Studio (apps/mushaf-studio) in Remotion Studio, in your browser
+bun run studio  # Mushaf Studio (apps/mushaf-studio): build, fill the fonts, fetch the sample, open the Studio
 bun run test    # unit tests
 ```
 
@@ -256,6 +265,7 @@ bun run test    # unit tests
 | [`packages/fonts-qpc-v4`](packages/fonts-qpc-v4), [`packages/fonts-qpc-v4-tajweed`](packages/fonts-qpc-v4-tajweed) | The page fonts as npm packages (the CDN fallback) |
 | [`packages/mushaf-studio`](packages/mushaf-studio)                                 | `@tlawat/mushaf-studio`: compositions, Zod schemas and the Mushaf panel for Remotion Studio |
 | [`apps/mushaf-studio`](apps/mushaf-studio)                                         | Mushaf Studio, the ready-made Remotion project (`bun run studio`) |
+| [`apps/mushaf-web`](apps/mushaf-web)                                               | Mushaf Studio Web: the catalogue path and an in-browser render, as one static page |
 | [`example`](example)                                                               | Example Remotion project and test harness |
 | [`scripts`](scripts)                                                               | `qul` CLI: mirror and check QUL's data and fonts; the fonts packages' tool |
 | [`docs`](docs)                                                                     | Architecture and font notes; Mushaf Studio's plan |

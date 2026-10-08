@@ -168,7 +168,7 @@ flowchart LR
     return n;
   };
   const hover = (node, text) => {
-    const show = (e) => { tip.textContent = text; tip.hidden = false; const r = node.getBoundingClientRect(); tip.style.left = `${Math.min(window.innerWidth - 160, r.left)}px`; tip.style.top = `${r.top - 32}px`; };
+    const show = () => { tip.textContent = text; tip.hidden = false; const r = node.getBoundingClientRect(); tip.style.left = `${Math.min(window.innerWidth - 160, r.left)}px`; tip.style.top = `${r.top - 32}px`; };
     node.addEventListener('pointerenter', show); node.addEventListener('focus', show);
     node.addEventListener('pointerleave', () => { tip.hidden = true; }); node.addEventListener('blur', () => { tip.hidden = true; });
     node.setAttribute('tabindex', '0');
@@ -176,7 +176,7 @@ flowchart LR
   // Commits per hour (UTC), from git log.
   const commits = [["19", 14], ["20", 4], ["21", 0], ["22", 0], ["23", 0], ["00", 0], ["01", 4], ["02", 13], ["03", 5], ["04", 0], ["05", 0], ["06", 0], ["07", 0], ["08", 0], ["09", 0], ["10", 0], ["11", 1]];
   const c = document.getElementById('commits');
-  const W = 420, H = 220, L = 30, B = 190, T = 16, max = 15;
+  const W = 420, L = 30, B = 190, T = 16, max = 15;
   const y = (v) => B - (v / max) * (B - T);
   for (const t of [0, 5, 10, 15]) { el(c, 'line', {class: 'grid', x1: L, x2: W, y1: y(t), y2: y(t)}); el(c, 'text', {x: L - 8, y: y(t) + 4, 'text-anchor': 'end'}, t); }
   const step = (W - L) / commits.length, bw = step - 8;

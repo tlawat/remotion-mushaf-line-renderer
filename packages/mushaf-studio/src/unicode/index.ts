@@ -1,4 +1,4 @@
-// Unicode-text layouts (roadmap item 1): `<MushafAyahText>`, one ayah at a time as Unicode text in a
+// Unicode-text layouts: `<MushafAyahText>`, one ayah at a time as Unicode text in a
 // QUL font, for reels framing; the Quran text files it reads (text.ts), the font hook (font.ts),
 // the ayah component (AyahText.tsx), the schema, the resolver and `calculateMetadata`.
 export {AyahText, type AyahTextProps} from './AyahText';
