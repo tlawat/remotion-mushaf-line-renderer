@@ -107,6 +107,8 @@ describe('<MushafLine>', () => {
     expect(row.style.fontSize).toBe('112px');
     expect(row.style.lineHeight).toBe('246px');
     expect(row.style.visibility).toBe('hidden');
+    // Kerning would move the zero-width waqf-mark glyph off the copy built into some word glyphs.
+    expect(row.style.getPropertyValue('font-kerning')).toBe('none');
     const spans = Array.from(row.querySelectorAll('span'));
     expect(spans).toHaveLength(4);
     expect(spans.map((s) => s.dataset.location)).toEqual(['2:1:1', '2:1:2', '2:1:3', '2:1:4']);

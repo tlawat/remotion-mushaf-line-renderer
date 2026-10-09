@@ -104,7 +104,11 @@ export const buildRowStyle = ({
   fontVariant: 'normal',
   fontSynthesis: 'none',
   fontFeatureSettings: 'normal',
-  fontKerning: 'auto',
+  // Off: some words are a word glyph that already carries its waqf mark plus a zero-width mark glyph,
+  // and the page font's kerning between the two moves that mark's copy sideways, so the mark shows
+  // twice and the next word is pulled closer (e.g. 10:1:1 p208, 13:1:1 p249, 15:1:1 p262 in the plain
+  // set). Without kerning the copies coincide; ordinary words' marks keep their place.
+  fontKerning: 'none',
   letterSpacing: 0,
   wordSpacing: 0,
   textTransform: 'none',

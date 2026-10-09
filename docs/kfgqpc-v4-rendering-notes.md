@@ -153,7 +153,12 @@ Rules learned the hard way:
   Black (base 5, all white, plus `13 black` on the ayah-marker glyph only), and P1–P6 (the raw
   palettes; P6 does not exist, so it falls back to the default). Its overrides for entries 16–18 are
   no-ops: the font has 16 entries.
-- Kerning: GPOS `kern` exists but is negligible (6 pairs on p3). Advance-width layout is safe.
+- Kerning: GPOS `kern` is rare (6 pairs on p3) but not harmless: on some pages it sits between a
+  word glyph and the zero-width waqf-mark glyph that follows it. In the plain set those word glyphs
+  already contain the mark, so with kerning on the mark shows twice, offset, and the next word moves
+  closer (10:1:1 p208, 13:1:1 p249 and 15:1:1 p262: the pair advances about 246 units/1000 less than
+  the word glyph alone). With kerning off the two copies coincide, and ordinary words' marks do not
+  move. Render the ayah line with `font-kerning: none`; advance-width layout is then exact.
 - `unicode-range` also lets you declare all 604 faces under one family name if you prefer, but
   since every page reuses the same code points, you **must** keep one family per page.
 - Preload strategy: `<link rel="preload" as="font" crossorigin>` for the current page ±1.
