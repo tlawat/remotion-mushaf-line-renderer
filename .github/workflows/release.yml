@@ -48,11 +48,11 @@ jobs:
       - name: Format and lint (Biome)
         run: bun run check
 
+      - name: Build the packages
+        run: bun run build
+
       - name: Unit tests
         run: bun run test
-
-      - name: Build the package
-        run: bun run build
 
       - name: Typecheck
         run: |
