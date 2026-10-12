@@ -123,7 +123,7 @@
     },
     "packages/remotion-mushaf-line-renderer": {
       "name": "@tlawat/remotion-mushaf-line",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "devDependencies": {
         "@remotion/bundler": "4.0.521",
         "@remotion/player": "4.0.521",

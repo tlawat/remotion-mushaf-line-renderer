@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-12)
 
 - **Recitations that cross surahs.** `RecitationTimings` is now `RecitationTimingsV1 | RecitationTimingsV2`:
   version 2, `{version: 2, ayat: [{surah, ayah, start, end, complete?, words?}]}` in recitation order,
