@@ -2,18 +2,14 @@
 
 ## Unreleased
 
-- **Header fonts for surah and juz names, by default.** Surah names now come from QUL's surah-name
-  header font ([resource 591](https://qul.tarteel.ai/resources/font/591), `'header-surah-name'`,
-  62 KB) and juz names from its juz-name header font
-  ([juz-name-header-font](https://qul.tarteel.ai/resources/font/juz-name-header-font), `'header-juz'`,
-  21 KB), on header lines, `<MushafSurahName>` and `<MushafJuzName>`. Each is set a little larger
-  than `fontSize` (1.4 × and 1.2 ×) so it fills the box the V4 names fill. The header font has no
-  Al-Fatihah: surah 1 still comes from the V4 surah-name font. New `surahNameFont: 'header' | 'v4'`
-  on `<MushafLine>`, `<MushafLineWindow>` and `<MushafSurahName>` sets the V4 font back
-  (`data-name-font` on the root says which). `MushafSharedFont`, `loadSharedFont()`,
-  `getMushafFontFile({font})` and a `fontSrc` resolver's shared files gain the two fonts; a
-  resolver that serves the shared fonts from `public/fonts/<font>/<fileName>` needs their files there
-  too (`bun run qul fonts` downloads them).
+- **Page headers.** New `<MushafPageHeader juz surah>` sets a page's running header as printed: the
+  juz's name against the right edge and the surah's name against the left, from QUL's juz-name and
+  surah-name page-header fonts (`'header-juz'`, 21 KB, and `'header-surah-name'`,
+  [resource 591](https://qul.tarteel.ai/resources/font/591), 62 KB; the latter has no Al-Fatihah,
+  which comes from the V4 surah-name font). Either side may be left out; neither is the new
+  `BAD_PAGE_HEADER`. `MushafSharedFont`, `loadSharedFont()`, `getMushafFontFile({font})` and a
+  `fontSrc` resolver's shared files gain the two fonts. Surah names in their frame and
+  `<MushafJuzName>` are unchanged.
 
 ## 0.5.0 (2026-10-12)
 

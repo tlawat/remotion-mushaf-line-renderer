@@ -38,6 +38,7 @@ import {
   type MushafLineData,
   MushafLineWindow,
   type MushafLineWindowProps,
+  MushafPageHeader,
   type MushafScrollAnchor,
   type MushafSharedFont,
   type MushafSlice,
@@ -259,11 +260,16 @@ export const noSurah = <MushafSurahName />;
 export const badVariant = <MushafJuzName juz={1} variant="opening" />;
 // @ts-expect-error there are no words to style on a surah name
 export const wordsOnName = <MushafSurahName surah={1} wordStyle={() => ({})} />;
-export const sharedFonts: MushafSharedFont[] = ['header-surah-name', 'header-juz', 'surah-names-v4', 'quran-common'];
-export const v4Name = <MushafSurahName surah={9} surahNameFont="v4" />;
-export const v4Header = <MushafLine page={187} line={1} surahNameFont="header" />;
-// @ts-expect-error the surah-name font is 'header' or 'v4'
-export const badNameFont = <MushafSurahName surah={9} surahNameFont="quran-common" />;
+export const sharedFonts: MushafSharedFont[] = ['surah-names-v4', 'quran-common', 'header-surah-name', 'header-juz'];
+export const pageHeaders = (
+  <>
+    <MushafPageHeader juz={22} surah={36} />
+    <MushafPageHeader juz={1} fontSize={40} lineHeight={80} style={{width: 900}} enter={slideFade()} name="Header" />
+    <MushafPageHeader surah={2} fontSrc="cdn" />
+  </>
+);
+// @ts-expect-error a page header has no frame
+export const framedPageHeader = <MushafPageHeader juz={1} framed />;
 // @ts-expect-error a page font set is not a shared font
 export const badShared: MushafSharedFont = 'qpc-v4';
 

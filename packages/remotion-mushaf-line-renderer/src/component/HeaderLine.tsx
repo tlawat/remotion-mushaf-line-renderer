@@ -7,8 +7,8 @@ import type {LineRendererProps} from './LineRenderer';
 import {fontSizeForWidth, lineHeightForFontSize} from './styles';
 
 /**
- * Renders a `surah_name` line (the name in its ornamental frame, from QUL's surah-name header font
- * (or the V4 one, `surahNameFont="v4"`) and quran-common) or a `basmallah` line (the basmalah of the surah-name font, set on the page
+ * Renders a `surah_name` line (the name in its ornamental frame, from QUL's surah-name and
+ * quran-common fonts) or a `basmallah` line (the basmalah of the surah-name font, set on the page
  * baseline). Same root, sizing and props as an ayah line; the word props have nothing to apply to.
  */
 export const HeaderLine: React.FC<LineRendererProps> = ({
@@ -20,7 +20,6 @@ export const HeaderLine: React.FC<LineRendererProps> = ({
   style,
   className,
   framed = true,
-  surahNameFont = 'header',
   fontSrc,
   fontFallback,
 }) => {
@@ -37,7 +36,7 @@ export const HeaderLine: React.FC<LineRendererProps> = ({
   }
   const items =
     line.type === 'surah_name'
-      ? surahHeaderItems(def, line.surahNumber as number, baseFontSize, framed, surahNameFont)
+      ? surahHeaderItems(def, line.surahNumber as number, baseFontSize, framed)
       : [{glyph: def.glyphs.basmalah, fontSize: baseFontSize, align: 'baseline' as const}];
   return (
     <GlyphRenderer
@@ -58,7 +57,6 @@ export const HeaderLine: React.FC<LineRendererProps> = ({
         centered: 'true',
         surah: line.surahNumber === undefined ? undefined : String(line.surahNumber),
         framed: line.type === 'surah_name' ? String(framed) : undefined,
-        'name-font': line.type === 'surah_name' ? surahNameFont : undefined,
       }}
       label={`<MushafLine> page ${line.page} line ${line.line}`}
       fontSrc={fontSrc}

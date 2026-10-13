@@ -6,7 +6,7 @@ import {GlyphRenderer} from './GlyphRenderer';
 import {fontSizeForWidth, lineHeightForFontSize} from './styles';
 
 /**
- * The name of a juz written out ("the first juz"), from QUL's juz-name header font, centred in a block
+ * The name of a juz written out ("the first juz"), from QUL's quran-common font, centred in a block
  * of `width: 100%` and height `lineHeight`, in the inherited CSS `color`. The font loads behind
  * `delayRender()`; `enter` / `exit` work as on a line.
  */

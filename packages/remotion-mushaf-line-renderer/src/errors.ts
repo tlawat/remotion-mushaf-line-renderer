@@ -3,6 +3,7 @@ export type MushafErrorCode =
   | 'UNKNOWN_FONT'
   | 'SURAH_OUT_OF_RANGE'
   | 'JUZ_OUT_OF_RANGE'
+  | 'BAD_PAGE_HEADER'
   | 'BAD_THEME'
   | 'BAD_COLOR'
   | 'BAD_SLICE'

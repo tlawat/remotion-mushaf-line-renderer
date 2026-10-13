@@ -76,8 +76,7 @@ export const lineFromLayout = (
     line,
     type: entry.type,
     centered: entry.centered,
-    // Header and basmalah lines record the V4 surah-name font (the basmalah's), whatever the theme;
-    // the font a header's name is set in is the component's `surahNameFont`.
+    // Header and basmalah lines are drawn from the surah-name font, whatever the theme.
     fontFamily: entry.type === 'ayah' ? fontSet.fontFamily(page) : def.sharedFonts.surahNames.fontFamily,
     ...(entry.surahNumber === undefined ? {} : {surahNumber: entry.surahNumber}),
     words,

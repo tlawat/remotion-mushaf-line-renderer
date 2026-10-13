@@ -20,11 +20,9 @@ const ROW = '.mushaf-line__row';
 const ROOT = '.mushaf-line';
 /** The shared fonts, mirrored by `bun run qul fonts` into example/public/fonts/<id>/. */
 const hasSharedFonts = () =>
-  [
-    'surah-names-v4/surah_names.woff2',
-    'header-surah-name/header-surah-name.woff2',
-    'header-juz/header-juz.woff2',
-  ].every((file) => existsSync(path.resolve(test.info().config.rootDir, `../../../../example/public/fonts/${file}`)));
+  existsSync(
+    path.resolve(test.info().config.rootDir, '../../../../example/public/fonts/surah-names-v4/surah_names.woff2'),
+  );
 const NO_SHARED_FONTS = 'the shared fonts are not mirrored under example/public/fonts (bun run qul fonts 10)';
 
 const open = async (page: Page, scenario: string, extra = '') => {
@@ -943,11 +941,11 @@ test.describe('surah names and juz names', () => {
     await expect(root).toHaveAttribute('data-framed', 'true');
     await expect(root).toHaveAttribute('data-font-origin', 'custom');
     await expect(root.locator('.mushaf-word')).toHaveCount(0);
-    expect(await fontsLoaded(page, ['mushaf-header-surah-name', 'mushaf-quran-common'])).toBe(true);
+    expect(await fontsLoaded(page, ['mushaf-surah-names-v4', 'mushaf-quran-common'])).toBe(true);
     const glyphs = await glyphsOf(page, ROOT);
     expect(glyphs.map((g) => [g.glyph, g.font, g.text])).toEqual([
       ['frame', 'quran-common', '\uE000'],
-      ['surah-name', 'header-surah-name', '\uE002'],
+      ['surah-name', 'surah-names-v4', '\uFC46'],
     ]);
     // The frame is as wide as the widest line of the mushaf at the page's type size: the measure.
     const rootBox = await box(page, ROOT, 0);
@@ -959,9 +957,9 @@ test.describe('surah names and juz names', () => {
     expect(name.width).toBeGreaterThan(rootBox.width * 0.1);
     expect(name.width).toBeLessThan(rootBox.width * 0.4);
     expect(Math.abs(name.x + name.width / 2 - (rootBox.x + rootBox.width / 2))).toBeLessThanOrEqual(2);
-    // Vertically: the ink of each glyph is centred in the line box (the header font's band is the
-    // median over its 113 names, so a name may sit a few per cent off; the frame is exact).
-    const nameInk = await inkCentreOffset(page, ROOT, 1, 819, -205, 1024);
+    // Vertically: the ink of each glyph is centred in the line box (the surah-name font's band is the
+    // median over the 114 names, so a name may sit a few per cent off; the frame is exact).
+    const nameInk = await inkCentreOffset(page, ROOT, 1, 3940, -2520, 2500);
     expect(Math.abs(nameInk.offset)).toBeLessThanOrEqual(nameInk.size * 0.12);
     const frameInk = await inkCentreOffset(page, ROOT, 0, 819, -205, 1024);
     expect(Math.abs(frameInk.offset)).toBeLessThanOrEqual(frameInk.size * 0.03);
@@ -1011,14 +1009,7 @@ test.describe('surah names and juz names', () => {
       expect(boxes[i]!.y).toBeGreaterThanOrEqual(boxes[i - 1]!.y + boxes[i - 1]!.height - 0.5);
     }
     await expect(page.locator(ROOT).nth(2).locator('.mushaf-word')).toHaveCount(4);
-    expect(
-      await fontsLoaded(page, [
-        'mushaf-header-surah-name',
-        'mushaf-surah-names-v4',
-        'mushaf-quran-common',
-        'mushaf-qpc-v4-p2',
-      ]),
-    ).toBe(true);
+    expect(await fontsLoaded(page, ['mushaf-surah-names-v4', 'mushaf-quran-common', 'mushaf-qpc-v4-p2'])).toBe(true);
   });
 
   test('standalone names: a framed surah name and a juz name, centred', async ({page}) => {
@@ -1028,7 +1019,7 @@ test.describe('surah names and juz names', () => {
     await expect(page.locator(`${NAME}__row`)).toHaveCSS('visibility', 'visible');
     await expect(page.locator(NAME)).toHaveAttribute('data-surah', '9');
     await expect(page.locator(NAME)).toHaveAttribute('data-framed', 'true');
-    expect((await glyphsOf(page, NAME)).map((g) => g.text)).toEqual(['\uE000', '\uE009']);
+    expect((await glyphsOf(page, NAME)).map((g) => g.text)).toEqual(['\uE000', '\uFC52']);
     await expect(page.locator(ROOT)).toHaveCount(0);
 
     await open(page, 'juz');
@@ -1036,7 +1027,7 @@ test.describe('surah names and juz names', () => {
     await expect(page.locator(`${JUZ}__row`)).toHaveCSS('visibility', 'visible');
     await expect(page.locator(JUZ)).toHaveAttribute('data-juz', '1');
     const [ordinal] = await glyphsOf(page, JUZ);
-    expect(ordinal).toMatchObject({glyph: 'juz-name', font: 'header-juz', text: '\uE001'});
+    expect(ordinal).toMatchObject({glyph: 'juz-name', font: 'quran-common', text: '\uE001'});
     const rootBox = await box(page, JUZ, 0);
     const ink = await inkWidth(page, JUZ, 0);
     expect(ink.width).toBeGreaterThan(rootBox.width * 0.1);
@@ -1044,7 +1035,6 @@ test.describe('surah names and juz names', () => {
     const centred = await inkCentreOffset(page, JUZ, 0, 819, -205, 1024);
     expect(Math.abs(centred.offset)).toBeLessThanOrEqual(centred.size * 0.1);
     expect(await fontsLoaded(page, ['mushaf-surah-names-v4'])).toBe(false);
-    expect(await fontsLoaded(page, ['mushaf-quran-common'])).toBe(false);
   });
 
   test('a header enters like a line, and a missing shared font fails loudly', async ({page}) => {
@@ -1060,7 +1050,7 @@ test.describe('surah names and juz names', () => {
     const err = page.locator('[data-error="FONT_HTTP"]');
     await expect(err).toBeVisible();
     await expect(err).toContainText('404');
-    await expect(err).toContainText('header-surah-name.woff2');
+    await expect(err).toContainText('surah_names.woff2');
   });
 });
 

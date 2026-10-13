@@ -134,10 +134,10 @@ redistribute them unmodified and carry the notice the files themselves carry.
 No font file is committed: `.gitignore` covers `*.ttf`, `*.woff` and `*.woff2` everywhere.
 `bun run qul fonts 1,10,187,604` downloads the fixture pages the suites use into the example's mirror
 and the package's fixtures (`bun run qul mirror` downloads every page), and CI caches them between runs.
-The same command downloads the shared fonts, QUL's surah-name and juz-name header fonts
+The same command downloads the shared fonts, QUL's surah-name and juz-name page-header fonts
 ([resource 591](https://qul.tarteel.ai/resources/font/591) and the
-[juz-name header font](https://qul.tarteel.ai/resources/font/juz-name-header-font), the default
-names), QUL's V4 surah-name font ([resource 237](https://qul.tarteel.ai/resources/font/237)) and
+[juz-name header font](https://qul.tarteel.ai/resources/font/juz-name-header-font), a page's
+running header), QUL's V4 surah-name font ([resource 237](https://qul.tarteel.ai/resources/font/237)) and
 `quran-common` ([resource 459](https://qul.tarteel.ai/resources/font/459)), into `example/public/fonts/<id>/` and
 checks their glyph tables against the package's registry; they are not part of the fonts packages
 (the package fetches them from QUL's CDN, or from the URLs a `fontSrc` resolver gives).

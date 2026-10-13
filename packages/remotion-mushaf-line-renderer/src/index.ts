@@ -11,6 +11,7 @@ export {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from 
 export {MushafJuzName} from './component/JuzName';
 export {MushafLine} from './component/MushafLine';
 export {MushafLineWindow} from './component/MushafLineWindow';
+export {MushafPageHeader} from './component/PageHeader';
 export {MushafSurahName} from './component/SurahName';
 // Sizing
 export {fontSizeForWidth, lineHeightForFontSize, windowLineOpacity} from './component/styles';
@@ -78,12 +79,12 @@ export type {
   MushafLocation,
   MushafMetrics,
   MushafPageFontFile,
+  MushafPageHeaderProps,
   MushafScrollAnchor,
   MushafSelection,
   MushafSharedFont,
   MushafSharedFontFile,
   MushafSlice,
-  MushafSurahNameFont,
   MushafSurahNameProps,
   MushafTheme,
   MushafThemeColors,

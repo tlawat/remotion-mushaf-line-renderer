@@ -43,8 +43,8 @@ export const QPC_V4 = {
   },
   /**
    * The fonts that are not per page, as QUL publishes them (the package's registry pins the same
-   * URLs): the surah-name and juz-name header fonts (QUL resource 591 and the juz-name header font,
-   * the default names), the V4 surah-name font (QUL resource 237, the 114 names and the basmalah)
+   * URLs): the surah-name and juz-name page-header fonts (QUL resource 591 and the juz-name header
+   * font: a page's running header), the V4 surah-name font (QUL resource 237, the 114 names and the basmalah)
    * and quran-common (QUL resource 459, the juz names and the surah-header frame). Mirrored by
    * `qul fonts` into example/public/fonts/<id>/<file>, the layout a `fontSrc` resolver serves.
    */

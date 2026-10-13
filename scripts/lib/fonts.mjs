@@ -14,8 +14,8 @@ const fontDirs = (set, page) => [
 /**
  * Downloads the shared fonts (the header fonts, surah names, quran-common; woff2 + ttf) into
  * example/public/fonts/<id>/, and checks the ttf: the surah-name font must map exactly the 114
- * code points the package's registry lists, the surah-name header font surahs 2-114 at U+E002-U+E072,
- * the juz-name header font and quran-common the 30 juz names, and quran-common the frame.
+ * code points the package's registry lists, the surah-name page-header font surahs 2-114 at U+E002-U+E072,
+ * the juz-name page-header font and quran-common the 30 juz names, and quran-common the frame.
  *
  * @returns {{etags: object, report: string[], failed: boolean}}
  */

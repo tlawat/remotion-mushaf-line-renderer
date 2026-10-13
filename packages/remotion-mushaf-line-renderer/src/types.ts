@@ -82,21 +82,14 @@ export type MushafThemeSelection = 'plain' | MushafThemeName | MushafTheme;
 export type MushafFontSet = 'qpc-v4' | 'qpc-v4-tajweed';
 
 /**
- * The fonts QUL publishes for the V4 mushaf that are not per page: `'header-surah-name'` (QUL's
- * surah-name header font, resource 591: the surah names as a page header sets them; the default for
- * surah names), `'header-juz'` (QUL's juz-name header font: the 30 juz names; the default for juz
- * names), `'surah-names-v4'` (QUL resource 237: the 114 surah names in the V4 print's own lettering,
- * and the basmalah) and `'quran-common'` (QUL resource 459: the 30 juz names, the ornamental
- * surah-header frame). All are fetched from QUL's CDN by default; none ships in the fonts packages.
+ * The fonts QUL publishes for the V4 mushaf that are not per page: `'surah-names-v4'` (QUL
+ * resource 237: the 114 surah names as set in a surah's header box, and the basmalah),
+ * `'quran-common'` (QUL resource 459: the 30 juz names, the ornamental surah-header frame), and the
+ * page-header fonts of a page's running header, `'header-surah-name'` (QUL resource 591: surahs
+ * 2-114) and `'header-juz'` (the 30 juz names). All are fetched from QUL's CDN by default; none
+ * ships in the fonts packages.
  */
-export type MushafSharedFont = 'header-surah-name' | 'header-juz' | 'surah-names-v4' | 'quran-common';
-
-/**
- * Which font sets a surah name: `'header'` (default), QUL's surah-name header font
- * (`'header-surah-name'`), or `'v4'`, the V4 print's surah-name font (`'surah-names-v4'`). The
- * header font has no Al-Fatihah, so surah 1 is set from the V4 font either way.
- */
-export type MushafSurahNameFont = 'header' | 'v4';
+export type MushafSharedFont = 'surah-names-v4' | 'quran-common' | 'header-surah-name' | 'header-juz';
 
 /** QUL's line vocabulary (see lib/exporter/export_mushaf_layout.rb in QUL). */
 export type MushafLineType = 'ayah' | 'surah_name' | 'basmallah';
@@ -414,8 +407,6 @@ export type MushafLineCommonProps = {
    * `quran-common` font). Default `true`; `false` sets the name alone. Ignored by other line types.
    */
   readonly framed?: boolean;
-  /** The font a `surah_name` line sets the name in; default `'header'`. See `MushafSurahNameFont`. */
-  readonly surahNameFont?: MushafSurahNameFont;
   /** Where the fonts come from; default `'cdn'` (QUL's CDN). See `MushafFontSrc`. */
   readonly fontSrc?: MushafFontSrc;
   /**
@@ -444,13 +435,18 @@ export type MushafSurahNameProps = MushafGlyphCommonProps & {
    * `false` sets the name alone.
    */
   readonly framed?: boolean;
-  /** The font the name is set in; default `'header'`. See `MushafSurahNameFont`. */
-  readonly surahNameFont?: MushafSurahNameFont;
 };
 
 export type MushafJuzNameProps = MushafGlyphCommonProps & {
   /** 1-30. */
   readonly juz: number;
+};
+
+export type MushafPageHeaderProps = MushafGlyphCommonProps & {
+  /** The juz the page is in (1-30), set at the top right; omit it to leave that side empty. */
+  readonly juz?: number | undefined;
+  /** The surah the page is in (1-114), set at the top left; omit it to leave that side empty. */
+  readonly surah?: number | undefined;
 };
 
 /**
@@ -499,7 +495,6 @@ export type MushafLineWindowCommonProps = Pick<
   | 'className'
   | 'name'
   | 'framed'
-  | 'surahNameFont'
   | 'activeWordId'
   | 'activeWordStyle'
   | 'wordStyle'
@@ -641,7 +636,7 @@ export type LoadPageFontOptions = {
 
 export type LoadSharedFontOptions = {
   readonly mushaf?: MushafId | undefined;
-  /** `'header-surah-name'`, `'header-juz'`, `'surah-names-v4'` or `'quran-common'` (see `MushafSharedFont`). */
+  /** `'surah-names-v4'`, `'quran-common'`, `'header-surah-name'` or `'header-juz'` (see `MushafSharedFont`). */
   readonly font: MushafSharedFont;
   /** Where the font comes from; default `'cdn'`. Pass the same value as the component you warm up. */
   readonly fontSrc?: MushafFontSrc | undefined;
@@ -690,9 +685,9 @@ export type MushafSharedFontFile = {
   readonly fontSet?: never;
   readonly page?: never;
   readonly format: 'woff2';
-  /** The font's id: `'header-surah-name'`, `'header-juz'`, `'surah-names-v4'` or `'quran-common'`. */
+  /** The font's id (see `MushafSharedFont`). */
   readonly id: MushafSharedFont;
-  /** `'header-surah-name.woff2'`, `'surah_names.woff2'`, ...: the file's name on QUL's CDN. */
+  /** `'surah_names.woff2'`, `'quran-common.woff2'`, `'header-surah-name.woff2'`, `'header-juz.woff2'`: the file's name on QUL's CDN. */
   readonly fileName: string;
   /** QUL's CDN URL for the file. */
   readonly cdnUrl: string;

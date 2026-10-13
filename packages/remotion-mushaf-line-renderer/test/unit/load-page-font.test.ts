@@ -666,7 +666,7 @@ describe('loadSharedFont', () => {
       expect.objectContaining({
         code: 'UNKNOWN_FONT',
         message:
-          "font must be one of 'header-surah-name', 'header-juz', 'surah-names-v4', 'quran-common' for \"qpc-v4\", got \"nope\".",
+          "font must be one of 'surah-names-v4', 'quran-common', 'header-surah-name', 'header-juz' for \"qpc-v4\", got \"nope\".",
       }),
     );
     // A fallback that is not a package is still refused, even though no package applies.

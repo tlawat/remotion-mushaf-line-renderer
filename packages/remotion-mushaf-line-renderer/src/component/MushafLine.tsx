@@ -46,7 +46,6 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     wordStyle,
     wordClassName,
     framed,
-    surahNameFont,
     fontSrc,
     fontFallback,
   } = props;
@@ -65,7 +64,6 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     wordStyle,
     wordClassName,
     framed,
-    surahNameFont,
     fontSrc,
     fontFallback,
   };
