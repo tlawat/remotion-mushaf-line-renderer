@@ -42,12 +42,25 @@ export const QPC_V4 = {
     return `${CDN_BASE}/${spec.dir}/${format}/p${page}.${format}${spec.query}`;
   },
   /**
-   * The two fonts that are not per page, as QUL publishes them (the package's registry pins the
-   * same URLs): the surah-name font (QUL resource 237, the 114 names and the basmalah) and
-   * quran-common (QUL resource 459, the juz names and the surah-header frame). Mirrored by
+   * The fonts that are not per page, as QUL publishes them (the package's registry pins the same
+   * URLs): the surah-name and juz-name header fonts (QUL resource 591 and the juz-name header font,
+   * the default names), the V4 surah-name font (QUL resource 237, the 114 names and the basmalah)
+   * and quran-common (QUL resource 459, the juz names and the surah-header frame). Mirrored by
    * `qul fonts` into example/public/fonts/<id>/<file>, the layout a `fontSrc` resolver serves.
    */
   sharedFonts: {
+    'header-surah-name': {
+      dir: 'header/surah-name',
+      file: 'header-surah-name',
+      fileName: 'header-surah-name.woff2',
+      resource: 591,
+    },
+    'header-juz': {
+      dir: 'header/juz-name',
+      file: 'header-juz',
+      fileName: 'header-juz.woff2',
+      resource: 'juz-name-header-font',
+    },
     'surah-names-v4': {dir: 'surah_names_v4', file: 'surah_names', fileName: 'surah_names.woff2', resource: 237},
     'quran-common': {dir: 'common', file: 'quran-common', fileName: 'quran-common.woff2', resource: 459},
   },

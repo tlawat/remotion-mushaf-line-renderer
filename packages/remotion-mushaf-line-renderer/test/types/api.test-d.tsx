@@ -259,7 +259,11 @@ export const noSurah = <MushafSurahName />;
 export const badVariant = <MushafJuzName juz={1} variant="opening" />;
 // @ts-expect-error there are no words to style on a surah name
 export const wordsOnName = <MushafSurahName surah={1} wordStyle={() => ({})} />;
-export const sharedFonts: MushafSharedFont[] = ['surah-names-v4', 'quran-common'];
+export const sharedFonts: MushafSharedFont[] = ['header-surah-name', 'header-juz', 'surah-names-v4', 'quran-common'];
+export const v4Name = <MushafSurahName surah={9} surahNameFont="v4" />;
+export const v4Header = <MushafLine page={187} line={1} surahNameFont="header" />;
+// @ts-expect-error the surah-name font is 'header' or 'v4'
+export const badNameFont = <MushafSurahName surah={9} surahNameFont="quran-common" />;
 // @ts-expect-error a page font set is not a shared font
 export const badShared: MushafSharedFont = 'qpc-v4';
 

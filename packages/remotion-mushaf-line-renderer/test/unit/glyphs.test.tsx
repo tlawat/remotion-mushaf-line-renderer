@@ -46,6 +46,8 @@ class Boundary extends React.Component<
 
 const SURAH_NAMES_URL = 'https://static-cdn.tarteel.ai/qul/fonts/surah_names_v4/surah_names.woff2';
 const COMMON_URL = 'https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2';
+const HEADER_SURAH_URL = 'https://static-cdn.tarteel.ai/qul/fonts/header/surah-name/header-surah-name.woff2';
+const HEADER_JUZ_URL = 'https://static-cdn.tarteel.ai/qul/fonts/header/juz-name/header-juz.woff2';
 
 let fakes: ReturnType<typeof installFontFakes>;
 let header: MushafLineData;
@@ -75,7 +77,7 @@ const visible = (c: HTMLElement, root = '.mushaf-line') =>
   waitFor(() => expect(rowOf(c, root).style.visibility).toBe('visible'));
 
 describe('<MushafLine> on a surah_name line', () => {
-  it('sets the name in its frame from the two shared fonts, behind one handle, and keeps the DOM contract', async () => {
+  it('sets the name in its frame from the header font and quran-common, behind one handle, and keeps the DOM contract', async () => {
     expect(header).toMatchObject({type: 'surah_name', surahNumber: 2, fontFamily: 'mushaf-surah-names-v4'});
     fakes.holdLoads();
     const {container} = render(<MushafLine line={header} className="hero" style={{top: 12}} />);
@@ -90,6 +92,7 @@ describe('<MushafLine> on a surah_name line', () => {
       centered: 'true',
       surah: '2',
       framed: 'true',
+      nameFont: 'header',
     });
     expect(root.dataset.fontOrigin).toBeUndefined();
     expect(root.style.height).toBe('246px');
@@ -98,10 +101,10 @@ describe('<MushafLine> on a surah_name line', () => {
     expect(root.firstElementChild).toBe(row);
     expect(row.style.visibility).toBe('hidden');
     // Both fonts are fetched from QUL's CDN, and one handle is held for the pair.
-    expect(fetched()).toEqual([SURAH_NAMES_URL, COMMON_URL]);
+    expect(fetched()).toEqual([HEADER_SURAH_URL, COMMON_URL]);
     expect(remotion.hook.delayRender).toHaveBeenCalledTimes(1);
     expect(remotion.hook.delayRender.mock.calls[0]?.[0]).toContain('<MushafLine> page 2 line 1: waiting for fonts');
-    expect(remotion.hook.delayRender.mock.calls[0]?.[0]).toContain('mushaf-surah-names-v4');
+    expect(remotion.hook.delayRender.mock.calls[0]?.[0]).toContain('mushaf-header-surah-name');
     expect(remotion.hook.delayRender.mock.calls[0]?.[0]).toContain('mushaf-quran-common');
     // The frame first (under the name), then the name: each centred in the row, in its own font.
     const [frame, name] = glyphs(container);
@@ -111,17 +114,18 @@ describe('<MushafLine> on a surah_name line', () => {
     expect(frame!.style.fontFamily).toBe('"mushaf-quran-common"');
     expect(frame!.textContent).toBe('');
     expect(name!.className).toBe('mushaf-glyph mushaf-glyph--surah-name');
-    expect(name!.dataset).toMatchObject({glyph: 'surah-name', font: 'surah-names-v4'});
-    expect(name!.style.fontFamily).toBe('"mushaf-surah-names-v4"');
-    expect(name!.textContent).toBe('ﱆ'); // Al-Baqarah
-    expect(name!.style.fontSize).toBe('112px');
+    expect(name!.dataset).toMatchObject({glyph: 'surah-name', font: 'header-surah-name'});
+    expect(name!.style.fontFamily).toBe('"mushaf-header-surah-name"');
+    expect(name!.textContent).toBe('\uE002'); // Al-Baqarah
+    // The header font draws its names smaller than the V4 font: they are set 1.4 times the size.
+    expect(Number.parseFloat(name!.style.fontSize)).toBeCloseTo(112 * 1.4, 6);
     expect(name!.style.lineHeight).toBe('246px');
     expect(name!.style.textAlign).toBe('center');
     // The frame spans the widest line of the mushaf at the page's type size: 17 em of 112 px over
     // 8,240 units of 1,024 per em.
     expect(Number.parseFloat(frame!.style.fontSize)).toBeCloseTo((112 * (42501 / 2500)) / (8240 / 1024), 3);
-    // The ink of each glyph is centred in the box, by its own band: names up a tenth of an em.
-    expect(name!.style.transform).toBe('translateY(-0.1044em)');
+    // The ink of each glyph is centred in the box, by its own band.
+    expect(name!.style.transform).toBe('translateY(0.0166015625em)');
     expect(frame!.style.transform).toBe('translateY(0.0126953125em)');
     await act(async () => {
       fakes.releaseLoads();
@@ -129,7 +133,7 @@ describe('<MushafLine> on a surah_name line', () => {
     await visible(container);
     expect(root.dataset.fontOrigin).toBe('cdn');
     expect(remotion.hook.continueRender).toHaveBeenCalledWith(remotion.hook.delayRender.mock.results[0]?.value);
-    expect(getFontStatus('surah-names-v4#cdn')).toBe('loaded');
+    expect(getFontStatus('header-surah-name#cdn')).toBe('loaded');
     expect(getFontStatus('quran-common#cdn')).toBe('loaded');
     // No word spans: the line has no words.
     expect(container.querySelectorAll('.mushaf-word')).toHaveLength(0);
@@ -140,7 +144,19 @@ describe('<MushafLine> on a surah_name line', () => {
     await visible(container);
     expect(container.querySelector<HTMLElement>('.mushaf-line')!.dataset.framed).toBe('false');
     expect(glyphs(container).map((g) => g.dataset.glyph)).toEqual(['surah-name']);
-    expect(fetched()).toEqual([SURAH_NAMES_URL]);
+    expect(fetched()).toEqual([HEADER_SURAH_URL]);
+  });
+
+  it('sets the name in the V4 surah-name font with surahNameFont="v4"', async () => {
+    const {container} = render(<MushafLine line={header} surahNameFont="v4" />);
+    await visible(container);
+    expect(container.querySelector<HTMLElement>('.mushaf-line')!.dataset.nameFont).toBe('v4');
+    const [, name] = glyphs(container);
+    expect(name!.dataset).toMatchObject({glyph: 'surah-name', font: 'surah-names-v4'});
+    expect(name!.textContent).toBe('ﱆ'); // Al-Baqarah
+    expect(name!.style.fontSize).toBe('112px');
+    expect(name!.style.transform).toBe('translateY(-0.1044em)');
+    expect(fetched()).toEqual([SURAH_NAMES_URL, COMMON_URL]);
   });
 
   it('sets a basmallah line with the four glyphs of the surah-name font on the page baseline', async () => {
@@ -192,13 +208,15 @@ describe('<MushafLine> on a surah_name line', () => {
     );
     expect(onError.mock.calls[0]?.[0]).toMatchObject({
       code: 'BAD_FONT_SRC',
-      message: expect.stringContaining('holds page fonts only, and mushaf font surah-names-v4 (surah_names.woff2)'),
+      message: expect.stringContaining(
+        'holds page fonts only, and mushaf font header-surah-name (header-surah-name.woff2)',
+      ),
     });
     expect(fakes.fetchMock).not.toHaveBeenCalled();
     // A fallback package is simply not used for them.
     cleanup();
     const {container} = render(<MushafLine line={header} fontFallback={pkg} />);
-    expect(fetched()).toEqual([SURAH_NAMES_URL, COMMON_URL]);
+    expect(fetched()).toEqual([HEADER_SURAH_URL, COMMON_URL]);
     expect(container.querySelector('.mushaf-line')).not.toBeNull();
   });
 
@@ -219,11 +237,11 @@ describe('<MushafLine> on a surah_name line', () => {
       {
         kind: 'shared',
         mushaf: 'qpc-v4',
-        font: 'surah-names-v4',
+        font: 'header-surah-name',
         format: 'woff2',
-        id: 'surah-names-v4',
-        fileName: 'surah_names.woff2',
-        cdnUrl: SURAH_NAMES_URL,
+        id: 'header-surah-name',
+        fileName: 'header-surah-name.woff2',
+        cdnUrl: HEADER_SURAH_URL,
       },
       {
         kind: 'shared',
@@ -235,9 +253,12 @@ describe('<MushafLine> on a surah_name line', () => {
         cdnUrl: COMMON_URL,
       },
     ]);
-    expect(fetched()).toEqual(['/fonts/surah-names-v4/surah_names.woff2', '/fonts/quran-common/quran-common.woff2']);
+    expect(fetched()).toEqual([
+      '/fonts/header-surah-name/header-surah-name.woff2',
+      '/fonts/quran-common/quran-common.woff2',
+    ]);
     const [frame, name] = glyphs(container);
-    expect(name!.style.fontFamily).toMatch(/^"mushaf-surah-names-v4-[0-9a-z]+"$/);
+    expect(name!.style.fontFamily).toMatch(/^"mushaf-header-surah-name-[0-9a-z]+"$/);
     expect(frame!.style.fontFamily).toMatch(/^"mushaf-quran-common-[0-9a-z]+"$/);
     expect(container.querySelector<HTMLElement>('.mushaf-line')!.dataset.fontOrigin).toBe('custom');
   });
@@ -253,7 +274,7 @@ describe('<MushafLine> on a surah_name line', () => {
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(onError.mock.calls[0]?.[0]).toMatchObject({
       code: 'FONT_HTTP',
-      message: expect.stringMatching(/HTTP 404 for mushaf font (surah-names-v4|quran-common)/),
+      message: expect.stringMatching(/HTTP 404 for mushaf font (header-surah-name|quran-common)/),
     });
     const {surahNumber: _dropped, ...noSurah} = header;
     const onError2 = vi.fn();
@@ -274,30 +295,44 @@ describe('<MushafSurahName> and <MushafJuzName>', () => {
     const {container} = render(<MushafSurahName surah={9} name="At-Tawbah" />);
     const root = container.querySelector<HTMLElement>('[data-sequence="At-Tawbah"] .mushaf-surah-name')!;
     expect(root).not.toBeNull();
-    expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', surah: '9', framed: 'true'});
+    expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', surah: '9', framed: 'true', nameFont: 'header'});
     expect(root.style.height).toBe('246px');
     expect(root.style.width).toBe('100%');
     expect(glyphs(container).map((g) => g.dataset.glyph)).toEqual(['frame', 'surah-name']);
-    expect(glyphs(container)[1]!.textContent).toBe('\uFC52'); // surah 9, At-Tawbah
+    expect(glyphs(container)[1]!.textContent).toBe('\uE009'); // surah 9, At-Tawbah
     await visible(container, '.mushaf-surah-name');
     expect(root.dataset.fontOrigin).toBe('cdn');
     cleanup();
     const alone = render(<MushafSurahName surah={114} framed={false} fontSize={80} lineHeight={100} />);
-    expect(glyphs(alone.container).map((g) => g.textContent)).toEqual(['ﯫ']); // An-Nas
-    expect(glyphs(alone.container)[0]!.style.fontSize).toBe('80px');
+    expect(glyphs(alone.container).map((g) => g.textContent)).toEqual(['\uE072']); // An-Nas
+    expect(glyphs(alone.container)[0]!.style.fontSize).toBe('112px');
     expect(alone.container.querySelector<HTMLElement>('.mushaf-surah-name')!.style.height).toBe('100px');
+    cleanup();
+    const v4 = render(<MushafSurahName surah={114} framed={false} surahNameFont="v4" fontSize={80} />);
+    expect(glyphs(v4.container).map((g) => g.textContent)).toEqual(['ﯫ']);
+    expect(glyphs(v4.container)[0]!.style.fontSize).toBe('80px');
   });
 
-  it('renders a juz name from the quran-common font', async () => {
+  it('sets Al-Fatihah from the V4 surah-name font, which the header font has no glyph for', async () => {
+    const {container} = render(<MushafSurahName surah={1} />);
+    const [, name] = glyphs(container);
+    expect(name!.dataset).toMatchObject({glyph: 'surah-name', font: 'surah-names-v4'});
+    expect(name!.textContent).toBe('\uFC45');
+    expect(fetched()).toEqual([SURAH_NAMES_URL, COMMON_URL]);
+    await visible(container, '.mushaf-surah-name');
+  });
+
+  it('renders a juz name from the juz-name header font', async () => {
     const {container} = render(<MushafJuzName juz={1} />);
     const root = container.querySelector<HTMLElement>('.mushaf-juz-name')!;
     expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', juz: '1'});
     expect(root.dataset.variant).toBeUndefined();
     const [glyph] = glyphs(container);
-    expect(glyph!.dataset).toMatchObject({glyph: 'juz-name', font: 'quran-common'});
+    expect(glyph!.dataset).toMatchObject({glyph: 'juz-name', font: 'header-juz'});
     expect(glyph!.textContent).toBe(''); // الجزء الأول
-    expect(glyph!.style.transform).toBe('translateY(-0.1123046875em)');
-    expect(fetched()).toEqual([COMMON_URL]);
+    expect(glyph!.style.transform).toBe('translateY(0.009765625em)');
+    expect(Number.parseFloat(glyph!.style.fontSize)).toBeCloseTo(112 * 1.2, 6);
+    expect(fetched()).toEqual([HEADER_JUZ_URL]);
     await visible(container, '.mushaf-juz-name');
     cleanup();
     const last = render(<MushafJuzName juz={30} className="x" />);

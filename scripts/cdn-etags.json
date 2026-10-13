@@ -14,6 +14,30 @@
    "contentLength": 66840,
    "cors": "*"
   },
+  "https://static-cdn.tarteel.ai/qul/fonts/header/juz-name/header-juz.ttf": {
+   "etag": "\"259e84630359baa7f75320575ad95163\"",
+   "contentType": "font/ttf",
+   "contentLength": 89240,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/header/juz-name/header-juz.woff2": {
+   "etag": "\"bf7dc1e3d7086935b7317525a12c6b81\"",
+   "contentType": "font/woff2",
+   "contentLength": 21320,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/header/surah-name/header-surah-name.ttf": {
+   "etag": "\"d15e33a4f3cf8571c93338997188fb2f\"",
+   "contentType": "font/ttf",
+   "contentLength": 239972,
+   "cors": "*"
+  },
+  "https://static-cdn.tarteel.ai/qul/fonts/header/surah-name/header-surah-name.woff2": {
+   "etag": "\"877f21e849fc4eeba3aecc68b0df6d40\"",
+   "contentType": "font/woff2",
+   "contentLength": 62672,
+   "cors": "*"
+  },
   "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/ttf/p1.ttf?v=3.1": {
    "etag": "W/\"44ef92110cfb795f1e49e5d57db71cd6\"",
    "contentType": "font/ttf",

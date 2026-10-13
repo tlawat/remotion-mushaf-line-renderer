@@ -95,6 +95,7 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
     className,
     name,
     framed,
+    surahNameFont,
     activeWordId,
     activeWordStyle,
     wordStyle,
@@ -194,6 +195,7 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
           wordStyle,
           wordClassName,
           framed,
+          surahNameFont,
           fontSrc,
           fontFallback,
         })}

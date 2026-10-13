@@ -20,7 +20,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(here, '../../../../example');
 const FIXTURE_FONT = 'fonts/qpc-v4-tajweed/p10.ttf';
 const hasFixtureFont = existsSync(path.join(exampleDir, 'public', FIXTURE_FONT));
-/** The shared fonts (surah names, quran-common), mirrored by `bun run qul fonts` into public/fonts/<id>/. */
+/** The shared fonts (the header fonts, surah names, quran-common), mirrored by `bun run qul fonts` into public/fonts/<id>/. */
 const SHARED_FONTS_DIR = 'fonts';
 const hasSharedFonts = existsSync(
   path.join(exampleDir, 'public', SHARED_FONTS_DIR, 'surah-names-v4/surah_names.woff2'),

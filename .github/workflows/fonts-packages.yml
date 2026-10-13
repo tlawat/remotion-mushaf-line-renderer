@@ -2,6 +2,8 @@ name: Fonts packages
 
 # The two fonts packages (packages/fonts-<set>/, @tlawat/mushaf-fonts-<set> on npm) hold QUL's page
 # fonts as of a snapshot date. This workflow
+#   - builds the packages (fill from QUL's CDN, verify against the manifest, pack) on a push or pull
+#     request that changes them, their build script or this file, and only then;
 #   - checks every week whether QUL's CDN still serves the snapshot's files (drift), and on drift
 #     downloads the current files, takes a new snapshot and opens a pull request with it;
 #   - stages a package on npm on demand (dry run by default; a real run also needs the repository
@@ -9,6 +11,17 @@ name: Fonts packages
 #     maintainer approves it with 2FA (`npm stage approve <id>` or on npmjs.com).
 
 on:
+  push:
+    branches: ['**']
+    paths:
+      - 'packages/fonts-*/**'
+      - 'scripts/fonts-package.mjs'
+      - '.github/workflows/fonts-packages.yml'
+  pull_request:
+    paths:
+      - 'packages/fonts-*/**'
+      - 'scripts/fonts-package.mjs'
+      - '.github/workflows/fonts-packages.yml'
   schedule:
     - cron: '0 5 * * 1'
   workflow_dispatch:
@@ -37,6 +50,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        set: [qpc-v4, qpc-v4-tajweed]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      # The fonts are not committed; a snapshot's files never change, so the cache is keyed on its manifest.
+      - name: Cache the fonts
+        uses: actions/cache@v4
+        with:
+          path: packages/fonts-${{ matrix.set }}/fonts
+          key: fonts-package-${{ matrix.set }}-${{ hashFiles(format('packages/fonts-{0}/manifest.json', matrix.set)) }}
+
+      - name: Fill from QUL's CDN and check against the manifest
+        run: |
+          node scripts/fonts-package.mjs fill ${{ matrix.set }} --cdn
+          node scripts/fonts-package.mjs check ${{ matrix.set }}
+
+      # `npm pack` runs the package's prepack (a byte-for-byte verify) and lists what would be published.
+      - name: Pack
+        working-directory: packages/fonts-${{ matrix.set }}
+        run: npm pack --dry-run
+
   snapshot:
     if: github.event_name == 'schedule' || inputs.action == 'drift' || inputs.action == 'snapshot'
     runs-on: ubuntu-latest

@@ -28,12 +28,14 @@ test checks against the registry's URLs) and probes the CDN the way a render wou
 
 `MUSHAFS` describes each supported mushaf: its QUL layout id, page count, lines per page, font
 metrics, the invariants of its data, its two font sets (the plain monochrome fonts and the
-COLR/CPAL colour fonts) with their CDN URLs, family names and CPAL palette roles, its two shared
-fonts (QUL's surah-name font, resource 237, and `quran-common`, resource 459: one file each, with
-their CDN URLs, families and metrics) and its glyph tables: the code point of every surah name (read
-from the surah-name font's cmap), the basmalah's four glyphs, the juz names (the `liga` ligatures of
-`quran-common`, addressed by their private-use code points), the header frame and, for each, where
-its ink sits relative to the baseline. `DATASETS` describes what the lines are built from: the pinned
+COLR/CPAL colour fonts) with their CDN URLs, family names and CPAL palette roles, its four shared
+fonts (QUL's surah-name and juz-name header fonts, resource 591 and `juz-name-header-font`, its V4
+surah-name font, resource 237, and `quran-common`, resource 459: one file each, with their CDN URLs,
+families and metrics) and its glyph tables: the code point of every surah name (U+E000 + n in the
+header font, the default; read from the cmap in the V4 font, which also sets Al-Fatihah, missing
+from the header font), the basmalah's four glyphs, the juz names (the `liga` ligatures of the juz
+header font, addressed by their private-use code points), the header frame (`quran-common`) and, for
+each, where its ink sits relative to the baseline and the scale it is set at. `DATASETS` describes what the lines are built from: the pinned
 export URLs, the page count and the `centeredPages` rule.
 
 `resolveSelection({mushaf, theme})` is the one place that turns the public selection into a

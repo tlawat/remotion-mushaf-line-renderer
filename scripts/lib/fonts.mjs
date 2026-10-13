@@ -12,9 +12,10 @@ const fontDirs = (set, page) => [
 ];
 
 /**
- * Downloads the shared fonts (surah names, quran-common; woff2 + ttf) into
+ * Downloads the shared fonts (the header fonts, surah names, quran-common; woff2 + ttf) into
  * example/public/fonts/<id>/, and checks the ttf: the surah-name font must map exactly the 114
- * code points the package's registry lists, quran-common the 30 juz names and the frame.
+ * code points the package's registry lists, the surah-name header font surahs 2-114 at U+E002-U+E072,
+ * the juz-name header font and quran-common the 30 juz names, and quran-common the frame.
  *
  * @returns {{etags: object, report: string[], failed: boolean}}
  */
@@ -97,7 +98,20 @@ export const checkSharedFont = (id, font) => {
       );
     if (zero.length) problems.push(`${zero.length} ${what} glyph(s) with zero advance`);
   };
-  if (id === 'surah-names-v4') {
+  if (id === 'header-surah-name') {
+    if (font.unitsPerEm !== 1024) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 1024`);
+    // No Al-Fatihah (U+E001): the registry sets surah 1 from the V4 surah-name font.
+    expectMapped(
+      Array.from({length: 113}, (_, i) => 0xe002 + i),
+      'surah-name',
+    );
+  } else if (id === 'header-juz') {
+    if (font.unitsPerEm !== 1024) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 1024`);
+    expectMapped(
+      Array.from({length: 30}, (_, i) => 0xe001 + i),
+      'juz-name',
+    );
+  } else if (id === 'surah-names-v4') {
     if (font.unitsPerEm !== 2500) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 2500`);
     const inRanges = [...font.advances.keys()].filter(
       (cp) => (cp >= 0xfb51 && cp <= 0xfbeb) || (cp >= 0xfc45 && cp <= 0xfc64),

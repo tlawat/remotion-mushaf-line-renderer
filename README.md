@@ -224,8 +224,8 @@ bun run build && bun run --cwd apps/mushaf-web dev   # the web app, at http://lo
 | `scheduleLines(lines, timings)`          | When each line is on screen, from the timings: `[{index, start, end}]` in seconds.        |
 | `wordAt(timings, seconds)`               | The word being recited at a moment, for `activeWordId`.                       |
 | `<MushafLine page={10} line={3} />`      | Same, resolving the line at render time. Header and basmalah lines render too. |
-| `<MushafSurahName surah={9} />`          | A surah's name in its printed frame, from QUL's surah-name font.               |
-| `<MushafJuzName juz={1} />`              | A juz's name, from QUL's `quran-common` font.                                  |
+| `<MushafSurahName surah={9} />`          | A surah's name in its printed frame, from QUL's surah-name header font.        |
+| `<MushafJuzName juz={1} />`              | A juz's name, from QUL's juz-name header font.                                 |
 | `slideFade()`, `revealRtl()`             | Presentations for `enter` / `exit`. Any DOM presentation from `@remotion/transitions` works too. |
 | `loadPageFont()`, `loadSharedFont()`, `loadMushafData()` | Preload a font or the data, e.g. for a `<Player>`.                    |
 | `getMushafFontFile({page, theme})`       | A font's file name, format and CDN URL, for a `fontSrc` resolver (`{font}` for the shared fonts). |
@@ -275,7 +275,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the test suites and checks CI runs.
 ## Licence
 
 Code: [MIT](LICENSE). The package ships no data and no fonts. The data is open data from
-[QUL](https://qul.tarteel.ai); the fonts (the page fonts, the surah-name font and `quran-common`)
+[QUL](https://qul.tarteel.ai); the fonts (the page fonts, the header fonts, the surah-name font and `quran-common`)
 belong to the [King Fahd Complex](https://qurancomplex.gov.sa) and are not open source. The two
 fonts packages redistribute the page fonts unmodified, as QUL publishes them; see each package's
 `LICENSE.md` and `NOTICE.md`.

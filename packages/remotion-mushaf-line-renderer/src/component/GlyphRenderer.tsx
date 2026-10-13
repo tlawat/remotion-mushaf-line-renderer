@@ -2,8 +2,14 @@ import type * as React from 'react';
 import {useRef} from 'react';
 import {useCurrentFrame, useVideoConfig} from 'remotion';
 import {getEnterState, getExitState, normaliseAnimation} from '../animation/animation-state';
-import {fontOfGlyph, type MushafDefinition, type MushafGlyph, type SharedFontDefinition} from '../mushaf/registry';
-import type {MushafFontFallback, MushafFontSrc, MushafLineAnimationProp} from '../types';
+import {
+  fontOfGlyph,
+  type MushafDefinition,
+  type MushafGlyph,
+  type SharedFontDefinition,
+  sharedFontsOf,
+} from '../mushaf/registry';
+import type {MushafFontFallback, MushafFontSrc, MushafLineAnimationProp, MushafSurahNameFont} from '../types';
 import {useCanvasGuard} from './hooks/use-canvas-guard';
 import {useSharedFontGate} from './hooks/use-shared-font-gate';
 import {Presented} from './Presented';
@@ -74,9 +80,9 @@ export const GlyphRenderer: React.FC<GlyphRendererProps> = ({
   const frame = useCurrentFrame();
   const rootRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
-  // One face per font, whatever the number of glyphs, the surah-name font first: it names the
-  // origin of a header, and it is the one a header cannot do without.
-  const fonts: SharedFontDefinition[] = [def.sharedFonts.surahNames, def.sharedFonts.common].filter((font) =>
+  // One face per font, whatever the number of glyphs, the surah-name fonts first: they name the
+  // origin of a header, and a header cannot do without its name.
+  const fonts: SharedFontDefinition[] = sharedFontsOf(def).filter((font) =>
     items.some((item) => fontOfGlyph(def, item.glyph) === font),
   );
   const gate = useSharedFontGate({def, fonts, fontSrc, fontFallback, label});
@@ -103,7 +109,7 @@ export const GlyphRenderer: React.FC<GlyphRendererProps> = ({
             data-font={font.id}
             style={buildGlyphStyle({
               fontFamily: gate.families[font.id] as string,
-              fontSize: item.fontSize,
+              fontSize: item.fontSize * (item.glyph.scale ?? 1),
               lineHeight,
               shiftEm: item.align === 'center' ? glyphShiftEm(font, item.glyph) : 0,
             })}
@@ -172,9 +178,10 @@ export const surahHeaderItems = (
   surah: number,
   fontSize: number,
   framed: boolean,
+  nameFont: MushafSurahNameFont = 'header',
 ): GlyphItem[] => [
   ...(framed
     ? [{glyph: def.glyphs.headerFrame, fontSize: frameFontSize(def, fontSize), align: 'center' as const}]
     : []),
-  {glyph: def.glyphs.surahName(surah), fontSize, align: 'center'},
+  {glyph: def.glyphs.surahName(surah, nameFont), fontSize, align: 'center'},
 ];

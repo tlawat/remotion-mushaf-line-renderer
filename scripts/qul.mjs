@@ -26,7 +26,7 @@
 //                                example/public/fonts/<set>/ and, for pages 1, 10, 187 and 604,
 //                                packages/…/test/fixtures/fonts/<set>/; checks every word of the
 //                                mirrored layout against them and the plain set against the colour set.
-//                                Also downloads the two shared fonts (surah names, quran-common)
+//                                Also downloads the shared fonts (the header fonts, surah names, quran-common)
 //                                into example/public/fonts/<id>/ and checks their glyph tables.
 //     --etags                               also refresh scripts/cdn-etags.json
 //     --allow-zero-advance                  do not fail when a standalone word has zero advance
@@ -162,7 +162,7 @@ const fonts = async (spec) => {
     allowZeroAdvance: args['allow-zero-advance'],
   });
   for (const line of report) log(' -', line);
-  log('downloading the shared fonts (surah names, quran-common)');
+  log('downloading the shared fonts (the header fonts, surah names, quran-common)');
   const shared = await downloadSharedFonts(def);
   for (const line of shared.report) log(' -', line);
   if (failed || shared.failed) {

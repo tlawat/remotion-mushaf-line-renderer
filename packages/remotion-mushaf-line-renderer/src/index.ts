@@ -83,6 +83,7 @@ export type {
   MushafSharedFont,
   MushafSharedFontFile,
   MushafSlice,
+  MushafSurahNameFont,
   MushafSurahNameProps,
   MushafTheme,
   MushafThemeColors,

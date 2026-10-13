@@ -20,6 +20,8 @@ import {
   MUSHAF_IDS,
   MUSHAFS,
   resolveSelection,
+  SHARED_FONT_IDS,
+  sharedFontsOf,
 } from '../../src/mushaf/registry';
 
 const v4 = MUSHAFS['qpc-v4'];
@@ -108,8 +110,24 @@ describe('mushaf registry', () => {
     expect(Object.values(v4.fontSets.plain.colorParts).flat()).toEqual([]);
   });
 
-  it('describes the two shared fonts as the dev tools pin them', () => {
-    const {surahNames, common} = v4.sharedFonts;
+  it('describes the shared fonts as the dev tools pin them', () => {
+    const {headerSurahNames, headerJuzNames, surahNames, common} = v4.sharedFonts;
+    expect(headerSurahNames).toMatchObject({
+      id: 'header-surah-name',
+      qulResource: 'https://qul.tarteel.ai/resources/font/591',
+      fontFamily: 'mushaf-header-surah-name',
+      fileName: 'header-surah-name.woff2',
+      cdnUrl: 'https://static-cdn.tarteel.ai/qul/fonts/header/surah-name/header-surah-name.woff2',
+      metrics: {unitsPerEm: 1024, ascent: 819, descent: -205},
+    });
+    expect(headerJuzNames).toMatchObject({
+      id: 'header-juz',
+      qulResource: 'https://qul.tarteel.ai/resources/font/juz-name-header-font',
+      fontFamily: 'mushaf-header-juz',
+      fileName: 'header-juz.woff2',
+      cdnUrl: 'https://static-cdn.tarteel.ai/qul/fonts/header/juz-name/header-juz.woff2',
+      metrics: {unitsPerEm: 1024, ascent: 819, descent: -205},
+    });
     expect(surahNames).toMatchObject({
       id: 'surah-names-v4',
       qulResource: 'https://qul.tarteel.ai/resources/font/237',
@@ -126,18 +144,21 @@ describe('mushaf registry', () => {
       cdnUrl: 'https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2',
       metrics: {unitsPerEm: 1024, ascent: 819, descent: -205},
     });
-    for (const font of [surahNames, common]) {
+    expect(sharedFontsOf(v4).map((f) => f.id)).toEqual(SHARED_FONT_IDS);
+    for (const font of sharedFontsOf(v4)) {
       expect(font.cdnUrl).toBe(QPC_V4.sharedFontUrl(font.id, 'woff2'));
       expect(QPC_V4.sharedFonts[font.id].fileName).toBe(font.fileName);
     }
     expect(getSharedFont(v4, 'quran-common')).toBe(common);
-    expect(() => getSharedFont(v4, 'p10')).toThrow(/font must be one of 'surah-names-v4', 'quran-common'/);
+    expect(() => getSharedFont(v4, 'p10')).toThrow(
+      /font must be one of 'header-surah-name', 'header-juz', 'surah-names-v4', 'quran-common'/,
+    );
   });
 
   it('maps every surah, the basmalah, every juz and the header frame to their glyphs', () => {
     const {glyphs} = v4;
     // The surah-name font's cmap: 1–21 in U+FC45–U+FC64, 22–114 in U+FB51–U+FBEB, gaps included.
-    const names = Array.from({length: 114}, (_, i) => glyphs.surahName(i + 1));
+    const names = Array.from({length: 114}, (_, i) => glyphs.surahName(i + 1, 'v4'));
     const cps = names.map((g) => g.text.codePointAt(0)!);
     const ascending = (list: number[]) => list.every((cp, i) => i === 0 || cp > list[i - 1]!);
     expect(ascending(cps.slice(0, 21))).toBe(true);
@@ -156,7 +177,24 @@ describe('mushaf registry', () => {
       text: '\uFCAA\uFCAB\uFCAE\uFCB4',
       bandCenter: 1418,
     });
-    expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 192});
+    // The header font, by default: surah n at U+E000 + n, set 1.4 times the size; it has no Al-Fatihah,
+    // which comes from the V4 font.
+    expect(glyphs.surahName(1)).toEqual(names[0]);
+    expect(glyphs.surahName(2)).toEqual({
+      font: 'headerSurahNames',
+      kind: 'surah-name',
+      text: '\uE002',
+      bandCenter: 324,
+      scale: 1.4,
+    });
+    expect(glyphs.surahName(114).text).toBe('\uE072');
+    expect(glyphs.juzName(1)).toEqual({
+      font: 'headerJuzNames',
+      kind: 'juz-name',
+      text: '\uE001',
+      bandCenter: 317,
+      scale: 1.2,
+    });
     expect(glyphs.juzName(30).text).toBe('\uE01E');
     expect(glyphs.headerFrame).toEqual({font: 'common', kind: 'frame', text: '\uE000', bandCenter: 320, advance: 8240});
     expect(assertSurahNumber(114)).toBe(114);
@@ -180,10 +218,34 @@ describe('mushaf registry', () => {
       const mapped = [...font.advances.keys()]
         .filter((cp: number) => (cp >= 0xfb51 && cp <= 0xfbeb) || (cp >= 0xfc45 && cp <= 0xfc64))
         .sort((a: number, b: number) => a - b);
-      const table = Array.from({length: 114}, (_, i) => v4.glyphs.surahName(i + 1).text.codePointAt(0));
+      const table = Array.from({length: 114}, (_, i) => v4.glyphs.surahName(i + 1, 'v4').text.codePointAt(0));
       // The font's order is the surah order, range by range.
       expect([...table.slice(21), ...table.slice(0, 21)]).toEqual(mapped);
       for (const ch of v4.glyphs.basmalah.text) expect(font.advances.get(ch.codePointAt(0))).toBeGreaterThan(0);
+    },
+  );
+  it.skipIf(!existsSync(mirrored('header-surah-name', 'header-surah-name')))(
+    'finds surahs 2-114 in the mirrored surah-name header font',
+    () => {
+      const font = parseSfnt(readFileSync(mirrored('header-surah-name', 'header-surah-name')));
+      expect(checkSharedFont('header-surah-name', font)).toEqual([]);
+      expect(font.unitsPerEm).toBe(v4.sharedFonts.headerSurahNames.metrics.unitsPerEm);
+      expect(font.ascender).toBe(v4.sharedFonts.headerSurahNames.metrics.ascent);
+      expect(font.descender).toBe(v4.sharedFonts.headerSurahNames.metrics.descent);
+      for (let surah = 2; surah <= 114; surah++)
+        expect(font.advances.get(v4.glyphs.surahName(surah).text.codePointAt(0))).toBeGreaterThan(0);
+    },
+  );
+  it.skipIf(!existsSync(mirrored('header-juz', 'header-juz')))(
+    'finds every juz name in the mirrored juz-name header font',
+    () => {
+      const font = parseSfnt(readFileSync(mirrored('header-juz', 'header-juz')));
+      expect(checkSharedFont('header-juz', font)).toEqual([]);
+      expect(font.unitsPerEm).toBe(v4.sharedFonts.headerJuzNames.metrics.unitsPerEm);
+      expect(font.ascender).toBe(v4.sharedFonts.headerJuzNames.metrics.ascent);
+      expect(font.descender).toBe(v4.sharedFonts.headerJuzNames.metrics.descent);
+      for (let juz = 1; juz <= 30; juz++)
+        expect(font.advances.get(v4.glyphs.juzName(juz).text.codePointAt(0))).toBeGreaterThan(0);
     },
   );
   it.skipIf(!existsSync(mirrored('quran-common', 'quran-common')))(
