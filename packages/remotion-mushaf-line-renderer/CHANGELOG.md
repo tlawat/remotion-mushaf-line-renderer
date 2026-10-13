@@ -5,9 +5,9 @@
 - **Page headers.** New `<MushafPageHeader juz surah>` sets a page's running header as printed: the
   juz's name against the right edge and the surah's name against the left, from QUL's juz-name and
   surah-name page-header fonts (`'header-juz'`, 21 KB, and `'header-surah-name'`,
-  [resource 591](https://qul.tarteel.ai/resources/font/591), 62 KB; the latter has no Al-Fatihah,
-  which comes from the V4 surah-name font). Either side may be left out; neither is the new
-  `BAD_PAGE_HEADER`. `MushafSharedFont`, `loadSharedFont()`, `getMushafFontFile({font})` and a
+  [resource 591](https://qul.tarteel.ai/resources/font/591), 62 KB). `surah` is 2-114: page 1 (Al-Fatihah)
+  has no running header, so `surah={1}` is `SURAH_OUT_OF_RANGE`. Either side may be left out;
+  neither is the new `BAD_PAGE_HEADER`. `MushafSharedFont`, `loadSharedFont()`, `getMushafFontFile({font})` and a
   `fontSrc` resolver's shared files gain the two fonts. Surah names in their frame and
   `<MushafJuzName>` are unchanged.
 

@@ -9,7 +9,7 @@ import {fontSizeForWidth, lineHeightForFontSize} from './styles';
 /**
  * A page's running header, as printed above its first line: the juz's name against the right edge
  * and the surah's name against the left, from QUL's juz-name and surah-name page-header fonts (the
- * surah-name one has no Al-Fatihah, which comes from the V4 surah-name font). A block of
+ * surah is 2-114: Al-Fatihah fills page 1, which has no running header). A block of
  * `width: 100%` and height `lineHeight`, like `<MushafLine>`; give it the width of the page's lines
  * (`style={{width}}`) to align the names with them. The names take the inherited CSS `color`; fonts
  * load behind `delayRender()`; `enter` / `exit` work as on a line.

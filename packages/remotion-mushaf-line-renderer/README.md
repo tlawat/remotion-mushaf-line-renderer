@@ -717,7 +717,7 @@ them, and the package draws from them:
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------ |
 | `surah-names-v4` ([QUL resource 237](https://qul.tarteel.ai/resources/font/237), the V4 surah-name font) | The 114 surah names as written above their first ayah, and the basmalah.       | 830 KB       |
 | `quran-common` ([QUL resource 459](https://qul.tarteel.ai/resources/font/459), the juz-name font)      | The 30 juz names and the ornamental frame a surah name is printed in.                | 67 KB      |
-| `header-surah-name` ([QUL resource 591](https://qul.tarteel.ai/resources/font/591), the surah-name page-header font) | Surahs 2–114 as a page's running header sets them (top left). No Al-Fatihah: it comes from `surah-names-v4`. | 62 KB |
+| `header-surah-name` ([QUL resource 591](https://qul.tarteel.ai/resources/font/591), the surah-name page-header font) | Surahs 2–114 as a page's running header sets them (top left). Page 1 (Al-Fatihah) has no running header, so no glyph for surah 1. | 62 KB |
 | `header-juz` ([the juz-name page-header font](https://qul.tarteel.ai/resources/font/juz-name-header-font)) | The 30 juz names as a page's running header sets them (top right).               | 21 KB        |
 
 They are fetched from QUL's CDN by default, like the page fonts, behind `delayRender()`, and nothing
@@ -766,7 +766,8 @@ The running header printed at the top of a page: the juz's name against the righ
 surah's name against the left, from the two page-header fonts, in a block of `width: 100%` and
 height `lineHeight`, with the same sizing, animation and font props as `<MushafJuzName>`. Give it
 the width of the page's lines so the names line up with them. Either side may be left out; neither
-is `BAD_PAGE_HEADER`:
+is `BAD_PAGE_HEADER`. `surah` is 2–114: Al-Fatihah fills page 1, which has no running header, so
+`surah={1}` is `SURAH_OUT_OF_RANGE`:
 
 ```tsx
 <MushafPageHeader juz={22} surah={36} style={{width: measure}} />   {/* page 440 */}

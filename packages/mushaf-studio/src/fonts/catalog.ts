@@ -84,7 +84,7 @@ export const QUL_FONTS: readonly QulFontResource[] = [
     name: 'Surah name page-header font',
     kind: 'shared',
     qulResource: 591,
-    script: "Ligatures: surahs 2-114 in a page's running header, top left (no Al-Fatihah)",
+    script: "Ligatures: surahs 2-114 in a page's running header, top left (page 1 has none)",
     cdnUrl: `${CDN}/header/surah-name/header-surah-name.{format}`,
     formats: ['woff2', 'woff', 'ttf'],
     supported: true,

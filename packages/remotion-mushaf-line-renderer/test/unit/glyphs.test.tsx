@@ -365,17 +365,16 @@ describe('<MushafPageHeader>', () => {
     expect(root.dataset.fontOrigin).toBe('cdn');
   });
 
-  it('sets one side alone, and Al-Fatihah from the V4 surah-name font', async () => {
+  it('sets one side alone', async () => {
     const {container} = render(<MushafPageHeader juz={1} />);
     expect(glyphs(container).map((g) => [g.dataset.font, g.style.textAlign])).toEqual([['header-juz', 'right']]);
     expect(container.querySelector<HTMLElement>(ROOT)!.dataset.surah).toBeUndefined();
     await visible(container, ROOT);
     cleanup();
-    const fatiha = render(<MushafPageHeader surah={1} />);
-    const [name] = glyphs(fatiha.container);
-    expect(name!.dataset).toMatchObject({glyph: 'surah-name', font: 'surah-names-v4'});
-    expect(name!.textContent).toBe('\uFC45');
-    expect(name!.style.textAlign).toBe('left');
+    const surah = render(<MushafPageHeader surah={2} />);
+    expect(glyphs(surah.container).map((g) => [g.dataset.font, g.style.textAlign])).toEqual([
+      ['header-surah-name', 'left'],
+    ]);
   });
 
   it('refuses a header with nothing in it, and numbers out of range', () => {
@@ -383,6 +382,8 @@ describe('<MushafPageHeader>', () => {
       [() => <MushafPageHeader />, 'BAD_PAGE_HEADER'],
       [() => <MushafPageHeader juz={31} />, 'JUZ_OUT_OF_RANGE'],
       [() => <MushafPageHeader juz={1} surah={0} />, 'SURAH_OUT_OF_RANGE'],
+      // Al-Fatihah fills page 1, which has no running header.
+      [() => <MushafPageHeader juz={1} surah={1} />, 'SURAH_OUT_OF_RANGE'],
     ];
     for (const [element, code] of cases) {
       const onError = vi.fn();

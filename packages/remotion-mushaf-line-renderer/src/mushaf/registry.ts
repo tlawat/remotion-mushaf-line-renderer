@@ -129,8 +129,9 @@ export type MushafGlyphs = {
   /** The name of juz 1-30, written out ("the first juz"). */
   readonly juzName: (juz: number) => MushafGlyph;
   /**
-   * The surah's name in a page's running header (top left), from the surah-name page-header font.
-   * That font has no Al-Fatihah: surah 1 comes from the V4 surah-name font.
+   * The surah's name in a page's running header (top left), from the surah-name page-header font:
+   * surahs 2-114. Al-Fatihah fills page 1, which has no running header, so the font has no glyph
+   * for it and surah 1 is refused (`SURAH_OUT_OF_RANGE`).
    */
   readonly pageHeaderSurahName: (surah: number) => MushafGlyph;
   /** The juz's name in a page's running header (top right), from the juz-name page-header font. */
@@ -356,10 +357,16 @@ const V4_GLYPHS: MushafGlyphs = {
     bandCenter: 192,
   }),
   // The page-header fonts address their ligatures (`surah002`, `juz001`) the same way: name n at U+E000 + n.
-  pageHeaderSurahName: (surah) =>
-    assertSurahNumber(surah) === 1
-      ? V4_GLYPHS.surahName(1)
-      : {font: 'headerSurahNames', kind: 'surah-name', text: String.fromCodePoint(0xe000 + surah), bandCenter: 324},
+  pageHeaderSurahName: (surah) => {
+    if (assertSurahNumber(surah) === 1) {
+      throw new MushafError(
+        'SURAH_OUT_OF_RANGE',
+        "a page header's surah must be an integer from 2 to 114, got 1: Al-Fatihah fills page 1, which has no running header.",
+        {surah},
+      );
+    }
+    return {font: 'headerSurahNames', kind: 'surah-name', text: String.fromCodePoint(0xe000 + surah), bandCenter: 324};
+  },
   pageHeaderJuzName: (juz) => ({
     font: 'headerJuzNames',
     kind: 'juz-name',

@@ -100,7 +100,7 @@ export const checkSharedFont = (id, font) => {
   };
   if (id === 'header-surah-name') {
     if (font.unitsPerEm !== 1024) problems.push(`unitsPerEm ${font.unitsPerEm}, expected 1024`);
-    // No Al-Fatihah (U+E001): the registry sets surah 1 from the V4 surah-name font.
+    // No Al-Fatihah (U+E001): page 1 has no running header.
     expectMapped(
       Array.from({length: 113}, (_, i) => 0xe002 + i),
       'surah-name',

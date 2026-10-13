@@ -178,9 +178,11 @@ describe('mushaf registry', () => {
       bandCenter: 1418,
     });
     expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 192});
-    // The page-header fonts: name n at U+E000 + n. The surah-name one has no Al-Fatihah, which comes
-    // from the V4 font.
-    expect(glyphs.pageHeaderSurahName(1)).toEqual(names[0]);
+    // The page-header fonts: name n at U+E000 + n. Page 1 has no running header, so neither has the
+    // surah-name font a glyph for Al-Fatihah.
+    expect(() => glyphs.pageHeaderSurahName(1)).toThrow(
+      expect.objectContaining({code: 'SURAH_OUT_OF_RANGE', message: expect.stringContaining('page 1')}),
+    );
     expect(glyphs.pageHeaderSurahName(2)).toEqual({
       font: 'headerSurahNames',
       kind: 'surah-name',
