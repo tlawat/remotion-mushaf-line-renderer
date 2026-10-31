@@ -12,23 +12,23 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@remotion/media": "4.0.521",
-    "@remotion/player": "4.0.521",
-    "@remotion/studio": "4.0.521",
-    "@remotion/transitions": "4.0.521",
-    "@remotion/web-renderer": "4.0.521",
-    "@remotion/zod-types": "4.0.521",
+    "@remotion/media": "4.0.539",
+    "@remotion/player": "4.0.539",
+    "@remotion/studio": "4.0.539",
+    "@remotion/transitions": "4.0.539",
+    "@remotion/web-renderer": "4.0.539",
+    "@remotion/zod-types": "4.0.539",
     "@tlawat/mushaf-studio": "workspace:*",
     "@tlawat/remotion-mushaf-line": "workspace:*",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "remotion": "4.0.521",
-    "zod": "4.5.4"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "4.0.539",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "typescript": "~5.9.3",
-    "vite": "^8.2.2"
+    "vite": "^8.3.5"
   }
 }
