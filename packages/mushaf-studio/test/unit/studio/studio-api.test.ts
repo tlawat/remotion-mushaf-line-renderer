@@ -18,7 +18,7 @@ vi.mock('remotion', async (importOriginal) => ({
 }));
 
 const api = await import('../../../src/studio/studio-api');
-const {getStudioState, resetStudioStore} = await import('../../../src/studio/store');
+const {getStudioState, resetStudioStore, setStudioState} = await import('../../../src/studio/store');
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -127,6 +127,57 @@ describe('the Studio API wrappers', () => {
     await expect(api.patchProps('MushafRecitation', {text: {transliterationFile: ''}})).rejects.toThrow('read-only');
     expect(getStudioState().pendingPatch).toEqual({splits: [{page: 1, line: 2, atWordId: 3}], text: {glossFile: ''}});
     expect(studio.reevaluateComposition).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a saved recording in later saves after the panel has cleared its pending patch', async () => {
+    type Call = [{defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>}];
+    const fatiha = {audioFile: 'fatiha/audio.mp3', timingsFile: 'fatiha/timings.json', splits: []};
+    await api.patchProps('MushafRecitation', {audioFile: 'r/30.mp3', timingsFile: 'r/30.json'});
+    const [first] = studio.saveDefaultProps.mock.calls as unknown as [Call];
+    first[0].defaultProps({savedDefaultProps: fatiha});
+    // The rendered props came back with the recording, so the panel dropped its pending patch...
+    setStudioState({pendingPatch: null});
+    // ...but the Studio's saved copy still has the Fatiha files when the next save starts.
+    const split = {page: 405, line: 1, atWordId: 55449};
+    await api.patchProps('MushafRecitation', {splits: [split]});
+    const second = studio.saveDefaultProps.mock.calls[1] as unknown as Call;
+    expect(second[0].defaultProps({savedDefaultProps: fatiha})).toEqual({
+      audioFile: 'r/30.mp3',
+      timingsFile: 'r/30.json',
+      splits: [split],
+    });
+  });
+
+  it('stops carrying what the saved props have caught up with, and keeps compositions apart', async () => {
+    type Call = [{defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>}];
+    await api.patchProps('MushafRecitation', {audioFile: 'r/30.mp3'});
+    (studio.saveDefaultProps.mock.calls[0] as unknown as Call)[0].defaultProps({savedDefaultProps: {}});
+    // The other composition never sees this one's carried patch.
+    await api.patchProps('MushafPassage', {slice: false});
+    expect((studio.saveDefaultProps.mock.calls[1] as unknown as Call)[0].defaultProps({savedDefaultProps: {}})).toEqual(
+      {slice: false},
+    );
+    // The Root caught up, then the user changed audioFile in the Props sidebar: a later panel save keeps it.
+    await api.patchProps('MushafRecitation', {slice: true});
+    (studio.saveDefaultProps.mock.calls[2] as unknown as Call)[0].defaultProps({
+      savedDefaultProps: {audioFile: 'r/30.mp3'},
+    });
+    expect(getStudioState().unsavedPatches.MushafRecitation).toEqual({slice: true});
+    await api.patchProps('MushafRecitation', {splits: []});
+    expect(
+      (studio.saveDefaultProps.mock.calls[3] as unknown as Call)[0].defaultProps({
+        savedDefaultProps: {audioFile: 'mine.mp3', slice: true},
+      }),
+    ).toEqual({audioFile: 'mine.mp3', slice: true, splits: []});
+  });
+
+  it('finds the part of a patch the props do not carry yet', () => {
+    expect(api.unappliedPart({a: 1, b: {c: 2, d: 3}}, {a: 1, b: {c: 2}})).toBeNull();
+    expect(api.unappliedPart({a: 1, b: {c: 2, d: 3}}, {a: 2, b: {c: 2, d: 4}, e: undefined})).toEqual({
+      a: 2,
+      b: {d: 4},
+    });
+    expect(api.unappliedPart({s: [{x: 1}]}, {s: [{x: 1}]})).toBeNull();
   });
 
   it('applies a pending patch to the props the tabs see and knows when the props carry it', () => {

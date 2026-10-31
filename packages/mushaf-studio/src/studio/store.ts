@@ -80,6 +80,14 @@ export type StudioState = {
    */
   readonly pendingPatch: PropsPatch | null;
   /**
+   * Per composition id: what `patchProps()` wrote that the Root file had not been read back with
+   * the last time a save looked (`savedDefaultProps`). Every save merges it in again, so a save made
+   * while `savedDefaultProps` still lags cannot write older values over newer ones. Unlike
+   * `pendingPatch` it is pruned only against `savedDefaultProps`, never against the props the
+   * composition renders, which can arrive before the Studio's saved copy does.
+   */
+  readonly unsavedPatches: Readonly<Record<string, PropsPatch>>;
+  /**
    * What the last look the Look tab applied changed, as it was before: Undo saves `patch` on
    * `compositionId`. In memory only; one level.
    */
@@ -174,6 +182,7 @@ const initialState = (): StudioState => {
     session: isSession(saved?.session) ? saved.session : null,
     uploadedAudio: typeof saved?.uploadedAudio === 'string' ? saved.uploadedAudio : null,
     pendingPatch: null,
+    unsavedPatches: {},
     lookUndo: null,
     waveforms: {},
   };
