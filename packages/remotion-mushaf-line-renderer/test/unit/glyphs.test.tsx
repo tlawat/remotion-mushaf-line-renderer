@@ -297,7 +297,7 @@ describe('<MushafSurahName> and <MushafJuzName>', () => {
     const [glyph] = glyphs(container);
     expect(glyph!.dataset).toMatchObject({glyph: 'juz-name', font: 'quran-common'});
     expect(glyph!.textContent).toBe(''); // الجزء الأول
-    expect(glyph!.style.transform).toBe('translateY(-0.1123046875em)');
+    expect(glyph!.style.transform).toBe('translateY(0.009765625em)');
     expect(fetched()).toEqual([COMMON_URL]);
     await visible(container, '.mushaf-juz-name');
     cleanup();

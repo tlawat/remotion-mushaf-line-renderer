@@ -177,7 +177,7 @@ describe('mushaf registry', () => {
       text: '\uFCAA\uFCAB\uFCAE\uFCB4',
       bandCenter: 1418,
     });
-    expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 192});
+    expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 317});
     // The page-header fonts: name n at U+E000 + n. Page 1 has no running header, so neither has the
     // surah-name font a glyph for Al-Fatihah.
     expect(() => glyphs.pageHeaderSurahName(1)).toThrow(

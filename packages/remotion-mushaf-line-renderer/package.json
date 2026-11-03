@@ -71,11 +71,11 @@
     }
   },
   "devDependencies": {
-    "@remotion/bundler": "4.0.521",
-    "@remotion/player": "4.0.521",
-    "@remotion/renderer": "4.0.521",
-    "@remotion/transitions": "4.0.521",
-    "remotion": "4.0.521"
+    "@remotion/bundler": "4.0.539",
+    "@remotion/player": "4.0.539",
+    "@remotion/renderer": "4.0.539",
+    "@remotion/transitions": "4.0.539",
+    "remotion": "4.0.539"
   },
   "publishConfig": {
     "access": "public",

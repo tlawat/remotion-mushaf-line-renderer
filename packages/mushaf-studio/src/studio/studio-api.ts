@@ -128,25 +128,69 @@ export const patchApplied = (
   });
 
 /**
+ * The part of `patch` that `base` does not carry yet (compared as `patchApplied()` does), or `null`
+ * when `base` carries all of it.
+ */
+export const unappliedPart = (
+  base: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | null => {
+  const rest: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    const current = base[key];
+    if (isPlainObject(current) && isPlainObject(value)) {
+      const nested = unappliedPart(current, value);
+      if (nested !== null) rest[key] = nested;
+    } else if (JSON.stringify(current) !== JSON.stringify(value)) {
+      rest[key] = value;
+    }
+  }
+  return Object.keys(rest).length === 0 ? null : rest;
+};
+
+/**
  * Merges `patch` into the composition's saved default props (the Root file) and re-runs
- * `calculateMetadata()`. `savedDefaultProps` lags behind: the Studio updates it when the Root has
- * reloaded, so a second save in that window would be built from the props before the first one.
- * The store's `pendingPatch` (every patch not yet seen back in the props) is merged in with it;
- * a save that fails leaves it as it was.
+ * `calculateMetadata()`. `savedDefaultProps` lags behind: the Studio updates it some time after the
+ * Root has been written, so a save in that window starts from the props before the earlier one.
+ * Two records keep earlier changes from being lost:
+ *
+ * - the store's `pendingPatch`, what the tabs see until the rendered props carry it (the panel
+ *   clears it then);
+ * - the store's `unsavedPatches[compositionId]`, merged into every save until `savedDefaultProps`
+ *   itself carries it. The rendered props can arrive before `savedDefaultProps` does, so clearing
+ *   on those alone let a later save write the old values back (a split saved over a new recording's
+ *   `audioFile`/`timingsFile`).
+ *
+ * A save that fails leaves both as they were.
  */
 export const patchProps = async (compositionId: string, patch: PropsPatch): Promise<void> => {
-  const previous = getStudioState().pendingPatch;
-  const pending = deepMerge(previous ?? {}, patch as Readonly<Record<string, unknown>>) as PropsPatch;
+  const state = getStudioState();
+  const previous = state.pendingPatch;
+  const previousUnsaved = state.unsavedPatches[compositionId] ?? null;
+  const ownPatch = patch as Readonly<Record<string, unknown>>;
+  const pending = deepMerge(previous ?? {}, ownPatch) as PropsPatch;
   setStudioState({pendingPatch: pending});
+  let written: Record<string, unknown> = {...ownPatch};
   try {
     await saveDefaultProps({
       compositionId,
-      defaultProps: ({savedDefaultProps}) => deepMerge(savedDefaultProps, pending as Readonly<Record<string, unknown>>),
+      defaultProps: ({savedDefaultProps}) => {
+        const carried =
+          previousUnsaved === null
+            ? null
+            : unappliedPart(savedDefaultProps, previousUnsaved as Readonly<Record<string, unknown>>);
+        written = deepMerge(carried ?? {}, ownPatch);
+        return deepMerge(savedDefaultProps, written);
+      },
     });
   } catch (error) {
     setStudioState({pendingPatch: previous});
     throw error;
   }
+  setStudioState({
+    unsavedPatches: {...getStudioState().unsavedPatches, [compositionId]: written as PropsPatch},
+  });
   reevaluateComposition();
 };
 

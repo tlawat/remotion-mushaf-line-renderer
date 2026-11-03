@@ -48,7 +48,7 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
   const otherRiwayah = recitation !== undefined && !isHafsRecitation(recitation);
   const confirmed = !otherRiwayah || confirmedSlug === recitation.slug;
 
-  const useRecitation = () => {
+  const chooseRecitation = () => {
     if (!recitation || !confirmed) return;
     const query = {slug: recitation.slug, chapter, verseFrom: from, verseTo: to};
     void runStudioTask(tNow('source.busy.segments'), async () => {
@@ -175,7 +175,7 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
             ) : null}
             <Button
               variant="primary"
-              onClick={useRecitation}
+              onClick={chooseRecitation}
               disabled={working || !recitation || !confirmed}
               title={confirmed ? undefined : t('source.riwayahConfirmFirst', {riwayah: recitation?.riwayah ?? ''})}
             >

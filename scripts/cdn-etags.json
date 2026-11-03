@@ -3,15 +3,15 @@
  "base": "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2",
  "entries": {
   "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.ttf": {
-   "etag": "W/\"b66936bf3f1a08975ad74136188b85cd\"",
+   "etag": "\"97045984517d213634519dfe4111de43\"",
    "contentType": "font/ttf",
-   "contentLength": 125444,
+   "contentLength": 171968,
    "cors": "*"
   },
   "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.woff2": {
-   "etag": "\"68b3a24eb3ab5c85b50e218431013a61\"",
+   "etag": "\"bc1ce16a34b61216d1511e7b1b7d7955\"",
    "contentType": "font/woff2",
-   "contentLength": 66840,
+   "contentLength": 63836,
    "cors": "*"
   },
   "https://static-cdn.tarteel.ai/qul/fonts/header/juz-name/header-juz.ttf": {
