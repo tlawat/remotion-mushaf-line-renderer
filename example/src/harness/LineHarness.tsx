@@ -60,7 +60,7 @@ export type LineHarnessProps = {
   /** The fonts packages: 'fallback' passes them as `fontFallback`, 'source' as `fontSrc` (wins over fontUrl). */
   fontPackages: 'none' | 'fallback' | 'source';
   /**
-   * Where the shared fonts (surah names, quran-common) come from: a URL prefix as-is (Player page),
+   * Where the shared fonts (the header fonts, surah names, quran-common) come from: a URL prefix as-is (Player page),
    * `<prefix>/<font id>/<file name>`. Null: QUL's CDN.
    */
   sharedFontsUrl: string | null;

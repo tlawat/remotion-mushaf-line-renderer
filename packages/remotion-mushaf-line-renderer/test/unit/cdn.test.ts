@@ -3,7 +3,7 @@
 // routed around by CDN_FORMAT_EXCEPTIONS in src/mushaf/registry.ts.
 import {existsSync, readFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
-import {DATASETS, fontSetById, getMushafDefinition, MUSHAF_IDS} from '../../src/mushaf/registry';
+import {DATASETS, fontSetById, getMushafDefinition, MUSHAF_IDS, sharedFontsOf} from '../../src/mushaf/registry';
 
 const file = new URL('../../../../scripts/cdn-etags.json', import.meta.url);
 
@@ -35,7 +35,7 @@ describe.skipIf(!existsSync(file))('CDN survey (scripts/cdn-etags.json)', () => 
         }
       }
       // The shared fonts too: a surah name or a juz name fetches them from the same CDN.
-      for (const font of [def.sharedFonts.surahNames, def.sharedFonts.common]) {
+      for (const font of sharedFontsOf(def)) {
         const entry = survey.entries[font.cdnUrl];
         if (!entry) missing.push(font.cdnUrl);
         else if (entry.cors !== '*') missing.push(`${font.cdnUrl} (cors ${entry.cors})`);

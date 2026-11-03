@@ -226,6 +226,7 @@ bun run build && bun run --cwd apps/mushaf-web dev   # the web app, at http://lo
 | `<MushafLine page={10} line={3} />`      | Same, resolving the line at render time. Header and basmalah lines render too. |
 | `<MushafSurahName surah={9} />`          | A surah's name in its printed frame, from QUL's surah-name font.               |
 | `<MushafJuzName juz={1} />`              | A juz's name, from QUL's `quran-common` font.                                  |
+| `<MushafPageHeader juz={22} surah={36} />` | A page's running header: the juz top right, the surah top left, from QUL's page-header fonts. |
 | `slideFade()`, `revealRtl()`             | Presentations for `enter` / `exit`. Any DOM presentation from `@remotion/transitions` works too. |
 | `loadPageFont()`, `loadSharedFont()`, `loadMushafData()` | Preload a font or the data, e.g. for a `<Player>`.                    |
 | `getMushafFontFile({page, theme})`       | A font's file name, format and CDN URL, for a `fontSrc` resolver (`{font}` for the shared fonts). |

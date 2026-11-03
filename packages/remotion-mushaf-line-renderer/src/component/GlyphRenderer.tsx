@@ -2,7 +2,13 @@ import type * as React from 'react';
 import {useRef} from 'react';
 import {useCurrentFrame, useVideoConfig} from 'remotion';
 import {getEnterState, getExitState, normaliseAnimation} from '../animation/animation-state';
-import {fontOfGlyph, type MushafDefinition, type MushafGlyph, type SharedFontDefinition} from '../mushaf/registry';
+import {
+  fontOfGlyph,
+  type MushafDefinition,
+  type MushafGlyph,
+  type SharedFontDefinition,
+  sharedFontsOf,
+} from '../mushaf/registry';
 import type {MushafFontFallback, MushafFontSrc, MushafLineAnimationProp} from '../types';
 import {useCanvasGuard} from './hooks/use-canvas-guard';
 import {useSharedFontGate} from './hooks/use-shared-font-gate';
@@ -19,6 +25,8 @@ export type GlyphItem = {
    * frames); `'baseline'` leaves it on the baseline the font's metrics give, as a line of text.
    */
   readonly align: 'center' | 'baseline';
+  /** Where the glyph sits across the box: `'center'` (default), or against its `'right'` or `'left'` edge. */
+  readonly side?: 'center' | 'right' | 'left';
 };
 
 export type GlyphRendererProps = {
@@ -76,7 +84,7 @@ export const GlyphRenderer: React.FC<GlyphRendererProps> = ({
   const rowRef = useRef<HTMLDivElement>(null);
   // One face per font, whatever the number of glyphs, the surah-name font first: it names the
   // origin of a header, and it is the one a header cannot do without.
-  const fonts: SharedFontDefinition[] = [def.sharedFonts.surahNames, def.sharedFonts.common].filter((font) =>
+  const fonts: SharedFontDefinition[] = sharedFontsOf(def).filter((font) =>
     items.some((item) => fontOfGlyph(def, item.glyph) === font),
   );
   const gate = useSharedFontGate({def, fonts, fontSrc, fontFallback, label});
@@ -106,6 +114,7 @@ export const GlyphRenderer: React.FC<GlyphRendererProps> = ({
               fontSize: item.fontSize,
               lineHeight,
               shiftEm: item.align === 'center' ? glyphShiftEm(font, item.glyph) : 0,
+              side: item.side ?? 'center',
             })}
           >
             {item.glyph.text}

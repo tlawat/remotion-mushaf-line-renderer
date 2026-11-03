@@ -155,6 +155,8 @@ export type GlyphStyleInput = {
   readonly lineHeight: number;
   /** Vertical correction in em, so the glyph's ink (not its em box) sits in the middle; 0 keeps the baseline. */
   readonly shiftEm: number;
+  /** Where the glyph sits across the row (`text-align`); default `'center'`. */
+  readonly side?: 'center' | 'right' | 'left';
 };
 
 /**
@@ -162,14 +164,20 @@ export type GlyphStyleInput = {
  * a single line box as tall as the row, then shifted by the glyph's own band so its ink is centred.
  * Every metric-affecting property is pinned, as on the word row.
  */
-export const buildGlyphStyle = ({fontFamily, fontSize, lineHeight, shiftEm}: GlyphStyleInput): React.CSSProperties => ({
+export const buildGlyphStyle = ({
+  fontFamily,
+  fontSize,
+  lineHeight,
+  shiftEm,
+  side = 'center',
+}: GlyphStyleInput): React.CSSProperties => ({
   position: 'absolute',
   top: 0,
   right: 0,
   bottom: 0,
   left: 0,
   display: 'block',
-  textAlign: 'center',
+  textAlign: side,
   direction: 'rtl',
   unicodeBidi: 'isolate',
   whiteSpace: 'nowrap',

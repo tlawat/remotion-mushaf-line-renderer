@@ -32,7 +32,7 @@ export const fontFileFor = (def: MushafDefinition, fontSet: FontSetDefinition, p
   };
 };
 
-/** A shared font (surah names, quran-common) as a file: one per mushaf, named after the font. */
+/** A shared font (the header fonts, surah names, quran-common) as a file: one per mushaf, named after the font. */
 export const sharedFontFileFor = (def: MushafDefinition, font: SharedFontDefinition): MushafSharedFontFile => ({
   kind: 'shared',
   mushaf: def.id,

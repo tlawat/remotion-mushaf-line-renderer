@@ -4,8 +4,9 @@
 # fonts. The exports and the ETag survey are committed to the branch the workflow ran on; font files
 # are checked and uploaded with the report, never committed.
 #
-# Runs on "Run workflow" (inputs below) and on pushes that touch the data tools or this file
-# (defaults: data on, fonts 1,10,187,604, compare off, commit on).
+# Runs on "Run workflow" (inputs below) and on branch pushes that touch the data tools or this file
+# (defaults: data on, fonts 1,10,187,604, compare off, commit on). Tag pushes do not run it: a tag
+# has no branch to commit to.
 #
 # What gets committed (when committing is on):
 #   example/public/data/qpc-v4/{words.json.zip,layout.db.zip}      the mirrored exports (open data)
@@ -32,6 +33,7 @@ on:
         default: true
         type: boolean
   push:
+    branches: ['**']
     paths:
       - '.github/workflows/qul-assets.yml'
       - 'scripts/qul.mjs'
@@ -103,6 +105,10 @@ jobs:
             node scripts/qul.mjs verify --data --pages "$FONTS" 2>&1 | tee verify.log
           fi
           exit 0
+
+      # Mushaf Studio's unit tests import the renderer through its package exports (dist/).
+      - name: Build the packages (the renderer, then Mushaf Studio)
+        run: bun run build
 
       - name: Validate the mirrored exports with the package tests (the runtime loader, the invariants, the dev-tools route)
         run: bun run test

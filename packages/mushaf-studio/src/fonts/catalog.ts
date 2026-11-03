@@ -16,8 +16,8 @@ export type QulFontResource = {
   readonly id: string;
   readonly name: string;
   readonly kind: QulFontKind;
-  /** QUL's resource id, for `https://qul.tarteel.ai/resources/font/<id>`. */
-  readonly qulResource: number;
+  /** QUL's resource id (or slug), for `https://qul.tarteel.ai/resources/font/<id>`. */
+  readonly qulResource: number | string;
   readonly script: string;
   /** Pages, for page fonts. */
   readonly pages?: number;
@@ -78,6 +78,26 @@ export const QUL_FONTS: readonly QulFontResource[] = [
     formats: ['woff2', 'ttf'],
     supported: false,
     notes: 'Needs the V2 word script and the 15-line V2 layout export (QUL mushaf layout 10).',
+  },
+  {
+    id: 'header-surah-name',
+    name: 'Surah name page-header font',
+    kind: 'shared',
+    qulResource: 591,
+    script: "Ligatures: surahs 2-114 in a page's running header, top left (page 1 has none)",
+    cdnUrl: `${CDN}/header/surah-name/header-surah-name.{format}`,
+    formats: ['woff2', 'woff', 'ttf'],
+    supported: true,
+  },
+  {
+    id: 'header-juz',
+    name: 'Juz name page-header font',
+    kind: 'shared',
+    qulResource: 'juz-name-header-font',
+    script: "Ligatures: the 30 juz names in a page's running header, top right",
+    cdnUrl: `${CDN}/header/juz-name/header-juz.{format}`,
+    formats: ['woff2', 'woff', 'ttf'],
+    supported: true,
   },
   {
     id: 'surah-names-v4',

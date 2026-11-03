@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Surah names, the basmalah and juz names: the shared fonts through <MushafLine> (header lines),
-// <MushafSurahName> and <MushafJuzName>.
+// <MushafSurahName>, <MushafJuzName> and <MushafPageHeader>.
 import {act, cleanup, render, waitFor} from '@testing-library/react';
 import React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -22,6 +22,7 @@ vi.mock('../../src/data/load-layout', async () => {
 const {MushafLine} = await import('../../src/component/MushafLine');
 const {MushafSurahName} = await import('../../src/component/SurahName');
 const {MushafJuzName} = await import('../../src/component/JuzName');
+const {MushafPageHeader} = await import('../../src/component/PageHeader');
 const {getMushafLine} = await import('../../src/resolve/get-mushaf-line');
 const {resetFontStore, getFontStatus} = await import('../../src/fonts/font-store');
 const {fade} = await import('@remotion/transitions/fade');
@@ -335,5 +336,60 @@ describe('<MushafSurahName> and <MushafJuzName>', () => {
     });
     await visible(b.container);
     expect(remotion.hook.continueRender).toHaveBeenCalledWith(handles[1]);
+  });
+});
+
+describe('<MushafPageHeader>', () => {
+  const HEADER_SURAH_URL = 'https://static-cdn.tarteel.ai/qul/fonts/header/surah-name/header-surah-name.woff2';
+  const HEADER_JUZ_URL = 'https://static-cdn.tarteel.ai/qul/fonts/header/juz-name/header-juz.woff2';
+  const ROOT = '.mushaf-page-header';
+
+  it('sets the juz at the right and the surah at the left, from the page-header fonts', async () => {
+    const {container} = render(<MushafPageHeader juz={22} surah={36} className="top" />);
+    const root = container.querySelector<HTMLElement>(ROOT)!;
+    expect(root.className).toBe('mushaf-page-header top');
+    expect(root.dataset).toMatchObject({mushaf: 'qpc-v4', juz: '22', surah: '36'});
+    expect(root.style.height).toBe('246px');
+    const [juz, surah] = glyphs(container);
+    expect(glyphs(container)).toHaveLength(2);
+    expect(juz!.dataset).toMatchObject({glyph: 'juz-name', font: 'header-juz'});
+    expect(juz!.textContent).toBe('\uE016');
+    expect(juz!.style.textAlign).toBe('right');
+    expect(juz!.style.fontFamily).toBe('"mushaf-header-juz"');
+    expect(surah!.dataset).toMatchObject({glyph: 'surah-name', font: 'header-surah-name'});
+    expect(surah!.textContent).toBe('\uE024');
+    expect(surah!.style.textAlign).toBe('left');
+    expect(surah!.style.fontSize).toBe('112px');
+    expect(fetched()).toEqual([HEADER_SURAH_URL, HEADER_JUZ_URL]);
+    await visible(container, ROOT);
+    expect(root.dataset.fontOrigin).toBe('cdn');
+  });
+
+  it('sets one side alone', async () => {
+    const {container} = render(<MushafPageHeader juz={1} />);
+    expect(glyphs(container).map((g) => [g.dataset.font, g.style.textAlign])).toEqual([['header-juz', 'right']]);
+    expect(container.querySelector<HTMLElement>(ROOT)!.dataset.surah).toBeUndefined();
+    await visible(container, ROOT);
+    cleanup();
+    const surah = render(<MushafPageHeader surah={2} />);
+    expect(glyphs(surah.container).map((g) => [g.dataset.font, g.style.textAlign])).toEqual([
+      ['header-surah-name', 'left'],
+    ]);
+  });
+
+  it('refuses a header with nothing in it, and numbers out of range', () => {
+    const cases: Array<[() => React.ReactElement, string]> = [
+      [() => <MushafPageHeader />, 'BAD_PAGE_HEADER'],
+      [() => <MushafPageHeader juz={31} />, 'JUZ_OUT_OF_RANGE'],
+      [() => <MushafPageHeader juz={1} surah={0} />, 'SURAH_OUT_OF_RANGE'],
+      // Al-Fatihah fills page 1, which has no running header.
+      [() => <MushafPageHeader juz={1} surah={1} />, 'SURAH_OUT_OF_RANGE'],
+    ];
+    for (const [element, code] of cases) {
+      const onError = vi.fn();
+      render(<Boundary onError={onError}>{element()}</Boundary>);
+      expect(onError.mock.calls[0]?.[0]).toMatchObject({code});
+      cleanup();
+    }
   });
 });

@@ -70,6 +70,8 @@ jobs:
           test -f example/public/fonts/qpc-v4-tajweed/p10.ttf \
             && test -f example/public/fonts/surah-names-v4/surah_names.woff2 \
             && test -f example/public/fonts/quran-common/quran-common.woff2 \
+            && test -f example/public/fonts/header-surah-name/header-surah-name.woff2 \
+            && test -f example/public/fonts/header-juz/header-juz.woff2 \
             || bun run qul fonts 10
 
       - name: Mirror of QUL's exports for the real-data tests (when not committed)

@@ -22,7 +22,9 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
   down to single palette entries.
 - **Surah names and juz names.** Header lines set the surah's name in its printed ornamental frame
   and basmalah lines the basmalah, from QUL's surah-name and `quran-common` fonts; `<MushafSurahName>`
-  and `<MushafJuzName>` set them on their own (see [Surah names and juz names](#surah-names-and-juz-names)).
+  and `<MushafJuzName>` set them on their own, and `<MushafPageHeader>` sets a page's running header
+  (the juz top right, the surah top left) from QUL's page-header fonts (see
+  [Surah names and juz names](#surah-names-and-juz-names)).
 - **Loud.** Every failure is a `MushafError` with a stable `code` and a message that names the fix.
 
 ## Contents
@@ -708,13 +710,15 @@ keeps the line-sized travel).
 
 ## Surah names and juz names
 
-The page fonts hold a page's words only. Two more fonts QUL publishes hold what is printed around
-them, and the package draws from both:
+The page fonts hold a page's words only. Four more fonts QUL publishes hold what is printed around
+them, and the package draws from them:
 
 | Font                                                              | Holds                                                                                        | Size (woff2) |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------ |
 | `surah-names-v4` ([QUL resource 237](https://qul.tarteel.ai/resources/font/237), the V4 surah-name font) | The 114 surah names as written above their first ayah, and the basmalah.       | 830 KB       |
 | `quran-common` ([QUL resource 459](https://qul.tarteel.ai/resources/font/459), the juz-name font)      | The 30 juz names and the ornamental frame a surah name is printed in.                | 67 KB      |
+| `header-surah-name` ([QUL resource 591](https://qul.tarteel.ai/resources/font/591), the surah-name page-header font) | Surahs 2–114 as a page's running header sets them (top left). Page 1 (Al-Fatihah) has no running header, so no glyph for surah 1. | 62 KB |
+| `header-juz` ([the juz-name page-header font](https://qul.tarteel.ai/resources/font/juz-name-header-font)) | The 30 juz names as a page's running header sets them (top right).               | 21 KB        |
 
 They are fetched from QUL's CDN by default, like the page fonts, behind `delayRender()`, and nothing
 is painted before they are in. Their glyphs are plain outlines in Chromium (so in every Remotion
@@ -756,13 +760,31 @@ line's sizing, animation and font props (`fontSize`, `lineHeight`, `style`, `cla
 `surah` is 1–114 (`SURAH_OUT_OF_RANGE` otherwise) and `juz` 1–30 (`JUZ_OUT_OF_RANGE`). The layout
 data carries no juz boundaries, so which juz a line belongs to is yours to say.
 
+### `<MushafPageHeader juz surah>`
+
+The running header printed at the top of a page: the juz's name against the right edge and the
+surah's name against the left, from the two page-header fonts, in a block of `width: 100%` and
+height `lineHeight`, with the same sizing, animation and font props as `<MushafJuzName>`. Give it
+the width of the page's lines so the names line up with them. Either side may be left out; neither
+is `BAD_PAGE_HEADER`. `surah` is 2–114: Al-Fatihah fills page 1, which has no running header, so
+`surah={1}` is `SURAH_OUT_OF_RANGE`:
+
+```tsx
+<MushafPageHeader juz={22} surah={36} style={{width: measure}} />   {/* page 440 */}
+<MushafPageHeader juz={1} />                                         {/* the juz alone */}
+```
+
+The layout data carries no juz, so which juz and surah a page belongs to is yours to say, as with
+`<MushafJuzName>`.
+
 ### Loading and mirroring the shared fonts
 
 - **Fonts.** `fontSrc` reaches these fonts too: a resolver receives a `MushafFontFile` with
-  `kind: 'shared'`, `font` (`'surah-names-v4'` or `'quran-common'`), `fileName` (`surah_names.woff2`,
-  `quran-common.woff2`) and `cdnUrl`. The fonts packages hold page fonts only, so a package as
+  `kind: 'shared'`, `font` (`'surah-names-v4'`, `'quran-common'`, `'header-surah-name'` or
+  `'header-juz'`), `fileName` (`surah_names.woff2`, `quran-common.woff2`, `header-surah-name.woff2`,
+  `header-juz.woff2`) and `cdnUrl`. The fonts packages hold page fonts only, so a package as
   `fontSrc` is refused with `BAD_FONT_SRC` by anything that needs a shared font, and `fontFallback`
-  never applies to them. To serve them yourself, put the two files in `public/` (this repository's
+  never applies to them. To serve them yourself, put the files in `public/` (this repository's
   `bun run qul fonts` downloads them, and the CDN URLs are in `getMushafFontFile({font})`) and
   resolve them there; a resolver may return a fonts package for the page files, so one resolver
   covers everything:
@@ -788,6 +810,12 @@ data carries no juz boundaries, so which juz a line belongs to is yours to say.
 <div class="mushaf-line" data-line-type="basmallah" ...><div class="mushaf-line__row"><span class="mushaf-glyph mushaf-glyph--basmalah" ...>...</span></div></div>
 <div class="mushaf-surah-name" data-surah="9" data-framed="true" ...><div class="mushaf-surah-name__row">...</div></div>
 <div class="mushaf-juz-name" data-juz="22" ...><div class="mushaf-juz-name__row"><span class="mushaf-glyph mushaf-glyph--juz-name" ...>&#xE016;</span></div></div>
+<div class="mushaf-page-header" data-juz="22" data-surah="36" ...>
+  <div class="mushaf-page-header__row">
+    <span class="mushaf-glyph mushaf-glyph--juz-name" data-font="header-juz" style="text-align:right">&#xE016;</span>
+    <span class="mushaf-glyph mushaf-glyph--surah-name" data-font="header-surah-name" style="text-align:left">&#xE024;</span>
+  </div>
+</div>
 ```
 
 Each glyph fills its row and is centred in it by `text-align` and a single line box; a `transform`
@@ -1018,7 +1046,8 @@ across package copies.
 | Code                                     | Meaning and fix                                                                                                                                |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UNKNOWN_MUSHAF`                         | `mushaf` is not `'qpc-v4'`.                                                                                                                    |
-| `UNKNOWN_FONT`                           | `font` is not `'surah-names-v4'` or `'quran-common'`.                                                                                          |
+| `UNKNOWN_FONT`                           | `font` is not `'surah-names-v4'`, `'quran-common'`, `'header-surah-name'` or `'header-juz'`.                                                   |
+| `BAD_PAGE_HEADER`                        | `<MushafPageHeader>` was given neither a `juz` nor a `surah`.                                                                                  |
 | `SURAH_OUT_OF_RANGE`, `JUZ_OUT_OF_RANGE` | `surah` must be `1..114`, `juz` `1..30`.                                                                                                        |
 | `BAD_THEME`                              | `theme` must be `'plain'`, a preset name or `{base, colors?, marker?}`; a base the font lacks, an entry outside 0–15 or an unknown part. |
 | `BAD_COLOR`                              | A theme colour is not a CSS colour.                                                                                                            |

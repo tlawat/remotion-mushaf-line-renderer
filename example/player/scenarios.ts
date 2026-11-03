@@ -6,7 +6,7 @@ import {defaultLineHarnessProps, type LineHarnessProps} from '../src/harness/Lin
 export const FIXTURE_FONT_URL = '/fonts/qpc-v4-tajweed/p10.ttf';
 /** QUL's two exports, mirrored by `bun run qul data` into example/public. */
 export const MIRROR_DATA = {words: '/data/qpc-v4/words.json.zip', layout: '/data/qpc-v4/layout.db.zip'};
-/** The two shared fonts (surah names, quran-common), copied by `bun run qul fonts` into example/public/fonts/<id>/. */
+/** The shared fonts (the header fonts, surah names, quran-common), copied by `bun run qul fonts` into example/public/fonts/<id>/. */
 export const SHARED_FONTS_URL = '/fonts';
 /** Page 10 line 3 in the colour font: 2:62 ends and 2:63 begins on it (the fixture font's page). */
 const P10_L3 = {theme: 'light', page: 10, line: 3} as const;
