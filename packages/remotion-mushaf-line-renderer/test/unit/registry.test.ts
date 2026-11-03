@@ -156,7 +156,7 @@ describe('mushaf registry', () => {
       text: '\uFCAA\uFCAB\uFCAE\uFCB4',
       bandCenter: 1418,
     });
-    expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 192});
+    expect(glyphs.juzName(1)).toEqual({font: 'common', kind: 'juz-name', text: '\uE001', bandCenter: 317});
     expect(glyphs.juzName(30).text).toBe('\uE01E');
     expect(glyphs.headerFrame).toEqual({font: 'common', kind: 'frame', text: '\uE000', bandCenter: 320, advance: 8240});
     expect(assertSurahNumber(114)).toBe(114);
