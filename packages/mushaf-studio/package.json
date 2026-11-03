@@ -64,7 +64,7 @@
     "@remotion/zod-types": "4.0.539",
     "@tlawat/remotion-mushaf-line": "workspace:*",
     "remotion": "4.0.539",
-    "zod": "4.6.7"
+    "zod": "4.5.4"
   },
   "publishConfig": {
     "access": "public",
