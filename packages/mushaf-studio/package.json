@@ -58,12 +58,12 @@
     "zod": ">=4.0.0"
   },
   "devDependencies": {
-    "@remotion/media": "4.0.521",
-    "@remotion/studio": "4.0.521",
-    "@remotion/transitions": "4.0.521",
-    "@remotion/zod-types": "4.0.521",
+    "@remotion/media": "4.0.539",
+    "@remotion/studio": "4.0.539",
+    "@remotion/transitions": "4.0.539",
+    "@remotion/zod-types": "4.0.539",
     "@tlawat/remotion-mushaf-line": "workspace:*",
-    "remotion": "4.0.521",
+    "remotion": "4.0.539",
     "zod": "4.5.4"
   },
   "publishConfig": {

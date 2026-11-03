@@ -298,7 +298,8 @@ export const assertJuzNumber = (juz: unknown): number => {
 /**
  * Where each kind of glyph sits: the middle of its vertical extent, in font units above the baseline,
  * as the median over its family of glyphs in the fonts as published (surah names -987..1843, juz
- * names -334..725, the frame -188..828). The basmalah is set on the
+ * names -109..737 since QUL redrew them in quran-common 3.4, October 2026; -334..725 before, centred
+ * at 192), the frame -188..828). The basmalah is set on the
  * page baseline like a line of text, so its band is not used.
  */
 const V4_GLYPHS: MushafGlyphs = {
@@ -316,7 +317,7 @@ const V4_GLYPHS: MushafGlyphs = {
     font: 'common',
     kind: 'juz-name',
     text: String.fromCodePoint(0xe000 + assertJuzNumber(juz)),
-    bandCenter: 192,
+    bandCenter: 317,
   }),
   // The `header` ligature: an ornamental frame 8,240 units wide with the name's box in the middle.
   headerFrame: {font: 'common', kind: 'frame', text: '\uE000', bandCenter: 320, advance: 8240},
