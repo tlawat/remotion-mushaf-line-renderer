@@ -445,7 +445,7 @@ export type MushafJuzNameProps = MushafGlyphCommonProps & {
 export type MushafPageHeaderProps = MushafGlyphCommonProps & {
   /** The juz the page is in (1-30), set at the top right; omit it to leave that side empty. */
   readonly juz?: number | undefined;
-  /** The surah the page is in (1-114), set at the top left; omit it to leave that side empty. */
+  /** The surah the page is in (2-114; page 1 has no running header), set at the top left; omit it to leave that side empty. */
   readonly surah?: number | undefined;
 };
 
