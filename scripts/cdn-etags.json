@@ -1,9 +1,9 @@
 {
- "generatedAt": "2026-10-13T06:14:46.843Z",
+ "generatedAt": "2026-11-03T19:09:07.440Z",
  "base": "https://static-cdn.tarteel.ai/qul/fonts/quran_fonts/v4-tajweed/woff2",
  "entries": {
   "https://static-cdn.tarteel.ai/qul/fonts/common/quran-common.ttf": {
-   "etag": "\"97045984517d213634519dfe4111de43\"",
+   "etag": "W/\"97045984517d213634519dfe4111de43\"",
    "contentType": "font/ttf",
    "contentLength": 171968,
    "cors": "*"
