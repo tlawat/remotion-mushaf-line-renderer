@@ -89,9 +89,15 @@ A unit test pins the shapes these read, so a Remotion upgrade that changes them 
 - The dock keeps a module-level "live props" record from `useLiveEditorProps()` on every render.
 - `patchProps(target, patch)` builds the save from
   `live[compositionId] ?? savedDefaultProps`, never from `savedDefaultProps` alone, and only adds
-  the **in-flight** patches: the ones sent but not yet echoed back in the live props
-  (`unappliedPart(live, inFlight)`), cleared by the first live props seen after the save (what
-  they lack is offered back or is the user's, never kept for a later save). No cumulative replay.
+  the **in-flight** parts of the panel's saves of that composition, every target's (every save
+  writes the whole composition): what was sent and no live props have shown yet. No cumulative
+  replay. Remotion 4.0.539 sends one echo per write of the Root, in write order, and a Props-sidebar
+  edit first shows as a local object (`updateProps()`) built from what the sidebar showed, then as
+  its echo. So a live object without a save's values is older than the save's echo until some live
+  object has shown them: it is not judged, and later saves keep carrying them. Once shown, a
+  live object without them is a newer write (see Restore below). What no live props have shown
+  `RACE_WINDOW_MS` after the save resolved stops being carried and is offered back, judged by a
+  timer when nothing new comes: no one can have chosen to drop a value never shown.
 - Saves run one at a time (a promise queue), so two quick saves never start from one snapshot.
 - `target` is `{compositionId, propsKey?}`. With `propsKey`, the patch is applied under
   `defaultProps[propsKey]`; when that value is `null` or missing, the base is
@@ -106,8 +112,11 @@ A unit test pins the shapes these read, so a Remotion upgrade that changes them 
 - `patchOtherComposition()` (thumbnail) uses the same live base and keeps the thumbnail's own
   title when the reciter is empty.
 - The panel watches for its saved fields disappearing from the live props and offers **Restore**
-  instead of writing silently: within `RACE_WINDOW_MS` of a save, what that save wrote (a sidebar
-  save can race a panel save); at any time, when the live props are the page-load props again,
+  instead of writing silently: within `RACE_WINDOW_MS` of live props first showing a save, what
+  that save wrote, when a writer that had not seen it wrote over it (a sidebar save built before
+  the panel's echo: some of the fields are back at the save's old values and the object differs
+  elsewhere too). The Studio's undo of the save (only its fields differ, back at their old values)
+  and a value of the user's own in the field are the user's. At any time, when the live props are the page-load props again,
   what every panel save of the session wrote (the Props sidebar's JSON "Reset"; the Studio's undo
   all the way back and a checkout of the Root look the same, so the notice says what is gone, not
   why). A field the user changed since is theirs and is not offered; each value is offered once,
@@ -230,7 +239,8 @@ the text, each for the reason given. A unit test covers each.
 
 - `StudioTarget` is `{compositionId, propsKey?, emptyProps?}`: the slot passes
   `emptySlotPropsFor(kind)` as `emptyProps`, so `studio-api.ts` needs no knowledge of the kinds.
-- The race window is `RACE_WINDOW_MS` (5 s). The page-load comparison (a JSON Reset) works at any
+- The race window is `RACE_WINDOW_MS` (5 s), from when live props first showed a save, or from when
+  it resolved for a save no live props showed (a timer judges it then). The page-load comparison (a JSON Reset) works at any
   time, against what every panel save of the session wrote.
 
 ### 3.2 Data reliability (2.3)
@@ -261,6 +271,10 @@ the text, each for the reason given. A unit test covers each.
 - Two panels with one target key dock once (`dockOwnerOf()`): the first mounted owns the dock and
   the dock's notices; each marks its doubts at its own start, and ends them with its box
   (`durationInFrames`).
+- Props with something to resolve (a `timingsFile`, an ayah text's `textFile`) whose `resolved`
+  holds neither timings nor an error were never given to the resolver: the slot throws
+  `BAD_STUDIO_PROP` naming the resolver outside the Studio's preview (`unresolvedSlotErrorOf()`),
+  and the panel shows the same message, instead of an empty box in a finished video.
 
 ### 3.4 Audio sources (2.5)
 
@@ -273,6 +287,25 @@ the text, each for the reason given. A unit test covers each.
 - "Play audioFile in the composition again" turns `hostAudio` off from Source.
 - The app's `MushafInTemplate` mutes its own track while the slot plays its own recording, so two
   recitations never play at once; it keeps the track on the timeline, so Source still offers it.
+- The compositions' own background video is named `OWN_BACKGROUND_NAME` and left out of the
+  template's tracks, like their `<Audio>`.
+- The track picker opens on the track followed now; an option with a negative offset says the track
+  starts that many seconds after the recitation.
+- When no track on the timeline plays the followed `audioFile` any more (after `TIMELINE_SETTLE_MS`
+  for the timeline to register), the dock and the "Now:" line say so; the dock offers to follow the
+  track of the saved name now playing another file, or to play `audioFile` again.
+- Under `hostAudio`, every choice that brings another recording (Download, Align of another file,
+  Replace the audio only) says before it is pressed, and again in a notice once saved, that the
+  composition stops following the template's track and that the template must mute it.
+- The "Now:" line names how the timings were made (catalogue, aligner) only when their `audio` is
+  the file the composition plays (or the catalogue clip they name); after Replace the audio only it
+  says the timings are of another recording, and Align works on the new file.
+- "Align this file" in "A file already in public/" aligns the file the composition plays even when
+  the catalogue timed it: staged by name, it is the user's request.
+- The catalogue's clip host is asked of aligner.qud.dev (`getChapterAudioUrl()`, no audio) once a
+  pick has settled, so the note names it before Download.
+- Project files leave `hostAudio` out (it is the template's); an import that brings another
+  `audioFile` into a composition that follows a track turns `hostAudio` off, as a new recording does.
 
 ### 3.5 Options that conflict (2.6)
 

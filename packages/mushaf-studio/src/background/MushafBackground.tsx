@@ -10,6 +10,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import {OWN_BACKGROUND_NAME} from '../audio/host';
 import {fileUrl} from '../compositions/shared';
 import type {Background, Glow, KenBurns} from './schema';
 
@@ -157,12 +158,12 @@ export const MushafBackground: React.FC<MushafBackgroundProps> = ({
         <Loop
           durationInFrames={Math.max(1, Math.round(background.videoSeconds * fps))}
           layout="none"
-          name="Background video"
+          name={OWN_BACKGROUND_NAME}
         >
           <OffthreadVideo src={src} muted style={style} />
         </Loop>
       );
-    else media = <Html5Video src={src} muted loop style={style} />;
+    else media = <Html5Video src={src} muted loop style={style} name={OWN_BACKGROUND_NAME} />;
   }
   return (
     <AbsoluteFill data-mushaf-background={background.kind} style={backgroundBaseStyle(background)}>

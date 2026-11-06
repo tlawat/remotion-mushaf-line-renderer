@@ -14,6 +14,7 @@ import {resolvePageProps} from '../page/calculate-metadata';
 import type {MushafPageProps} from '../page/schema';
 import {resolveAyahTextProps} from '../unicode/calculate-metadata';
 import type {MushafAyahTextProps} from '../unicode/schema';
+import type {MushafSlotKind} from './schema';
 
 /** What a slot resolver takes from the template's `calculateMetadata()`. */
 export type ResolveSlotOptions = {
@@ -67,17 +68,51 @@ export const slotDurationOf = (props: {readonly resolved?: unknown} | null | und
   return typeof frames === 'number' && Number.isFinite(frames) ? Math.max(0, Math.round(frames)) : 0;
 };
 
+/**
+ * Whether slot props of `kind` have nothing to resolve yet: an empty `timingsFile`, or an empty
+ * `textFile` for an ayah text. A resolver leaves `resolved` null for them.
+ */
+export const slotIsEmpty = (
+  kind: MushafSlotKind,
+  props: {readonly timingsFile?: unknown; readonly textFile?: unknown},
+): boolean => props.timingsFile === '' || (kind === 'ayah-text' && props.textFile === '');
+
+const RESOLVERS: Readonly<Record<MushafSlotKind, string>> = {
+  recitation: 'resolveMushafRecitationSlot',
+  'ayah-text': 'resolveMushafAyahTextSlot',
+  page: 'resolveMushafPageSlot',
+};
+
+/**
+ * Why slot props of `kind` show nothing when no resolver has filled them in: props with something to
+ * resolve whose `resolved` holds neither timings nor an error (a template that forgot the resolver
+ * in `calculateMetadata()`, or returned without putting its `props` back). `null` otherwise.
+ */
+export const unresolvedSlotErrorOf = (
+  kind: MushafSlotKind,
+  props: {readonly resolved?: unknown; readonly timingsFile?: unknown; readonly textFile?: unknown} | null,
+  propsKey: string,
+): string | null => {
+  if (props === null || slotIsEmpty(kind, props) || slotErrorOf(props) !== null) return null;
+  if (isRecord(props.resolved) && 'timings' in props.resolved) return null;
+  return (
+    `the props are not resolved: call ${RESOLVERS[kind]}() in the template's calculateMetadata() ` +
+    `(or before passing the props to a <Player>) and put its .props back under "${propsKey}"`
+  );
+};
+
 const resolveSlot = async <P extends {readonly resolved?: unknown}>(
   props: P | null,
   options: ResolveSlotOptions,
-  empty: (props: P) => boolean,
+  kind: MushafSlotKind,
   resolve: (
     props: P,
     options: {readonly fps: number; readonly signal?: AbortSignal | undefined; readonly lenientSplits: boolean},
   ) => Promise<ResolvedProps<P>>,
 ): Promise<ResolvedSlot<P>> => {
   if (props === null) return {props: null, durationInFrames: 0, error: null};
-  if (empty(props)) return {props: {...props, resolved: null}, durationInFrames: 0, error: null};
+  if (slotIsEmpty(kind, props as {readonly timingsFile?: unknown}))
+    return {props: {...props, resolved: null}, durationInFrames: 0, error: null};
   const lenient = previewsLeniently(options.isRendering ?? false);
   try {
     const resolved = await resolve(props, {fps: options.fps, signal: options.abortSignal, lenientSplits: lenient});
@@ -109,8 +144,7 @@ const resolveSlot = async <P extends {readonly resolved?: unknown}>(
 export const resolveMushafRecitationSlot = (
   props: MushafRecitationProps | null,
   options: ResolveSlotOptions,
-): Promise<ResolvedSlot<MushafRecitationProps>> =>
-  resolveSlot(props, options, (p) => p.timingsFile === '', resolveRecitationProps);
+): Promise<ResolvedSlot<MushafRecitationProps>> => resolveSlot(props, options, 'recitation', resolveRecitationProps);
 
 /**
  * `resolveMushafRecitationSlot()` for `<MushafAyahText>` props (`<MushafAyahTextSlot>`): an empty
@@ -119,11 +153,10 @@ export const resolveMushafRecitationSlot = (
 export const resolveMushafAyahTextSlot = (
   props: MushafAyahTextProps | null,
   options: ResolveSlotOptions,
-): Promise<ResolvedSlot<MushafAyahTextProps>> =>
-  resolveSlot(props, options, (p) => p.timingsFile === '' || p.textFile === '', resolveAyahTextProps);
+): Promise<ResolvedSlot<MushafAyahTextProps>> => resolveSlot(props, options, 'ayah-text', resolveAyahTextProps);
 
 /** `resolveMushafRecitationSlot()` for `<MushafPage>` props (`<MushafPageSlot>`). */
 export const resolveMushafPageSlot = (
   props: MushafPageProps | null,
   options: ResolveSlotOptions,
-): Promise<ResolvedSlot<MushafPageProps>> => resolveSlot(props, options, (p) => p.timingsFile === '', resolvePageProps);
+): Promise<ResolvedSlot<MushafPageProps>> => resolveSlot(props, options, 'page', resolvePageProps);

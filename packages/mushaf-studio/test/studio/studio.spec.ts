@@ -331,7 +331,7 @@ test('MushafInTemplate docks the panel on the intro, offers its own audio track,
       "Now: the template's track Template audio plays public/mushaf-studio/fatiha/audio.mp3, from second 0",
     );
     const tracks = panel.getByRole('combobox', {name: 'Track'});
-    await expect(tracks.locator('option')).toHaveText(['Template audio · audio · second 0 at the start']);
+    await expect(tracks.locator('option')).toHaveText(["Template audio · audio · second 0 at the recitation's start"]);
     await expect(panel.getByRole('button', {name: 'Use this track'})).toBeEnabled();
     // In step with the track as the template places it: no timing to update.
     await expect(panel.locator('[data-mushaf-control="host-moved"]')).toHaveCount(0);

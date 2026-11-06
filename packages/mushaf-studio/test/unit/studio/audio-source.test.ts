@@ -23,9 +23,10 @@ const sidecar = (source: AlignmentSidecar['source']): AlignmentSidecar => ({
   words: [],
   edits: [],
 });
-const timings = (source: AlignmentSidecar['source'] | null): StudioTimings => ({
+const timings = (source: AlignmentSidecar['source'] | null, audio?: string): StudioTimings => ({
   version: 1,
   surah: 1,
+  ...(audio === undefined ? {} : {audio}),
   ayat: [{ayah: 1, start: 0, end: 1}],
   ...(source === null ? {} : {alignment: sidecar(source)}),
 });
@@ -33,11 +34,12 @@ const props = (
   rest: Partial<MushafRecitationProps>,
   source: AlignmentSidecar['source'] | null = null,
   audioSrc: string | null = null,
+  audio?: string,
 ): MushafRecitationProps => ({
   ...defaultMushafRecitationProps,
   audioFile: 'mushaf-studio/p/take.mp3',
   ...rest,
-  resolved: {timings: timings(source), audioSrc},
+  resolved: {timings: timings(source, audio), audioSrc},
 });
 const nothingStaged = {path: null, origin: 'upload' as const};
 
@@ -76,8 +78,39 @@ describe('nowSourceOf()', () => {
       host: 'hetchyy-quranic-universal-aligner.hf.space',
     });
     expect(nowSourceOf(props({}, 'qud'))).toEqual({kind: 'aligned', path: 'mushaf-studio/p/take.mp3'});
-    expect(nowSourceOf(props({}, 'manual'))).toEqual({kind: 'file', path: 'mushaf-studio/p/take.mp3'});
+    expect(nowSourceOf(props({}, 'manual'))).toEqual({
+      kind: 'file',
+      path: 'mushaf-studio/p/take.mp3',
+      otherTimings: null,
+    });
     expect(nowSourceOf({...defaultMushafRecitationProps, resolved: null}).kind).toBe('file');
+  });
+
+  it('names where the timings came from only when they were made for the file the composition plays', () => {
+    // The catalogue download wrote the clip under this name, or the stream was downloaded later.
+    expect(nowSourceOf(props({}, 'qud-catalogue', null, 'mushaf-studio/p/take.mp3')).kind).toBe('catalogue');
+    expect(nowSourceOf(props({}, 'qud-catalogue', null, CLIP)).kind).toBe('catalogue');
+    expect(nowSourceOf(props({}, 'qud', null, 'mushaf-studio/p/take.mp3')).kind).toBe('aligned');
+    // "Replace the audio only" with the user's own file: not downloaded from the catalogue, and alignable.
+    const replaced = props(
+      {audioFile: 'mushaf-studio/p/my-own-take.mp3'},
+      'qud-catalogue',
+      null,
+      'mushaf-studio/p/take.mp3',
+    );
+    expect(nowSourceOf(replaced)).toEqual({
+      kind: 'file',
+      path: 'mushaf-studio/p/my-own-take.mp3',
+      otherTimings: 'mushaf-studio/p/take.mp3',
+    });
+    expect(alignSourceOf(replaced, nothingStaged)).toEqual({
+      kind: 'file',
+      path: 'mushaf-studio/p/my-own-take.mp3',
+      origin: 'current',
+    });
+    expect(
+      nowSourceOf(props({audioFile: 'mushaf-studio/p/mine.mp3'}, 'qud', null, 'mushaf-studio/p/take.mp3')).kind,
+    ).toBe('file');
   });
 
   it('says when a missing file streams the catalogue clip, and when audioFile is a stream', () => {
@@ -133,6 +166,22 @@ describe('alignSourceOf()', () => {
       kind: 'file',
       path: 'mushaf-studio/p/take.mp3',
       origin: 'current',
+    });
+  });
+
+  it('aligns the catalogue clip itself when Source staged it by name, but never instead of a followed track', () => {
+    const staged = {path: 'mushaf-studio/p/take.mp3', origin: 'public' as const};
+    expect(alignSourceOf(props({}, 'qud-catalogue'), staged)).toEqual({
+      kind: 'file',
+      path: 'mushaf-studio/p/take.mp3',
+      origin: 'current',
+    });
+    expect(alignSourceOf(props({}, 'qud-catalogue'), {...staged, origin: 'upload'})).toEqual({kind: 'catalogue'});
+    const host = {enabled: true, offsetSeconds: 0, track: 'Template audio'};
+    expect(alignSourceOf(props({hostAudio: host}, 'qud-catalogue'), staged)).toEqual({
+      kind: 'file',
+      path: 'mushaf-studio/p/take.mp3',
+      origin: 'track',
     });
   });
 

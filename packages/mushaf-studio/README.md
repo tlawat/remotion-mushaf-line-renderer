@@ -248,11 +248,21 @@ line that says what it replaces:
 | --- | --- |
 | **Download from the catalogue** | **Download into public/**: the word timings from aligner.qud.dev and the clip of the ayahs from the host the aligner's answer names (a Hugging Face Space), both into `public/mushaf-studio/<project>/`. Nothing of yours is uploaded. When the clip cannot be downloaded nothing is saved: **Retry the download**, or **Stream from {host}**, which saves the clip's URL as `audioFile` (renders then need that host). |
 | **Upload my recording** | Copies the file into `public/` (it stays on this machine) and stages it for Align, which uploads it to aligner.qud.dev and says so first. The composition keeps playing what it plays until Align saves the timings. |
-| **A file already in public/** | **Align this file** (the default) stages it for Align; **Replace the audio only** sets `audioFile` and keeps the timings, with a warning that the highlight follows the old timings. |
-| **A track in this video** | Shown when the template has audio or video tracks on the Studio's timeline (the composition's own `<Audio>`, named `OWN_AUDIO_NAME`, is left out). **Use this track** sets `audioFile` to the track's file and turns `hostAudio` on with the second of it heard at the recitation's start. Only a track at speed 1 that does not loop can be followed. A `blob:` or `data:` track is written into `public/` once; using it again, or after a reload, maps it back to that file. |
+| **A file already in public/** | **Align this file** (the default) stages it for Align, the file the composition plays included (a catalogue clip can be aligned again this way); **Replace the audio only** sets `audioFile` and keeps the timings, with a warning that the highlight follows the old timings. |
+| **A track in this video** | Shown when the template has audio or video tracks on the Studio's timeline (the composition's own `<Audio>`, named `OWN_AUDIO_NAME`, and its own background video are left out). The picker opens on the track followed now. **Use this track** sets `audioFile` to the track's file and turns `hostAudio` on with the second of it heard at the recitation's start. Only a track at speed 1 that does not loop can be followed. A `blob:` or `data:` track is written into `public/` once; using it again, or after a reload, maps it back to that file. |
+
+Under `hostAudio`, a choice that brings another recording (a download, Align of another file,
+Replace the audio only) says first that the composition stops following the template's track, and
+says it again once saved: the template must then mute its track, or both play. When no track on the
+timeline plays the followed file any more, the dock says so and offers **Follow the track playing
+now** (a track of the saved name now playing another file) or **Play audioFile in the composition
+again**.
 
 The **Now:** line at the top says what the composition plays and where it came from (downloaded
-from the clip host, timed by the aligner, streaming a URL, the template's track). A stream, and a
+from the clip host, timed by the aligner, streaming a URL, the template's track, checked against the
+timeline), naming the origin only when the timings were made for that file: after **Replace the
+audio only** it says the timings are of another recording. The catalogue's clip host is asked of
+aligner.qud.dev (no audio) once a pick settles, so it is named before Download. A stream, and a
 missing `audioFile` the catalogue clip stands in for, get a **Download it into public/** button.
 Align works on the one recording Source staged for this composition, else on what it plays, and
 says which: a catalogue recitation is not aligned again (Review adjusts it); a URL is fetched by the
@@ -294,12 +304,15 @@ CLI and Lambda see the same inputs.
 - **Saves start from the Studio's live props.** In Remotion 4.0.539 the props `saveDefaultProps()`
   hands its callback are the Root as the page loaded it; the panel builds each save on the props the
   Studio shows now instead (its editor context, read in one module, `remotion-internals.ts`), adds
-  only its own saves still on their way, and runs saves one at a time. A Props-sidebar edit, the
-  Studio's undo or a hand edit of the Root is never put back to an old value.
-- **Restore.** When the live props lose what the panel saved (the sidebar's JSON Reset or the
-  Studio's undo going back to the props from when the page loaded, a sidebar save racing a panel
-  save), the dock names the fields and offers **Restore**; × keeps the props as they are. It never
-  writes them back on its own, and a field you changed since is yours: it is not offered.
+  only what its own saves of the composition sent and the Studio has not shown yet (quick saves all
+  land, even when the Studio's echoes come late), and runs saves one at a time. A Props-sidebar
+  edit, the Studio's undo or a hand edit of the Root is never put back to an old value.
+- **Restore.** When the live props lose what the panel saved (a Props-sidebar edit made before the
+  panel's save had come back, which writes the old values over it; the sidebar's JSON Reset or the
+  Studio's undo going back to the props from when the page loaded; a save the Studio never showed
+  within a few seconds), the dock names the fields and offers **Restore**; × keeps the props as they
+  are. It never writes them back on its own, and a field you changed since is yours, as is the
+  Studio's undo of a panel save: neither is offered.
 - **Reviewed timings are never replaced.** A new alignment or catalogue download writes
   `<name>.timings.json`, or, when that file has manual edits (nudges, a captions import: its
   `alignment.edits`) or other timings, the next free `<name>-2.timings.json`, `-3`, ..., and says
@@ -409,6 +422,10 @@ save into it, and every panel save fails.
   (`slotErrorOf()`), so the panel shows it and stays on screen to fix it. When rendering
   (`isRendering`, the CLI, Lambda) it rethrows, and the slot throws the message anywhere but the
   Studio's preview, the Studio's in-browser render included.
+- must run: props with a `timingsFile` that no resolver filled in (the resolver forgotten in
+  `calculateMetadata()`, or its `props` not put back under the key) would leave an empty box, so the
+  slot throws `BAD_STUDIO_PROP` naming the resolver anywhere but the Studio's preview, where the
+  panel says the same.
 
 **The slot component** takes the template's field as `props` and the key it lives under as
 `propsKey`, and renders the composition (`panel={false}`) in a `<Sequence>` with the panel docked
@@ -441,7 +458,7 @@ of its own, its words follow the template's track from `hostAudio.offsetSeconds`
 cleanup does nothing (the template's `<Audio>` owns its volume and fades), and `memorize` repeats
 are refused. The panel does it for you: Source lists the template's audio and video tracks from the
 Studio's timeline (**A track in this video**; the compositions' own `<Audio>` is `OWN_AUDIO_NAME`
-and left out), **Use this track** sets `audioFile` and the offset, and **Update timing** is offered
+and left out, with their own background video), **Use this track** sets `audioFile` and the offset, and **Update timing** is offered
 when the track moves on the timeline. Give the template's `<Audio>` a `name`: the panel matches the
 track by it (`hostAudio.track`). Only a track at speed 1 that does not loop can be followed, and a
 video track's sound is sent to the aligner as WAV. Once the slot plays a recording of its own again

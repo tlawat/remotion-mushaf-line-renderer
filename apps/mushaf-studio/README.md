@@ -155,7 +155,9 @@ it gives (page, ink, the current word's mark, the rosettes or the translation); 
 already have is ticked. A click saves the look's style props (theme, layout, animation,
 highlighting, text placement) into `src/Root.tsx` and never touches the content: the recitation,
 the timings, the ayah range, the splits and the translation files stay as they are. Fine-tune any
-of it in the Props sidebar afterwards. **Undo** puts back what the last look changed. Each
+of it in the Props sidebar afterwards. **Undo** steps back through the looks applied, last first,
+and puts back only the fields that still hold a look's values: a field you edited since keeps your
+value. Each
 composition shows the looks designed for it (`MushafAyahText` has no tajweed theme, so it gets no
 Tajweed light; it takes the page, ink and highlighting of the others). The looks are exported as
 `MUSHAF_LOOKS`, with `applyLook()`, for use in code.
@@ -165,7 +167,9 @@ Tajweed light; it takes the page, ink and highlighting of the others). The looks
 - **Night**: the dark tajweed theme on a deep blue-black page, the current word glowing.
 - **Black & gold**: warm white on black, the rosettes and the current word in gold.
 - **Sepia**: the sepia tajweed theme on an old-paper page, a soft marker behind the current word.
-- **Reel 9:16**: a vertical frame, one line at a time, wide margins, the translation below.
+- **Reel 9:16**: a vertical frame for reels and stories, one line at a time, the translation below.
+  Like every look it leaves the positions alone (margins, vertical position, offsets): set them in
+  the Props sidebar.
 - **Square post 1:1**: a square frame, three lines with faint neighbours, the translation below.
 - **Karaoke**: a bright marker that walks word by word, the other words dimmed.
 - **Study**: the translation below, a readable gloss strip, the current word in teal.

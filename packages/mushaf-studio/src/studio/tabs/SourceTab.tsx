@@ -1,11 +1,17 @@
 import type * as React from 'react';
 import {useEffect, useMemo, useRef} from 'react';
 import {followsHostAudio, hostAudioOf} from '../../audio/host';
-import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../qud';
+import {getChapterAudioUrl, getChapterSegments, listRecitations, timingsFromCatalogue} from '../../qud';
 import {isHafsRecitation} from '../../qud/riwayah';
 import type {QudChapterSegments, QudRecitation} from '../../qud/types';
 import {defaultSourceMode, hostOf, nowSourceOf, type SourceMode, VIDEO_EXTENSIONS} from '../audio-source';
-import {followedTrack, type HostAudioTrack, studioTrackFile, useHostAudioTracks} from '../host-tracks';
+import {
+  followedTrack,
+  type HostAudioTrack,
+  studioTrackFile,
+  useFollowedTrack,
+  useHostAudioTracks,
+} from '../host-tracks';
 import type {MessageKey} from '../i18n';
 import {saveRecording} from '../recording';
 import {
@@ -75,6 +81,9 @@ const stage = (key: string, path: string | null, origin: StagedOrigin = 'upload'
 const ownAudioAgain = (props: StudioCompositionProps) =>
   followsHostAudio(props) ? {hostAudio: {...hostAudioOf(props), enabled: false}} : {};
 
+/** The name of the template's track the composition follows, as the panel shows it. */
+const followedName = (props: StudioCompositionProps): string => hostAudioOf(props).track || baseName(props.audioFile);
+
 /** The file name at the end of a URL's path, decoded (`Take%201.mp3` is `Take 1.mp3`). */
 const decodedName = (path: string): string => {
   try {
@@ -85,10 +94,12 @@ const decodedName = (path: string): string => {
 };
 
 /** The line that says what the composition plays now, with the one action that fixes a stream. */
-const NowLine: React.FC<TabProps> = ({target, props, project}) => {
+const NowLine: React.FC<TabProps> = ({target, props, project, frameOffset}) => {
   const t = useT();
   const {busy} = useStudioState();
   const now = nowSourceOf(props);
+  // The saved props say a track plays it; the timeline says whether one still does.
+  const followed = useFollowedTrack(props, frameOffset);
   // A stream, or a missing file the catalogue clip stands in for: one click puts the file into public/.
   const download = (url: string, host: string, path: string | null) =>
     void runStudioTask(tNow('source.busy.downloadNow', {host}), async () => {
@@ -112,7 +123,7 @@ const NowLine: React.FC<TabProps> = ({target, props, project}) => {
       case 'none':
         return t('source.now.none');
       case 'track':
-        return t('source.now.track', {
+        return t(followed.kind === 'gone' ? 'source.now.trackGone' : 'source.now.track', {
           track: now.track || baseName(now.file),
           file: isUrl(now.file) ? now.file : `public/${now.file}`,
           offset: now.offsetSeconds,
@@ -128,7 +139,12 @@ const NowLine: React.FC<TabProps> = ({target, props, project}) => {
       case 'aligned':
         return t('source.now.aligned', {path: now.path});
       default:
-        return t('source.now.file', {path: now.path});
+        return now.otherTimings === null
+          ? t('source.now.file', {path: now.path})
+          : t('source.now.otherTimings', {
+              path: now.path,
+              timings: isUrl(now.otherTimings) ? now.otherTimings : `public/${now.otherTimings}`,
+            });
     }
   })();
   const fix =
@@ -143,7 +159,13 @@ const NowLine: React.FC<TabProps> = ({target, props, project}) => {
       data-now={now.kind}
       style={{
         ...styles.note,
-        color: now.kind === 'missing' || now.kind === 'streaming' ? colors.warning : colors.text,
+        color:
+          now.kind === 'missing' ||
+          now.kind === 'streaming' ||
+          (now.kind === 'track' && followed.kind === 'gone') ||
+          (now.kind === 'file' && now.otherTimings !== null)
+            ? colors.warning
+            : colors.text,
         marginTop: 0,
       }}
     >
@@ -165,6 +187,47 @@ const Replaces: React.FC<{readonly children: React.ReactNode}> = ({children}) =>
     {children}
   </p>
 );
+
+/** Under `hostAudio`, what a new recording also does: the composition stops following the template's track. */
+const StopsTrack: React.FC<{readonly props: StudioCompositionProps}> = ({props}) => {
+  const t = useT();
+  return followsHostAudio(props) ? (
+    <p style={{...styles.replaces, color: colors.warning}} data-mushaf-control="source-stops-track">
+      {t('source.replaces.stopsTrack', {track: followedName(props)})}
+    </p>
+  ) : null;
+};
+
+/**
+ * The host the catalogue's audio of `slug`'s surah `chapter` comes from, asked of aligner.qud.dev
+ * (`getChapterAudioUrl()`: no audio, nothing of the user's) once the pick has settled for a moment,
+ * so Source names it before anything is downloaded; kept in the target's drafts by `slug/chapter`.
+ * `null` until then, or when it cannot be told.
+ */
+const useClipHost = (key: string, slug: string | null, chapter: number): string | null => {
+  const [hosts, setHosts] = useStudioDraft<Readonly<Record<string, string>>>(key, 'source.clipHosts', {});
+  const id = slug === null ? null : `${slug}/${chapter}`;
+  const known = id === null ? null : (hosts[id] ?? null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the draft's setter is new on every render; the pick decides.
+  useEffect(() => {
+    if (id === null || slug === null || known !== null) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      Promise.resolve()
+        .then(() => getChapterAudioUrl({slug, chapter}))
+        .then((url) => {
+          const named = typeof url === 'string' ? hostOf(url) : null;
+          if (live && named !== null) setHosts((current) => ({...current, [id]: named}));
+        })
+        .catch(() => undefined);
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [id, slug, chapter, known]);
+  return known;
+};
 
 /** A failed clip download: nothing was saved; Retry, or stream from the clip's host on purpose. */
 type FailedDownload = {readonly query: string; readonly host: string; readonly error: string};
@@ -205,7 +268,8 @@ const CatalogueSource: React.FC<TabProps> = ({target, props, project}) => {
   const querySignature = query ? JSON.stringify(query) : '';
   // The host is the answer's: until one came, the one these props were downloaded from, else unnamed.
   const now = nowSourceOf(props);
-  const knownHost = seenHost ?? (now.kind === 'catalogue' ? now.host : null);
+  const askedHost = useClipHost(key, recitation?.slug ?? null, chapter);
+  const knownHost = seenHost ?? askedHost ?? (now.kind === 'catalogue' ? now.host : null);
 
   const saveFrom = async (
     segments: QudChapterSegments,
@@ -338,6 +402,7 @@ const CatalogueSource: React.FC<TabProps> = ({target, props, project}) => {
         </div>
       ) : null}
       <Replaces>{t('source.replaces.recording')}</Replaces>
+      <StopsTrack props={props} />
       <Button
         variant="primary"
         onClick={() => run('download')}
@@ -474,12 +539,20 @@ const PublicSource: React.FC<TabProps> = ({target, props}) => {
             {t('source.public.stage')}
           </Button>
         </>
+      ) : picked !== '' && picked === props.audioFile ? (
+        <Note>{t('source.public.isCurrent')}</Note>
       ) : (
         <>
-          <p role="alert" style={{...styles.note, color: colors.warning}}>
-            {t('source.public.replaceWarning', {timings: props.timingsFile ? `public/${props.timingsFile}` : '-'})}
-          </p>
-          <Replaces>{t('source.replaces.audioOnly')}</Replaces>
+          {props.timingsFile !== '' ? (
+            <p role="alert" style={{...styles.note, color: colors.warning}}>
+              {t('source.public.replaceWarning', {timings: `public/${props.timingsFile}`})}
+            </p>
+          ) : null}
+          <Replaces>
+            {followsHostAudio(props)
+              ? t('source.replaces.audioOnlyTrack', {track: followedName(props)})
+              : t('source.replaces.audioOnly')}
+          </Replaces>
           <Button variant="primary" onClick={replace} disabled={working || !picked}>
             {t('source.public.replaceButton')}
           </Button>
@@ -510,10 +583,15 @@ const TrackSource: React.FC<TabProps & {readonly tracks: readonly HostAudioTrack
   const t = useT();
   const [choice, setChoice] = useStudioDraft(key, 'source.track', '');
   const usable = tracks.filter((track) => track.limit === null);
-  const picked = usable.find((track) => trackKeyOf(track) === choice) ?? usable[0] ?? null;
   const following = followsHostAudio(props);
   // The track followed now keeps its file: a blob: track's bytes are already in audioFile.
   const followed = following ? followedTrack(tracks, props.audioFile, hostAudioOf(props).track, studioTrackFile) : null;
+  // Until the user picks one, the picker shows the track followed now.
+  const picked =
+    usable.find((track) => trackKeyOf(track) === choice) ??
+    (followed !== null && followed.limit === null ? followed : null) ??
+    usable[0] ??
+    null;
   const isFollowed = picked !== null && picked.id === followed?.id;
   const pickedFile = picked ? studioTrackFile(picked) : null;
   const pickedName = isFollowed
@@ -546,13 +624,17 @@ const TrackSource: React.FC<TabProps & {readonly tracks: readonly HostAudioTrack
         audioFile = file.kind === 'public' ? file.path : file.url;
       }
       const same = audioFile === props.audioFile;
+      const untimed = props.timingsFile === '';
       await patchProps(target, {
         audioFile,
         hostAudio: {enabled: true, offsetSeconds: picked.offsetSeconds, track: picked.label},
       });
       stage(key, null);
       setStudioState({
-        notice: tNow(same ? 'source.notice.trackedSame' : 'source.notice.tracked', {track: picked.label}),
+        notice: tNow(
+          untimed ? 'source.notice.trackedNew' : same ? 'source.notice.trackedSame' : 'source.notice.tracked',
+          {track: picked.label},
+        ),
       });
     });
   };
@@ -563,11 +645,18 @@ const TrackSource: React.FC<TabProps & {readonly tracks: readonly HostAudioTrack
     });
   const optionLabel = (track: HostAudioTrack): string =>
     [
-      t('source.track.option', {
-        label: track.label,
-        kind: t(track.kind === 'video' ? 'source.track.kind.video' : 'source.track.kind.audio'),
-        offset: track.offsetSeconds,
-      }),
+      // A negative offset: the track starts after the recitation does.
+      track.offsetSeconds < 0
+        ? t('source.track.optionLater', {
+            label: track.label,
+            kind: t(track.kind === 'video' ? 'source.track.kind.video' : 'source.track.kind.audio'),
+            seconds: -track.offsetSeconds,
+          })
+        : t('source.track.option', {
+            label: track.label,
+            kind: t(track.kind === 'video' ? 'source.track.kind.video' : 'source.track.kind.audio'),
+            offset: track.offsetSeconds,
+          }),
       track.limit === 'rate'
         ? t('source.track.limit.rate')
         : track.limit === 'loop'
@@ -607,7 +696,11 @@ const TrackSource: React.FC<TabProps & {readonly tracks: readonly HostAudioTrack
                 })}
               </Note>
               <Replaces>
-                {pickedName === props.audioFile ? t('source.replaces.trackSame') : t('source.replaces.track')}
+                {props.timingsFile === ''
+                  ? t('source.replaces.trackNew')
+                  : pickedName === props.audioFile
+                    ? t('source.replaces.trackSame')
+                    : t('source.replaces.track')}
               </Replaces>
               <Button variant="primary" onClick={use} disabled={working}>
                 {t('source.track.use')}

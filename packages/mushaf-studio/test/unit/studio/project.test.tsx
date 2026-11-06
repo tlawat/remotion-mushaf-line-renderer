@@ -42,7 +42,7 @@ const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema')
 const {defaultMushafPageProps} = await import('../../../src/page/schema');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 const {isMushafStudioError} = await import('../../../src/errors');
-const {rememberPanelProps} = await import('../../../src/studio/studio-api');
+const {rememberPanelProps, resetSaveTracking} = await import('../../../src/studio/studio-api');
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
 
 const recitation: MushafRecitationProps = {
@@ -216,6 +216,7 @@ describe('the Project menu', () => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
     resetStudioStore();
+    resetSaveTracking();
   });
 
   const openMenu = () => fireEvent.click(document.querySelector('[data-mushaf-control="project-menu"]')!);
@@ -302,7 +303,9 @@ describe('the Project menu', () => {
     ];
     expect(call[0].compositionId).toBe('MushafRecitation');
     const saved = call[0].defaultProps({savedDefaultProps: {...defaultMushafRecitationProps}});
-    expect(saved).toEqual({...file.props, resolved: null});
+    // The target's own `hostAudio` stays: it is not in the project.
+    expect(file.props.hostAudio).toBeUndefined();
+    expect(saved).toEqual({...file.props, hostAudio: defaultMushafRecitationProps.hostAudio, resolved: null});
     expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(getStudioState().notice).toBe(
@@ -320,6 +323,34 @@ describe('the Project menu', () => {
     importFile(JSON.stringify(file));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(getStudioState().lookUndo).toEqual({MushafPage: [undo]}));
+  });
+
+  it("leaves the template's track out of the project, and stops following it when the import brings another recording", async () => {
+    const {importProject} = await import('../../../src/studio/ProjectMenu');
+    const following = {
+      ...recitation,
+      hostAudio: {enabled: true, offsetSeconds: 2, track: 'Template audio'},
+    } as typeof recitation;
+    const file = project.projectFileOf('MushafInTemplate', following);
+    expect(file.props.hostAudio).toBeUndefined();
+    studio.getStaticFiles.mockReturnValue(file.files.map(entry));
+    const patchOf = (index: number) =>
+      (
+        studio.saveDefaultProps.mock.calls[index] as unknown as [
+          {defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>},
+        ]
+      )[0].defaultProps({savedDefaultProps: {}});
+    // Back into the slot it came from: the same recording, the track is still followed.
+    await importProject('MushafInTemplate', following, JSON.stringify(file));
+    expect(patchOf(0).hostAudio).toBeUndefined();
+    // Into a slot that follows its track with another recording: the composition plays the project's.
+    const other = {...following, audioFile: 'mushaf-studio/fatiha/audio.mp3'} as typeof recitation;
+    await importProject('MushafInTemplate', other, JSON.stringify(file));
+    expect(patchOf(1).hostAudio).toEqual({enabled: false, offsetSeconds: 2, track: 'Template audio'});
+    // An older file that still carries hostAudio does not turn it on anywhere.
+    const older = {...file, props: {...file.props, hostAudio: {enabled: true, offsetSeconds: 0, track: 'x'}}};
+    await importProject('MushafRecitation', recitation, JSON.stringify(older));
+    expect(patchOf(2).hostAudio).toBeUndefined();
   });
 
   it('names the missing files and changes nothing', async () => {

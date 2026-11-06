@@ -52,21 +52,28 @@ const clock = (at: number): string => {
 const audioOf = (source: AlignSource): string | null =>
   source.kind === 'file' ? source.path : source.kind === 'url' ? source.url : null;
 
-/** Where the recording came from, in the words of the tab; `video` when its sound is sent as a WAV. */
-const OriginLine: React.FC<{readonly source: AlignSource; readonly track: string; readonly video: boolean}> = ({
-  source,
-  track,
-  video,
-}) => {
+/**
+ * Where the recording came from, in the words of the tab; `video` when its sound is sent as a WAV;
+ * `stopsTrack` when saving the timings turns `hostAudio` off (the composition followed a track,
+ * and this recording is another).
+ */
+const OriginLine: React.FC<{
+  readonly source: AlignSource;
+  readonly track: string;
+  readonly video: boolean;
+  readonly stopsTrack: boolean;
+}> = ({source, track, video, stopsTrack}) => {
   const t = useT();
   if (source.kind === 'none') return <Note>{t('align.noAudio')}</Note>;
   if (source.kind === 'catalogue') return <Note>{t('align.catalogue')}</Note>;
   const audio = source.kind === 'file' ? `public/${source.path}` : source.url;
+  // A URL is fetched by this browser, else handed to the aligner: said before Align is pressed.
+  const byUrl = source.kind === 'url' ? t('align.from.url', {host: hostOf(source.url) ?? source.url}) : null;
   const line =
     source.origin === 'track'
-      ? t('align.from.track', {track: track || baseName(audio)})
-      : source.kind === 'url'
-        ? t('align.from.url', {host: hostOf(source.url) ?? source.url})
+      ? [t('align.from.track', {track: track || baseName(audio)}), byUrl].filter(Boolean).join(' ')
+      : byUrl !== null
+        ? byUrl
         : t(
             source.origin === 'upload'
               ? 'align.from.upload'
@@ -81,6 +88,11 @@ const OriginLine: React.FC<{readonly source: AlignSource; readonly track: string
       </p>
       <Note>{line}</Note>
       {video ? <Note>{t('align.video')}</Note> : null}
+      {stopsTrack ? (
+        <p style={{...styles.note, color: colors.warning}} data-mushaf-control="align-stops-track">
+          {t('align.stopsTrack', {track: track || baseName(audio)})}
+        </p>
+      ) : null}
     </div>
   );
 };
@@ -212,7 +224,17 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project, frameOffse
   return (
     <div>
       <Section title={t('align.audioTitle')}>
-        <OriginLine source={source} track={track} video={video} />
+        <OriginLine
+          source={source}
+          track={track}
+          video={video}
+          stopsTrack={
+            hostAudioOf(props).enabled &&
+            source.kind !== 'none' &&
+            source.kind !== 'catalogue' &&
+            source.origin !== 'track'
+          }
+        />
       </Section>
       <Section title={t('align.options')}>
         <div style={styles.row}>

@@ -92,11 +92,11 @@ export type StudioState = {
    */
   readonly pendingPatches: Readonly<Record<string, PropsPatch>>;
   /**
-   * By target key: what `patchProps()` sent to the Root that the live props
-   * (`useLiveEditorProps()`) do not show yet. The next save adds it to its base, so two saves in
-   * quick succession both land; the first live props after the save clear it, whatever they hold
-   * (what they lack is offered in `rolledBack` or is the user's), so an older panel value is never
-   * written over a later change made elsewhere.
+   * By target key: what `patchProps()` sent to the Root that no live props
+   * (`useLiveEditorProps()`) have shown yet. The next save of the composition adds it to its base,
+   * so quick saves all land even when the echoes come late; it goes once live props show it, or
+   * `RACE_WINDOW_MS` after the save resolved (what is still missing then is offered in
+   * `rolledBack`), so an older panel value is never written over a later change made elsewhere.
    */
   readonly inFlightPatches: Readonly<Record<string, PropsPatch>>;
   /**

@@ -33,11 +33,14 @@ const EN = {
     'This tab stopped on an error (see the status line). Reload it; if it stops again, check the props.',
   'panel.reload': 'Reload',
   'panel.rolledBack':
-    "The Root no longer has what the panel saved ({fields}). The Props sidebar's JSON Reset and the Studio's undo can go back to the props from when the page loaded, and a sidebar save made during the panel's can write over it. Restore saves the panel's values again; × keeps the props as they are.",
+    "Some of the panel's changes are no longer in the props ({fields}): an undo, a Reset in the Props sidebar, or a sidebar edit made while the panel was saving took them out. Restore puts them back; × keeps the props as they are.",
   'panel.rolledBackMore': '{fields} and {count} more',
   'panel.hostMoved':
     "The template's track {track} has moved: second {live} now plays at the recitation's start, but the timings start at second {saved}.",
   'panel.updateTiming': 'Update timing',
+  'panel.hostGone':
+    "The composition follows the template's track {track}, but no track on the timeline plays {file} any more: the highlight follows timings of a recording that is not heard.",
+  'panel.followNow': 'Follow the track playing now',
   'panel.busy.timing': 'Updating the timing...',
   'panel.notice.timing': 'The timings follow {track} again, from second {offset}.',
   'panel.restore': 'Restore',
@@ -83,6 +86,8 @@ const EN = {
       'Cleared {count} files ({files}): they are not for the new passage, {passage}. Fetch them again in the Text tab.',
   },
   'recording.notice.sameRecording': 'The same recording as before: the ayah range and the line splits are kept.',
+  'recording.notice.untracked':
+    "The composition no longer follows the template's track {track}: it plays {file} itself, so the template must mute that track or both play.",
 
   'source.modes': 'Where the audio comes from',
   'source.mode.catalogue': 'Download from the catalogue',
@@ -92,12 +97,16 @@ const EN = {
   'source.now.none': 'Now: no audio yet. Pick where it comes from below.',
   'source.now.track':
     "Now: the template's track {track} plays {file}, from second {offset} at the recitation's start; the composition plays no audio of its own.",
+  'source.now.trackGone':
+    "Now: the composition follows the template's track {track}, but no track on the timeline plays {file}: nothing of the recitation is heard.",
   'source.now.missing': 'Now: public/{path} is missing, so the clip streams from {host} instead, in renders too.',
   'source.now.streaming': 'Now: streaming {url}. Previews and renders need {host} to be online.',
   'source.now.catalogue': "Now: public/{path}, downloaded from {host} with the catalogue's reviewed timings.",
   'source.now.catalogueNoHost': "Now: public/{path}, downloaded with the catalogue's reviewed timings.",
   'source.now.aligned': 'Now: public/{path}, timed by aligner.qud.dev.',
   'source.now.file': 'Now: public/{path}.',
+  'source.now.otherTimings':
+    'Now: public/{path}; its timings were made for another recording ({timings}): align this file to time its words.',
   'source.now.download': 'Download it into public/',
   'source.loadingCatalogue': 'Loading the reviewed recitations of the aligner...',
   'source.reciter': 'Reciter',
@@ -126,10 +135,15 @@ const EN = {
   'source.replaces.nothingYet':
     'Replaces nothing yet: the composition plays what it plays until Align saves the new timings.',
   'source.replaces.audioOnly': 'Replaces: the audio only (audioFile); the timings, the ayah range and the splits stay.',
+  'source.replaces.audioOnlyTrack':
+    "Replaces: the audio; the composition stops following the template's track {track} and plays this file itself (the template must mute its track, or both play). The timings, the ayah range and the splits stay.",
+  'source.replaces.stopsTrack':
+    "It also stops following the template's track {track}: the composition plays its own audio again, so the template must mute that track, or both play.",
   'source.replaces.track':
     "Replaces: the audio (the template's track plays it); the timings stay until you align the track.",
   'source.replaces.trackSame':
     'Replaces: none of the timings (they are of this file); the composition stops playing it itself.',
+  'source.replaces.trackNew': 'Replaces nothing yet: the composition follows this track, and Align times its words.',
   'source.upload.does':
     'Copies your file into public/{dir}/; it stays on this machine. Align then uploads it to aligner.qud.dev, and says so before it sends anything.',
   'source.upload.button': 'Choose a file to copy into public/',
@@ -137,7 +151,7 @@ const EN = {
   'source.ready': 'public/{path} is ready. It stays on this machine until you press Align in the next tab.',
   'source.goToAlign': 'Go to Align',
   'source.noPublicAudio': 'No audio or video file in public/ yet.',
-  'source.publicSelect': 'Audio in public/',
+  'source.publicSelect': 'Audio or video in public/',
   'source.fileSize': '{name} ({size} kB)',
   'source.public.use': 'What to do with the file',
   'source.public.align': 'Align this file',
@@ -147,11 +161,13 @@ const EN = {
   'source.public.replaceWarning':
     'The word highlight keeps following the current timings ({timings}): unless this file is the same recording, the words will be marked at the wrong times.',
   'source.public.replaceButton': 'Replace the audio',
+  'source.public.isCurrent': 'This is the file the composition plays now: there is nothing to replace.',
   'source.track.none': 'The template has no audio or video track on the timeline.',
   'source.track.noneUsable':
     "None of the template's tracks can be followed: only a track that plays at speed 1 and does not loop can.",
   'source.track.select': 'Track',
-  'source.track.option': '{label} · {kind} · second {offset} at the start',
+  'source.track.option': "{label} · {kind} · second {offset} at the recitation's start",
+  'source.track.optionLater': "{label} · {kind} · starts {seconds} s after the recitation's start",
   'source.track.kind.audio': 'audio',
   'source.track.kind.video': 'video',
   'source.track.limit.rate': '(another speed: not supported)',
@@ -174,6 +190,7 @@ const EN = {
     'The composition follows {track}. Its timings are of another file: align the track in the Align tab.',
   'source.notice.trackedSame':
     'The composition follows {track}, and its timings are of this file: check them in Review.',
+  'source.notice.trackedNew': 'The composition follows {track}. Align it in the Align tab to time its words.',
   'source.notice.untracked': 'The composition plays {file} itself again.',
 
   'look.note':
@@ -204,6 +221,8 @@ const EN = {
   'align.from.track': "The template's track {track}, which the composition follows.",
   'align.from.url':
     'What the composition streams. This browser fetches it to upload it; if {host} does not allow that, the aligner downloads it itself.',
+  'align.stopsTrack':
+    "Saving the timings also stops following the template's track {track}: the composition plays this recording itself, so the template must mute that track, or both play.",
   'align.video': 'A video: its sound is decoded in this browser and sent as a WAV file.',
   'align.busy.decoding': "Decoding the video's sound...",
   'align.busy.byUrl': 'The aligner is downloading the audio from {host}...',
@@ -538,21 +557,24 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'panel.tabCrashed': 'توقف هذا التبويب بسبب خطأ (انظر سطر الحالة). أعد تحميله؛ وإن توقف مرة أخرى فراجع الخصائص.',
   'panel.reload': 'إعادة التحميل',
   'panel.rolledBack':
-    'لم يعد ملف Root يحمل ما حفظته اللوحة ({fields}). قد يعيد زر Reset في عرض JSON للشريط الجانبي Props، أو التراجع في Studio، الخصائصَ كما كانت عند تحميل الصفحة، وقد يكتب حفظٌ من الشريط الجانبي أثناء حفظ اللوحة فوقه. «استعادة» تحفظ قيم اللوحة مرة أخرى، و× تُبقي الخصائص كما هي.',
+    'لم تعد بعض تغييرات اللوحة في الخصائص ({fields}): أخرجها تراجع، أو إعادة ضبط في شريط الخصائص، أو تعديل فيه أثناء حفظ اللوحة. «استعادة» يعيدها؛ و× يُبقي الخصائص كما هي.',
   'panel.rolledBackMore': '{fields} و{count} غيرها',
   'panel.hostMoved':
     'تحرّك مسار القالب {track}: صارت الثانية {live} تُسمع عند بداية التلاوة، والتوقيتات تبدأ من الثانية {saved}.',
   'panel.updateTiming': 'حدّث التوقيت',
+  'panel.hostGone':
+    'يتّبع التركيب مسار القالب {track}، لكن لم يعد أي مسار على الخط الزمني يشغّل {file}: يتبع التمييز توقيتات تسجيل لا يُسمع.',
+  'panel.followNow': 'اتّبع المسار الذي يعمل الآن',
   'panel.busy.timing': 'جارٍ تحديث التوقيت...',
   'panel.notice.timing': 'صارت التوقيتات تتبع {track} مرة أخرى، من الثانية {offset}.',
   'panel.restore': 'استعادة',
   'panel.keepAsIs': 'أبقِ الخصائص كما هي',
   'panel.busy.restoring': 'جارٍ استعادة قيم اللوحة...',
-  'panel.slot': 'الموضع',
-  'panel.slotPicker': 'أي موضع من هذا القالب تعدّله اللوحة',
+  'panel.slot': 'الخانة',
+  'panel.slotPicker': 'أي خانة من خانات هذا القالب تعدّلها اللوحة',
   'panel.slotEmpty':
     'لا تلاوة في هذا القالب تحت {key} بعد. اختر مصدرًا: أول حفظ يكتب هناك خصائص كاملة، ويبقى للقالب ما له.',
-  'panel.slotError': 'لا يعرض الموضع {key} شيئًا: {message}',
+  'panel.slotError': 'لا تعرض الخانة {key} شيئًا: {message}',
 
   'tab.source': 'المصدر',
   'tab.look': 'المظهر',
@@ -585,6 +607,8 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'recording.notice.cleared':
     'أُزيلت ملفات ({count}) لا تخص المقطع الجديد {passage}: {files}. اجلبها من جديد في تبويب النص.',
   'recording.notice.sameRecording': 'هذا التسجيل نفسه: يبقى نطاق الآيات وتقسيمات الأسطر كما هي.',
+  'recording.notice.untracked':
+    'لم يعد التركيب يتّبع مسار القالب {track}: صار يشغّل {file} بنفسه، فيجب أن يكتم القالب ذلك المسار وإلا عمل الاثنان معًا.',
 
   'source.modes': 'مصدر الصوت',
   'source.mode.catalogue': 'تنزيل من الفهرس',
@@ -594,12 +618,16 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.now.none': 'الآن: لا صوت بعد. اختر مصدره أدناه.',
   'source.now.track':
     'الآن: مسار القالب {track} يشغّل {file} من الثانية {offset} عند بداية التلاوة؛ ولا يشغّل التركيب صوتًا خاصًا به.',
+  'source.now.trackGone':
+    'الآن: يتّبع التركيب مسار القالب {track}، لكن لا مسار على الخط الزمني يشغّل {file}: لا يُسمع شيء من التلاوة.',
   'source.now.missing': 'الآن: الملف public/{path} غير موجود، لذا يُبثّ المقطع من {host} بدلًا منه، حتى عند التصيير.',
   'source.now.streaming': 'الآن: بثّ {url}. تحتاج المعاينة والتصيير إلى أن يكون {host} متاحًا.',
   'source.now.catalogue': 'الآن: public/{path}، نُزِّل من {host} مع توقيتات الفهرس المراجَعة.',
   'source.now.catalogueNoHost': 'الآن: public/{path}، نُزِّل مع توقيتات الفهرس المراجَعة.',
   'source.now.aligned': 'الآن: public/{path}، وقّته aligner.qud.dev.',
   'source.now.file': 'الآن: public/{path}.',
+  'source.now.otherTimings':
+    'الآن: public/{path}؛ وقد صُنعت توقيتاته لتسجيل آخر ({timings}): حاذِ هذا الملف لتوقيت كلماته.',
   'source.now.download': 'نزّله إلى public/',
   'source.loadingCatalogue': 'جارٍ تحميل التلاوات المراجَعة من أداة المحاذاة...',
   'source.reciter': 'القارئ',
@@ -625,8 +653,13 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.replaces.recording': 'يستبدل: الصوت والتوقيتات؛ ويعيد التسجيل الجديد ضبط نطاق الآيات وتقسيمات الأسطر.',
   'source.replaces.nothingYet': 'لا يستبدل شيئًا بعد: يشغّل التركيب ما يشغّله حتى تحفظ المحاذاة التوقيتات الجديدة.',
   'source.replaces.audioOnly': 'يستبدل: الصوت وحده (audioFile)؛ وتبقى التوقيتات ونطاق الآيات والتقسيمات.',
+  'source.replaces.audioOnlyTrack':
+    'يستبدل: الصوت؛ ويكفّ التركيب عن اتّباع مسار القالب {track} ويشغّل هذا الملف بنفسه (يجب أن يكتم القالب مساره وإلا عمل الاثنان معًا). وتبقى التوقيتات ونطاق الآيات والتقسيمات.',
+  'source.replaces.stopsTrack':
+    'ويكفّ أيضًا عن اتّباع مسار القالب {track}: يعود التركيب إلى تشغيل صوته بنفسه، فيجب أن يكتم القالب ذلك المسار وإلا عمل الاثنان معًا.',
   'source.replaces.track': 'يستبدل: الصوت (يشغّله مسار القالب)؛ وتبقى التوقيتات حتى تحاذي المسار.',
   'source.replaces.trackSame': 'لا يستبدل شيئًا من التوقيتات (فهي لهذا الملف)؛ ويكفّ التركيب عن تشغيله بنفسه.',
+  'source.replaces.trackNew': 'لا يستبدل شيئًا بعد: يتّبع التركيب هذا المسار، وتوقّت المحاذاةُ كلماته.',
   'source.upload.does':
     'ينسخ ملفك إلى public/{dir}/؛ ويبقى على هذا الجهاز. ثم ترفعه المحاذاة إلى aligner.qud.dev، وتقول ذلك قبل أن ترسل أي شيء.',
   'source.upload.button': 'اختر ملفًا لنسخه إلى public/',
@@ -634,7 +667,7 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.ready': 'الملف public/{path} جاهز. يبقى على هذا الجهاز حتى تضغط «محاذاة» في التبويب التالي.',
   'source.goToAlign': 'انتقل إلى المحاذاة',
   'source.noPublicAudio': 'لا يوجد ملف صوت أو فيديو في public/ بعد.',
-  'source.publicSelect': 'الصوت في public/',
+  'source.publicSelect': 'الصوت أو الفيديو في public/',
   'source.fileSize': '{name} ({size} ك.ب)',
   'source.public.use': 'ماذا تفعل بالملف',
   'source.public.align': 'حاذِ هذا الملف',
@@ -644,10 +677,12 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.public.replaceWarning':
     'يبقى تظليل الكلمات تابعًا للتوقيتات الحالية ({timings}): فإن لم يكن هذا الملف التسجيلَ نفسه ظُلِّلت الكلمات في غير أوقاتها.',
   'source.public.replaceButton': 'استبدل الصوت',
+  'source.public.isCurrent': 'هذا هو الملف الذي يشغّله التركيب الآن: لا شيء لاستبداله.',
   'source.track.none': 'ليس للقالب مسار صوت أو فيديو على الخط الزمني.',
   'source.track.noneUsable': 'لا يمكن اتّباع أي مسار من مسارات القالب: لا يُتّبع إلا مسار يعمل بالسرعة 1 ولا يتكرّر.',
   'source.track.select': 'المسار',
-  'source.track.option': '{label} · {kind} · الثانية {offset} عند البداية',
+  'source.track.option': '{label} · {kind} · الثانية {offset} عند بداية التلاوة',
+  'source.track.optionLater': '{label} · {kind} · يبدأ بعد بداية التلاوة بـ{seconds} ث',
   'source.track.kind.audio': 'صوت',
   'source.track.kind.video': 'فيديو',
   'source.track.limit.rate': '(سرعة أخرى: غير مدعوم)',
@@ -668,11 +703,12 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.notice.downloaded': 'الملف public/{path} في مكانه: لم تعد المعاينة والتصيير بحاجة إلى {host}.',
   'source.notice.tracked': 'يتّبع التركيب {track}. وتوقيتاته لملف آخر: حاذِ المسار في تبويب المحاذاة.',
   'source.notice.trackedSame': 'يتّبع التركيب {track}، وتوقيتاته لهذا الملف: راجعها في تبويب المراجعة.',
+  'source.notice.trackedNew': 'يتّبع التركيب {track}. حاذِه في تبويب المحاذاة لتوقيت كلماته.',
   'source.notice.untracked': 'يشغّل التركيب {file} بنفسه مرة أخرى.',
 
   'look.note':
     'يضبط المظهر خصائص التنسيق بنقرة واحدة، ولا يغيّر موضع الأسطر الذي ضبطته (موضعها العمودي وإزاحاتها وهوامشها)؛ ويمكنك تغيير أيٍّ منها بعد ذلك في الشريط الجانبي للخصائص (Props). أما التلاوة والتوقيتات وملفات الترجمة فتبقى كما هي.',
-  'look.slotNote': 'في الموضع يحدّد صندوق القالب المقاس: لا يغيّر المظهر layout.aspect.',
+  'look.slotNote': 'في خانة القالب يحدّد صندوقُ القالب المقاسَ: لا يغيّر المظهر layout.aspect.',
   'look.looks': 'المظاهر',
   'look.active': 'الخصائص مطابقة لهذا المظهر',
   'look.undo': 'تراجع عن {name}',
@@ -697,6 +733,8 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'align.from.current': 'ما يشغّله التركيب الآن.',
   'align.from.track': 'مسار القالب {track}، الذي يتّبعه التركيب.',
   'align.from.url': 'ما يبثّه التركيب. يجلبه هذا المتصفح ليرفعه؛ فإن لم يسمح {host} بذلك نزّلته أداة المحاذاة بنفسها.',
+  'align.stopsTrack':
+    'ويكفّ حفظ التوقيتات أيضًا عن اتّباع مسار القالب {track}: يشغّل التركيب هذا التسجيل بنفسه، فيجب أن يكتم القالب ذلك المسار وإلا عمل الاثنان معًا.',
   'align.video': 'فيديو: يُفكّ صوته في هذا المتصفح ويُرسَل ملفَّ WAV.',
   'align.busy.decoding': 'جارٍ فكّ صوت الفيديو...',
   'align.busy.byUrl': 'تنزّل أداة المحاذاة الصوت من {host}...',

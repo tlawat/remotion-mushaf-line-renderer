@@ -3,12 +3,12 @@ import {memo, useEffect, useMemo, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
 import {hostAudioOf} from '../audio/host';
-import {slotDurationOf, slotErrorOf} from '../slots/resolve';
+import {slotDurationOf, slotErrorOf, unresolvedSlotErrorOf} from '../slots/resolve';
 import {emptySlotPropsFor} from '../slots/schema';
 import {reserveDockSpace} from './dock-space';
 import {DoubtMarkers} from './doubts';
 import {useInStudio} from './environment';
-import {followedTrack, hostTrackMoved, studioTrackFile, useHostAudioTracks} from './host-tracks';
+import {hostTrackMoved, studioTrackFile, useFollowedTrack} from './host-tracks';
 import {directionOf, STUDIO_LANGUAGES} from './i18n';
 import type {MushafStudioPanelKind, MushafStudioPanelProps} from './index';
 import {ProjectMenu} from './ProjectMenu';
@@ -33,7 +33,9 @@ import {
 } from './store';
 import {
   applyPatch,
+  baseName,
   dismissRolledBack,
+  isUrl,
   observeLiveProps,
   type PropsPatch,
   patchApplied,
@@ -161,9 +163,12 @@ const RolledBack: React.FC<{readonly target: StudioTarget; readonly lost: PropsP
 };
 
 /**
- * Under `hostAudio`, the live template track the composition follows (`followedTrack()`), when it
- * has moved since its offset was saved (`hostTrackMoved()`): the timings would run early or late.
- * Offers "Update timing", which saves the live offset; nothing is written until it is pressed.
+ * Under `hostAudio`, the live template track the composition follows (`useFollowedTrack()`): when it
+ * has moved since its offset was saved (`hostTrackMoved()`), the timings would run early or late,
+ * and "Update timing" saves the live offset; when no track plays `audioFile` any more (removed, or
+ * playing another file), the recitation is not heard, and the panel says so and offers to follow
+ * the track of that name now playing, or to play `audioFile` in the composition again. Nothing is
+ * written until a button is pressed.
  */
 const HostTrackTiming: React.FC<{
   readonly target: StudioTarget;
@@ -171,13 +176,51 @@ const HostTrackTiming: React.FC<{
   readonly frameOffset: number;
   readonly fps: number;
 }> = ({target, props, frameOffset, fps}) => {
-  const tracks = useHostAudioTracks(frameOffset);
+  const state = useFollowedTrack(props, frameOffset);
   const {busy} = useStudioState();
   const t = useT();
   const host = hostAudioOf(props);
-  if (!host.enabled) return null;
-  const live = followedTrack(tracks, props.audioFile, host.track, studioTrackFile);
-  if (live === null || live.limit !== null || !hostTrackMoved(host.offsetSeconds, live.offsetSeconds, fps)) return null;
+  const working = busy !== null;
+  if (state.kind === 'gone') {
+    const named = state.named;
+    const file = named === null ? null : studioTrackFile(named);
+    const playing = file === null || file.kind === 'bytes' ? null : file.kind === 'public' ? file.path : file.url;
+    const follow = () =>
+      void runStudioTask(tNow('source.busy.track'), async () => {
+        if (named === null || playing === null) return;
+        await patchProps(target, {
+          audioFile: playing,
+          hostAudio: {enabled: true, offsetSeconds: named.offsetSeconds, track: named.label},
+        });
+        setStudioState({notice: tNow('source.notice.tracked', {track: named.label})});
+      });
+    const own = () =>
+      void runStudioTask(tNow('busy.updating'), async () => {
+        await patchProps(target, {hostAudio: {...host, enabled: false}});
+        setStudioState({notice: tNow('source.notice.untracked', {file: props.audioFile})});
+      });
+    return (
+      <div style={{...styles.status, ...styles.statusLine('error')}} role="alert" data-mushaf-control="host-gone">
+        <span style={{flex: '1 1 auto'}}>
+          {t('panel.hostGone', {
+            track: host.track || baseName(props.audioFile),
+            file: isUrl(props.audioFile) ? props.audioFile : `public/${props.audioFile}`,
+          })}
+        </span>
+        {playing !== null ? (
+          <button type="button" style={styles.button('default', working)} disabled={working} onClick={follow}>
+            {t('panel.followNow')}
+          </button>
+        ) : null}
+        <button type="button" style={styles.button('ghost', working)} disabled={working} onClick={own}>
+          {t('source.track.stop')}
+        </button>
+      </div>
+    );
+  }
+  if (state.kind !== 'found') return null;
+  const live = state.track;
+  if (live.limit !== null || !hostTrackMoved(host.offsetSeconds, live.offsetSeconds, fps)) return null;
   const update = () =>
     void runStudioTask(tNow('panel.busy.timing'), async () => {
       await patchProps(target, {hostAudio: {...host, offsetSeconds: live.offsetSeconds, track: live.label}});
@@ -188,7 +231,7 @@ const HostTrackTiming: React.FC<{
       <span style={{flex: '1 1 auto'}}>
         {t('panel.hostMoved', {track: live.label, live: live.offsetSeconds, saved: host.offsetSeconds})}
       </span>
-      <button type="button" style={styles.button('default', busy !== null)} disabled={busy !== null} onClick={update}>
+      <button type="button" style={styles.button('default', working)} disabled={working} onClick={update}>
         {t('panel.updateTiming')}
       </button>
     </div>
@@ -265,7 +308,7 @@ const StudioDock: React.FC<{
   const lost = state.rolledBack[key];
   // A slot's own folder, so two slots of a template never share one.
   const folder = project ?? (propsKey ? `${compositionId}-${propsKey}` : undefined);
-  const slotError = slotErrorOf(props);
+  const slotError = slotErrorOf(props) ?? (propsKey ? unresolvedSlotErrorOf(view.kind, props, propsKey) : null);
   const mounted = mountedPanelsOf(state, compositionId);
   const other = state.side === 'left' ? 'right' : 'left';
   const dock = (

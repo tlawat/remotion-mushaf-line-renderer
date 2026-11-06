@@ -20,7 +20,9 @@ import {unicodeFontOf} from '../unicode/font';
 import {fetchQuranComText, type QuranTextScript, serialiseAyahWords} from '../unicode/text';
 import {describeError, type StudioTarget, setStudioState, t} from './store';
 import {
+  baseName,
   deepMerge,
+  isUrl,
   numberedName,
   type PropsPatch,
   patchProps,
@@ -294,13 +296,19 @@ export const saveRecording = async (options: {
   const notices: string[] = [];
   if (where.kept !== null) notices.push(t('recording.notice.versioned', {kept: where.kept, path: timingsFile}));
   const before = props.timingsFile === '' ? null : await readTimingsFile(props.timingsFile).catch(() => null);
+  const untracks = followsHostAudio(props) && options.keepHostAudio !== true;
   let patch: PropsPatch = {
     audioFile,
     timingsFile,
-    ...(followsHostAudio(props) && options.keepHostAudio !== true
-      ? {hostAudio: {...hostAudioOf(props), enabled: false}}
-      : {}),
+    ...(untracks ? {hostAudio: {...hostAudioOf(props), enabled: false}} : {}),
   };
+  if (untracks)
+    notices.push(
+      t('recording.notice.untracked', {
+        track: hostAudioOf(props).track || baseName(props.audioFile),
+        file: isUrl(audioFile) ? audioFile : `public/${audioFile}`,
+      }),
+    );
   if (isOtherRecording(props, audioFile, before, measured)) {
     const stale = await stalePassageFiles(props, measured);
     patch = deepMerge(deepMerge(stale.patch, patch), freshRecording(props)) as PropsPatch;

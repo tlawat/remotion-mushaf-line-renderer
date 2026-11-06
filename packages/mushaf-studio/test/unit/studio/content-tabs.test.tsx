@@ -78,6 +78,7 @@ const {freshRecording, isPageProps, translationLayersOf, hasLines, isPageResolve
   '../../../src/studio/tab-props'
 );
 const {projectFits, collectProjectFiles} = await import('../../../src/studio/project');
+const {resetSaveTracking} = await import('../../../src/studio/studio-api');
 type StudioTimings = import('../../../src/types').StudioTimings;
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
 type MushafPageProps = import('../../../src/page/schema').MushafPageProps;
@@ -154,6 +155,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   resetStudioStore();
+  resetSaveTracking();
 });
 
 describe('translation layers', () => {

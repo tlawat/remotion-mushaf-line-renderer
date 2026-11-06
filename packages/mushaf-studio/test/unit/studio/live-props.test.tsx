@@ -125,7 +125,9 @@ describe('the dock in the live props', () => {
     // The sidebar's JSON Reset: the live props are the page-load props again.
     act(() => studioModel.echo(studioModel.pageLoad));
     const notice = await screen.findByRole('alert');
-    expect(notice.textContent).toMatch(/^The Root no longer has what the panel saved \(theme, layout\.background, /);
+    expect(notice.textContent).toMatch(
+      /^Some of the panel's changes are no longer in the props \(theme, layout\.background, /,
+    );
     expect(notice.textContent).toMatch(/and \d+ more\)/);
     expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', {name: 'Restore'}));
@@ -142,7 +144,7 @@ describe('the dock in the live props', () => {
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     studioModel.echo();
     act(() => studioModel.echo(studioModel.pageLoad));
-    expect((await screen.findByRole('alert')).textContent).toMatch(/^لم يعد ملف Root يحمل ما حفظته اللوحة/);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/^لم تعد بعض تغييرات اللوحة في الخصائص/);
     fireEvent.click(screen.getByTitle('أبقِ الخصائص كما هي'));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(getStudioState().rolledBack).toEqual({});

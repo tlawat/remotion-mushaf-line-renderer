@@ -2,6 +2,7 @@
 // `public/mushaf-studio/<project>/project.json` (and as a download), or import such a file back.
 import type * as React from 'react';
 import {useRef, useState} from 'react';
+import {followsHostAudio, hostAudioOf} from '../audio/host';
 import {MushafStudioError} from '../errors';
 import {
   downloadText,
@@ -42,8 +43,9 @@ export const exportProject = async (
 /**
  * Imports a project file's text into the composition: validated, refused when its props are for
  * the other kind of composition or when `public/` lacks a file it needs (all of them named), else
- * its props saved with `patchProps()`. The Look tab's undo of the target is forgotten: the looks it
- * would go back through were applied to the props the import replaced.
+ * its props saved with `patchProps()`, all but `hostAudio`: a composition that follows its template's
+ * track stops following it when the project brings another `audioFile`. The Look tab's undo of the
+ * target is forgotten: the looks it would go back through were applied to the props the import replaced.
  */
 export const importProject = async (target: StudioTarget | string, props: StudioCompositionProps, text: string) => {
   let json: unknown;
@@ -64,7 +66,15 @@ export const importProject = async (target: StudioTarget | string, props: Studio
       tNow('project.missing', {count: missing.length, files: missing.map((f) => `public/${f}`).join(', ')}),
       {missing},
     );
-  await patchProps(target, project.props as PropsPatch);
+  // `hostAudio` is the target's (an older file, or the schema's default, may carry one): the composition
+  // follows the template's track only while it plays the same recording, the rule a new recording follows.
+  const {hostAudio: _hostAudio, ...imported} = project.props;
+  const sameAudio = imported.audioFile === undefined || imported.audioFile === props.audioFile;
+  const patch =
+    followsHostAudio(props) && !sameAudio
+      ? {...imported, hostAudio: {...hostAudioOf(props), enabled: false}}
+      : imported;
+  await patchProps(target, patch as PropsPatch);
   setStudioState({lookUndo: withEntry(getStudioState().lookUndo, targetKeyOf(target), undefined)});
   return project;
 };

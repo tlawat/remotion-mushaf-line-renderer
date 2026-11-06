@@ -4,9 +4,9 @@
 // track ids change on every mount, so the composition only ever reads the saved `hostAudio` props.
 // The timing copies the Studio timeline's own (`@remotion/sdk`'s timeline calculator and
 // `getTimelineMediaStartFrame()` in Remotion 4.0.539).
-import {useMemo} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {useVideoConfig} from 'remotion';
-import {OWN_AUDIO_NAME} from '../audio/host';
+import {hostAudioOf, OWN_AUDIO_NAME, OWN_BACKGROUND_NAME} from '../audio/host';
 import {isHttpUrl} from '../compositions/shared';
 import {type TimelineSequence, useTimelineSequences} from './remotion-internals';
 import {staticFileList, trackCopyOf} from './studio-api';
@@ -51,13 +51,16 @@ type Timing = {
   readonly own: boolean;
 };
 
+const OWN_NAMES: ReadonlySet<string> = new Set([OWN_AUDIO_NAME, OWN_BACKGROUND_NAME]);
+
 const roundMs = (seconds: number): number => Math.round(seconds * 1000) / 1000;
 
 /**
  * The template's audio and video tracks among the timeline's `sequences`, each with the second of
  * its file heard at composition frame `ownStart` (the recitation's frame 0) at `fps`. The
- * composition's own `<Audio>` is left out: a track named `OWN_AUDIO_NAME`, or inside a sequence of
- * that name (a trimmed `<Audio>` passes its `name` to the sequence it wraps itself in). A track
+ * composition's own media are left out: a track named `OWN_AUDIO_NAME` (its `<Audio>`) or
+ * `OWN_BACKGROUND_NAME` (its muted background video), or inside a sequence of either name (a trimmed
+ * `<Audio>` passes its `name` to the sequence it wraps itself in, a background `<Loop>` has it). A track
  * whose parent is not in the list (the registry mid-update) is left out rather than mistimed.
  */
 export const hostAudioTracksOf = (
@@ -84,7 +87,7 @@ export const hostAudioTracksOf = (
         parentRate,
         childRate: parentRate * sequence.sequencePlaybackRate,
         loops: sequence.loop || (parentTiming?.loops ?? false),
-        own: sequence.displayName === OWN_AUDIO_NAME || (parentTiming?.own ?? false),
+        own: OWN_NAMES.has(sequence.displayName) || (parentTiming?.own ?? false),
       };
     }
     timings.set(sequence.id, timing);
@@ -228,4 +231,51 @@ export const followedTrack = (
   if (named) return named;
   if (label === '') return null;
   return tracks.find((track) => track.label === label && fileOf(track)?.kind === 'bytes') ?? null;
+};
+
+/** How long after the panel mounts an empty or partial timeline counts as still registering. */
+export const TIMELINE_SETTLE_MS = 1000;
+
+/** Under `hostAudio`, what became of the template's track the composition follows. */
+export type FollowedTrackState =
+  /** The composition plays its own audio. */
+  | {readonly kind: 'off'}
+  /** The timeline may still be registering its tracks: nothing is said yet. */
+  | {readonly kind: 'pending'}
+  /** The live track that plays `audioFile` (`followedTrack()`). */
+  | {readonly kind: 'found'; readonly track: HostAudioTrack}
+  /**
+   * No track plays `audioFile` any more (removed, or now playing another file); `named` is a
+   * followable track that carries the saved name and plays another file, when there is one.
+   */
+  | {readonly kind: 'gone'; readonly named: HostAudioTrack | null};
+
+/**
+ * What became of the template's track the composition follows: `tracks` against the saved
+ * `audioFile` and `hostAudio.track`, `settled` once the timeline has had `TIMELINE_SETTLE_MS`.
+ */
+export const followedTrackState = (
+  props: {readonly audioFile: string},
+  tracks: readonly HostAudioTrack[],
+  settled: boolean,
+  fileOf: (track: HostAudioTrack) => TrackFile | null,
+): FollowedTrackState => {
+  const host = hostAudioOf(props);
+  if (!host.enabled) return {kind: 'off'};
+  const live = followedTrack(tracks, props.audioFile, host.track, fileOf);
+  if (live !== null) return {kind: 'found', track: live};
+  if (!settled) return {kind: 'pending'};
+  const named = tracks.find((track) => track.label === host.track && track.limit === null) ?? null;
+  return {kind: 'gone', named: host.track === '' ? null : named};
+};
+
+/** `followedTrackState()` on the Studio's timeline, from `ownStart` (the panel's `frameOffset`). */
+export const useFollowedTrack = (props: {readonly audioFile: string}, ownStart: number): FollowedTrackState => {
+  const tracks = useHostAudioTracks(ownStart);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(true), TIMELINE_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return followedTrackState(props, tracks, settled, studioTrackFile);
 };

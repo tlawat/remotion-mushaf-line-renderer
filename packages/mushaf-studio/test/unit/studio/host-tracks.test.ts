@@ -101,6 +101,30 @@ describe('hostAudioTracksOf()', () => {
     expect(hostAudioTracksOf(sequences, {ownStart: 60, fps: FPS}).map((track) => track.id)).toEqual(['template']);
   });
 
+  it('leaves out the composition’s own background video: a bare looping <Html5Video>, or the one in its <Loop>', () => {
+    const sequences = [
+      // Before its length is known, an <Html5Video loop> registers as a plain video of its own name.
+      audio({
+        id: 'bare',
+        type: 'video',
+        src: '/static-abc/bg.mp4',
+        displayName: 'Mushaf background video',
+        muted: true,
+      }),
+      sequence({id: 'loop', displayName: 'Mushaf background video', loop: true}),
+      audio({
+        id: 'inside',
+        type: 'video',
+        parent: 'loop',
+        src: '/static-abc/bg.mp4',
+        displayName: 'bg.mp4',
+        muted: true,
+      }),
+      audio({id: 'template', displayName: 'Template audio'}),
+    ];
+    expect(hostAudioTracksOf(sequences, {ownStart: 0, fps: FPS}).map((track) => track.id)).toEqual(['template']);
+  });
+
   it('skips a track whose parent is not registered yet, or a cycle, rather than mistiming it', () => {
     const sequences = [
       audio({id: 'orphan', parent: 'gone'}),

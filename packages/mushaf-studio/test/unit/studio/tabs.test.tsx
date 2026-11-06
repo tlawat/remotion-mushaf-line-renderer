@@ -47,6 +47,7 @@ vi.mock('@remotion/studio', () => studio);
 const qud = vi.hoisted(() => ({
   listRecitations: vi.fn(async () => []),
   getChapterSegments: vi.fn(),
+  getChapterAudioUrl: vi.fn(),
   timingsFromCatalogue: vi.fn(),
   alignAudio: vi.fn(),
   alignUrl: vi.fn(),
@@ -699,7 +700,7 @@ describe('Source', () => {
     ]);
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
     pickSource('A file already in public/');
-    fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
+    fireEvent.change(screen.getByRole('combobox', {name: 'Audio or video in public/'}), {
       target: {value: 'mushaf-studio/p/old.mp3'},
     });
     // Aligning it is the default; replacing the audio alone warns that the timings stay.
@@ -1191,14 +1192,17 @@ describe('drafts', () => {
       screen.getByRole('checkbox', {name: "Use the Warsh A'n Nafi' recitation with the Hafs mushaf anyway"}),
     );
     fireEvent.click(screen.getByRole('radio', {name: 'A file already in public/'}));
-    fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
+    fireEvent.change(screen.getByRole('combobox', {name: 'Audio or video in public/'}), {
       target: {value: 'mushaf-studio/p/old.mp3'},
     });
     switchTab('Look');
     switchTab('Source');
     // Back on the source picked, with its file; the catalogue's pickers are kept too.
     expect(screen.getByRole('radio', {name: 'A file already in public/'})).toHaveProperty('checked', true);
-    expect(screen.getByRole('combobox', {name: 'Audio in public/'})).toHaveProperty('value', 'mushaf-studio/p/old.mp3');
+    expect(screen.getByRole('combobox', {name: 'Audio or video in public/'})).toHaveProperty(
+      'value',
+      'mushaf-studio/p/old.mp3',
+    );
     fireEvent.click(screen.getByRole('radio', {name: 'Download from the catalogue'}));
     expect(screen.getByLabelText('Reciter')).toHaveProperty('value', 'warsh_1');
     expect(screen.getByRole('button', {name: 'Download into public/'})).toHaveProperty('disabled', false);
@@ -1301,8 +1305,8 @@ describe('Source: what plays now, and a track in this video', () => {
     const picker = screen.getByRole('combobox', {name: 'Track'});
     const options = [...picker.querySelectorAll('option')];
     expect(options.map((option) => [option.textContent, option.disabled])).toEqual([
-      ['Template audio · audio · second -2 at the start', false],
-      ['Music · audio · second 0 at the start (loops: not supported)', true],
+      ["Template audio · audio · starts 2 s after the recitation's start", false],
+      ["Music · audio · second 0 at the recitation's start (loops: not supported)", true],
     ]);
     // The same file the timings were made of: they stay, the composition stops playing it itself.
     expect(screen.getByText(/^Replaces: none of the timings \(they are of this file\)/)).toBeTruthy();
@@ -1440,7 +1444,7 @@ describe('Source: what plays now, and a track in this video', () => {
   it('stages a file of public/ for Align by default, and Align says where it came from', () => {
     source(defaultMushafRecitationProps);
     pickSource('A file already in public/');
-    fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
+    fireEvent.change(screen.getByRole('combobox', {name: 'Audio or video in public/'}), {
       target: {value: 'mushaf-studio/p/fatiha.mp3'},
     });
     fireEvent.click(screen.getByRole('button', {name: 'Stage it for Align'}));
@@ -1450,6 +1454,117 @@ describe('Source: what plays now, and a track in this video', () => {
     expect(screen.getByRole('tab', {selected: true}).textContent).toBe('Align');
     expect(document.body.querySelector('[data-mushaf-control="align-source"]')?.getAttribute('data-origin')).toBe(
       'public',
+    );
+  });
+
+  it('says when no track plays the followed file any more, and offers the track of that name or the own audio', async () => {
+    // The template's track of that name now plays another file.
+    timeline.sequences = [trackSequence('t2', `${STATIC}/music.mp3`, 60, 'Template audio')];
+    const following = {enabled: true, offsetSeconds: -2, track: 'Template audio'};
+    source(propsWith(reviewTimings(), {hostAudio: following}));
+    // Nothing is said while the timeline may still be registering.
+    expect(document.body.querySelector('[data-mushaf-control="host-gone"]')).toBeNull();
+    const gone = await waitFor(
+      () => {
+        const alert = document.body.querySelector('[data-mushaf-control="host-gone"]');
+        expect(alert).not.toBeNull();
+        return alert!;
+      },
+      {timeout: 3000},
+    );
+    expect(gone.textContent).toMatch(
+      /follows the template's track Template audio, but no track on the timeline plays public\/mushaf-studio\/p\/fatiha\.mp3 any more/,
+    );
+    expect(document.body.querySelector('[data-mushaf-control="source-now"]')?.textContent).toMatch(
+      /^Now: the composition follows the template's track Template audio, but no track on the timeline plays public\/mushaf-studio\/p\/fatiha\.mp3: nothing of the recitation is heard\./,
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Follow the track playing now'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(saved(0)).toEqual({audioFile: 'music.mp3', hostAudio: following});
+  });
+
+  it('defaults the track picker to the track followed now', () => {
+    timeline.sequences = [trackSequence('m', `${STATIC}/music.mp3`, 0, 'Music'), template];
+    source(propsWith(reviewTimings(), {hostAudio: {enabled: true, offsetSeconds: -2, track: 'Template audio'}}));
+    const picker = screen.getByRole('combobox', {name: 'Track'}) as HTMLSelectElement;
+    expect(picker.selectedOptions[0]?.textContent).toMatch(/^Template audio · audio/);
+    expect(screen.getByText(/^Replaces: none of the timings \(they are of this file\)/)).toBeTruthy();
+  });
+
+  it('says a new slot has no timings yet when it follows a track', async () => {
+    timeline.sequences = [template];
+    source({...defaultMushafRecitationProps, audioFile: '', timingsFile: ''});
+    pickSource('A track in this video');
+    expect(
+      screen.getByText(/^Replaces nothing yet: the composition follows this track, and Align times its words\./),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Use this track'}));
+    await waitFor(() =>
+      expect(getStudioState().notice).toBe(
+        'The composition follows Template audio. Align it in the Align tab to time its words.',
+      ),
+    );
+  });
+
+  it('says that a new recording stops following the template’s track, before anything is saved', async () => {
+    timeline.sequences = [template];
+    studio.getStaticFiles.mockReturnValue([
+      {
+        src: `${STATIC}/mushaf-studio/p/fatiha.mp3`,
+        name: 'mushaf-studio/p/fatiha.mp3',
+        sizeInBytes: 2048,
+        lastModified: 0,
+      },
+      {src: `${STATIC}/mushaf-studio/p/mine.mp3`, name: 'mushaf-studio/p/mine.mp3', sizeInBytes: 2048, lastModified: 0},
+    ]);
+    qud.listRecitations.mockResolvedValue(recitationsFixture.recitations as never);
+    const following = {enabled: true, offsetSeconds: -2, track: 'Template audio'};
+    source(propsWith(reviewTimings(), {hostAudio: following}));
+    pickSource('Download from the catalogue');
+    expect(
+      (await screen.findByText(/^It also stops following the template's track Template audio/)).textContent,
+    ).toMatch(/the template must mute that track, or both play\.$/);
+    pickSource('A file already in public/');
+    fireEvent.click(screen.getByRole('radio', {name: 'Replace the audio only (keep the current timings)'}));
+    // The file it plays now: nothing to replace.
+    expect(screen.getByText(/^This is the file the composition plays now/)).toBeTruthy();
+    expect(screen.queryByRole('button', {name: 'Replace the audio'})).toBeNull();
+    fireEvent.change(screen.getByRole('combobox', {name: 'Audio or video in public/'}), {
+      target: {value: 'mushaf-studio/p/mine.mp3'},
+    });
+    expect(
+      screen.getByText(/^Replaces: the audio; the composition stops following the template's track Template audio/),
+    ).toBeTruthy();
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+  });
+
+  it('names the catalogue’s audio host before anything is downloaded', async () => {
+    qud.listRecitations.mockResolvedValue(recitationsFixture.recitations as never);
+    qud.getChapterAudioUrl.mockResolvedValue('https://clips.example.org/r/1.mp3' as never);
+    source(propsWith(reviewTimings()));
+    pickSource('Download from the catalogue');
+    expect(
+      await screen.findByText(/the audio of ayahs 1-7 from clips\.example\.org into public\//, {}, {timeout: 3000}),
+    ).toBeTruthy();
+    expect(qud.getChapterSegments).not.toHaveBeenCalled();
+  });
+
+  it('says where Align fetches a followed URL track from, and that another recording stops following it', () => {
+    const url = 'https://cdn.example.org/recitation.mp3';
+    const following = {enabled: true, offsetSeconds: 0, track: 'Template audio'};
+    const {unmount} = panel(propsWith(reviewTimings(), {audioFile: url, hostAudio: following}), 'align');
+    const origin = document.body.querySelector('[data-mushaf-control="align-source"]')!;
+    expect(origin.textContent).toContain("The template's track Template audio, which the composition follows.");
+    expect(origin.textContent).toContain('cdn.example.org');
+    expect(document.body.querySelector('[data-mushaf-control="align-stops-track"]')).toBeNull();
+    unmount();
+    setStudioState({
+      uploadedAudio: {MushafRecitation: 'mushaf-studio/p/mine.m4a'},
+      stagedFrom: {MushafRecitation: 'upload'},
+    });
+    panel(propsWith(reviewTimings(), {hostAudio: following}), 'align');
+    expect(document.body.querySelector('[data-mushaf-control="align-stops-track"]')?.textContent).toMatch(
+      /^Saving the timings also stops following the template's track Template audio/,
     );
   });
 
@@ -1474,6 +1589,10 @@ describe('Source: what plays now, and a track in this video', () => {
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(saved(0)).toMatchObject({hostAudio: {...following, enabled: false}});
     await waitFor(() => expect(getStudioState().busy).toBeNull());
+    // And says so: the template's track keeps playing unless the template mutes it.
+    expect(getStudioState().notice).toContain(
+      "The composition no longer follows the template's track Template audio: it plays public/",
+    );
     unmount();
     // Another session, the Root still following the track (the save above is not this one's to show).
     resetStudioStore();

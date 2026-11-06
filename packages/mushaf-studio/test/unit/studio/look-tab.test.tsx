@@ -40,7 +40,8 @@ const {defaultMushafRecitationProps, mushafRecitationSchema} = await import(
 );
 const {defaultMushafAyahTextProps, mushafAyahTextSchema} = await import('../../../src/unicode/schema');
 const {applyLook, looksFor, MUSHAF_LOOKS} = await import('../../../src/presets');
-const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
+const {resetStudioStore, getStudioState} = await import('../../../src/studio/store');
+const {observeLiveProps, resetSaveTracking} = await import('../../../src/studio/studio-api');
 
 type SaveCall = [
   {
@@ -64,6 +65,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   resetStudioStore();
+  resetSaveTracking();
 });
 
 describe('Look tab', () => {
@@ -148,7 +150,8 @@ describe('Look tab', () => {
     rerender(panel(karaoke));
     // The marker's colour set in the Props sidebar since (the Studio's live props answered the saves).
     const edited = {...karaoke, highlight: {...karaoke.highlight, color: '#123456'}};
-    setStudioState({inFlightPatches: {}});
+    observeLiveProps({MushafRecitation: karaoke});
+    observeLiveProps({MushafRecitation: edited});
     rerender(panel(edited));
 
     fireEvent.click(screen.getByText('Undo Karaoke'));
@@ -161,7 +164,7 @@ describe('Look tab', () => {
       'Karaoke is undone; the fields changed since it was applied keep their new values.',
     );
     rerender(panel(undone));
-    setStudioState({inFlightPatches: {}});
+    observeLiveProps({MushafRecitation: undone});
 
     // Night's own colour of the word was changed since too: only its other fields go back.
     fireEvent.click(screen.getByText('Undo Night'));

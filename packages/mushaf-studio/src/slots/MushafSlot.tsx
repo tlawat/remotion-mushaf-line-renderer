@@ -13,7 +13,7 @@ import {useInStudio} from '../studio/environment';
 import {useOwnSequenceStart} from '../studio/remotion-internals';
 import {MushafAyahText} from '../unicode/MushafAyahText';
 import type {MushafAyahTextProps} from '../unicode/schema';
-import {slotDurationOf, slotErrorOf} from './resolve';
+import {slotDurationOf, slotErrorOf, unresolvedSlotErrorOf} from './resolve';
 import type {MushafSlotKind} from './schema';
 
 /** What every slot takes besides its props: where it sits in the template, when, and its panel. */
@@ -96,7 +96,8 @@ const Slot = <P extends MushafRecitationProps | MushafAyahTextProps | MushafPage
   const start = useOwnSequenceStart();
   // What the Studio's preview reports in the panel, anything else refuses: a render, a <Player>,
   // the Studio's in-browser render (which resolves on the Studio's page, as the preview does).
-  const error = slotErrorOf(props);
+  // Props no resolver filled in would leave an empty box in a finished video.
+  const error = slotErrorOf(props) ?? unresolvedSlotErrorOf(kind, props, propsKey);
   if (error !== null && !inStudio)
     throw new MushafStudioError('BAD_STUDIO_PROP', `${propsKey}: ${error}`, {prop: propsKey});
   const frames = box.durationInFrames ?? slotDurationOf(props);
@@ -143,8 +144,8 @@ const Slot = <P extends MushafRecitationProps | MushafAyahTextProps | MushafPage
  * panel beside it, saving under `propsKey` of the template's props, its seeks and timeline markers
  * placed at the slot's start. `props` is what `resolveMushafRecitationSlot()` put back under the
  * key; `null` (no recitation yet) shows nothing in the box and the panel on Source. A slot whose
- * props could not be resolved shows nothing in the Studio (the panel says why) and throws
- * `BAD_STUDIO_PROP` anywhere else.
+ * props could not be resolved, or were never given to the resolver, shows nothing in the Studio (the
+ * panel says why) and throws `BAD_STUDIO_PROP` anywhere else.
  *
  * ```tsx
  * <MushafRecitationSlot props={props.mushaf} propsKey="mushaf" from={45} left={60} top={640} width={960} height={640} />

@@ -11,6 +11,12 @@ import {describeValue, MushafStudioError} from '../errors';
  */
 export const OWN_AUDIO_NAME = 'Mushaf recitation audio';
 
+/**
+ * The `name` the compositions give their own background video (`background.kind: 'video'`, muted):
+ * the Mushaf panel leaves it out of the template's tracks too.
+ */
+export const OWN_BACKGROUND_NAME = 'Mushaf background video';
+
 export const hostAudioSchema = z
   .object({
     /** The template plays the audio: the composition plays none of its own, and `audio`'s cleanup does nothing. */
@@ -23,7 +29,7 @@ export const hostAudioSchema = z
     offsetSeconds: z
       .number()
       .describe(
-        "Second of the template's track heard at the recitation's first frame (set by the Mushaf panel's Update timing)",
+        "Second of the template's track heard at the recitation's first frame (set by Source's Use this track; Update timing refreshes it)",
       ),
     /** Informational: what the panel matched the track by when it set the offset. */
     track: z.string().describe('The template track this follows, as the Studio timeline names it'),

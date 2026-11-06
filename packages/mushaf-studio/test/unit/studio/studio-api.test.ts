@@ -210,9 +210,31 @@ describe('the Studio API wrappers', () => {
       mushaf: {audioFile: 'a.mp3', layout: {aspect: '16:9', visibleLines: 2}, splits: []},
     });
     // A slot without `emptyProps` starts from nothing.
-    api.rememberLiveProps({Template: {mushaf: null}});
-    await api.patchProps({compositionId: 'Template', propsKey: 'other'}, {slice: true});
+    api.rememberLiveProps({Other: {mushaf: null}});
+    await api.patchProps({compositionId: 'Other', propsKey: 'other'}, {slice: true});
     expect(write(2, {})).toEqual({mushaf: null, other: {slice: true}});
+  });
+
+  it("carries one slot's save in flight into a save of another slot of the template, and judges each by its own", async () => {
+    const intro = {compositionId: 'Template', propsKey: 'intro'};
+    const outro = {compositionId: 'Template', propsKey: 'outro'};
+    const aligned = {audioFile: 'take-1.mp3', timingsFile: 'take-1.timings.json'};
+    api.rememberLiveProps({
+      Template: {intro: {audioFile: 'a.mp3', timingsFile: 'a.timings.json'}, outro: {layout: {visibleLines: 3}}},
+    });
+    await api.patchProps(intro, aligned);
+    const first = write(0, {});
+    // The outro changes before the intro's save has come back: the save writes both.
+    await api.patchProps(outro, {layout: {visibleLines: 5}});
+    const second = write(1, {});
+    expect(second).toEqual({intro: aligned, outro: {layout: {visibleLines: 5}}});
+    // The intro's echo is older than the outro's save: nothing is offered, the outro's stays in flight.
+    api.observeLiveProps({Template: first});
+    expect(getStudioState().rolledBack).toEqual({});
+    expect(getStudioState().inFlightPatches).toEqual({'Template/outro': {layout: {visibleLines: 5}}});
+    api.observeLiveProps({Template: second});
+    expect(getStudioState().inFlightPatches).toEqual({});
+    expect(getStudioState().rolledBack).toEqual({});
   });
 
   it("reads and writes a target inside its composition's props", () => {

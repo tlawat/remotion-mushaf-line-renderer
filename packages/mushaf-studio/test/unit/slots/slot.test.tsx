@@ -52,6 +52,7 @@ const {MushafAyahTextSlot, MushafPageSlot, MushafRecitationSlot, defaultMushafRe
   '../../../src/slots'
 );
 const {defaultMushafAyahTextSlotProps, defaultMushafPageSlotProps} = await import('../../../src/slots/schema');
+const {unresolvedSlotErrorOf} = await import('../../../src/slots/resolve');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 
 const resolvedProps = (durationInFrames: number): MushafRecitationProps => ({
@@ -161,6 +162,53 @@ describe('<MushafRecitationSlot>', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('a slot no resolver filled in', () => {
+  const unresolved = {
+    ...defaultMushafRecitationSlotProps,
+    audioFile: 'mushaf-studio/fatiha/audio.mp3',
+    timingsFile: 'mushaf-studio/fatiha/audio.timings.json',
+    resolved: null,
+  };
+
+  it('shows the panel in the Studio and refuses a render, naming the resolver', () => {
+    render(<MushafRecitationSlot props={unresolved} propsKey="mushaf" />);
+    expect(seen.sequences).toHaveLength(0);
+    expect(seen.panels).toHaveLength(1);
+    env.isStudio = false;
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() => render(<MushafRecitationSlot props={unresolved} propsKey="mushaf" />)).toThrow(
+        /mushaf: the props are not resolved: call resolveMushafRecitationSlot\(\)/,
+      );
+      // Empty props have nothing to resolve: an empty box, no error.
+      render(<MushafRecitationSlot props={{...unresolved, timingsFile: ''}} propsKey="mushaf" />);
+      render(
+        <MushafAyahTextSlot
+          props={{...defaultMushafAyahTextSlotProps, timingsFile: 't.json', textFile: '', resolved: null}}
+          propsKey="ayah"
+        />,
+      );
+      expect(seen.sequences).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('names the resolver of each kind', () => {
+    expect(unresolvedSlotErrorOf('page', {timingsFile: 't.json', resolved: null}, 'page')).toMatch(
+      /resolveMushafPageSlot\(\).*under "page"/,
+    );
+    expect(unresolvedSlotErrorOf('ayah-text', {timingsFile: 't.json', textFile: 'x.json'}, 'a')).toMatch(
+      /resolveMushafAyahTextSlot/,
+    );
+    expect(unresolvedSlotErrorOf('recitation', {timingsFile: 't.json', resolved: {timings: {}}}, 'm')).toBeNull();
+    expect(
+      unresolvedSlotErrorOf('recitation', {timingsFile: 't.json', resolved: {error: 'x', durationInFrames: 0}}, 'm'),
+    ).toBeNull();
+    expect(unresolvedSlotErrorOf('recitation', null, 'm')).toBeNull();
   });
 });
 

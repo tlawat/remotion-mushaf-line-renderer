@@ -48,6 +48,7 @@ vi.mock('@remotion/studio', () => studio);
 const qud = vi.hoisted(() => ({
   listRecitations: vi.fn(),
   getChapterSegments: vi.fn(),
+  getChapterAudioUrl: vi.fn(),
   timingsFromCatalogue: vi.fn(),
   alignAudio: vi.fn(),
   sessionTimestamps: vi.fn(),
@@ -285,6 +286,15 @@ describe('a slot with a recitation', () => {
     render(<MushafStudioPanel compositionId="MyTemplate" props={failed} propsKey="mushaf" />);
     const alert = document.body.querySelector('[data-mushaf-control="slot-error"]');
     expect(alert?.textContent).toBe('The mushaf slot shows nothing: timingsFile is broken');
+  });
+
+  it('says which resolver to call when no resolver filled the props in', () => {
+    const unresolved = {...defaultMushafRecitationSlotProps, timingsFile: 't.timings.json', resolved: null};
+    render(<MushafStudioPanel compositionId="MyTemplate" props={unresolved} propsKey="mushaf" />);
+    const alert = document.body.querySelector('[data-mushaf-control="slot-error"]');
+    expect(alert?.textContent).toMatch(
+      /^The mushaf slot shows nothing: the props are not resolved: call resolveMushafRecitationSlot\(\)/,
+    );
   });
 });
 

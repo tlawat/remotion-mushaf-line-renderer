@@ -41,13 +41,25 @@ export type NowSource =
   | {readonly kind: 'catalogue'; readonly path: string; readonly host: string | null}
   /** A file of `public/` whose timings the aligner made: the user's recording. */
   | {readonly kind: 'aligned'; readonly path: string}
-  /** A file of `public/` with timings from elsewhere. */
-  | {readonly kind: 'file'; readonly path: string};
+  /**
+   * A file of `public/` with timings from elsewhere; `otherTimings` names the recording the timings
+   * say they were made for when that is another file (the audio was replaced, the timings kept).
+   */
+  | {readonly kind: 'file'; readonly path: string; readonly otherTimings: string | null};
+
+/** The file name of a path or URL, without its query or fragment. */
+const fileNameOf = (path: string): string => {
+  const bare = path.replace(/[?#].*$/, '');
+  return bare.slice(bare.lastIndexOf('/') + 1);
+};
 
 /**
  * What `props` play now (`audioFile`, read with `props.resolved`): the template's track under
  * `hostAudio`; the catalogue clip `calculateMetadata()` streams when `audioFile` is missing
- * (`resolved.audioSrc`); a URL; else a file of `public/`, named by how its timings were made.
+ * (`resolved.audioSrc`); a URL; else a file of `public/`, named by how its timings were made, but
+ * only when the timings were made for that file: their `audio` is absent, has its file name, or is
+ * the catalogue clip they name (a stream downloaded later). Otherwise the audio was replaced and the
+ * timings kept, and `otherTimings` says what they were made for.
  */
 export const nowSourceOf = (props: StudioCompositionProps): NowSource => {
   const {audioFile} = props;
@@ -61,11 +73,14 @@ export const nowSourceOf = (props: StudioCompositionProps): NowSource => {
   }
   if (isUrl(audioFile)) return {kind: 'streaming', url: audioFile, host: hostOf(audioFile) ?? audioFile};
   const sidecar = resolved?.timings.alignment;
-  if (sidecar?.source === 'qud-catalogue') {
-    return {kind: 'catalogue', path: audioFile, host: hostOf(sidecar.recitation?.audioUrl ?? '')};
-  }
+  const timed = (resolved?.timings as {readonly audio?: unknown} | undefined)?.audio;
+  const clip = sidecar?.recitation?.audioUrl;
+  const ofThisFile =
+    typeof timed !== 'string' || timed === '' || fileNameOf(timed) === fileNameOf(audioFile) || timed === clip;
+  if (!ofThisFile) return {kind: 'file', path: audioFile, otherTimings: timed};
+  if (sidecar?.source === 'qud-catalogue') return {kind: 'catalogue', path: audioFile, host: hostOf(clip ?? '')};
   if (sidecar?.source === 'qud') return {kind: 'aligned', path: audioFile};
-  return {kind: 'file', path: audioFile};
+  return {kind: 'file', path: audioFile, otherTimings: null};
 };
 
 /** The Source tab's four choices. */
@@ -102,7 +117,9 @@ export type AlignSource =
 
 /**
  * What Align sends: the recording Source staged for this target when the composition does not play
- * it yet, else what the composition plays, unless those are the catalogue's reviewed timings.
+ * it yet, else what the composition plays, unless those are the catalogue's reviewed timings. The
+ * file the composition plays, staged in Source by name ("A file already in public/", Align this
+ * file), is aligned even when the catalogue timed it: the user asked for it.
  */
 export const alignSourceOf = (
   props: StudioCompositionProps,
@@ -110,6 +127,8 @@ export const alignSourceOf = (
 ): AlignSource => {
   if (staged.path !== null && staged.path !== props.audioFile)
     return {kind: 'file', path: staged.path, origin: staged.origin};
+  if (staged.path !== null && staged.origin === 'public' && !hostAudioOf(props).enabled && !isUrl(staged.path))
+    return {kind: 'file', path: staged.path, origin: 'current'};
   const now = nowSourceOf(props);
   switch (now.kind) {
     case 'none':

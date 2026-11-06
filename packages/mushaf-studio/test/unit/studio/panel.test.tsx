@@ -44,6 +44,7 @@ vi.mock('@remotion/studio', () => studio);
 const qud = vi.hoisted(() => ({
   listRecitations: vi.fn(),
   getChapterSegments: vi.fn(),
+  getChapterAudioUrl: vi.fn(),
   timingsFromCatalogue: vi.fn(),
   alignAudio: vi.fn(),
   sessionTimestamps: vi.fn(),
@@ -84,7 +85,7 @@ const {MushafStudioPanel, isInStudio} = await import('../../../src/studio');
 const {isStudioPreview} = await import('../../../src/studio/environment');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
-const {patchProps} = await import('../../../src/studio/studio-api');
+const {patchProps, resetSaveTracking} = await import('../../../src/studio/studio-api');
 const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
 const {parseAyahWords} = await import('../../../src/unicode/text');
 type StudioTimings = import('../../../src/types').StudioTimings;
@@ -175,6 +176,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   resetStudioStore();
+  resetSaveTracking();
 });
 
 describe('isInStudio / isStudioPreview', () => {

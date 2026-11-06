@@ -297,33 +297,98 @@ export const latestPanelProps = <T extends Readonly<Record<string, unknown>>>(
   return applyPatch((panelProps.get(key) as T | undefined) ?? fallback, getStudioState().pendingPatches[key]);
 };
 
-/** How long after a save resolves a live update that lacks what it wrote counts as a race with another writer. */
+/**
+ * How long a live update that lacks what a save wrote counts as a race with another writer: from
+ * when live props first showed it, or, for a save no live props have shown, from when it resolved.
+ */
 export const RACE_WINDOW_MS = 5000;
 
-/** What the dock knows of the panel's saves at one target, judged against every new live props object. */
+/**
+ * One panel save at a target, judged against every new live props object. The Studio sends one
+ * echo per write of the Root, in write order, and a Props-sidebar edit shows first as a local
+ * object built from what the sidebar showed, then as its echo. So a live object that lacks what the
+ * save wrote is older than the save's echo until some live object has shown it, and after that it
+ * is a newer write: a sidebar save that had not seen it, the Studio's undo, or the user's change.
+ */
+type SaveEntry = {
+  /** What the save wrote at the target: the in-flight part it carried and its own patch. */
+  written: Readonly<Record<string, unknown>>;
+  /** The target's props it was built from: what a writer that had not seen the save writes back. */
+  base: Readonly<Record<string, unknown>>;
+  /** The composition's whole props it wrote. */
+  wrote: Readonly<Record<string, unknown>>;
+  /** What no live props have shown yet: later saves carry it, and a live object without it is older. */
+  unseen: Readonly<Record<string, unknown>> | null;
+  /** What live props have shown, within `RACE_WINDOW_MS` of `shownAt`: a live object without it is newer. */
+  shown: Readonly<Record<string, unknown>> | null;
+  shownAt: number;
+  /** When the save resolved; `null` while it is on its way. */
+  resolvedAt: number | null;
+  /** Its place among the session's saves: it carries only what the saves before it have in flight. */
+  readonly order: number;
+};
+
+/** What the dock knows of the panel's saves at one target. */
 type SaveRecord = {
-  readonly target: StudioTarget;
+  target: StudioTarget;
   /**
-   * What the panel's saves wrote at the target this session, merged across saves, less what the
-   * live props have since lost or changed: what a return to the page-load props is compared with.
+   * What the panel's saves wrote at the target this session and the live props have shown, less
+   * what they have since lost or changed: what a return to the page-load props is compared with.
    */
   written: Readonly<Record<string, unknown>> | null;
-  /** What the last save wrote (the in-flight part it carried and its own patch), less what was offered back. */
-  last: Readonly<Record<string, unknown>> | null;
-  /** When the last save resolved: a live update within `RACE_WINDOW_MS` of it that lacks `last` raced it. */
-  resolvedAt: number;
+  /** The saves still watched, oldest first; the last one is kept while nothing else is. */
+  saves: SaveEntry[];
   /** The composition's live props object last judged, so each one is judged once. */
-  seen: unknown;
+  judged: unknown;
 };
 
 const records = new Map<string, SaveRecord>();
+let savesStarted = 0;
 /** `savedDefaultProps` by composition id: the page-load props, what the Props sidebar's JSON Reset goes back to. */
 const pageLoadProps = new Map<string, Readonly<Record<string, unknown>>>();
 
+/** JSON with every object's keys sorted: the same props compare equal whatever order a writer used. */
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_key, inner: unknown) =>
+    isPlainObject(inner)
+      ? Object.fromEntries(
+          Object.keys(inner)
+            .sort()
+            .map((key) => [key, inner[key]]),
+        )
+      : inner,
+  ) ?? 'undefined';
+
 const isPageLoad = (compositionId: string, whole: Readonly<Record<string, unknown>>): boolean => {
   const loaded = pageLoadProps.get(compositionId);
-  return loaded !== undefined && (loaded === whole || JSON.stringify(loaded) === JSON.stringify(whole));
+  return loaded !== undefined && (loaded === whole || canonical(loaded) === canonical(whole));
 };
+
+/** The key paths of a patch's values: `{a: 1, b: {c: 2}}` gives `[a]`, `[b, c]`. */
+const leafPaths = (patch: Readonly<Record<string, unknown>>): string[][] =>
+  Object.entries(patch).flatMap(([key, value]) =>
+    value === undefined ? [] : isPlainObject(value) ? leafPaths(value).map((path) => [key, ...path]) : [[key]],
+  );
+
+const valueAt = (props: Readonly<Record<string, unknown>>, path: readonly string[]): unknown =>
+  path.reduce<unknown>((value, key) => (isPlainObject(value) ? value[key] : undefined), props);
+
+/**
+ * Whether a live object that lacks `lacking` of what `save` wrote (and live props had shown) undid
+ * it by racing it: some of it is back at the value the save was built from, and the object differs
+ * from what the save wrote elsewhere too, so a writer that had not seen the save wrote over it. A
+ * field that holds a value of its own is the user's change; an object that differs only in the
+ * save's fields, back at their old values, is the Studio's undo of the save.
+ */
+const racedBy = (
+  save: SaveEntry,
+  target: StudioTarget,
+  whole: Readonly<Record<string, unknown>>,
+  own: Readonly<Record<string, unknown>>,
+  lacking: Readonly<Record<string, unknown>>,
+): boolean =>
+  leafPaths(lacking).some((path) => canonical(valueAt(own, path)) === canonical(valueAt(save.base, path))) &&
+  canonical(patchTarget(whole, target, save.written)) !== canonical(save.wrote);
 
 // One save at a time: each starts from the live props the one before it has been written over, so
 // two quick saves never start from the same snapshot.
@@ -343,61 +408,128 @@ const mergeParts = (
   b: Readonly<Record<string, unknown>> | null,
 ): Readonly<Record<string, unknown>> | null => (a === null ? b : b === null ? a : deepMerge(a, b));
 
+/** What the saves watched at a target have sent that no live props have shown, merged. */
+const unseenOf = (record: SaveRecord): Readonly<Record<string, unknown>> | null =>
+  record.saves.reduce<Readonly<Record<string, unknown>> | null>((all, save) => mergeParts(all, save.unseen), null);
+
+/** The store's `inFlightPatches`, from the saves watched. */
+const inFlightOf = (): Readonly<Record<string, PropsPatch>> => {
+  const inFlight: Record<string, PropsPatch> = {};
+  for (const [key, record] of records) {
+    const unseen = unseenOf(record);
+    if (unseen !== null) inFlight[key] = unseen as PropsPatch;
+  }
+  return inFlight;
+};
+
+/**
+ * The save of `patch` at `to`, built from the composition's live props `from`: every target of the
+ * composition gets what the saves watched there before save number `order` have sent and no live
+ * props have shown yet, as every save writes the whole composition, then `to` gets `patch`.
+ */
+const buildSave = (
+  to: StudioTarget,
+  from: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>,
+  order: number,
+): Pick<SaveEntry, 'written' | 'base' | 'wrote'> => {
+  const key = targetKeyOf(to);
+  let whole = from;
+  let carried: Readonly<Record<string, unknown>> | null = null;
+  for (const [other, record] of records) {
+    if (record.target.compositionId !== to.compositionId) continue;
+    const unseen = record.saves.reduce<Readonly<Record<string, unknown>> | null>(
+      (all, save) => (save.order < order ? mergeParts(all, save.unseen) : all),
+      null,
+    );
+    const part = unseen === null ? null : unappliedPart(targetPropsOf(whole, record.target) ?? {}, unseen);
+    if (part === null) continue;
+    if (other === key) carried = part;
+    else whole = patchTarget(whole, record.target, part);
+  }
+  const written = deepMerge(carried ?? {}, patch);
+  return {written, base: targetPropsOf(from, to) ?? {}, wrote: patchTarget(whole, to, written)};
+};
+
+/** Starts watching `save` at `to`. */
+const watchSave = (to: StudioTarget, save: SaveEntry, from: unknown): void => {
+  const record = records.get(targetKeyOf(to));
+  if (record === undefined) records.set(targetKeyOf(to), {target: to, written: null, saves: [save], judged: from});
+  else {
+    record.target = to;
+    record.saves.push(save);
+  }
+  setStudioState({inFlightPatches: inFlightOf()});
+};
+
+// The next look at the live props once a save's race window is over: a save no live props have
+// shown by then is judged even if nothing new comes.
+let expiry: ReturnType<typeof setTimeout> | null = null;
+const judgeLater = (): void => {
+  if (expiry !== null) clearTimeout(expiry);
+  expiry = setTimeout(() => {
+    expiry = null;
+    observeLiveProps(liveProps);
+  }, RACE_WINDOW_MS + 100);
+  (expiry as {unref?: () => void}).unref?.();
+};
+
 /**
  * Merges `patch` into the target's props in the Root file and re-runs `calculateMetadata()`. The
  * target is a composition id, or `{compositionId, propsKey}` for props a template keeps under a key
  * of its `defaultProps`. The save starts from the live Root values (`useLiveEditorProps()`, kept by
- * the dock), so what the Props sidebar, the Studio's undo or a hand edit changed stays; only the
- * in-flight part of the save before (sent, and no live props seen since) is added, never a value
- * the live props have already answered. Saves run one at a time, in call order.
+ * the dock), so what the Props sidebar, the Studio's undo or a hand edit changed stays; only what
+ * the panel's earlier saves of the composition sent and no live props have shown yet is added,
+ * never a value the live props have already shown. Saves run one at a time, in call order.
  *
  * The store's `pendingPatches` shows the change in the tabs until the rendered props carry it; a
  * save that fails leaves it as it was (unless a later save is already pending), leaves what the
- * save before has in flight watched as it was, and rejects.
+ * saves before have in flight watched as it was, and rejects.
  */
 export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Promise<void> => {
   const to = toTarget(target);
   const key = targetKeyOf(to);
   const {compositionId} = to;
-  const ownPatch = patch as Readonly<Record<string, unknown>>;
   const before = getStudioState().pendingPatches;
-  const pending = deepMerge(before[key] ?? {}, ownPatch) as PropsPatch;
+  const pending = deepMerge(before[key] ?? {}, patch as Readonly<Record<string, unknown>>) as PropsPatch;
   setStudioState({pendingPatches: withEntry(before, key, pending)});
   return serially(async () => {
-    // Only what the live props do not show yet is carried: a value they have shown and someone
-    // changed since is theirs.
-    const start = liveProps[compositionId];
-    const own = start === undefined ? null : targetPropsOf(start, to);
-    const inFlight = getStudioState().inFlightPatches[key] as Readonly<Record<string, unknown>> | undefined;
-    const carried = inFlight === undefined ? null : own === null ? inFlight : unappliedPart(own, inFlight);
-    const written = deepMerge(carried ?? {}, ownPatch);
+    // What the live props show now is judged first, so the save carries only what is still unseen.
+    observeLiveProps(liveProps);
+    const from = liveProps[compositionId] ?? pageLoadProps.get(compositionId) ?? {};
+    savesStarted += 1;
+    const order = savesStarted;
+    const save: SaveEntry = {
+      ...buildSave(to, from, patch, order),
+      unseen: null,
+      shown: null,
+      shownAt: 0,
+      resolvedAt: null,
+      order,
+    };
+    save.unseen = save.written;
+    watchSave(to, save, from);
     try {
       await saveDefaultProps({
         compositionId,
         defaultProps: ({savedDefaultProps}) => {
           pageLoadProps.set(compositionId, savedDefaultProps);
-          return patchTarget(liveProps[compositionId] ?? savedDefaultProps, to, written);
+          // Built again from the live props as they are when the Studio asks.
+          Object.assign(save, buildSave(to, liveProps[compositionId] ?? savedDefaultProps, patch, order));
+          if (save.resolvedAt === null) save.unseen = save.written;
+          return save.wrote as Record<string, unknown>;
         },
       });
     } catch (error) {
+      const record = records.get(key);
+      if (record !== undefined) record.saves = record.saves.filter((watched) => watched !== save);
+      setStudioState({inFlightPatches: inFlightOf()});
       const now = getStudioState().pendingPatches;
       if (now[key] === pending) setStudioState({pendingPatches: withEntry(now, key, before[key])});
       throw error;
     }
-    const whole = liveProps[compositionId];
-    const after = whole === undefined ? null : targetPropsOf(whole, to);
-    const sent = after === null ? written : unappliedPart(after, written);
-    setStudioState({inFlightPatches: withEntry(getStudioState().inFlightPatches, key, asPatch(sent))});
-    const record = records.get(key);
-    records.set(key, {
-      target: to,
-      written: deepMerge(record?.written ?? {}, written),
-      last: written,
-      resolvedAt: Date.now(),
-      // Live props that came during the save are its answer (the Studio sends the new Root before
-      // it answers, and a racing sidebar save can follow it): they are judged now, against it.
-      seen: start,
-    });
+    save.resolvedAt = Date.now();
+    judgeLater();
     observeLiveProps(liveProps);
     reevaluateComposition();
   });
@@ -407,16 +539,20 @@ export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Pr
  * Judges the live props the dock just rendered against the panel's saves (and keeps them, as
  * `rememberLiveProps()` does), once per new live props object of a composition:
  *
- * - the first live props after a save are its answer: nothing it sent stays in flight past them,
- *   so no later save writes an old panel value on its own;
- * - what the last save wrote and they lack, while the save is recent (`RACE_WINDOW_MS`: a sidebar
- *   save that raced it), is moved from `pendingPatches` to `rolledBack`: the dock offers to
- *   restore it;
+ * - what a save sent and they show is no longer in flight; what they lack, until some live props
+ *   have shown it, is not judged (they are older than the save's echo: a sidebar edit's local
+ *   object, the echo of an earlier write) and later saves keep carrying it;
+ * - what live props had shown and these lack, within `RACE_WINDOW_MS`, is moved from
+ *   `pendingPatches` to `rolledBack` (the dock offers to restore it) when a writer that had not
+ *   seen the save wrote over it; the Studio's undo of the save, or a value of the user's own in the
+ *   field, is the user's;
+ * - what a save sent and no live props have shown `RACE_WINDOW_MS` after it resolved is offered
+ *   the same way (no one can have chosen to drop a value never shown), also when nothing new comes;
  * - what any save of the session wrote and they lack, when they are the page-load props again, is
  *   offered the same way. That is the sidebar's JSON Reset, but also the Studio's undo all the way
  *   back or a checkout of the Root: the offer says what is gone, not why, and writes nothing;
  * - any other change of a saved field is the user's: it is no longer the panel's to offer;
- * - an offered value the live props carry again is no longer offered.
+ * - an offered value the live props carry again is no longer offered, and is watched again.
  *
  * Each value is offered once: after Restore or ×, the same page-load props do not offer it again.
  * Writes the store only when something changed.
@@ -424,36 +560,88 @@ export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Pr
 export const observeLiveProps = (live: LiveEditorProps, now: number = Date.now()): void => {
   liveProps = live;
   const state = getStudioState();
-  let {inFlightPatches, pendingPatches, rolledBack} = state;
+  let {pendingPatches, rolledBack} = state;
   for (const [key, record] of records) {
     const {compositionId} = record.target;
     const whole = live[compositionId];
-    if (whole === undefined || whole === record.seen) continue;
-    record.seen = whole;
+    if (whole === undefined) continue;
     const own = targetPropsOf(whole, record.target) ?? {};
-    inFlightPatches = withEntry(inFlightPatches, key, undefined);
-    const offered = rolledBack[key] as Readonly<Record<string, unknown>> | undefined;
-    if (offered !== undefined) {
-      const still = unappliedPart(own, offered);
-      const back = still === null ? offered : withoutPart(offered, still);
-      if (back !== null) {
-        // Back (the Studio's undo of a reset, say): the panel's values again.
-        record.written = deepMerge(record.written ?? {}, back);
-        rolledBack = withEntry(rolledBack, key, asPatch(still));
+    let gone: Readonly<Record<string, unknown>> | null = null;
+    let lost: Readonly<Record<string, unknown>> | null = null;
+    if (whole !== record.judged) {
+      const previous = record.judged;
+      record.judged = whole;
+      const offered = rolledBack[key] as Readonly<Record<string, unknown>> | undefined;
+      if (offered !== undefined) {
+        const still = unappliedPart(own, offered);
+        const back = still === null ? offered : withoutPart(offered, still);
+        if (back !== null) {
+          // Back (the Studio's undo of a reset, a late echo): the panel's values again, watched again
+          // as if these props had saved them, so a writer that had not seen them is offered again.
+          record.written = mergeParts(record.written, back);
+          savesStarted += 1;
+          record.saves.push({
+            written: back,
+            base: (isPlainObject(previous) ? targetPropsOf(previous, record.target) : null) ?? {},
+            wrote: whole,
+            unseen: null,
+            shown: back,
+            shownAt: now,
+            resolvedAt: now,
+            order: savesStarted,
+          });
+          rolledBack = withEntry(rolledBack, key, asPatch(still));
+        }
+      }
+      // Latest first: a value a later save wrote and these show is no longer an earlier save's to carry.
+      let later: Readonly<Record<string, unknown>> | null = null;
+      for (const save of [...record.saves].reverse()) {
+        if (save.shown !== null && now - save.shownAt > RACE_WINDOW_MS) save.shown = null;
+        const lacking = save.shown === null ? null : unappliedPart(own, save.shown);
+        if (save.shown !== null && lacking !== null) {
+          save.shown = withoutPart(save.shown, lacking);
+          gone = mergeParts(gone, lacking);
+          if (racedBy(save, record.target, whole, own, lacking)) lost = mergeParts(lost, lacking);
+        }
+        if (save.unseen !== null && later !== null) save.unseen = withoutPart(save.unseen, later);
+        if (save.unseen !== null) {
+          const still = unappliedPart(own, save.unseen);
+          const seen = still === null ? save.unseen : withoutPart(save.unseen, still);
+          if (seen !== null) {
+            save.unseen = still;
+            save.shown = mergeParts(save.shown, seen);
+            save.shownAt = now;
+            record.written = mergeParts(record.written, seen);
+            later = mergeParts(later, seen);
+          }
+        }
+      }
+      const missing = record.written === null ? null : unappliedPart(own, record.written);
+      if (missing !== null && record.written !== null) {
+        record.written = withoutPart(record.written, missing);
+        gone = mergeParts(gone, missing);
+        if (isPageLoad(compositionId, whole)) lost = mergeParts(lost, missing);
       }
     }
-    if (record.last !== null && now - record.resolvedAt > RACE_WINDOW_MS) record.last = null;
-    const raced = record.last === null ? null : unappliedPart(own, record.last);
-    if (raced !== null && record.last !== null) record.last = withoutPart(record.last, raced);
-    const missing = record.written === null ? null : unappliedPart(own, record.written);
-    if (missing !== null && record.written !== null) record.written = withoutPart(record.written, missing);
-    const gone = mergeParts(missing, raced);
-    if (gone === null) continue;
-    const shown = pendingPatches[key] as Readonly<Record<string, unknown>> | undefined;
-    if (shown !== undefined) pendingPatches = withEntry(pendingPatches, key, asPatch(withoutPart(shown, gone)));
-    const lost = isPageLoad(compositionId, whole) ? gone : raced;
+    for (const save of record.saves) {
+      if (save.unseen === null || save.resolvedAt === null || now - save.resolvedAt <= RACE_WINDOW_MS) continue;
+      const never = unappliedPart(own, save.unseen);
+      save.unseen = null;
+      gone = mergeParts(gone, never);
+      lost = mergeParts(lost, never);
+    }
+    const last = record.saves[record.saves.length - 1];
+    record.saves = record.saves.filter(
+      (save) => save === last || save.unseen !== null || save.resolvedAt === null || save.shown !== null,
+    );
+    if (gone !== null) {
+      const shown = pendingPatches[key] as Readonly<Record<string, unknown>> | undefined;
+      if (shown !== undefined) pendingPatches = withEntry(pendingPatches, key, asPatch(withoutPart(shown, gone)));
+    }
     if (lost !== null) rolledBack = withEntry(rolledBack, key, deepMerge(rolledBack[key] ?? {}, lost) as PropsPatch);
   }
+  const next = inFlightOf();
+  const inFlightPatches = canonical(next) === canonical(state.inFlightPatches) ? state.inFlightPatches : next;
   if (
     inFlightPatches !== state.inFlightPatches ||
     pendingPatches !== state.pendingPatches ||
@@ -503,6 +691,8 @@ export const trackCopyOf = (src: string): string | null => trackCopies.get(src) 
 /** Forgets the saves being watched, the page-load, live and panel props, and the paths written. For tests. */
 export const resetSaveTracking = (): void => {
   records.clear();
+  if (expiry !== null) clearTimeout(expiry);
+  expiry = null;
   writtenPaths.clear();
   trackCopies.clear();
   panelProps.clear();

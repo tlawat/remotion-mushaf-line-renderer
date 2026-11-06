@@ -1,10 +1,13 @@
 // The panel's save path against a model of Remotion 4.0.539's Studio, as it behaves:
 // - `saveDefaultProps()` hands its callback `savedDefaultProps`, the Root as the page loaded it, and
 //   that never changes in a session (the Studio writes the Root without rebuilding the bundle);
-// - the Root file is what was written last, by anyone; the Props sidebar writes the whole object,
-//   built from the live props;
-// - the live props (`EditorPropsContext`) are the file's content, pushed after every write
-//   (`default-props-updatable-changed`); the dock hands each new value to `observeLiveProps()`.
+// - the Root file is what was written last, by anyone; every write sends one echo of what it wrote
+//   (`default-props-updatable-changed`, a new object), and the echoes reach the browser in write
+//   order, but when each is rendered, before or after the panel's save resolves, is up to timing;
+// - a Props-sidebar edit (OptionsPanel's `setDefaultProps`) first changes the live props in the
+//   browser (`updateProps`), built from what the sidebar shows, then writes that object to the Root;
+// - the Studio's undo writes the Root as it was before its last write, which sends an echo too;
+// - the dock hands each new live props object (`EditorPropsContext`) to `observeLiveProps()`.
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const studio = vi.hoisted(() => ({
@@ -33,16 +36,29 @@ const PAGE_LOAD: Props = {
   overlay: {reciter: ''},
 };
 
-/** The Studio: one Root file, its frozen page-load copy, and the live props the dock renders. */
+const ALIGNED = {audioFile: 'take-1.mp3', timingsFile: 'take-1.timings.json'};
+
+/** The Studio: one Root file, its frozen page-load copy, the echoes on their way, and the live props the dock renders. */
 const remotion = () => {
   let file: Props = PAGE_LOAD;
+  const history: Props[] = [];
+  const echoes: Props[] = [];
   let live: Record<string, Props> = {};
   let during: ((write: () => void) => void) | null = null;
+  const writeRoot = (next: Props) => {
+    history.push(file);
+    file = next;
+    echoes.push(structuredClone(next));
+  };
+  const show = (props: Props, now?: number) => {
+    live = {...live, [ID]: props};
+    api.observeLiveProps(live, now);
+  };
   studio.saveDefaultProps.mockImplementation(
     async ({defaultProps}: {defaultProps: (v: {savedDefaultProps: Props}) => Props}) => {
-      const write = () => {
-        file = defaultProps({savedDefaultProps: PAGE_LOAD});
-      };
+      // The Studio builds the object before it sends it; the server writes it when the request arrives.
+      const next = defaultProps({savedDefaultProps: PAGE_LOAD});
+      const write = () => writeRoot(next);
       const hook = during;
       during = null;
       if (hook) hook(write);
@@ -57,27 +73,43 @@ const remotion = () => {
     set duringNextSave(hook: (write: () => void) => void) {
       during = hook;
     },
+    /** Every echo on its way reaches the browser, in write order, and the dock renders each. */
+    echo(now?: number) {
+      for (let next = echoes.shift(); next; next = echoes.shift()) show(next, now);
+    },
+    /** Only the oldest echo on its way is rendered. */
+    echoOne(now?: number) {
+      const next = echoes.shift();
+      if (!next) throw new Error('No echo on its way');
+      show(next, now);
+    },
+    /** The dock looks at the same live props again (a timer, a re-render): nothing new. */
+    look(now?: number) {
+      api.observeLiveProps(live, now);
+    },
     /** The Studio reads the Root again (the composition selected again, a reconnect): the same content, a new object. */
     reread(now?: number) {
-      live = {...live, [ID]: structuredClone(file)};
-      api.observeLiveProps(live, now);
+      show(structuredClone(file), now);
     },
-    /** The file-change event reaches the browser: the live props become the file, the dock renders them. */
-    echo(now?: number) {
-      live = {...live, [ID]: file};
-      api.observeLiveProps(live, now);
+    /** A Props-sidebar edit: the live props changed at once, built from what the sidebar shows, then written to the Root. */
+    sidebar(change: (props: Props) => Props, now?: number) {
+      const next = change(live[ID] ?? PAGE_LOAD);
+      show(next, now);
+      writeRoot(next);
     },
-    /** A Props-sidebar edit: the whole live object, changed, written to the Root. */
-    sidebar(change: (props: Props) => Props) {
-      file = change(live[ID] ?? PAGE_LOAD);
+    /** The Studio's undo (Ctrl/Cmd+Z): the Root as it was before its last write, written again. */
+    undo() {
+      const previous = history.pop();
+      if (!previous) throw new Error('Nothing to undo');
+      file = previous;
+      echoes.push(structuredClone(previous));
     },
     /** The sidebar's JSON Reset: the live props go back to the page-load props; nothing is written. */
     jsonReset(now?: number) {
-      live = {...live, [ID]: PAGE_LOAD};
-      api.observeLiveProps(live, now);
+      show(PAGE_LOAD, now);
     },
   };
-  model.echo();
+  show(PAGE_LOAD);
   return model;
 };
 
@@ -164,18 +196,91 @@ describe('the save path against the Studio', () => {
 
   it('offers to restore a panel save that a racing sidebar save wrote over, and forgets the offer when the props come back', async () => {
     const studioModel = remotion();
-    const before = studioModel.file;
-    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
-    // The sidebar committed an edit built from the props before the panel's save: it writes the old recording back.
-    studioModel.sidebar(() => ({...before, overlay: {reciter: 'Alafasy'}}));
-    studioModel.echo();
-    expect(getStudioState().rolledBack).toEqual({[ID]: {audioFile: 'take-1.mp3'}});
+    await api.patchProps(ID, ALIGNED);
+    // Before the panel's echo is rendered, the user changes the layout in the sidebar: built from
+    // the props it shows, which do not have the alignment yet.
+    studioModel.sidebar((props) => ({...props, layout: {...(props.layout as Props), visibleLines: 5}}));
+    // Its local object is older than the panel's echo: nothing is judged yet, and the save is still carried.
+    expect(getStudioState().rolledBack).toEqual({});
+    expect(getStudioState().pendingPatches[ID]).toEqual(ALIGNED);
+    expect(getStudioState().inFlightPatches).toEqual({[ID]: ALIGNED});
+    // The panel's echo shows the alignment...
+    studioModel.echoOne();
+    expect(getStudioState().rolledBack).toEqual({});
+    // ...and the sidebar's echo has written it over.
+    studioModel.echoOne();
+    expect(studioModel.file).toMatchObject({audioFile: 'page-load.mp3', layout: {visibleLines: 5}});
+    expect(getStudioState().rolledBack).toEqual({[ID]: ALIGNED});
     // Nothing pending shows the lost value as if it were there.
     expect(getStudioState().pendingPatches[ID]).toBeUndefined();
-    // The Studio's undo puts it back: the offer goes.
-    studioModel.sidebar((props) => ({...props, audioFile: 'take-1.mp3'}));
+    // The Studio's undo of the sidebar's write puts it back: the offer goes.
+    studioModel.undo();
     studioModel.echo();
     expect(getStudioState().rolledBack).toEqual({});
+  });
+
+  it('lands three quick panel saves when the echoes come one save behind', async () => {
+    const studioModel = remotion();
+    // Align, then a look; the echo of the alignment is rendered while the look is on its way.
+    await api.patchProps(ID, ALIGNED);
+    studioModel.duringNextSave = (write) => {
+      write();
+      studioModel.echoOne();
+    };
+    await api.patchProps(ID, {layout: {background: '#101418'}});
+    // The look is still in flight: the live props showed the alignment, not the look.
+    expect(getStudioState().inFlightPatches).toEqual({[ID]: {layout: {background: '#101418'}}});
+    // A split before the look's echo: it carries the look.
+    await api.patchProps(ID, {splits: [{page: 1, line: 1, atWordId: 1}]});
+    expect(studioModel.file).toMatchObject({
+      ...ALIGNED,
+      layout: {visibleLines: 3, background: '#101418'},
+      splits: [{page: 1, line: 1, atWordId: 1}],
+    });
+    studioModel.echo();
+    expect(getStudioState().inFlightPatches).toEqual({});
+    expect(getStudioState().rolledBack).toEqual({});
+  });
+
+  it('offers nothing for a sidebar save sent just before a panel save, and offers back what a second one wrote over', async () => {
+    const studioModel = remotion();
+    // The user types a reciter in the sidebar and clicks Align: the field's blur saves first.
+    studioModel.sidebar((props) => ({...props, overlay: {reciter: 'Alafasy'}}));
+    studioModel.duringNextSave = (write) => {
+      write();
+      studioModel.echoOne();
+    };
+    await api.patchProps(ID, ALIGNED);
+    expect(studioModel.file).toMatchObject({...ALIGNED, overlay: {reciter: 'Alafasy'}});
+    // The sidebar's echo is older than the panel's: no offer, the tabs keep the alignment.
+    expect(getStudioState().rolledBack).toEqual({});
+    expect(getStudioState().pendingPatches[ID]).toEqual(ALIGNED);
+    expect(getStudioState().inFlightPatches).toEqual({[ID]: ALIGNED});
+    // A sidebar edit made before the panel's echo still lands with it, and keeps the alignment.
+    studioModel.sidebar((props) => ({...props, layout: {...(props.layout as Props), visibleLines: 5}}));
+    studioModel.echo();
+    expect(getStudioState().rolledBack).toEqual({[ID]: ALIGNED});
+    await api.restoreRolledBack(ID);
+    expect(studioModel.file).toMatchObject({...ALIGNED, overlay: {reciter: 'Alafasy'}, layout: {visibleLines: 5}});
+    studioModel.echo();
+    expect(getStudioState().rolledBack).toEqual({});
+  });
+
+  it("takes the Studio's undo of a panel save as the user's, even at once", async () => {
+    const studioModel = remotion();
+    studioModel.sidebar((props) => ({...props, layout: {...(props.layout as Props), visibleLines: 5}}));
+    studioModel.echo();
+    // A look, then Ctrl+Z at once: the Root goes back to the sidebar's five lines without the look.
+    await api.patchProps(ID, {layout: {background: '#101418'}});
+    studioModel.echo();
+    studioModel.undo();
+    studioModel.echo(Date.now() + 2000);
+    expect(studioModel.file).toMatchObject({layout: {visibleLines: 5, background: '#ffffff'}});
+    expect(getStudioState().rolledBack).toEqual({});
+    expect(getStudioState().pendingPatches[ID]).toBeUndefined();
+    // The next panel save does not bring the look back.
+    await api.patchProps(ID, {splits: []});
+    expect(studioModel.file).toMatchObject({layout: {visibleLines: 5, background: '#ffffff'}});
   });
 
   it("takes a later sidebar change of a field the panel saved as the user's", async () => {
@@ -213,7 +318,7 @@ describe('the save path against the Studio', () => {
     await expect(api.patchProps(ID, {splits: [{page: 1, line: 1, atWordId: 1}]})).rejects.toThrow('disconnected');
     expect(getStudioState().inFlightPatches).toEqual({});
     // A minute later the user points audioFile at another file in the sidebar.
-    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}), Date.now() + 60_000);
     studioModel.echo(Date.now() + 60_000);
     await api.patchProps(ID, {layout: {background: '#000000'}});
     expect(studioModel.file).toMatchObject({audioFile: 'mine.mp3', layout: {background: '#000000'}});
@@ -234,34 +339,49 @@ describe('the save path against the Studio', () => {
     expect(getStudioState().inFlightPatches).toEqual({});
   });
 
-  it("drops what is in flight once the first live props after the save are the user's, past the race window", async () => {
+  it('offers back what no live props showed within the race window, and withdraws the offer when its echo comes late', async () => {
     const studioModel = remotion();
-    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
-    // The first live props the dock sees, long after, have the sidebar's recording.
-    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
-    studioModel.echo(Date.now() + 60_000);
+    await api.patchProps(ID, ALIGNED);
+    // No echo is rendered (two came at once and React rendered only the last, say); the dock looks
+    // again once the race window is over.
+    studioModel.look(Date.now() + api.RACE_WINDOW_MS + 1000);
     expect(getStudioState().inFlightPatches).toEqual({});
+    expect(getStudioState().rolledBack).toEqual({[ID]: ALIGNED});
+    expect(getStudioState().pendingPatches[ID]).toBeUndefined();
+    // The echo comes after all: the offer goes, and the next save starts from it.
+    studioModel.echo(Date.now() + api.RACE_WINDOW_MS + 2000);
     expect(getStudioState().rolledBack).toEqual({});
     await api.patchProps(ID, {layout: {background: '#000000'}});
-    expect(studioModel.file).toMatchObject({audioFile: 'mine.mp3'});
+    expect(studioModel.file).toMatchObject({...ALIGNED, layout: {background: '#000000'}});
+  });
+
+  it('judges the race window from a timer when nothing new comes', async () => {
+    vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+    try {
+      remotion();
+      await api.patchProps(ID, ALIGNED);
+      expect(getStudioState().rolledBack).toEqual({});
+      await vi.advanceTimersByTimeAsync(api.RACE_WINDOW_MS + 200);
+      expect(getStudioState().rolledBack).toEqual({[ID]: ALIGNED});
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('judges a racing sidebar save that came, with the echo, before the save resolved', async () => {
     const studioModel = remotion();
-    const before = studioModel.file;
-    // The server writes the panel's save and the echo is rendered; the sidebar, built from the
-    // props before it, writes over it; both are rendered before the panel's save resolves.
+    // The server writes the panel's save; the sidebar, built from the props before it, writes over
+    // it; both echoes are rendered before the panel's save resolves.
     studioModel.duringNextSave = (write) => {
       write();
-      studioModel.echo();
-      studioModel.sidebar(() => ({...before, layout: {visibleLines: 7, background: '#ffffff'}}));
+      studioModel.sidebar((props) => ({...props, layout: {visibleLines: 7, background: '#ffffff'}}));
       studioModel.echo();
     };
     await api.patchProps(ID, {audioFile: 'take-1.mp3'});
     expect(getStudioState().rolledBack).toEqual({[ID]: {audioFile: 'take-1.mp3'}});
     expect(getStudioState().inFlightPatches).toEqual({});
     // Ten seconds later the user sets the recording in the sidebar; the next panel save keeps it.
-    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}), Date.now() + 10_000);
     studioModel.echo(Date.now() + 10_000);
     await api.patchProps(ID, {splits: []});
     expect(studioModel.file).toMatchObject({audioFile: 'mine.mp3', layout: {visibleLines: 7}});
@@ -292,7 +412,7 @@ describe('the save path against the Studio', () => {
     studioModel.echo();
     await api.patchProps(ID, {layout: {background: '#101418'}});
     studioModel.echo();
-    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}), Date.now() + 60_000);
     studioModel.echo(Date.now() + 60_000);
     studioModel.jsonReset(Date.now() + 10 * 60_000);
     expect(getStudioState().rolledBack).toEqual({[ID]: {layout: {background: '#101418'}}});

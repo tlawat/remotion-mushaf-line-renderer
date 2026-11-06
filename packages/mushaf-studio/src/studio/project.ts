@@ -72,9 +72,13 @@ export const collectProjectFiles = (props: StudioCompositionProps): readonly str
   return [...paths].sort();
 };
 
-/** The project file of a composition: its props without `resolved`, and the files they need. */
+/**
+ * The project file of a composition: its props without `resolved` and `hostAudio` (which track of
+ * a template the composition follows belongs to the template, not to the project: the project's
+ * audio is `audioFile`), and the files they need.
+ */
 export const projectFileOf = (compositionId: string, props: StudioCompositionProps): ProjectFile => {
-  const {resolved: _resolved, ...rest} = props as unknown as Readonly<Record<string, unknown>>;
+  const {resolved: _resolved, hostAudio: _hostAudio, ...rest} = props as unknown as Readonly<Record<string, unknown>>;
   return {version: 1, compositionId, props: rest, files: collectProjectFiles(props)};
 };
 
