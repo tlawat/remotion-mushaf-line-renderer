@@ -10,6 +10,15 @@ export {
   forgetAudioAnalysis,
 } from './analyze';
 export {
+  assertNoHostRepeats,
+  defaultHostAudio,
+  followsHostAudio,
+  type HostAudio,
+  hostAudioOf,
+  hostAudioSchema,
+  OWN_AUDIO_NAME,
+} from './host';
+export {
   applyBiquad,
   type Biquad,
   firstSound,
@@ -32,3 +41,4 @@ export {
   type VolumeCurve,
   volumeAt,
 } from './volume';
+export {type AudioDecoder, audioToWav, encodeWav, WAV_SAMPLE_RATE} from './wav';

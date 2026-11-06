@@ -120,6 +120,22 @@ design and the roadmap.
   frame), and the same for `MushafAyahText` and `MushafPage`. The panel takes `propsKey`, `kind`
   and `frameOffset`; the compositions take `panel={false}`; the glow's levels record their fps
   (`levelsFps`). The app's `MushafInTemplate` is the example.
+- **Explicit audio sources.** Source is one choice of four (the catalogue, an upload, a file of
+  `public/`, a track of the template), each with one button and a line that says what it replaces,
+  under a "Now:" line that says what plays and where it came from. The catalogue note names
+  aligner.qud.dev and the clip host read from the answer; a clip that cannot be downloaded saves
+  nothing (Retry, or Stream from its host on purpose) instead of saving its URL silently; a missing
+  file the catalogue clip streams for can be downloaded from the Now line. Align works on the one
+  staged recording and says where it came from; it does not re-align a catalogue recitation, aligns
+  a URL (fetched by the browser, else by the aligner, `alignUrl()`), and sends a video's sound as
+  WAV (`encodeWav()`, `audioToWav()`).
+- **`hostAudio`.** An optional group in `MushafRecitation`, `MushafAyahText` and `MushafPage`
+  (`hostAudioSchema`, `defaultHostAudio`, read by `hostAudioOf()`): the template plays the audio,
+  the composition plays none, its timings start at `offsetSeconds` of the track, the audio cleanup
+  does nothing, and `memorize` repeats are refused (`assertNoHostRepeats()`). The compositions'
+  own `<Audio>` is named `OWN_AUDIO_NAME`. The panel lists the template's tracks from the Studio's
+  timeline, follows one, and offers Update timing when it moves. The glow's levels are silent before
+  a track that starts after the composition (`levelsWindow()`).
 - **CI.** After the render suite, CI builds `apps/mushaf-web`, downloads the sample's recording and
   runs the Studio smoke suite (`test:studio`, which now covers the Review tab). The root
   `bun run typecheck` checks `apps/mushaf-web` too.

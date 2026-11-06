@@ -180,8 +180,12 @@ describe('the timeline sequences', () => {
       durationInFrames: 300,
       parent: 'scene',
       startMediaFrom: 60,
+      mediaFrameAtSequenceZero: null,
       playbackRate: 1,
+      sequencePlaybackRate: 1,
+      trimBefore: 0,
       loop: false,
+      muted: false,
     };
     expect(seen.current).toEqual([expected]);
     const first = seen.current;
@@ -212,6 +216,27 @@ describe('the timeline sequences', () => {
       loopDisplay: {numberOfTimes: 2, startOffset: 0, durationInFrames: 150},
     } as Partial<Sequence> & Pick<Sequence, 'type'>);
     expect(timelineSequenceOf(video)).toMatchObject({type: 'video', src: 'v.mp4', playbackRate: 1.5, loop: true});
+    // What the offset of a template's track is worked out from: the timeline's own fields.
+    const trimmed = sequence({
+      type: 'audio',
+      src: 'a.mp3',
+      muted: true,
+      startMediaFrom: 90,
+      mediaFrameAtSequenceZero: 45,
+      playbackRate: 1,
+      frozenMediaFrame: null,
+      sequencePlaybackRate: 2,
+      trimBefore: 30,
+    } as Partial<Sequence> & Pick<Sequence, 'type'>);
+    expect(timelineSequenceOf(trimmed)).toMatchObject({
+      mediaFrameAtSequenceZero: 45,
+      sequencePlaybackRate: 2,
+      trimBefore: 30,
+      muted: true,
+    });
+    expect(
+      timelineSequenceOf({id: 'x', type: 'audio', trimBefore: null, mediaFrameAtSequenceZero: null}),
+    ).toMatchObject({trimBefore: 0, mediaFrameAtSequenceZero: null});
     expect(timelineSequenceOf({displayName: 'x'})).toBeNull();
     expect(timelineSequenceOf({id: 'bare'})).toEqual({
       id: 'bare',
@@ -222,8 +247,12 @@ describe('the timeline sequences', () => {
       durationInFrames: 0,
       parent: null,
       startMediaFrom: 0,
+      mediaFrameAtSequenceZero: null,
       playbackRate: 1,
+      sequencePlaybackRate: 1,
+      trimBefore: 0,
       loop: false,
+      muted: false,
     });
     expect(timelineSequencesOf('nope')).toEqual([]);
     expect(timelineSequencesOf([null, {id: 'a'}]).map((entry) => entry.id)).toEqual(['a']);

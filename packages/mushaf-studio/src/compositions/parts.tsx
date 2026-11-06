@@ -5,6 +5,7 @@ import {Audio as MediaAudio} from '@remotion/media';
 import type {MushafThemeSelection} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {Audio, useRemotionEnvironment} from 'remotion';
+import {OWN_AUDIO_NAME} from '../audio/host';
 import type {AudioSettings} from '../audio/schema';
 import {levelAt, type VolumeCurve} from '../audio/volume';
 import {EndCard} from '../content/EndCard';
@@ -156,7 +157,9 @@ export type CompositionAudioProps = {
 /**
  * The composition's `<Audio>`: `remotion`'s in the Studio, a `<Player>` and a server render, and
  * `@remotion/media`'s under the in-browser web renderer (`renderMediaOnWeb()`, which announces
- * `isClientSideRendering`), where `remotion`'s throws. The same props either way.
+ * `isClientSideRendering`), where `remotion`'s throws. The same props either way, and the same
+ * `name` (`OWN_AUDIO_NAME`), which the Studio's timeline shows and by which the Mushaf panel leaves
+ * the composition's own track out of the template's tracks.
  */
 export const CompositionAudio: React.FC<CompositionAudioProps> = ({src, trimBefore, trimAfter, volume}) => {
   const {isClientSideRendering} = useRemotionEnvironment();
@@ -165,9 +168,9 @@ export const CompositionAudio: React.FC<CompositionAudioProps> = ({src, trimBefo
     ...(trimAfter === undefined ? {} : {trimAfter}),
   };
   return isClientSideRendering ? (
-    <MediaAudio src={src} volume={volume} {...trims} />
+    <MediaAudio src={src} volume={volume} name={OWN_AUDIO_NAME} {...trims} />
   ) : (
-    <Audio src={src} volume={volume} {...trims} />
+    <Audio src={src} volume={volume} name={OWN_AUDIO_NAME} {...trims} />
   );
 };
 

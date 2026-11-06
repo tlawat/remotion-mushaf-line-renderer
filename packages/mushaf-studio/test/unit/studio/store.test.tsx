@@ -70,13 +70,18 @@ describe('the studio store', () => {
     setStudioState({
       session,
       uploadedAudio: uploads,
+      stagedFrom: {'Template/mushaf': 'public'},
       busy: 'x',
       error: 'y',
       catalogue: [],
       pendingPatches: {MushafRecitation: {slice: true}},
       drafts: {MushafRecitation: {review: {nudges: 1}}},
     });
-    expect(JSON.parse(sessionStorage.getItem('mushaf-studio.session')!)).toEqual({session, uploadedAudio: uploads});
+    expect(JSON.parse(sessionStorage.getItem('mushaf-studio.session')!)).toEqual({
+      session,
+      uploadedAudio: uploads,
+      stagedFrom: {'Template/mushaf': 'public'},
+    });
     // A reload: a fresh module reads the storage back, the transient fields start over.
     vi.resetModules();
     const fresh = await import('../../../src/studio/store');
@@ -87,6 +92,7 @@ describe('the studio store', () => {
       side: 'left',
       session,
       uploadedAudio: uploads,
+      stagedFrom: {'Template/mushaf': 'public'},
     });
     expect(state.pendingPatches).toEqual({});
     expect(state.inFlightPatches).toEqual({});
@@ -113,10 +119,14 @@ describe('the studio store', () => {
       session: null,
       uploadedAudio: {},
     });
-    sessionStorage.setItem('mushaf-studio.session', '{"uploadedAudio": {"A": "a.mp3", "B": 2}}');
+    sessionStorage.setItem(
+      'mushaf-studio.session',
+      '{"uploadedAudio": {"A": "a.mp3", "B": 2}, "stagedFrom": {"A": "public", "B": "nope", "C": 1}}',
+    );
     vi.resetModules();
     const again = await import('../../../src/studio/store');
     expect(again.getStudioState().uploadedAudio).toEqual({A: 'a.mp3'});
+    expect(again.getStudioState().stagedFrom).toEqual({A: 'public'});
   });
 
   it('files state by target key: a composition id, or the id and the props key of a slot', () => {

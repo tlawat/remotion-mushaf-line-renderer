@@ -10,6 +10,7 @@ import {
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {followsHostAudio} from '../audio/host';
 import {volumeAt} from '../audio/volume';
 import {backgroundFor} from '../background/compat';
 import {MushafBackground} from '../background/MushafBackground';
@@ -123,6 +124,8 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
     props;
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
+  // Under hostAudio the template plays the recording: the composition plays none of its own.
+  const ownAudio = audioFile !== '' && !followsHostAudio(props);
   const isStudio = useInStudio();
   const font = useUnicodeFont(props.font);
   const resolved = props.resolved as ResolvedAyahText | null;
@@ -213,14 +216,14 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         audioLevel={glowLevelAt(resolved.audio, now, fps)}
         glowY={layout.verticalAlign}
       />
-      {audioFile !== '' && identity && (
+      {ownAudio && identity && (
         <CompositionAudio
           src={recordingUrl(audioFile, resolved, staticFile)}
           trimBefore={audioOffsetFrames}
           volume={(f) => volumeAt(f, curve)}
         />
       )}
-      {audioFile !== '' &&
+      {ownAudio &&
         !identity &&
         clips.map((c) => {
           const trimBefore = audioOffsetFrames + Math.round(c.audioFrom * fps);

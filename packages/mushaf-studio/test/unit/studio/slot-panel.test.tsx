@@ -185,7 +185,7 @@ describe('a slot with no recitation yet', () => {
 
   it("downloads a catalogue pick into the slot's own folder and saves the files under the key", async () => {
     render(<MushafStudioPanel compositionId="MyTemplate" props={null} kind="recitation" propsKey="mushaf" />);
-    fireEvent.click(await screen.findByText('Use this recitation'));
+    fireEvent.click(await screen.findByText('Download into public/'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     const timingsPath = 'mushaf-studio/mytemplate-mushaf/abdul_hamid_ghraio_2025_yt-1-1-7.timings.json';
     expect(studio.writeStaticFile).toHaveBeenCalledWith(expect.objectContaining({filePath: timingsPath}));

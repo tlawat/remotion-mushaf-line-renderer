@@ -1,5 +1,6 @@
 import {enterTiming, type RecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
+import {followsHostAudio} from '../../audio/host';
 import {isIdentityTimeline, timelineDuration} from '../../memorize/timeline';
 import {sizeForAspect} from '../../schema';
 import {isInStudio} from '../../studio/environment';
@@ -42,6 +43,7 @@ export const withRecitationAudio = async (
     staticFile,
     signal: options.signal,
     sidecar: timings.alignment,
+    hostAudio: followsHostAudio(props),
   });
   return {
     ...skipRecitationStart(resolved, audio.trimSeconds, props.memorize),

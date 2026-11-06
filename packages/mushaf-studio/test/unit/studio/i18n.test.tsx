@@ -134,9 +134,9 @@ describe('the language switch', () => {
       'الأسطر',
       'النص',
     ]);
-    await screen.findByText('استخدم هذه التلاوة');
+    await screen.findByText('نزّل إلى public/');
     await screen.findByText('جاهز.');
-    expect(screen.queryByText('Use this recitation')).toBeNull();
+    expect(screen.queryByText('Download into public/')).toBeNull();
     expect(JSON.parse(localStorage.getItem('mushaf-studio.panel')!).language).toBe('ar');
     // Every tab renders in Arabic.
     for (const name of ['المظهر', 'المحاذاة', 'المراجعة', 'الأسطر', 'النص']) {

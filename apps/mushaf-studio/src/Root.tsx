@@ -538,9 +538,10 @@ export const RemotionRoot: React.FC = () => {
           resolved: null,
         }}
       />
-      {/* A template of your own with the recitation dropped in (see MushafInTemplate.tsx): its title, intro
-          and outro are its own props, the recitation's are under `mushaf` (null until one is picked).
-          The panel saves there only, and stays docked on the intro and the outro too. */}
+      {/* A template of your own with the recitation dropped in (see MushafInTemplate.tsx): its title, intro,
+          outro and audio track (`soundtrack`) are its own props, the recitation's are under `mushaf` (null
+          until one is picked). The recitation follows the template's track (`mushaf.hostAudio`) and plays
+          none itself. The panel saves there only, and stays docked on the intro and the outro too. */}
       <Composition
         id="MushafInTemplate"
         component={MushafInTemplate}
@@ -556,6 +557,7 @@ export const RemotionRoot: React.FC = () => {
           introSeconds: 2,
           outro: 'Subscribe for more',
           outroSeconds: 2,
+          soundtrack: 'mushaf-studio/fatiha/audio.mp3',
           mushaf: {
             audioFile: 'mushaf-studio/fatiha/audio.mp3',
             timingsFile: 'mushaf-studio/fatiha/timings.json',
@@ -682,6 +684,11 @@ export const RemotionRoot: React.FC = () => {
               fadeOutSeconds: 1,
               trimSilence: false,
               volume: 1,
+            },
+            hostAudio: {
+              enabled: true,
+              offsetSeconds: 0,
+              track: 'Template audio',
             },
             review: {
               showDoubtful: true,

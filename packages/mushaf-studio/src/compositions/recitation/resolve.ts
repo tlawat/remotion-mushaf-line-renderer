@@ -12,6 +12,7 @@ import {
   scheduleLines,
 } from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
+import {assertNoHostRepeats, hostAudioOf} from '../../audio/host';
 import {describeValue, MushafStudioError} from '../../errors';
 import {applySplits, doubtfulWords, fitSplits} from '../../lines';
 import {clipTimeline, type MemorizeClip} from '../../memorize/timeline';
@@ -205,6 +206,22 @@ export const audioOffsetFor = (file: StudioTimings, played: StudioTimings, leadI
 };
 
 /**
+ * `audioOffsetFor()`, or under `hostAudio` the second of the template's track heard at the
+ * composition's frame 0 (`hostAudio.offsetSeconds`, negative when the track starts later): the
+ * template plays the audio, so where the composition starts in it is the template's, not chosen
+ * for the first line's entrance.
+ */
+export const recordingOffsetFor = (
+  props: object,
+  file: StudioTimings,
+  played: StudioTimings,
+  leadInSeconds: number,
+): number => {
+  const host = hostAudioOf(props);
+  return host.enabled ? roundTime(host.offsetSeconds) : audioOffsetFor(file, played, leadInSeconds);
+};
+
+/**
  * The timings `offset` seconds earlier: every ayah and word, and the sidecar's words and segments,
  * which share the recording's base. The same object for an offset of 0, so a file played from its
  * start keeps its identity (and its byte-for-byte round trip).
@@ -327,7 +344,7 @@ const acrossSurahsLines = async (
 /**
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah
  * range (one surah's timings only: timings that cross surahs are used whole) and to the ayahs the
- * recording carries whole, moves them `audioOffsetSeconds` earlier (see `audioOffsetFor()`), finds
+ * recording carries whole, moves them `audioOffsetSeconds` earlier (see `recordingOffsetFor()`), finds
  * the lines (`getMushafLines(recitedRange(...))`, or `getMushafLinesForRanges(recitedRanges(...))`
  * across surahs, sliced), applies the splits (refusing one that does not fit, or, with
  * `lenientSplits`, leaving it out and listing it in `droppedSplits`), schedules the lines (after the surah's header lines
@@ -335,7 +352,8 @@ const acrossSurahsLines = async (
  * `withHeaderSlots()`; across surahs each later surah's header lines come before its ayah 1, see
  * `withInnerHeaderSlots()`), loads the translation and gloss files, and marks the doubtful
  * words of the whole range (an incomplete ayah's words included), and lays out the clip timeline
- * of `memorize` (each ayah played `repeat` times). Pure given `fetch`;
+ * of `memorize` (each ayah played `repeat` times; refused under `hostAudio`, see
+ * `assertNoHostRepeats()`). Pure given `fetch`;
  * `calculateMetadata()` is this plus the size and duration.
  */
 export const resolveRecitation = async (
@@ -349,10 +367,11 @@ export const resolveRecitation = async (
     staticFile: options.staticFile ?? remotionStaticFile,
     ...(options.signal ? {signal: options.signal} : {}),
   };
+  assertNoHostRepeats(props, props.memorize);
   const file = await readTimings(props.timingsFile, io);
   const inRange = timingsInRange(file, props.fromAyah, props.toAyah);
   const played = playableTimings(inRange);
-  const audioOffsetSeconds = audioOffsetFor(file, played, props.animation.leadInSeconds);
+  const audioOffsetSeconds = recordingOffsetFor(props, file, played, props.animation.leadInSeconds);
   const timings = shiftTimings(played, audioOffsetSeconds);
   const sources = {
     theme: themeSelectionFrom(props.theme, props.customTheme),

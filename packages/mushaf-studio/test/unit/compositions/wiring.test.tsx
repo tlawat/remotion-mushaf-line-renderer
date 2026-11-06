@@ -76,8 +76,12 @@ const {MushafStudioError} = await import('../../../src/errors');
 const {FONTS_ATTRIBUTION} = await import('../../../src/export');
 const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, textSchema} = await import('../../../src/schema');
 const {planTranslationLayer} = await import('../../../src/compositions/parts');
-const {loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import('../../../src/compositions/extras');
-const {levelAt} = await import('../../../src/audio');
+const {levelsWindow, loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import(
+  '../../../src/compositions/extras'
+);
+const {assertNoHostRepeats, defaultHostAudio, hostAudioOf, levelAt, OWN_AUDIO_NAME} = await import(
+  '../../../src/audio'
+);
 const {surah2Timings, syntheticMushafLines} = await import('../page/helpers');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitationWithClips = import('../../../src/compositions/recitation').ResolvedRecitationWithClips;
@@ -752,5 +756,115 @@ describe('skipRecitationStart', () => {
     expect(moved.schedule[0]!.start).toBe(0);
     expect(moved.audioOffsetSeconds).toBe(1);
     expect(moved.clips[1]!.audioFrom).toBeCloseTo(3.533 - 1, 6);
+  });
+});
+
+describe('hostAudio: the template plays the audio', () => {
+  const host = (offsetSeconds: number) => ({enabled: true, offsetSeconds, track: 'Template audio'});
+  const nameOf = (record: unknown) => (record as {name?: string}).name;
+
+  it('names its own <Audio> so the panel can leave it out of the template’s tracks, and plays it while off', async () => {
+    const props = recitationProps();
+    mount(<MushafRecitation {...props} resolved={await resolvedOf(props)} />);
+    expect(remotion.audios.map(nameOf)).toEqual(['Mushaf recitation audio']);
+    expect(OWN_AUDIO_NAME).toBe('Mushaf recitation audio');
+    // Props saved before the group existed read as off.
+    const {hostAudio: _, ...older} = props;
+    expect(hostAudioOf(older)).toEqual(defaultHostAudio);
+    expect(mushafRecitationSchema.safeParse(older).success).toBe(true);
+    cleanup();
+    remotion.audios.length = 0;
+    mount(
+      <MushafRecitation
+        {...(older as MushafRecitationProps)}
+        resolved={await resolvedOf(older as MushafRecitationProps)}
+      />,
+    );
+    expect(remotion.audios).toHaveLength(1);
+  });
+
+  it('plays no audio of its own, and moves the timings to the second of the track heard at frame 0', async () => {
+    const props = recitationProps({hostAudio: host(1.5), audio: audio({normalize: true, trimSilence: true})});
+    const resolved = await resolvedOf(props);
+    expect(resolved.audioOffsetSeconds).toBe(1.5);
+    expect(resolved.timings.ayat[0]!.start).toBeCloseTo(0.331 - 1.5, 6);
+    expect(resolved.timings.ayat[0]!.words![0]!.start).toBeCloseTo(0.331 - 1.5, 6);
+    // The cleanup is the template's: no gain, no trim, nothing analysed for them.
+    expect(resolved.audio).toEqual({gain: 1, trimSeconds: 0, levels: []});
+    expect(mocks.analyzeAudio).not.toHaveBeenCalled();
+    mount(<MushafRecitation {...props} resolved={resolved} />);
+    expect(remotion.audios).toHaveLength(0);
+    // A track that starts later than the recitation: the timings move later.
+    const late = await resolvedOf(recitationProps({hostAudio: host(-2)}));
+    expect(late.audioOffsetSeconds).toBe(-2);
+    expect(late.timings.ayat[0]!.start).toBeCloseTo(2.331, 6);
+  });
+
+  it('never streams the catalogue clip in place of a missing file: the template’s track is what plays', async () => {
+    const props = recitationProps({audioFile: 'missing.mp3', timingsFile: 'clip.json', hostAudio: host(0)});
+    const resolved = await resolvedOf(props);
+    expect(resolved.audioSrc).toBeNull();
+    expect(resolved.audioWarning).toBeNull();
+  });
+
+  it('pads the glow’s levels with silence for a track that starts after the recitation', async () => {
+    const glow = background({glow: {enabled: true, color: '#fff', strength: 0.5}});
+    const resolved = await resolvedOf(recitationProps({hostAudio: host(-2), background: glow}));
+    // The file itself is analysed, from 2 s before it starts: 60 silent frames, then its own levels.
+    expect(mocks.analyzeAudio).toHaveBeenCalledWith(
+      'https://studio.test/audio.mp3',
+      expect.objectContaining({fps: 30}),
+    );
+    const levels = resolved.audio!.levels;
+    expect(levels.slice(0, 60)).toEqual(new Array(60).fill(0));
+    expect(levels.slice(60, 63)).toEqual([0, 0.111, 0.222]);
+    expect(levels).toHaveLength(Math.ceil((27.559 + 2 + 1) * 30));
+    expect(levelsWindow([0.5, 1], -1, 3)).toEqual([0, 0.5, 1]);
+    expect(levelsWindow([0.5, 1, 0.25], 1, 5)).toEqual([1, 0.25]);
+    expect(levelsWindow([0.5], -4, 2)).toEqual([0, 0]);
+  });
+
+  it('refuses memorisation repeats, which cannot replay a track the template plays straight through', async () => {
+    const memorize = {...defaultMushafRecitationProps.memorize, mode: 'repeat' as const, repeat: 3};
+    const refused = resolvedOf(recitationProps({hostAudio: host(0), memorize}));
+    await expect(refused).rejects.toMatchObject({code: 'BAD_STUDIO_PROP'});
+    await expect(refused).rejects.toThrow(
+      /memorize\.repeat is 3 \(mode "repeat"\), but hostAudio\.enabled is true.*Set memorize\.repeat to 1 or memorize\.mode to "off"/,
+    );
+    // One play of each ayah, words hidden, is fine.
+    const once = await resolvedOf(
+      recitationProps({hostAudio: host(0), memorize: {...memorize, mode: 'blank-upcoming', repeat: 1}}),
+    );
+    expect(once.clips.every((clip) => clip.repetition === 1)).toBe(true);
+    expect(() => assertNoHostRepeats({hostAudio: {enabled: false}}, memorize)).not.toThrow();
+  });
+
+  it('works the same in an ayah text and a page', async () => {
+    const ayahProps: MushafAyahTextProps = {
+      ...defaultMushafAyahTextProps,
+      audioFile: 'audio.mp3',
+      timingsFile: 'timings.json',
+      textFile: 'text.json',
+      hostAudio: host(0.5),
+    };
+    const ayahText = (await calculateMushafAyahTextMetadata(metadataArgs(ayahProps))).props!.resolved;
+    expect(ayahText.audioOffsetSeconds).toBe(0.5);
+    expect(ayahText.ayahs[0]!.start).toBeCloseTo(0.331 - 0.5, 6);
+    mount(<MushafAyahText {...ayahProps} resolved={ayahText} />);
+    expect(remotion.audios).toHaveLength(0);
+    const repeat = {...defaultMushafAyahTextProps.memorize, mode: 'repeat' as const, repeat: 2};
+    await expect(resolveAyahText({...ayahProps, memorize: repeat})).rejects.toMatchObject({code: 'BAD_STUDIO_PROP'});
+    cleanup();
+    const pageProps: MushafPageProps = {
+      ...defaultMushafPageProps,
+      audioFile: 'audio.mp3',
+      timingsFile: 'surah2.json',
+      hostAudio: host(-1),
+    };
+    const page = (await calculateMushafPageMetadata(metadataArgs(pageProps))).props!.resolved;
+    expect(page.audioOffsetSeconds).toBe(-1);
+    expect(page.timings.ayat[0]!.start).toBeCloseTo(1.5, 6);
+    mount(<MushafPage {...pageProps} resolved={page} />);
+    expect(remotion.audios).toHaveLength(0);
   });
 });

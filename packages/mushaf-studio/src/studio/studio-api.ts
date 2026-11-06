@@ -16,6 +16,7 @@ import {
 import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {staticFile} from 'remotion';
 import {forgetAudioAnalysis} from '../audio/analyze';
+import type {HostAudio} from '../audio/host';
 import {MushafStudioError} from '../errors';
 import type {MushafLookPatch} from '../presets';
 import type {Review, Text} from '../schema';
@@ -28,7 +29,7 @@ import {forgetWaveform} from './waveform-peaks';
 /**
  * What the panel changes on the composition: the content props, the file fields of `text` (its
  * translation layers included) and `review`, the end card's files, and the style groups a look sets
- * (see `MushafLookPatch`). `slice` and `splits` are `<MushafRecitation>`'s, `textFile`
+ * (see `MushafLookPatch`), and `hostAudio`. `slice` and `splits` are `<MushafRecitation>`'s, `textFile`
  * `<MushafAyahText>`'s; a `<MushafPage>` has no `text`.
  */
 export type PropsPatch = Omit<MushafLookPatch, 'text'> & {
@@ -44,6 +45,8 @@ export type PropsPatch = Omit<MushafLookPatch, 'text'> & {
     | undefined;
   readonly review?: Partial<Review> | undefined;
   readonly endCard?: EndCardView | undefined;
+  /** Always the whole group: a template's Root without it gets complete props. */
+  readonly hostAudio?: HostAudio | undefined;
 };
 
 const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>

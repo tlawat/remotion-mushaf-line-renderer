@@ -1,4 +1,5 @@
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
+import {followsHostAudio} from '../audio/host';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../compositions/extras';
 import {
   type ResolvedProps,
@@ -34,6 +35,7 @@ export const withPageAudio = async (
     staticFile,
     signal: options.signal,
     sidecar: timings.alignment,
+    hostAudio: followsHostAudio(props),
   });
   return {
     ...skipPageStart(resolved, audio.trimSeconds, props.pageView.turnSeconds),

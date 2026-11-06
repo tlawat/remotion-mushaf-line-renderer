@@ -10,6 +10,7 @@ import {
 import type * as React from 'react';
 import {useEffect} from 'react';
 import {AbsoluteFill, Easing, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {followsHostAudio} from '../audio/host';
 import {volumeAt} from '../audio/volume';
 import {backgroundFor} from '../background/compat';
 import {MushafBackground} from '../background/MushafBackground';
@@ -307,6 +308,8 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
+  // Under hostAudio the template plays the recording: the composition plays none of its own.
+  const ownAudio = audioFile !== '' && !followsHostAudio(props);
   const resolved = props.resolved as ResolvedPage | null;
   if (!resolved) {
     throw new MushafStudioError(
@@ -400,7 +403,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
         }}
         audioLevel={glowLevelAt(resolved.audio, now, fps)}
       />
-      {audioFile !== '' && (
+      {ownAudio && (
         <CompositionAudio
           src={recordingUrl(audioFile, resolved, staticFile)}
           trimBefore={Math.round(resolved.audioOffsetSeconds * fps)}

@@ -1,7 +1,9 @@
 // An example of a template of your own with a recitation dropped into it: a 1080x1920 reel with its
-// own title, intro and outro, its own Zod schema, and the recitation's props under one key
-// (`mushaf`). The Mushaf panel saves there and leaves the template's own props alone; it stays docked
-// on every frame, the intro and the outro included.
+// own title, intro and outro, its own Zod schema, its own audio track, and the recitation's props
+// under one key (`mushaf`). The Mushaf panel saves there and leaves the template's own props alone;
+// it stays docked on every frame, the intro and the outro included. The recitation follows the
+// template's track (`mushaf.hostAudio`) instead of playing its audio itself: the panel's Source tab
+// lists the track under "A track in this video".
 import {
   MushafRecitationSlot,
   mushafRecitationSlotSchema,
@@ -9,11 +11,22 @@ import {
   slotDurationOf,
 } from '@tlawat/mushaf-studio';
 import type * as React from 'react';
-import {AbsoluteFill, type CalculateMetadataFunction, interpolate, Sequence, useCurrentFrame} from 'remotion';
+import {
+  AbsoluteFill,
+  Audio,
+  type CalculateMetadataFunction,
+  interpolate,
+  Sequence,
+  staticFile,
+  useCurrentFrame,
+} from 'remotion';
 import {z} from 'zod';
 
 /** The template's frame rate: the recitation is resolved at it, so its frames are the template's. */
 export const TEMPLATE_FPS = 30;
+
+/** The name of the template's own `<Audio>`: what the Studio's timeline and the Mushaf panel call the track. */
+export const TEMPLATE_AUDIO_NAME = 'Template audio';
 
 /** Where the recitation sits, in template pixels. */
 const BOX = {left: 60, top: 600, width: 960, height: 720} as const;
@@ -24,6 +37,9 @@ export const mushafInTemplateSchema = z.object({
   introSeconds: z.number().min(0).max(10).describe('Seconds of intro before the recitation'),
   outro: z.string().describe('What the outro says'),
   outroSeconds: z.number().min(0).max(10).describe('Seconds of outro after the recitation'),
+  soundtrack: z
+    .string()
+    .describe("The template's own audio track, a path in public/ (empty: none), from the recitation's start"),
   // The recitation, nested under one key so it never collides with the template's own props; `null`
   // until a recitation is picked in the Mushaf panel.
   mushaf: mushafRecitationSlotSchema,
@@ -60,6 +76,7 @@ export const MushafInTemplate: React.FC<MushafInTemplateProps> = ({
   introSeconds,
   outro,
   outroSeconds,
+  soundtrack,
   mushaf,
 }) => {
   const frame = useCurrentFrame();
@@ -94,6 +111,13 @@ export const MushafInTemplate: React.FC<MushafInTemplateProps> = ({
           border: '2px solid rgba(255, 255, 255, 0.22)',
         }}
       />
+      {/* The template's own track, from the recitation's start: the slot's `hostAudio` follows it,
+          so the recitation plays nothing itself and its words keep time with this. */}
+      {soundtrack !== '' ? (
+        <Sequence from={intro} name={TEMPLATE_AUDIO_NAME} layout="none">
+          <Audio src={staticFile(soundtrack)} name={TEMPLATE_AUDIO_NAME} />
+        </Sequence>
+      ) : null}
       <MushafRecitationSlot
         props={mushaf}
         propsKey="mushaf"

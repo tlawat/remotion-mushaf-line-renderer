@@ -297,7 +297,9 @@ const templateBlockOf = (root: string): string => {
   return next < 0 ? root.slice(start) : root.slice(start, start + next);
 };
 
-test('MushafInTemplate docks the panel on the intro and saves a look under `mushaf` only', async ({page}) => {
+test('MushafInTemplate docks the panel on the intro, offers its own audio track, and saves a look under `mushaf` only', async ({
+  page,
+}) => {
   const rootFile = appRootFile();
   const original = readFileSync(rootFile, 'utf8');
   try {
@@ -316,6 +318,20 @@ test('MushafInTemplate docks the panel on the intro and saves a look under `mush
     for (const tab of ['Source', 'Look', 'Align', 'Review', 'Lines', 'Text']) {
       await expect(panel.getByRole('tab', {name: tab})).toBeVisible();
     }
+
+    // The template's own <Audio> is on the Studio's timeline, and Source offers it: the recitation
+    // follows it (`mushaf.hostAudio`), timed from the slot's start, its own <Audio> left out.
+    await panel.getByRole('tab', {name: 'Source'}).click();
+    const trackChoice = panel.getByRole('radio', {name: 'A track in this video'});
+    await expect(trackChoice).toBeChecked();
+    await expect(panel.locator('[data-mushaf-control="source-now"]')).toContainText(
+      "Now: the template's track Template audio plays public/mushaf-studio/fatiha/audio.mp3, from second 0",
+    );
+    const tracks = panel.getByRole('combobox', {name: 'Track'});
+    await expect(tracks.locator('option')).toHaveText(['Template audio · audio · second 0 at the start']);
+    await expect(panel.getByRole('button', {name: 'Use this track'})).toBeEnabled();
+    // In step with the track as the template places it: no timing to update.
+    await expect(panel.locator('[data-mushaf-control="host-moved"]')).toHaveCount(0);
 
     // A look from the panel: saved in the Root under the template's `mushaf` key, nowhere else.
     await panel.getByRole('tab', {name: 'Look'}).click();

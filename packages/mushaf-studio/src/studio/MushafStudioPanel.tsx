@@ -2,11 +2,13 @@ import type * as React from 'react';
 import {memo, useEffect, useMemo, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
+import {hostAudioOf} from '../audio/host';
 import {slotDurationOf, slotErrorOf} from '../slots/resolve';
 import {emptySlotPropsFor} from '../slots/schema';
 import {reserveDockSpace} from './dock-space';
 import {DoubtMarkers} from './doubts';
 import {useInStudio} from './environment';
+import {followedTrack, hostTrackMoved, studioTrackFile, useHostAudioTracks} from './host-tracks';
 import {directionOf, STUDIO_LANGUAGES} from './i18n';
 import type {MushafStudioPanelKind, MushafStudioPanelProps} from './index';
 import {ProjectMenu} from './ProjectMenu';
@@ -36,6 +38,7 @@ import {
   type PropsPatch,
   patchApplied,
   patchPaths,
+  patchProps,
   rememberLiveProps,
   rememberPanelProps,
   restoreRolledBack,
@@ -152,6 +155,41 @@ const RolledBack: React.FC<{readonly target: StudioTarget; readonly lost: PropsP
         title={t('panel.keepAsIs')}
       >
         ×
+      </button>
+    </div>
+  );
+};
+
+/**
+ * Under `hostAudio`, the live template track the composition follows (`followedTrack()`), when it
+ * has moved since its offset was saved (`hostTrackMoved()`): the timings would run early or late.
+ * Offers "Update timing", which saves the live offset; nothing is written until it is pressed.
+ */
+const HostTrackTiming: React.FC<{
+  readonly target: StudioTarget;
+  readonly props: StudioCompositionProps;
+  readonly frameOffset: number;
+  readonly fps: number;
+}> = ({target, props, frameOffset, fps}) => {
+  const tracks = useHostAudioTracks(frameOffset);
+  const {busy} = useStudioState();
+  const t = useT();
+  const host = hostAudioOf(props);
+  if (!host.enabled) return null;
+  const live = followedTrack(tracks, props.audioFile, host.track, studioTrackFile);
+  if (live === null || live.limit !== null || !hostTrackMoved(host.offsetSeconds, live.offsetSeconds, fps)) return null;
+  const update = () =>
+    void runStudioTask(tNow('panel.busy.timing'), async () => {
+      await patchProps(target, {hostAudio: {...host, offsetSeconds: live.offsetSeconds, track: live.label}});
+      setStudioState({notice: tNow('panel.notice.timing', {track: live.label, offset: live.offsetSeconds})});
+    });
+  return (
+    <div style={{...styles.status, ...styles.statusLine('notice')}} role="alert" data-mushaf-control="host-moved">
+      <span style={{flex: '1 1 auto'}}>
+        {t('panel.hostMoved', {track: live.label, live: live.offsetSeconds, saved: host.offsetSeconds})}
+      </span>
+      <button type="button" style={styles.button('default', busy !== null)} disabled={busy !== null} onClick={update}>
+        {t('panel.updateTiming')}
       </button>
     </div>
   );
@@ -365,6 +403,7 @@ const StudioDock: React.FC<{
               {t('panel.slotError', {key: propsKey ?? compositionId, message: slotError})}
             </div>
           ) : null}
+          <HostTrackTiming target={target} props={shown} frameOffset={frameOffset} fps={fps} />
           {lost ? <RolledBack target={target} lost={lost} /> : null}
           <StatusLine />
         </>

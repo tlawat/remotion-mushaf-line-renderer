@@ -7,6 +7,7 @@
 import {recitedRange} from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
 import {analyzeAudio, forgetAudioAnalysis} from '../audio/analyze';
+import {followsHostAudio, hostAudioOf} from '../audio/host';
 import {audioSummaryFrom, audioSummaryOf, withAudioSummary} from '../audio/summary';
 import {recitedPassageOf} from '../compositions/extras';
 import {fileUrl, loadTextFile, STUDIO_FPS} from '../compositions/shared';
@@ -263,7 +264,8 @@ export type SavedRecording = {
  * Saves a new recording: its timings measured (`withRecordingSummary()`) and written into the
  * project as `timingsName`, or under the next free numbered name when a file there has manual edits
  * or other timings (`timingsPathFor()`: a reviewed file is never replaced), then `audioFile` and
- * `timingsFile` in one patch. Only when it is another recording (`isOtherRecording()`) does the
+ * `timingsFile` in one patch (with `hostAudio` turned off, unless `keepHostAudio`: the new
+ * recording is the composition's own to play). Only when it is another recording (`isOtherRecording()`) does the
  * patch also reset the range and the splits (`freshRecording()`) and clear the text and end-card
  * files that do not fit the new passage (`stalePassageFiles()`). On `<MushafAyahText>` it first
  * fetches the text of the recited ayahs in its font's script and writes it beside them, under the
@@ -279,6 +281,11 @@ export const saveRecording = async (options: {
   readonly audioFile: string;
   readonly timings: StudioTimings;
   readonly timingsName: string;
+  /**
+   * Whether `audioFile` is the template's track the composition follows (`hostAudio`), which stays
+   * on; otherwise a composition that followed one plays `audioFile` itself again.
+   */
+  readonly keepHostAudio?: boolean | undefined;
 }): Promise<SavedRecording> => {
   const {target, props, project, audioFile, timingsName} = options;
   const measured = await withRecordingSummary(options.timings, audioFile);
@@ -287,7 +294,13 @@ export const saveRecording = async (options: {
   const notices: string[] = [];
   if (where.kept !== null) notices.push(t('recording.notice.versioned', {kept: where.kept, path: timingsFile}));
   const before = props.timingsFile === '' ? null : await readTimingsFile(props.timingsFile).catch(() => null);
-  let patch: PropsPatch = {audioFile, timingsFile};
+  let patch: PropsPatch = {
+    audioFile,
+    timingsFile,
+    ...(followsHostAudio(props) && options.keepHostAudio !== true
+      ? {hostAudio: {...hostAudioOf(props), enabled: false}}
+      : {}),
+  };
   if (isOtherRecording(props, audioFile, before, measured)) {
     const stale = await stalePassageFiles(props, measured);
     patch = deepMerge(deepMerge(stale.patch, patch), freshRecording(props)) as PropsPatch;

@@ -49,6 +49,7 @@ const qud = vi.hoisted(() => ({
   getChapterSegments: vi.fn(),
   timingsFromCatalogue: vi.fn(),
   alignAudio: vi.fn(),
+  alignUrl: vi.fn(),
   sessionTimestamps: vi.fn(),
   splitSession: vi.fn(),
   realignSession: vi.fn(),
@@ -76,6 +77,13 @@ const unicodeText = vi.hoisted(() => ({fetchQuranComText: vi.fn()}));
 vi.mock('../../../src/unicode/text', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/unicode/text')>()),
   fetchQuranComText: unicodeText.fetchQuranComText,
+}));
+
+// The Studio's timeline: what a test lays out there is what the panel reads as the template's tracks.
+const timeline = vi.hoisted(() => ({sequences: [] as readonly unknown[]}));
+vi.mock('../../../src/studio/remotion-internals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/studio/remotion-internals')>()),
+  useTimelineSequences: () => timeline.sequences,
 }));
 
 const {MushafStudioPanel} = await import('../../../src/studio');
@@ -255,9 +263,29 @@ const written = (index: number): WriteCall[0] => (studio.writeStaticFile.mock.ca
 const writtenJson = (index: number): StudioTimings => JSON.parse(written(index).contents as string) as StudioTimings;
 const panel = (props: MushafRecitationProps, tab: 'align' | 'review' | 'lines' | 'text') =>
   render(<MushafStudioPanel compositionId="MushafRecitation" props={props} initialTab={tab} />);
+/** An audio track as `useTimelineSequences()` reads it from the Studio's timeline. */
+const trackSequence = (id: string, src: string, from: number, displayName = 'track') => ({
+  id,
+  displayName,
+  type: 'audio',
+  src,
+  from,
+  durationInFrames: 600,
+  parent: null,
+  startMediaFrom: 0,
+  mediaFrameAtSequenceZero: 0,
+  playbackRate: 1,
+  sequencePlaybackRate: 1,
+  trimBefore: 0,
+  loop: false,
+  muted: false,
+});
+/** Picks one of Source's four audio sources. */
+const pickSource = (name: string) => fireEvent.click(screen.getByRole('radio', {name}));
 
 beforeEach(() => {
   resetStudioStore();
+  timeline.sequences = [];
   // Each test's public/ starts empty: no file a test before it wrote counts as taken.
   resetSaveTracking();
   env.isStudio = true;
@@ -329,10 +357,116 @@ describe('Align', () => {
     expect(studio.writeStaticFile).toHaveBeenCalledTimes(1);
   });
 
-  it('has nothing to align when the composition plays a URL and nothing was uploaded', () => {
-    panel(propsWith(reviewTimings(), {audioFile: 'https://x.y/z.mp3'}), 'align');
+  it('has nothing to align when the composition plays nothing and nothing was uploaded', () => {
+    panel(propsWith(reviewTimings(), {audioFile: ''}), 'align');
     expect(screen.getByRole('button', {name: 'Align'})).toHaveProperty('disabled', true);
     expect(screen.getByText(/Put a recording into public\//)).toBeTruthy();
+  });
+
+  it('says where the staged recording came from, and aligns what the composition plays when nothing is staged', () => {
+    setStudioState({
+      uploadedAudio: {MushafRecitation: 'mushaf-studio/p/old.mp3'},
+      stagedFrom: {MushafRecitation: 'public'},
+    });
+    const {unmount} = panel(propsWith(reviewTimings()), 'align');
+    expect(screen.getByText('public/mushaf-studio/p/old.mp3')).toBeTruthy();
+    expect(screen.getByText(/A file of public\/ staged in Source: the composition does not play it yet/)).toBeTruthy();
+    unmount();
+    // Staged, then aligned: the composition plays it now, and Align says so.
+    panel(propsWith(reviewTimings(), {audioFile: 'mushaf-studio/p/old.mp3'}), 'align');
+    expect(screen.getByText('What the composition plays now.')).toBeTruthy();
+    expect(document.body.querySelector('[data-mushaf-control="align-source"]')?.getAttribute('data-origin')).toBe(
+      'current',
+    );
+  });
+
+  it('does not align the catalogue’s reviewed timings again, and says why', () => {
+    const catalogue = reviewTimings();
+    const timings = {...catalogue, alignment: {...catalogue.alignment!, source: 'qud-catalogue' as const}};
+    panel(propsWith(timings), 'align');
+    const button = screen.getByRole('button', {name: 'Align'});
+    expect(button).toHaveProperty('disabled', true);
+    expect(button.getAttribute('title')).toMatch(/^Already timed by the catalogue/);
+    expect(screen.getAllByText(/Already timed by the catalogue \(reviewed word timings\)/)).toHaveLength(1);
+  });
+
+  it('aligns a streamed URL: fetched by this browser and uploaded, else downloaded by the aligner itself', async () => {
+    const timings = reviewTimings();
+    qud.alignAudio.mockResolvedValue({audio_id: 'sess-u', segments: [], device: 'GPU'});
+    qud.alignUrl.mockResolvedValue({audio_id: 'sess-v', segments: [], device: 'GPU'});
+    qud.sessionTimestamps.mockResolvedValue({audio_id: 'sess-u', segments: []});
+    qud.timingsFromQud.mockReturnValue(timings);
+    const url = 'https://cdn.example.org/recitations/Take%201.mp3';
+    const {unmount} = panel(propsWith(timings, {audioFile: url}), 'align');
+    expect(
+      screen.getByText(/What the composition streams\. This browser fetches it to upload it; if cdn\.example\.org/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Align'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledWith(url);
+    expect(qud.alignAudio.mock.calls[0]![1]).toBe('Take%201.mp3');
+    expect(qud.alignUrl).not.toHaveBeenCalled();
+    expect(saved(0)).toMatchObject({audioFile: url});
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    unmount();
+    // A host that refuses the browser (CORS): the aligner fetches it, nothing is uploaded from here.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (input === url) throw new TypeError('Failed to fetch');
+        return {ok: true, status: 200, json: async () => reviewTimings()};
+      }),
+    );
+    qud.alignAudio.mockClear();
+    panel(propsWith(timings, {audioFile: url}), 'align');
+    fireEvent.click(screen.getByRole('button', {name: 'Align'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(2));
+    expect(qud.alignAudio).not.toHaveBeenCalled();
+    expect(qud.alignUrl).toHaveBeenCalledWith(url, expect.objectContaining({model: 'Base', riwayah: 'hafs'}), {
+      token: null,
+    });
+    expect(qud.sessionTimestamps).toHaveBeenLastCalledWith('sess-v', {}, {token: null});
+    expect(getStudioState().error).toBeNull();
+  });
+
+  it("sends a video's sound as a WAV file it decodes in the browser", async () => {
+    const timings = reviewTimings();
+    qud.alignAudio.mockResolvedValue({audio_id: 'sess-w', segments: [], device: 'GPU'});
+    qud.sessionTimestamps.mockResolvedValue({audio_id: 'sess-w', segments: []});
+    qud.timingsFromQud.mockReturnValue(timings);
+    const decode = vi.fn(async () => ({
+      getChannelData: () => new Float32Array([0, 0.5, -0.5, 1]),
+      numberOfChannels: 1,
+      sampleRate: 16_000,
+    }));
+    vi.stubGlobal(
+      'OfflineAudioContext',
+      vi.fn(function OfflineAudioContext() {
+        return {decodeAudioData: decode};
+      }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        blob: async () => new Blob([new Uint8Array([9, 9, 9])]),
+        json: async () => reviewTimings(),
+      })),
+    );
+    setStudioState({uploadedAudio: {MushafRecitation: 'mushaf-studio/p/clip.mp4'}});
+    panel(propsWith(timings), 'align');
+    expect(screen.getByText(/A video: its sound is decoded in this browser and sent as a WAV file/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Align'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    const [blob, name] = qud.alignAudio.mock.calls[0] as unknown as [Blob, string];
+    expect(name).toBe('clip.wav');
+    expect(blob.type).toBe('audio/wav');
+    // A 44-byte header and four 16-bit samples.
+    expect(blob.size).toBe(52);
+    expect(written(0).filePath).toBe('mushaf-studio/mushafrecitation/clip.timings.json');
+    // The composition plays the video file itself; the WAV was only for the aligner.
+    expect(saved(0)).toMatchObject({audioFile: 'mushaf-studio/p/clip.mp4'});
   });
 
   it('warns that the mushaf is the Hafs print for another riwayah, and aligns only once the user confirms', async () => {
@@ -404,7 +538,8 @@ describe('a new recording on an ayah text', () => {
 
   it("Source fetches the passage's text in the font's script and sets it with the timings, in one patch", async () => {
     ayahPanel('source');
-    fireEvent.click(await screen.findByText('Use this recitation'));
+    pickSource('Download from the catalogue');
+    fireEvent.click(await screen.findByText('Download into public/'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(unicodeText.fetchQuranComText).toHaveBeenCalledWith({chapter: 1, fromAyah: 2, toAyah: 3, script: 'uthmani'});
     const timingsPath = 'mushaf-studio/reel/abdul_hamid_ghraio_2025_yt-1-1-7.timings.json';
@@ -429,7 +564,8 @@ describe('a new recording on an ayah text', () => {
   it('Source patches nothing when the text cannot be fetched, and says where the timings are', async () => {
     quranComDown();
     ayahPanel('source');
-    fireEvent.click(await screen.findByText('Use this recitation'));
+    pickSource('Download from the catalogue');
+    fireEvent.click(await screen.findByText('Download into public/'));
     await waitFor(() => expect(getStudioState().error).not.toBeNull());
     expect(getStudioState().error).toBe(
       'The timings are in public/mushaf-studio/reel/abdul_hamid_ghraio_2025_yt-1-1-7.timings.json, but the Quran text for 1:2-3 could not be fetched: quran.com answered 1:2-3 with HTTP 503; fetch it in the Text tab, then pick the timings again.',
@@ -487,10 +623,18 @@ describe('Source', () => {
       {src: '/x', name: 'mushaf-studio/p/old.mp3', sizeInBytes: 2048, lastModified: 0},
     ]);
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
+    pickSource('A file already in public/');
     fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
       target: {value: 'mushaf-studio/p/old.mp3'},
     });
-    fireEvent.click(screen.getByText('Use as audio'));
+    // Aligning it is the default; replacing the audio alone warns that the timings stay.
+    expect(screen.getByRole('radio', {name: 'Align this file'})).toHaveProperty('checked', true);
+    fireEvent.click(screen.getByRole('radio', {name: 'Replace the audio only (keep the current timings)'}));
+    expect(screen.getByRole('alert').textContent).toMatch(
+      /keeps following the current timings \(public\/mushaf-studio\/fatiha\/timings\.json\)/,
+    );
+    expect(screen.getByText(/^Replaces: the audio only \(audioFile\)/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Replace the audio'}));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(saved(0)).toEqual({audioFile: 'mushaf-studio/p/old.mp3'});
     await waitFor(() => expect(getStudioState().uploadedAudio).toEqual({MushafPage: 'mushaf-studio/p/page.m4a'}));
@@ -508,7 +652,7 @@ describe('Source', () => {
       vi.fn(async () => ({ok: true, status: 200, arrayBuffer: async () => new Uint8Array([1]).buffer})),
     );
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
-    const button = await screen.findByRole('button', {name: 'Use this recitation'});
+    const button = await screen.findByRole('button', {name: 'Download into public/'});
     expect(button).toHaveProperty('disabled', false);
     expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: 'warsh_1'}});
@@ -966,19 +1110,23 @@ describe('drafts', () => {
       {src: '/x', name: 'mushaf-studio/p/old.mp3', sizeInBytes: 2048, lastModified: 0},
     ]);
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
-    await screen.findByRole('button', {name: 'Use this recitation'});
+    await screen.findByRole('button', {name: 'Download into public/'});
     fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: 'warsh_1'}});
     fireEvent.click(
       screen.getByRole('checkbox', {name: "Use the Warsh A'n Nafi' recitation with the Hafs mushaf anyway"}),
     );
+    fireEvent.click(screen.getByRole('radio', {name: 'A file already in public/'}));
     fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
       target: {value: 'mushaf-studio/p/old.mp3'},
     });
     switchTab('Look');
     switchTab('Source');
-    expect(screen.getByLabelText('Reciter')).toHaveProperty('value', 'warsh_1');
-    expect(screen.getByRole('button', {name: 'Use this recitation'})).toHaveProperty('disabled', false);
+    // Back on the source picked, with its file; the catalogue's pickers are kept too.
+    expect(screen.getByRole('radio', {name: 'A file already in public/'})).toHaveProperty('checked', true);
     expect(screen.getByRole('combobox', {name: 'Audio in public/'})).toHaveProperty('value', 'mushaf-studio/p/old.mp3');
+    fireEvent.click(screen.getByRole('radio', {name: 'Download from the catalogue'}));
+    expect(screen.getByLabelText('Reciter')).toHaveProperty('value', 'warsh_1');
+    expect(screen.getByRole('button', {name: 'Download into public/'})).toHaveProperty('disabled', false);
   });
 
   it("keeps Text's pickers through a tab switch", () => {
@@ -1022,7 +1170,9 @@ describe('uploads', () => {
       {src: '/x', name: 'mushaf-studio/mushafrecitation/take.m4a', sizeInBytes: 2048, lastModified: 0},
     ]);
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
-    fireEvent.change(screen.getByLabelText('Own recording'), {
+    pickSource('Upload my recording');
+    expect(screen.getByText(/^Replaces nothing yet: the composition plays what it plays until Align/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Your recording'), {
       target: {files: [new File(['audio'], 'Take.m4a', {type: 'audio/mp4'})]},
     });
     await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
@@ -1030,5 +1180,194 @@ describe('uploads', () => {
     await waitFor(() =>
       expect(getStudioState().uploadedAudio).toEqual({MushafRecitation: 'mushaf-studio/mushafrecitation/take-2.m4a'}),
     );
+  });
+});
+
+describe('Source: what plays now, and a track in this video', () => {
+  const STATIC = '/static-abc';
+  const own = {
+    ...trackSequence('own', '/static-abc/mushaf-studio/p/fatiha.mp3', 0),
+    displayName: 'Mushaf recitation audio',
+  };
+  const template = trackSequence('t', `${STATIC}/mushaf-studio/p/fatiha.mp3`, 60, 'Template audio');
+  const looping = {...trackSequence('l', `${STATIC}/music.mp3`, 0, 'Music'), loop: true};
+  const source = (props: MushafRecitationProps) =>
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={props} initialTab="source" />);
+
+  beforeEach(() => {
+    (window as unknown as {remotion_staticBase?: string}).remotion_staticBase = STATIC;
+    studio.getStaticFiles.mockReturnValue([
+      {
+        src: `${STATIC}/mushaf-studio/p/fatiha.mp3`,
+        name: 'mushaf-studio/p/fatiha.mp3',
+        sizeInBytes: 2048,
+        lastModified: 0,
+      },
+    ]);
+  });
+  afterEach(() => {
+    delete (window as unknown as {remotion_staticBase?: string}).remotion_staticBase;
+  });
+
+  it('offers the choice only when the template has a track', () => {
+    source(propsWith(reviewTimings()));
+    expect(screen.getAllByRole('radio').map((radio) => radio.parentElement?.textContent)).toEqual([
+      'Download from the catalogue',
+      'Upload my recording',
+      'A file already in public/',
+    ]);
+    expect(screen.getByText('Now: public/mushaf-studio/p/fatiha.mp3, timed by aligner.qud.dev.')).toBeTruthy();
+  });
+
+  it("lists the template's tracks, not its own, and follows one: audioFile and hostAudio in one patch", async () => {
+    timeline.sequences = [own, template, looping];
+    source(propsWith(reviewTimings()));
+    pickSource('A track in this video');
+    const picker = screen.getByRole('combobox', {name: 'Track'});
+    const options = [...picker.querySelectorAll('option')];
+    expect(options.map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Template audio · audio · second -2 at the start', false],
+      ['Music · audio · second 0 at the start (loops: not supported)', true],
+    ]);
+    // The same file the timings were made of: they stay, the composition stops playing it itself.
+    expect(screen.getByText(/^Replaces: none of the timings \(they are of this file\)/)).toBeTruthy();
+    expect(
+      screen.getByText(/audioFile becomes mushaf-studio\/p\/fatiha\.mp3, and hostAudio its timing \(second -2/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Use this track'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(saved(0)).toEqual({
+      audioFile: 'mushaf-studio/p/fatiha.mp3',
+      hostAudio: {enabled: true, offsetSeconds: -2, track: 'Template audio'},
+    });
+    await waitFor(() =>
+      expect(getStudioState().notice).toMatch(/follows Template audio, and its timings are of this file/),
+    );
+  });
+
+  it('offers Update timing when the followed track has moved, and writes only when it is pressed', async () => {
+    timeline.sequences = [template];
+    const following = {enabled: true, offsetSeconds: 0, track: 'Template audio'};
+    const {unmount} = source(propsWith(reviewTimings(), {hostAudio: following}));
+    expect(
+      screen.getByText(
+        /^Now: the template's track Template audio plays public\/mushaf-studio\/p\/fatiha\.mp3, from second 0/,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('radio', {name: 'A track in this video'})).toHaveProperty('checked', true);
+    const moved = document.body.querySelector('[data-mushaf-control="host-moved"]')!;
+    expect(moved.textContent).toMatch(
+      /second -2 now plays at the recitation's start, but the timings start at second 0/,
+    );
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Update timing'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(saved(0)).toEqual({hostAudio: {enabled: true, offsetSeconds: -2, track: 'Template audio'}});
+    unmount();
+    // In step with the track (within half a frame): nothing to offer.
+    source(propsWith(reviewTimings(), {hostAudio: {...following, offsetSeconds: -2.01}}));
+    expect(document.body.querySelector('[data-mushaf-control="host-moved"]')).toBeNull();
+  });
+
+  it('plays audioFile in the composition again on request', async () => {
+    timeline.sequences = [template];
+    source(propsWith(reviewTimings(), {hostAudio: {enabled: true, offsetSeconds: -2, track: 'Template audio'}}));
+    fireEvent.click(screen.getByRole('button', {name: 'Play audioFile in the composition again'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(saved(0)).toEqual({hostAudio: {enabled: false, offsetSeconds: -2, track: 'Template audio'}});
+  });
+
+  it('downloads a missing file the catalogue clip streams for, under audioFile’s own path', async () => {
+    const clip = 'https://clips.example.org/fatiha.mp3?start_ms=0';
+    const props = propsWith(reviewTimings());
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ok: true, status: 200, arrayBuffer: async () => new Uint8Array([7]).buffer})),
+    );
+    source({...props, resolved: {...props.resolved, audioSrc: clip}});
+    const now = document.body.querySelector('[data-mushaf-control="source-now"]')!;
+    expect(now.getAttribute('data-now')).toBe('missing');
+    expect(now.textContent).toMatch(
+      /^Now: public\/mushaf-studio\/p\/fatiha\.mp3 is missing, so the clip streams from clips\.example\.org instead, in renders too\./,
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Download it into public/'}));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledWith(clip);
+    expect(written(0).filePath).toBe('mushaf-studio/p/fatiha.mp3');
+    await waitFor(() => expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1));
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(getStudioState().notice).toBe(
+      'public/mushaf-studio/p/fatiha.mp3 is in place: previews and renders no longer need clips.example.org.',
+    );
+  });
+
+  it('downloads a streamed audioFile into the project and points audioFile at it', async () => {
+    const url = 'https://clips.example.org/r/Take%201.mp3?start_ms=0';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ok: true, status: 200, arrayBuffer: async () => new Uint8Array([7]).buffer})),
+    );
+    source(propsWith(reviewTimings(), {audioFile: url}));
+    expect(
+      screen.getByText(
+        'Now: streaming https://clips.example.org/r/Take%201.mp3?start_ms=0. Previews and renders need clips.example.org to be online.',
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Download it into public/'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(written(0).filePath).toBe('mushaf-studio/mushafrecitation/take-1.mp3');
+    expect(saved(0)).toEqual({audioFile: 'mushaf-studio/mushafrecitation/take-1.mp3'});
+  });
+
+  it('stages a file of public/ for Align by default, and Align says where it came from', () => {
+    source(defaultMushafRecitationProps);
+    pickSource('A file already in public/');
+    fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
+      target: {value: 'mushaf-studio/p/fatiha.mp3'},
+    });
+    fireEvent.click(screen.getByRole('button', {name: 'Stage it for Align'}));
+    expect(getStudioState().uploadedAudio).toEqual({MushafRecitation: 'mushaf-studio/p/fatiha.mp3'});
+    expect(getStudioState().stagedFrom).toEqual({MushafRecitation: 'public'});
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(screen.getByRole('tab', {selected: true}).textContent).toBe('Align');
+    expect(document.body.querySelector('[data-mushaf-control="align-source"]')?.getAttribute('data-origin')).toBe(
+      'public',
+    );
+  });
+
+  it('turns hostAudio off when another recording is downloaded, and keeps it when the track is aligned', async () => {
+    const following = {enabled: true, offsetSeconds: -2, track: 'Template audio'};
+    qud.listRecitations.mockResolvedValue(recitationsFixture.recitations as never);
+    qud.getChapterSegments.mockResolvedValue(chapterFixture);
+    qud.timingsFromCatalogue.mockReturnValue(reviewTimings());
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+        blob: async () => new Blob(['audio']),
+        json: async () => reviewTimings(),
+      })),
+    );
+    const {unmount} = source(propsWith(reviewTimings(), {hostAudio: following}));
+    pickSource('Download from the catalogue');
+    fireEvent.click(await screen.findByText('Download into public/'));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(saved(0)).toMatchObject({hostAudio: {...following, enabled: false}});
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    unmount();
+    // Another session, the Root still following the track (the save above is not this one's to show).
+    resetStudioStore();
+    resetSaveTracking();
+    qud.alignAudio.mockResolvedValue({audio_id: 'sess-t', segments: [], device: 'GPU'});
+    qud.sessionTimestamps.mockResolvedValue({audio_id: 'sess-t', segments: []});
+    qud.timingsFromQud.mockReturnValue(reviewTimings());
+    panel(propsWith(reviewTimings(), {hostAudio: following}), 'align');
+    expect(screen.getByText("The template's track Template audio, which the composition follows.")).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Align'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(2));
+    expect(saved(1)).not.toHaveProperty('hostAudio');
+    expect(saved(1)).toMatchObject({audioFile: 'mushaf-studio/p/fatiha.mp3'});
   });
 });

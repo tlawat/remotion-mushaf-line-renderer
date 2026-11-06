@@ -1,8 +1,11 @@
 import type * as React from 'react';
 import {useState} from 'react';
-import {timingsFromQud} from '../../qud';
-import type {QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
+import {hostAudioOf} from '../../audio/host';
+import {audioToWav} from '../../audio/wav';
+import {alignUrl, sessionTimestamps, timingsFromQud} from '../../qud';
+import type {QudAlignOptions, QudClientOptions, QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
 import {alignWithCache} from '../align-cache';
+import {type AlignSource, alignSourceOf, hostOf, isVideoFile} from '../audio-source';
 import type {MessageKey} from '../i18n';
 import {saveRecording} from '../recording';
 import {
@@ -19,7 +22,7 @@ import {
   useStudioState,
   useT,
 } from '../store';
-import {baseName, isUrl, readPublicFile, slugify, stemOf} from '../studio-api';
+import {baseName, readPublicFile, slugify, stemOf} from '../studio-api';
 import {colors, styles} from '../styles';
 import type {TabProps} from '../tab-props';
 import {Button, Field, Note, ProgressBar, Section} from '../ui';
@@ -44,11 +47,93 @@ const clock = (at: number): string => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
-/** Align: sends a recording of `public/` to the QUD Universal Aligner and writes the timings it returns. */
+/** The recording Align sends, as the tab names it: a path of `public/`, or the URL. */
+const audioOf = (source: AlignSource): string | null =>
+  source.kind === 'file' ? source.path : source.kind === 'url' ? source.url : null;
+
+/** Where the recording came from, in the words of the tab. */
+const OriginLine: React.FC<{readonly source: AlignSource; readonly track: string}> = ({source, track}) => {
+  const t = useT();
+  if (source.kind === 'none') return <Note>{t('align.noAudio')}</Note>;
+  if (source.kind === 'catalogue') return <Note>{t('align.catalogue')}</Note>;
+  const audio = source.kind === 'file' ? `public/${source.path}` : source.url;
+  const line =
+    source.origin === 'track'
+      ? t('align.from.track', {track: track || baseName(audio)})
+      : source.kind === 'url'
+        ? t('align.from.url', {host: hostOf(source.url) ?? source.url})
+        : t(
+            source.origin === 'upload'
+              ? 'align.from.upload'
+              : source.origin === 'public'
+                ? 'align.from.public'
+                : 'align.from.current',
+          );
+  return (
+    <div data-mushaf-control="align-source" data-origin={source.origin}>
+      <p style={{margin: '0 0 8px'}}>
+        <span style={styles.code}>{audio}</span>
+      </p>
+      <Note>{line}</Note>
+      {isVideoFile(audio) ? <Note>{t('align.video')}</Note> : null}
+    </div>
+  );
+};
+
+/**
+ * What the aligner answers for `source`: a file of `public/` read through the dev server (a
+ * video's sound decoded into a WAV first, `audioToWav()`), or a URL fetched by the browser, both
+ * through `alignWithCache()`; a URL the browser may not fetch (CORS) is downloaded by the aligner
+ * itself (`alignUrl()`), with no cache.
+ */
+const alignSource = async (
+  source: Extract<AlignSource, {kind: 'file' | 'url'}>,
+  align: QudAlignOptions,
+  client: QudClientOptions,
+) => {
+  let blob: Blob | null = null;
+  let name = baseName(source.kind === 'file' ? source.path : new URL(source.url).pathname) || 'audio';
+  if (source.kind === 'file') {
+    blob = await readPublicFile(source.path);
+  } else {
+    blob = await fetch(source.url)
+      .then((response) => (response.ok ? response.blob() : null))
+      .catch(() => null);
+  }
+  if (blob === null && source.kind === 'url') {
+    setStudioState({busy: tNow('align.busy.byUrl', {host: hostOf(source.url) ?? source.url})});
+    const response = await alignUrl(source.url, align, client);
+    setStudioState({busy: tNow('align.busy.wordTimes'), progress: null});
+    const timestamps = await sessionTimestamps(response.audio_id, {}, client);
+    return {align: response, timestamps, reused: false, alignedAt: null, name};
+  }
+  if (blob !== null && isVideoFile(name)) {
+    setStudioState({busy: tNow('align.busy.decoding')});
+    blob = await audioToWav(blob, name);
+    name = `${stemOf(name)}.wav`;
+  }
+  setStudioState({busy: tNow('align.busy.checking')});
+  const result = await alignWithCache({
+    audio: blob!,
+    fileName: name,
+    align,
+    client,
+    now: () => Date.now(),
+    onUpload: () => setStudioState({busy: tNow('align.busy.aligning')}),
+    onAligned: () => setStudioState({busy: tNow('align.busy.wordTimes'), progress: null}),
+  });
+  return {...result, name};
+};
+
+/**
+ * Align: sends the one recording Source staged for this target (or, when none is, what the
+ * composition plays) to the QUD Universal Aligner, says where it came from and where it goes
+ * before it sends anything, and writes the timings it returns. A recording the catalogue already
+ * timed is not sent.
+ */
 export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
-  const {busy, progress, session, uploadedAudio: uploads} = useStudioState();
+  const {busy, progress, session, uploadedAudio: uploads, stagedFrom} = useStudioState();
   const key = targetKeyOf(target);
-  const uploadedAudio = uploads[key] ?? null;
   const t = useT();
   // The options in the store by target: a tab switch keeps what the user chose.
   const [model, setModel] = useStudioDraft<QudModel>(key, 'align.model', session?.model ?? 'Base');
@@ -58,29 +143,25 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
   const [confirmedRiwayah, setConfirmedRiwayah] = useStudioDraft<QudRiwayah | null>(key, 'align.consent', null);
   const [token, setToken] = useState(() => getHfToken());
   const [remembered, setRemembered] = useState(() => isHfTokenRemembered());
-  // The recording the user just put into public/ wins over whatever the composition plays, a downloaded clip included.
-  const audio = uploadedAudio ?? (isUrl(props.audioFile) || !props.audioFile ? null : props.audioFile);
+  // The one recording Source chose: staged there, else what the composition plays.
+  const source = alignSourceOf(props, {path: uploads[key] ?? null, origin: stagedFrom[key] ?? 'upload'});
+  const audio = audioOf(source);
+  const track = hostAudioOf(props).track;
   const working = busy !== null;
   // The page is the Hafs print: another riwayah aligns only once the user has said it may not match.
   const otherRiwayah = riwayah !== 'hafs';
   const confirmed = !otherRiwayah || confirmedRiwayah === riwayah;
 
   const align = () => {
-    if (!audio || !confirmed) return;
+    if (audio === null || (source.kind !== 'file' && source.kind !== 'url') || !confirmed) return;
     const client = {token: token || null};
     void runStudioTask(tNow('align.busy.reading'), async () => {
-      const blob = await readPublicFile(audio);
-      const name = baseName(audio);
-      setStudioState({busy: tNow('align.busy.checking')});
-      const result = await alignWithCache({
-        audio: blob,
-        fileName: name,
-        align: {model, device, riwayah, onProgress: (step) => setStudioState({progress: step})},
+      const result = await alignSource(
+        source,
+        {model, device, riwayah, onProgress: (step) => setStudioState({progress: step})},
         client,
-        now: () => Date.now(),
-        onUpload: () => setStudioState({busy: tNow('align.busy.aligning')}),
-        onAligned: () => setStudioState({busy: tNow('align.busy.wordTimes'), progress: null}),
-      });
+      );
+      const {name} = result;
       const response = result.align;
       const notices: string[] = [];
       if (result.reused && result.alignedAt !== null)
@@ -105,6 +186,8 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
         audioFile: audio,
         timings,
         timingsName: `${stem}.timings.json`,
+        // The template's track stays the one played; any other recording is the composition's own.
+        keepHostAudio: source.origin === 'track',
       });
       const all = [...notices, ...saved.notices];
       setStudioState({notice: all.length > 0 ? all.join(' ') : null});
@@ -114,13 +197,7 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
   return (
     <div>
       <Section title={t('align.audioTitle')}>
-        {audio ? (
-          <p style={{margin: '0 0 8px'}}>
-            <span style={styles.code}>public/{audio}</span>
-          </p>
-        ) : (
-          <Note>{t('align.noAudio')}</Note>
-        )}
+        <OriginLine source={source} track={track} />
       </Section>
       <Section title={t('align.options')}>
         <div style={styles.row}>
@@ -231,8 +308,10 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
         <Button
           variant="primary"
           onClick={align}
-          disabled={working || !audio || !confirmed}
-          title={confirmed ? undefined : t('align.riwayahConfirmFirst')}
+          disabled={working || audio === null || !confirmed}
+          title={
+            source.kind === 'catalogue' ? t('align.catalogue') : confirmed ? undefined : t('align.riwayahConfirmFirst')
+          }
         >
           {t('align.button')}
         </Button>

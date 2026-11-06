@@ -1,6 +1,7 @@
 import {enterTiming, exitTiming, MushafLine, MushafLineWindow, wordAt} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {followsHostAudio} from '../../audio/host';
 import {volumeAt} from '../../audio/volume';
 import {backgroundFor} from '../../background/compat';
 import {MushafBackground} from '../../background/MushafBackground';
@@ -98,6 +99,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
   const isStudio = useInStudio();
+  // Under hostAudio the template plays the recording: the composition plays none of its own.
+  const ownAudio = audioFile !== '' && !followsHostAudio(props);
   const resolved = props.resolved as (ResolvedRecitation & {readonly clips?: readonly MemorizeClip[]}) | null;
   if (!resolved) {
     throw new MushafStudioError(
@@ -278,14 +281,14 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         audioLevel={glowLevelAt(resolved.audio, now, fps)}
         glowY={layout.verticalAlign}
       />
-      {audioFile !== '' && identity && (
+      {ownAudio && identity && (
         <CompositionAudio
           src={recordingUrl(audioFile, resolved, staticFile)}
           trimBefore={Math.round(resolved.audioOffsetSeconds * fps)}
           volume={(f) => volumeAt(f, curve)}
         />
       )}
-      {audioFile !== '' &&
+      {ownAudio &&
         !identity &&
         clips.map((clip) => {
           // Frames of the file: the composition's own offset into the recording, then the clip's range.

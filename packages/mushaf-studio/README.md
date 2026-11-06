@@ -234,16 +234,36 @@ six tabs:
 
 | Tab        | What it does                                                                                                     |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Source** | The QUD catalogue's reviewed recitations (reciter, riwayah, style, chapters), or a recording of your own.          |
+| **Source** | Where the audio comes from, as one choice: the QUD catalogue's reviewed recitations, a recording of your own, a file already in `public/`, or a track the template plays. A "Now:" line says what plays now. |
 | **Look**   | One-click style presets (`MUSHAF_LOOKS`, `applyLook()`): theme, layout, animation, highlighting and text placement, never the content; **Undo** puts back the last look's changes. |
 | **Align**  | Uploads the recording to the [QUD Universal Aligner](https://aligner.qud.dev) with streaming progress, then fetches the word times. Says first that the audio leaves the machine. |
 | **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align. Exports captions and imports them back. |
 | **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments. On `<MushafPage>`, the pages. |
 | **Text**   | Ayah translations and word-by-word glosses (`<MushafRecitation>` only) from quran.com, or a QUL file in `public/`; the end card's tafsir or surah introduction. |
 
+**Where the audio comes from.** Source is one explicit choice of four, each with one button and a
+line that says what it replaces:
+
+| Choice | What its button does |
+| --- | --- |
+| **Download from the catalogue** | **Download into public/**: the word timings from aligner.qud.dev and the clip of the ayahs from the host the aligner's answer names (a Hugging Face Space), both into `public/mushaf-studio/<project>/`. Nothing of yours is uploaded. When the clip cannot be downloaded nothing is saved: **Retry the download**, or **Stream from {host}**, which saves the clip's URL as `audioFile` (renders then need that host). |
+| **Upload my recording** | Copies the file into `public/` (it stays on this machine) and stages it for Align, which uploads it to aligner.qud.dev and says so first. The composition keeps playing what it plays until Align saves the timings. |
+| **A file already in public/** | **Align this file** (the default) stages it for Align; **Replace the audio only** sets `audioFile` and keeps the timings, with a warning that the highlight follows the old timings. |
+| **A track in this video** | Shown when the template has audio or video tracks on the Studio's timeline (the composition's own `<Audio>`, named `OWN_AUDIO_NAME`, is left out). **Use this track** sets `audioFile` to the track's file and turns `hostAudio` on with the second of it heard at the recitation's start. Only a track at speed 1 that does not loop can be followed. |
+
+The **Now:** line at the top says what the composition plays and where it came from (downloaded
+from the clip host, timed by the aligner, streaming a URL, the template's track). A stream, and a
+missing `audioFile` the catalogue clip stands in for, get a **Download it into public/** button.
+Align works on the one recording Source staged for this composition, else on what it plays, and
+says which: a catalogue recitation is not aligned again (Review adjusts it); a URL is fetched by the
+browser and uploaded, or downloaded by the aligner itself (`alignUrl()`) when its host does not let
+the browser read it; a video's sound is decoded in the browser and sent as WAV (`audioToWav()`).
+When the template's track has moved since its offset was saved, the dock offers **Update timing**;
+it never writes the offset on its own.
+
 **The riwayah guard.** The page is the Hafs print (KFGQPC V4); another riwayah can differ from it
 in words and spelling. A catalogue recitation in another riwayah (`isHafsRecitation()` is false),
-or Align with another riwayah picked, shows a warning, and **Use this recitation** or **Align**
+or Align with another riwayah picked, shows a warning, and **Download into public/** or **Align**
 stays disabled until a checkbox confirms it.
 
 The Text tab also fetches the passage's Quran text (`uthmani` or `indopak`, `fetchQuranComText()`)
@@ -331,8 +351,13 @@ export const Template: React.FC<z.infer<typeof templateSchema>> = ({title, musha
   `resolveMushafPageSlot()` and their schemas and defaults do the same for the other compositions;
   the compositions themselves take `panel={false}` to leave the panel out.
 
+- **The template's own audio.** A template that plays the recitation itself (its `<Audio>` with a
+  `name`, music under it, a voice-over) turns the slot's `hostAudio` on: the slot plays no audio of
+  its own and its words follow the template's track. The panel lists the template's tracks in
+  Source and works out the offset from where the track sits on the timeline.
+
 The app's `MushafInTemplate` composition ([`apps/mushaf-studio/src/MushafInTemplate.tsx`](../../apps/mushaf-studio/src/MushafInTemplate.tsx))
-is a working example.
+is a working example, its own track (`soundtrack`) followed by the slot.
 
 ## Props
 
@@ -562,6 +587,25 @@ the in-browser web renderer (`renderMediaOnWeb()`) the compositions use `@remoti
 | `fadeOutSeconds` | 0–5          | `1`     | Fade out to the end of the recitation.                                      |
 | `trimSilence`    | boolean      | `false` | Skip the silence before the first word (`silenceTrimSeconds()`), never past the first line's entrance: it is added to `audioOffsetSeconds` and the timings move with it. |
 | `volume`         | 0–2          | `1`     | On top of the normalisation gain.                                           |
+
+### `hostAudio` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
+
+The template plays the audio, and the composition follows it: a template with its own `<Audio>`
+track (in a slot, or around the composition). Optional, and read leniently (`hostAudioOf()`), so
+props saved before it keep working; the defaults have it off. When `enabled`, the composition plays
+no `<Audio>` of its own, its timings start at `offsetSeconds` of `audioFile` (the second of the
+template's track heard at the composition's frame 0; negative when the track starts later, and the
+glow's levels are silent until then), the `audio` cleanup does nothing (the template's `<Audio>`
+owns its volume and fades; no catalogue clip stands in for a missing file), and a `memorize` repeat
+is refused with `BAD_STUDIO_PROP` (the track plays straight through). The Mushaf panel sets it from
+the template's track on the Studio's timeline (Source, **A track in this video**) and offers
+**Update timing** when the track moves; a render reads only these saved values.
+
+| Field           | Type    | Default | Description                                                                   |
+| --------------- | ------- | ------- | ----------------------------------------------------------------------------- |
+| `enabled`       | boolean | `false` | Follow the template's track instead of playing `audioFile`.                   |
+| `offsetSeconds` | number  | `0`     | The second of the track heard at the composition's first frame.              |
+| `track`         | string  | `''`    | The timeline name of the track it follows (what the panel matches it by).     |
 
 ### `legend` (`MushafRecitation`, `MushafPage`)
 

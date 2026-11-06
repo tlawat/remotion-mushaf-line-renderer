@@ -25,10 +25,21 @@ export type TimelineSequence = {
   readonly parent: string | null;
   /** The frame of the media heard at the sequence's frame 0 (`startFrom`/`trimBefore`); 0 when none. */
   readonly startMediaFrom: number;
+  /**
+   * The frame of the media at the sequence's frame 0 as the timeline places it (`mediaFrameAtSequenceZero`),
+   * `null` when Remotion does not say (older entries: `startMediaFrom` stands in).
+   */
+  readonly mediaFrameAtSequenceZero: number | null;
   /** The media's playback rate, else the sequence's own; 1 when neither is known. */
   readonly playbackRate: number;
+  /** The sequence's own rate (`sequencePlaybackRate`), which its children run at; 1 when unknown. */
+  readonly sequencePlaybackRate: number;
+  /** Frames the sequence cuts off its children's start (`trimBefore`); 0 when none. */
+  readonly trimBefore: number;
   /** Whether the timeline draws it looping. */
   readonly loop: boolean;
+  /** Whether a media track is muted. */
+  readonly muted: boolean;
 };
 
 const internals = Internals as unknown as Readonly<Record<string, unknown>>;
@@ -105,8 +116,13 @@ export const timelineSequenceOf = (value: unknown): TimelineSequence | null => {
     durationInFrames: isFiniteNumber(value.duration) ? value.duration : 0,
     parent: typeof value.parent === 'string' ? value.parent : null,
     startMediaFrom: media && isFiniteNumber(value.startMediaFrom) ? value.startMediaFrom : 0,
+    mediaFrameAtSequenceZero:
+      media && isFiniteNumber(value.mediaFrameAtSequenceZero) ? value.mediaFrameAtSequenceZero : null,
     playbackRate: isFiniteNumber(rate) ? rate : 1,
+    sequencePlaybackRate: isFiniteNumber(value.sequencePlaybackRate) ? value.sequencePlaybackRate : 1,
+    trimBefore: isFiniteNumber(value.trimBefore) ? value.trimBefore : 0,
     loop: isRecord(value.loopDisplay),
+    muted: value.muted === true,
   };
 };
 

@@ -247,6 +247,12 @@ export type AudioCleanupOptions = {
   readonly sidecar?: Pick<AlignmentSidecar, 'recitation' | 'audio'> | undefined;
   /** For the probe of `audioFile`; `globalThis.fetch` by default. */
   readonly fetch?: typeof fetch | undefined;
+  /**
+   * The template plays the audio (`hostAudio.enabled`): no gain, no trim, no catalogue clip in place
+   * of a missing `audioFile` (the template's track is what plays); only the glow's levels are
+   * measured, of `audioFile` itself, from `offsetSeconds`, which may be negative.
+   */
+  readonly hostAudio?: boolean | undefined;
 };
 
 /** What `resolveAudioCleanup()` resolves: the cleanup, the Studio's warning, and the URL to play instead of `audioFile`. */
@@ -266,6 +272,18 @@ const joinWarnings = (...warnings: readonly (string | null)[]): string | null =>
 const round3 = (value: number): number => Math.round(value * 1000) / 1000;
 
 /**
+ * Up to `count` levels of `levels` from frame `from`, rounded to three decimals, as `slice()` would
+ * give them, except that a frame before the recording (a negative `from`: the template's track
+ * starts after the composition) is silent, 0, where `slice()` would count from the end.
+ * `levelsWindow([0.5, 1], -1, 3)` is `[0, 0.5, 1]`.
+ */
+export const levelsWindow = (levels: readonly number[], from: number, count: number): readonly number[] => {
+  const silent = Math.min(count, Math.max(0, -from));
+  const start = Math.max(0, from);
+  return [...new Array<number>(silent).fill(0), ...levels.slice(start, start + count - silent).map(round3)];
+};
+
+/**
  * Finds where the recording plays from (`resolveAudioSource()`: the timings' catalogue clip when
  * `audioFile` is missing from `public/`), analyses it when something needs it
  * (`needsAudioAnalysis()`) and says what to do with it: the gain that brings it to
@@ -273,13 +291,16 @@ const round3 = (value: number): number => Math.round(value * 1000) / 1000;
  * (`silenceTrimSeconds()`, under `trimSilence`, never past `latestSeconds`) and, for the glow, one
  * level per frame of `fps` from the composition's new start (three decimals; `levelsFps` records
  * the fps). With the glow off, the sidecar's `audio` summary (written when the panel saved the timings) stands in for the analysis,
- * so nothing is downloaded. An analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a
+ * so nothing is downloaded. Under `hostAudio` only the glow's levels are measured (see the option). An analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a
  * file the browser cannot fetch or decode) is not an error: the audio plays as it is, and `warning`
  * says why. Any other failure (an abort) passes through.
  */
 export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise<AudioCleanup> => {
-  const {audio, background, fps} = options;
-  const source = await resolveAudioSource(options);
+  const {background, fps} = options;
+  const host = options.hostAudio === true;
+  // Under hostAudio the template's <Audio> owns the loudness and the start: nothing to normalise or trim.
+  const audio = host ? {...options.audio, normalize: false, trimSilence: false} : options.audio;
+  const source = host ? AUDIO_FILE_AS_IS : await resolveAudioSource(options);
   const cleanup = (resolved: ResolvedAudio, warning: string | null): AudioCleanup => ({
     audio: resolved,
     warning: joinWarnings(source.warning, warning),
@@ -313,8 +334,8 @@ export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise
   if (!glowIsOn(background)) return cleanup({gain, trimSeconds, levels: []}, null);
   const from = Math.round((options.offsetSeconds + trimSeconds) * fps);
   const count = Math.max(0, Math.ceil((options.endSeconds - trimSeconds + 1) * fps));
-  const levels = analysis.levels.slice(from, from + count).map(round3);
-  return cleanup({gain, trimSeconds, levels, levelsFps: fps}, null);
+  // A slice from a negative frame would count from the end of the recording: the frames before it are silent.
+  return cleanup({gain, trimSeconds, levels: levelsWindow(analysis.levels, from, count), levelsFps: fps}, null);
 };
 
 // ---------------------------------------------------------------------------------------------

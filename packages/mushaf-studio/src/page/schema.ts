@@ -1,5 +1,6 @@
 import {zColor} from '@remotion/zod-types';
 import {z} from 'zod';
+import {defaultHostAudio, hostAudioSchema} from '../audio/host';
 import {audioSchema, defaultAudio} from '../audio/schema';
 import {backgroundSchema, defaultBackground} from '../background/schema';
 import {
@@ -74,7 +75,11 @@ export const defaultPageText: PageText = {...defaultText, translationPosition: '
  */
 export const mushafPageSchema = z.object({
   /** A `public/` path (`mushaf-studio/fatiha/audio.mp3`) or an https URL. */
-  audioFile: z.string().describe('Audio: a path in public/ or a URL'),
+  audioFile: z
+    .string()
+    .describe(
+      "Audio: a path in public/ or a URL (when the path is missing, the catalogue clip its timings name streams instead; under hostAudio, the file of the template's track)",
+    ),
   /** A `public/` path to a `RecitationTimings` JSON (with or without the studio's `alignment` sidecar). */
   timingsFile: z.string().describe('Timings JSON in public/'),
   /** 0 keeps the file's range. A range of one surah's timings: timings across surahs (version 2) are used whole. */
@@ -109,7 +114,13 @@ export const mushafPageSchema = z.object({
   ),
   legend: legendSchema.describe('Legend of the tajweed colours (colour themes only)'),
   endCard: endCardSchema.describe('A closing card after the last ayah'),
-  audio: audioSchema.describe('The recitation’s loudness, fades and leading silence'),
+  audio: audioSchema.describe(
+    'The recitation’s loudness, fades and leading silence (does nothing under hostAudio: the template’s <Audio> owns them)',
+  ),
+  /** Optional: props saved before it existed read as off (`hostAudioOf()`). */
+  hostAudio: hostAudioSchema
+    .optional()
+    .describe('Follow an audio track of the template instead of playing audioFile (wins over the audio cleanup)'),
   /** Filled by calculateMetadata; see `ResolvedPage`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
@@ -151,5 +162,6 @@ export const defaultMushafPageProps: MushafPageProps = {
   legend: defaultLegend,
   endCard: defaultEndCard,
   audio: defaultAudio,
+  hostAudio: defaultHostAudio,
   resolved: null,
 };

@@ -1,4 +1,5 @@
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
+import {followsHostAudio} from '../audio/host';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../compositions/extras';
 import {
   type ResolvedProps,
@@ -35,6 +36,7 @@ export const withAyahTextAudio = async (
     staticFile,
     signal: options.signal,
     sidecar: timings.alignment,
+    hostAudio: followsHostAudio(props),
   });
   return {
     ...skipAyahTextStart(resolved, audio.trimSeconds, props.memorize),

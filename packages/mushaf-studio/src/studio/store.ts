@@ -47,6 +47,11 @@ export type StudioSession = {
   readonly riwayah: QudRiwayah;
 };
 
+/** Where a recording staged for Align came from: the user's upload, or a file already in `public/`. */
+export type StagedOrigin = 'upload' | 'public';
+
+const isStagedOrigin = (value: unknown): value is StagedOrigin => value === 'upload' || value === 'public';
+
 export type StudioState = {
   /** `null` until the user picks one: the panel then shows its `initialTab`. */
   readonly tab: StudioTab | null;
@@ -71,8 +76,14 @@ export type StudioState = {
   /** `listQuranComTafsirs()` for every language, fetched once (by the Text tab, for the end card). */
   readonly quranComTafsirs: readonly QuranComResource[] | null;
   readonly session: StudioSession | null;
-  /** By target key (`targetKeyOf()`): the last recording the user put into `public/` through the Source tab. */
+  /**
+   * By target key (`targetKeyOf()`): the one recording the Source tab staged for Align, a path of
+   * `public/` the composition does not play yet (an upload, or a file already there). Align works
+   * on it, else on what the composition plays.
+   */
   readonly uploadedAudio: Readonly<Record<string, string>>;
+  /** By target key: where the staged recording of `uploadedAudio` came from; a missing entry is an upload. */
+  readonly stagedFrom: Readonly<Record<string, StagedOrigin>>;
   /**
    * By target key: what `patchProps()` saved that the rendered props have not come back with yet
    * (`calculateMetadata()` runs again after the Root is written). The tabs see the props with it
@@ -228,7 +239,12 @@ const initialState = (): StudioState => {
     language?: unknown;
     showDoubts?: unknown;
   } | null;
-  const saved = readJson('session', SESSION_KEY) as {session?: unknown; uploadedAudio?: unknown} | null;
+  const saved = readJson('session', SESSION_KEY) as {
+    session?: unknown;
+    uploadedAudio?: unknown;
+    stagedFrom?: unknown;
+  } | null;
+  const origins = stringRecord(saved?.stagedFrom);
   return {
     tab: isTab(panel?.tab) ? panel.tab : null,
     collapsed: panel?.collapsed === true,
@@ -245,6 +261,9 @@ const initialState = (): StudioState => {
     quranComTafsirs: null,
     session: isSession(saved?.session) ? saved.session : null,
     uploadedAudio: stringRecord(saved?.uploadedAudio),
+    stagedFrom: Object.fromEntries(
+      Object.entries(origins).filter((entry): entry is [string, StagedOrigin] => isStagedOrigin(entry[1])),
+    ),
     pendingPatches: {},
     inFlightPatches: {},
     rolledBack: {},
@@ -278,8 +297,12 @@ export const setStudioState = (patch: Partial<StudioState>): void => {
   state = next;
   if (LAYOUT_FIELDS.some((field) => field in patch))
     writeJson('local', PANEL_KEY, Object.fromEntries(LAYOUT_FIELDS.map((field) => [field, next[field]])));
-  if ('session' in patch || 'uploadedAudio' in patch)
-    writeJson('session', SESSION_KEY, {session: next.session, uploadedAudio: next.uploadedAudio});
+  if ('session' in patch || 'uploadedAudio' in patch || 'stagedFrom' in patch)
+    writeJson('session', SESSION_KEY, {
+      session: next.session,
+      uploadedAudio: next.uploadedAudio,
+      stagedFrom: next.stagedFrom,
+    });
   for (const listener of listeners) listener();
 };
 

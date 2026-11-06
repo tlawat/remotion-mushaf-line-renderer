@@ -85,6 +85,31 @@ export const styles = {
     fontWeight: active ? 600 : 400,
   }),
   content: {flex: '1 1 auto', overflowY: 'auto', padding: '10px 12px'} as CSSProperties,
+  /** A choice of one among a few, as a block of buttons (Source's audio sources). */
+  segments: {display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 10} as CSSProperties,
+  segment: (active: boolean): CSSProperties => ({
+    ...base,
+    padding: '5px 6px',
+    borderRadius: 3,
+    border: `1px solid ${active ? colors.accent : colors.border}`,
+    background: active ? colors.raised : 'transparent',
+    color: active ? colors.text : colors.muted,
+    fontWeight: active ? 600 : 400,
+    textAlign: 'start',
+    cursor: 'pointer',
+    position: 'relative',
+  }),
+  /** The radio inside a segment: still focusable and announced, the segment shows its state. */
+  hiddenRadio: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+    margin: 0,
+    pointerEvents: 'none',
+  } as CSSProperties,
+  /** What a choice replaces, said right above its button. */
+  replaces: {color: colors.warning, fontSize: 11, margin: '4px 0 8px'} as CSSProperties,
   status: {
     flex: '0 0 auto',
     borderTop: `1px solid ${colors.border}`,
