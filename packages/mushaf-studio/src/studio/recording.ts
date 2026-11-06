@@ -11,7 +11,7 @@ import {isMushafStudioError, MushafStudioError} from '../errors';
 import type {StudioTimings} from '../types';
 import {unicodeFontOf} from '../unicode/font';
 import {fetchQuranComText, type QuranTextScript, serialiseAyahWords} from '../unicode/text';
-import {describeError, setStudioState, t} from './store';
+import {describeError, type StudioTarget, setStudioState, t} from './store';
 import {type PropsPatch, patchProps, projectPath, writeFile, writeJsonFile} from './studio-api';
 import {freshRecording, isAyahTextProps, type StudioCompositionProps} from './tab-props';
 
@@ -66,20 +66,21 @@ export const withRecordingSummary = async (
  * nothing: the files stay written and the error names them. Resolves with the timings' path.
  */
 export const saveRecording = async (options: {
-  readonly compositionId: string;
+  /** Where the patch goes (`patchProps()`'s target). */
+  readonly target: StudioTarget;
   readonly props: StudioCompositionProps;
   readonly project: string | undefined;
   readonly audioFile: string;
   readonly timings: StudioTimings;
   readonly timingsName: string;
 }): Promise<string> => {
-  const {compositionId, props, project, audioFile, timingsName} = options;
+  const {target, props, project, audioFile, timingsName} = options;
   const measured = await withRecordingSummary(options.timings, audioFile);
   const timingsFile = await writeJsonFile(projectPath(project, timingsName), measured);
   const patch: PropsPatch = {audioFile, timingsFile, ...freshRecording(props)};
   if (!isAyahTextProps(props)) {
     setStudioState({busy: t('busy.updating')});
-    await patchProps(compositionId, patch);
+    await patchProps(target, patch);
     return timingsFile;
   }
   const {surah, fromAyah, toAyah} = recitedRange(measured);
@@ -104,6 +105,6 @@ export const saveRecording = async (options: {
     );
   }
   setStudioState({busy: t('busy.updating')});
-  await patchProps(compositionId, {...patch, textFile});
+  await patchProps(target, {...patch, textFile});
   return timingsFile;
 };

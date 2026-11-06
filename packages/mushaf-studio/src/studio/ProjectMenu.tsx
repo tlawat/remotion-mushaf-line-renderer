@@ -12,8 +12,8 @@ import {
   readFileText,
   validateProjectFile,
 } from './project';
-import {runStudioTask, setStudioState, t as tNow, useStudioState, useT} from './store';
-import {type PropsPatch, patchProps, projectPath, staticFileList, writeJsonFile} from './studio-api';
+import {runStudioTask, type StudioTarget, setStudioState, t as tNow, useStudioState, useT} from './store';
+import {latestPanelProps, type PropsPatch, patchProps, projectPath, staticFileList, writeJsonFile} from './studio-api';
 import {colors, styles} from './styles';
 import type {StudioCompositionProps} from './tab-props';
 
@@ -34,7 +34,7 @@ export const exportProject = async (
  * the other kind of composition or when `public/` lacks a file it needs (all of them named), else
  * its props saved with `patchProps()`.
  */
-export const importProject = async (compositionId: string, props: StudioCompositionProps, text: string) => {
+export const importProject = async (target: StudioTarget | string, props: StudioCompositionProps, text: string) => {
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -53,15 +53,15 @@ export const importProject = async (compositionId: string, props: StudioComposit
       tNow('project.missing', {count: missing.length, files: missing.map((f) => `public/${f}`).join(', ')}),
       {missing},
     );
-  await patchProps(compositionId, project.props as PropsPatch);
+  await patchProps(target, project.props as PropsPatch);
   return project;
 };
 
 export const ProjectMenu: React.FC<{
-  readonly compositionId: string;
+  readonly target: StudioTarget;
   readonly props: StudioCompositionProps;
   readonly project: string | undefined;
-}> = ({compositionId, props, project}) => {
+}> = ({target, props, project}) => {
   const t = useT();
   const {busy} = useStudioState();
   const [open, setOpen] = useState(false);
@@ -70,7 +70,9 @@ export const ProjectMenu: React.FC<{
   const onExport = () => {
     setOpen(false);
     void runStudioTask(tNow('project.busy.export'), async () => {
-      const path = await exportProject(compositionId, props, project);
+      // The props as they are now, not the dock's memoized copy (a Props-sidebar edit of a group the
+      // dock does not show still belongs in the project).
+      const path = await exportProject(target.compositionId, latestPanelProps(target, props), project);
       setStudioState({notice: tNow('project.exported', {path})});
     });
   };
@@ -78,7 +80,7 @@ export const ProjectMenu: React.FC<{
   const onImport = (file: File) => {
     setOpen(false);
     void runStudioTask(tNow('project.busy.import'), async () => {
-      const imported = await importProject(compositionId, props, await readFileText(file));
+      const imported = await importProject(target, props, await readFileText(file));
       setStudioState({notice: tNow('project.imported', {name: file.name, count: imported.files.length})});
     });
   };

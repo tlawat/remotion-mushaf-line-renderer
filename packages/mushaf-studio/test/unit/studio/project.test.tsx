@@ -204,6 +204,27 @@ describe('the Project menu', () => {
     expect(studio.saveDefaultProps).not.toHaveBeenCalled();
   });
 
+  it('exports what a Props-sidebar edit changed since the dock last rendered, a group no tab shows included', async () => {
+    Object.assign(URL, {createObjectURL: vi.fn(() => 'blob:project'), revokeObjectURL: vi.fn()});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const {rerender} = render(<MushafStudioPanel compositionId="MushafRecitation" props={recitation} />);
+    const edited: MushafRecitationProps = {
+      ...recitation,
+      background: {...recitation.background, color: '#123456'},
+      overlay: {...recitation.overlay, reciter: 'Mishary Alafasy'},
+    };
+    rerender(<MushafStudioPanel compositionId="MushafRecitation" props={edited} />);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', {name: 'Export project'}));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    const [write] = studio.writeStaticFile.mock.calls[0] as unknown as [{filePath: string; contents: string}];
+    expect(JSON.parse(write.contents)).toEqual(project.projectFileOf('MushafRecitation', edited));
+    expect(JSON.parse(write.contents).props).toMatchObject({
+      background: {color: '#123456'},
+      overlay: {reciter: 'Mishary Alafasy'},
+    });
+  });
+
   const importFile = (contents: string) => {
     openMenu();
     const input = document.querySelector<HTMLInputElement>('[data-mushaf-control="import-project-file"]')!;

@@ -5,6 +5,7 @@ import type {AyahTranslation, ResolvedRecitation} from '../types';
 import type {ResolvedAyahText} from '../unicode/resolve';
 import type {MushafAyahTextProps} from '../unicode/schema';
 import type {MushafStudioPanelProps} from './index';
+import type {StudioTarget} from './store';
 import type {PropsPatch} from './studio-api';
 
 /** The props of a composition that renders the panel: `<MushafRecitation>`'s, `<MushafAyahText>`'s or `<MushafPage>`'s. */
@@ -13,6 +14,8 @@ export type StudioCompositionProps = MushafStudioPanelProps['props'];
 /** What every tab receives from the dock. */
 export type TabProps = {
   readonly compositionId: string;
+  /** What the tab's saves go to (`patchProps(target, ...)`) and what its state in the store is filed under (`targetKeyOf()`). */
+  readonly target: StudioTarget;
   readonly props: StudioCompositionProps;
   readonly project: string | undefined;
   /** The composition's frame rate, for `seek()`. */

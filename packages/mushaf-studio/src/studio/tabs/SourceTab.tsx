@@ -4,7 +4,18 @@ import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../q
 import {isHafsRecitation} from '../../qud/riwayah';
 import type {QudRecitation} from '../../qud/types';
 import {saveRecording} from '../recording';
-import {describeError, loadOnce, runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
+import {
+  describeError,
+  getStudioState,
+  loadOnce,
+  runStudioTask,
+  setStudioState,
+  targetKeyOf,
+  t as tNow,
+  useStudioState,
+  useT,
+  withEntry,
+} from '../store';
 import {AUDIO_EXTENSIONS, fileNameFor, isUrl, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {colors, styles} from '../styles';
 import {ayahCount, surahLabel} from '../surahs';
@@ -23,8 +34,13 @@ const groupByReciter = (catalogue: readonly QudRecitation[]): readonly [string, 
 };
 
 /** Source: a reviewed recitation from the aligner's catalogue, an own recording, or a file already in `public/`. */
-export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) => {
-  const {catalogue, uploadedAudio, busy, language} = useStudioState();
+export const SourceTab: React.FC<TabProps> = ({target, props, project}) => {
+  const {catalogue, busy, language, uploadedAudio: uploads} = useStudioState();
+  const key = targetKeyOf(target);
+  const uploadedAudio = uploads[key] ?? null;
+  /** Keeps (or with `null` forgets) the recording this target's Align works on next. */
+  const setUploaded = (path: string | null) =>
+    setStudioState({uploadedAudio: withEntry(getStudioState().uploadedAudio, key, path ?? undefined)});
   const t = useT();
   useEffect(() => {
     void loadOnce('catalogue', () => listRecitations());
@@ -65,7 +81,7 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
       }
       const timings = timingsFromCatalogue(segments, {audio});
       await saveRecording({
-        compositionId,
+        target,
         props,
         project,
         audioFile: audio,
@@ -73,21 +89,22 @@ export const SourceTab: React.FC<TabProps> = ({compositionId, props, project}) =
         timingsName: `${base}.timings.json`,
       });
       // The clip is what Align works on now, not an earlier upload.
-      setStudioState({uploadedAudio: null});
+      setUploaded(null);
     });
   };
 
   const upload = (file: File) => {
     void runStudioTask(tNow('source.busy.copying'), async () => {
       const path = await writeFile(projectPath(project, fileNameFor(file.name)), await file.arrayBuffer());
-      setStudioState({uploadedAudio: path, notice: tNow('source.notice.copied', {name: file.name, path})});
+      setUploaded(path);
+      setStudioState({notice: tNow('source.notice.copied', {name: file.name, path})});
     });
   };
 
   const pickPublic = (path: string) => {
     void runStudioTask(tNow('busy.updating'), async () => {
-      await patchProps(compositionId, {audioFile: path});
-      setStudioState({uploadedAudio: null});
+      await patchProps(target, {audioFile: path});
+      setUploaded(null);
     });
   };
 

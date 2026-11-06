@@ -1,36 +1,42 @@
 import type * as React from 'react';
-import {memo, useEffect, useState} from 'react';
+import {memo, useEffect, useMemo, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
-import {LOOK_GROUPS} from '../presets';
 import {reserveDockSpace} from './dock-space';
 import {DoubtMarkers} from './doubts';
 import {useInStudio} from './environment';
 import {directionOf, STUDIO_LANGUAGES} from './i18n';
 import type {MushafStudioPanelProps} from './index';
 import {ProjectMenu} from './ProjectMenu';
+import {useLiveEditorProps} from './remotion-internals';
 import {
   describeError,
+  getStudioState,
   LOADING_LABELS,
+  runStudioTask,
   STUDIO_TABS,
   type StudioTab,
+  type StudioTarget,
   setStudioState,
+  targetKeyOf,
+  t as tNow,
   useStudioState,
   useT,
+  withEntry,
 } from './store';
-import {applyPatch, patchApplied} from './studio-api';
-import {colors, styles} from './styles';
 import {
-  endCardOf,
-  hasLines,
-  isAyahTextProps,
-  isPageProps,
-  isPageResolved,
-  resolvedOf,
-  type StudioCompositionProps,
-  type TabProps,
-  textFileOf,
-} from './tab-props';
+  applyPatch,
+  dismissRolledBack,
+  observeLiveProps,
+  type PropsPatch,
+  patchApplied,
+  patchPaths,
+  rememberLiveProps,
+  rememberPanelProps,
+  restoreRolledBack,
+} from './studio-api';
+import {colors, styles} from './styles';
+import {hasLines, isPageResolved, resolvedOf, type StudioCompositionProps, type TabProps} from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
 import {LinesTab} from './tabs/LinesTab';
 import {LookTab} from './tabs/LookTab';
@@ -102,24 +108,67 @@ const StatusLine: React.FC = () => {
   );
 };
 
+/** How many field names the rolled-back notice lists before it says how many more there are. */
+const LISTED_FIELDS = 4;
+
+/**
+ * Offers to save again what a panel save wrote and the live props lost right after it (the Props
+ * sidebar's JSON Reset, a sidebar save that raced the panel's). Nothing is written unless the user
+ * presses Restore.
+ */
+const RolledBack: React.FC<{readonly target: StudioTarget; readonly lost: PropsPatch}> = ({target, lost}) => {
+  const {busy} = useStudioState();
+  const t = useT();
+  const paths = patchPaths(lost as Readonly<Record<string, unknown>>);
+  const listed = paths.slice(0, LISTED_FIELDS).join(', ');
+  const fields =
+    paths.length > LISTED_FIELDS
+      ? t('panel.rolledBackMore', {fields: listed, count: paths.length - LISTED_FIELDS})
+      : listed;
+  const restore = () => void runStudioTask(tNow('panel.busy.restoring'), () => restoreRolledBack(target));
+  return (
+    <div style={{...styles.status, ...styles.statusLine('notice')}} role="alert" data-mushaf-control="rolled-back">
+      <span style={{flex: '1 1 auto'}}>{t('panel.rolledBack', {fields})}</span>
+      <button type="button" style={styles.button('default', busy !== null)} disabled={busy !== null} onClick={restore}>
+        {t('panel.restore')}
+      </button>
+      <button
+        type="button"
+        style={styles.button('ghost', false)}
+        onClick={() => dismissRolledBack(target)}
+        title={t('panel.keepAsIs')}
+      >
+        ×
+      </button>
+    </div>
+  );
+};
+
 /** The dock itself: Studio only, so `useVideoConfig()` and `document` are safe here. */
 const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, project, initialTab}) => {
   const state = useStudioState();
   const t = useT();
   const {fps} = useVideoConfig();
   const [host] = useState(() => (typeof document === 'undefined' ? null : document.body));
-  const {pendingPatch} = state;
+  const target = useMemo<StudioTarget>(() => ({compositionId}), [compositionId]);
+  const key = targetKeyOf(target);
+  // The Root as the Studio has it now: every save starts from it, whoever wrote it last.
+  const live = useLiveEditorProps();
+  rememberLiveProps(live);
+  useEffect(() => observeLiveProps(live), [live]);
+  const pendingPatch = state.pendingPatches[key];
   // The composition has come back with what was saved: the tabs read the props themselves again.
   useEffect(() => {
-    if (pendingPatch !== null && patchApplied(props, pendingPatch as Readonly<Record<string, unknown>>))
-      setStudioState({pendingPatch: null});
-  }, [props, pendingPatch]);
+    if (pendingPatch !== undefined && patchApplied(props, pendingPatch as Readonly<Record<string, unknown>>))
+      setStudioState({pendingPatches: withEntry(getStudioState().pendingPatches, key, undefined)});
+  }, [props, pendingPatch, key]);
   // The dock is an overlay; the Studio is told to leave it room, so the preview is never under it.
   useEffect(() => reserveDockSpace(state.collapsed, state.side), [state.collapsed, state.side]);
   if (!host) return null;
   const tab = state.tab ?? initialTab ?? 'source';
   const Tab = TABS[tab];
   const shown = applyPatch(props, pendingPatch);
+  const lost = state.rolledBack[key];
   const other = state.side === 'left' ? 'right' : 'left';
   const dock = (
     <aside
@@ -172,7 +221,7 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
                   </button>
                 ))}
               </fieldset>
-              <ProjectMenu compositionId={compositionId} props={shown} project={project} />
+              <ProjectMenu target={target} props={shown} project={project} />
               <button
                 type="button"
                 style={styles.button('ghost', false)}
@@ -212,9 +261,16 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
               message={t('panel.tabCrashed')}
               reload={t('panel.reload')}
             >
-              <Tab compositionId={compositionId} props={shown} project={project ?? compositionId} fps={fps} />
+              <Tab
+                compositionId={compositionId}
+                target={target}
+                props={shown}
+                project={project ?? compositionId}
+                fps={fps}
+              />
             </TabErrorBoundary>
           </div>
+          {lost ? <RolledBack target={target} lost={lost} /> : null}
           <StatusLine />
         </>
       )}
@@ -223,20 +279,15 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
   return createPortal(dock, host);
 };
 
-const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
-  // Only the environment hook above this line: outside the Studio's preview nothing of the dock
-  // (and nothing of `document`) is touched.
-  const inStudio = useInStudio();
-  if (!inStudio) return null;
+/** The Studio part of the panel: the doubt markers and the dock. Re-rendered only when `propsEqual()` says so. */
+const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => (
   // The timeline markers are the composition's own children (Sequences register where they are
   // rendered); the dock is portaled out of it.
-  return (
-    <>
-      <DoubtMarkers props={panelProps.props} />
-      <StudioDock {...panelProps} />
-    </>
-  );
-};
+  <>
+    <DoubtMarkers props={panelProps.props} />
+    <StudioDock {...panelProps} />
+  </>
+);
 
 /**
  * A cheap fingerprint of `resolved`: enough to notice a new resolution without comparing the data.
@@ -272,46 +323,21 @@ const resolvedSignature = (props: StudioCompositionProps): string => {
 };
 
 /**
- * What one composition has and the others do not: an ayah text's file and font (its script), a
- * recitation's lines, a page's review threshold; and the end card's files where there is one.
- */
-const ownContent = (props: StudioCompositionProps): string => {
-  const card = endCardOf(props);
-  const own = isAyahTextProps(props)
-    ? ['ayah-text', props.textFile, props.font]
-    : isPageProps(props)
-      ? ['page', props.review.confidenceThreshold]
-      : ['recitation', props.slice, props.review.confidenceThreshold, props.splits];
-  return JSON.stringify([...own, card.show ?? null, card.tafsirFile ?? null, card.chapterInfoFile ?? null]);
-};
-
-/** The style groups a look sets, as one string: the Look tab marks the look the props have. */
-const styleSignature = (props: StudioCompositionProps): string =>
-  JSON.stringify(LOOK_GROUPS.map((group) => (props as Readonly<Record<string, unknown>>)[group] ?? null));
-
-/**
- * The composition re-renders on every frame; the panel must not. Content props are compared by
- * value, the style groups by a JSON signature (small objects, and the Look tab shows which look
- * they match), `resolved` by a fingerprint rather than by identity, so a parent that rebuilds the
- * props object each frame still leaves the dock alone.
+ * The composition re-renders on every frame; the panel must not. Every top-level prop is compared
+ * by identity (Remotion hands the composition the same group objects frame after frame, and a new
+ * one when anything in it changed), `resolved` by a fingerprint, so a `calculateMetadata()` that
+ * rebuilt the same data leaves the dock alone.
  */
 const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boolean => {
   if (a.compositionId !== b.compositionId || a.project !== b.project || a.initialTab !== b.initialTab) return false;
-  const x = a.props;
-  const y = b.props;
-  return (
-    x.audioFile === y.audioFile &&
-    x.timingsFile === y.timingsFile &&
-    x.fromAyah === y.fromAyah &&
-    x.toAyah === y.toAyah &&
-    textFileOf(x, 'translationFile') === textFileOf(y, 'translationFile') &&
-    textFileOf(x, 'glossFile') === textFileOf(y, 'glossFile') &&
-    textFileOf(x, 'transliterationFile') === textFileOf(y, 'transliterationFile') &&
-    ownContent(x) === ownContent(y) &&
-    styleSignature(x) === styleSignature(y) &&
-    resolvedSignature(x) === resolvedSignature(y)
-  );
+  const x = a.props as Readonly<Record<string, unknown>>;
+  const y = b.props as Readonly<Record<string, unknown>>;
+  for (const key of new Set([...Object.keys(x), ...Object.keys(y)]))
+    if (key !== 'resolved' && !Object.is(x[key], y[key])) return false;
+  return resolvedSignature(a.props) === resolvedSignature(b.props);
 };
+
+const StudioPanel = memo(Panel, propsEqual);
 
 /**
  * The Mushaf panel: rendered inside a composition (`<MushafRecitation>`, `<MushafAyahText>` or `<MushafPage>`), it
@@ -320,7 +346,15 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
  * Review, Lines and Text and a Project menu, and marks the doubtful segments on the Studio's
  * timeline with empty `<Sequence>`s rendered in the composition itself. Every change it makes goes
  * through the same path: write the file(s) into `public/`, `saveDefaultProps()` on the
- * composition, then `reevaluateComposition()`. It never calls `delayRender()`, and only the
- * waveform's playhead re-renders with the frame.
+ * composition from its live Root values, then `reevaluateComposition()`. It never calls
+ * `delayRender()`, and only the waveform's playhead re-renders with the frame.
  */
-export const MushafStudioPanel: React.FC<MushafStudioPanelProps> = memo(Panel, propsEqual);
+export const MushafStudioPanel: React.FC<MushafStudioPanelProps> = (panelProps) => {
+  // Only the environment hook before this check: outside the Studio's preview nothing of the dock
+  // (and nothing of `document`) is touched.
+  const inStudio = useInStudio();
+  if (!inStudio) return null;
+  // Every frame, past the memo: what Export project, Copy description and Set thumbnail read when clicked.
+  rememberPanelProps(panelProps.compositionId, panelProps.props);
+  return <StudioPanel {...panelProps} />;
+};

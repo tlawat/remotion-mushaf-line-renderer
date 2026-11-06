@@ -138,7 +138,7 @@ const isTyping = (target: EventTarget): boolean =>
  * a comparison with another timings file, split and re-align; and a keyboard for going through the
  * doubtful words (see `REVIEW_SHORTCUTS`).
  */
-export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fps}) => {
+export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => {
   const {session, busy, showDoubts} = useStudioState();
   const t = useT();
   const resolved = resolvedOf(props);
@@ -222,10 +222,10 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   /** Writes new timings where the composition reads them (or into the project when it reads a URL) and re-resolves. */
   const writeTimings = async (next: StudioTimings): Promise<void> => {
     const current = props.timingsFile;
-    const target = isUrl(current) ? projectPath(project, `${stemOf(current) || 'timings'}.timings.json`) : current;
-    await writeJsonFile(target, next);
-    if (target === current) reevaluate();
-    else await patchProps(compositionId, {timingsFile: target});
+    const path = isUrl(current) ? projectPath(project, `${stemOf(current) || 'timings'}.timings.json`) : current;
+    await writeJsonFile(path, next);
+    if (path === current) reevaluate();
+    else await patchProps(target, {timingsFile: path});
   };
 
   const applyEdits = () => {
@@ -565,6 +565,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
         <Note>{t('review.applyNote', {file: props.timingsFile})}</Note>
       </Section>
       <ExportRow
+        target={target}
         props={props}
         project={project}
         writeTimings={async (next) => {

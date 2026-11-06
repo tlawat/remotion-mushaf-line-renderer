@@ -1,7 +1,17 @@
 import type * as React from 'react';
 import {applyLook, lookMatches, lookPatchFor, looksFor, lookUndoPatch, type MushafLook} from '../../presets';
 import type {MessageKey} from '../i18n';
-import {runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
+import {
+  getStudioState,
+  LOOK_UNDO_DEPTH,
+  runStudioTask,
+  setStudioState,
+  targetKeyOf,
+  t as tNow,
+  useStudioState,
+  useT,
+  withEntry,
+} from '../store';
 import {patchProps} from '../studio-api';
 import {styles} from '../styles';
 import {compositionKindOf, type StudioCompositionProps, type TabProps} from '../tab-props';
@@ -32,26 +42,30 @@ const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chi
  * `patchProps()` every tab uses) and never the content; Undo puts back what the last look changed.
  * Needs nothing resolved: it works before a recitation is chosen.
  */
-export const LookTab: React.FC<TabProps> = ({compositionId, props}) => {
+export const LookTab: React.FC<TabProps> = ({target, props}) => {
   const {busy, lookUndo} = useStudioState();
   const t = useT();
   const working = busy !== null;
   const looks = looksFor(compositionKindOf(props));
-  const undo = lookUndo !== null && lookUndo.compositionId === compositionId ? lookUndo : null;
+  const key = targetKeyOf(target);
+  const undo = lookUndo[key]?.at(-1) ?? null;
 
   const choose = (look: MushafLook) => {
     const before = lookUndoPatch(props, look);
+    const applied = lookPatchFor(props, look);
     void runStudioTask(tNow('look.busy.applying', {name: look.name}), async () => {
-      await patchProps(compositionId, lookPatchFor(props, look));
-      setStudioState({lookUndo: {compositionId, name: look.name, patch: before}});
+      await patchProps(target, applied);
+      const stack = [...(getStudioState().lookUndo[key] ?? []), {name: look.name, patch: before, applied}];
+      setStudioState({lookUndo: withEntry(getStudioState().lookUndo, key, stack.slice(-LOOK_UNDO_DEPTH))});
     });
   };
 
   const revert = () => {
     if (!undo) return;
     void runStudioTask(tNow('look.busy.undoing', {name: undo.name}), async () => {
-      await patchProps(compositionId, undo.patch);
-      setStudioState({lookUndo: null});
+      await patchProps(target, undo.patch);
+      const stack = (getStudioState().lookUndo[key] ?? []).filter((entry) => entry !== undo);
+      setStudioState({lookUndo: withEntry(getStudioState().lookUndo, key, stack.length > 0 ? stack : undefined)});
     });
   };
 

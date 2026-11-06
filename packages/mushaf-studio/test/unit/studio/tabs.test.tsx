@@ -281,7 +281,7 @@ afterEach(() => {
 
 describe('Align', () => {
   it('says where the audio goes before the button, aligns the uploaded recording over a public clip, and keeps the token out of every file and prop', async () => {
-    setStudioState({uploadedAudio: 'mushaf-studio/p/My Take.m4a'});
+    setStudioState({uploadedAudio: {MushafRecitation: 'mushaf-studio/p/My Take.m4a'}});
     const timings = reviewTimings();
     qud.alignAudio.mockResolvedValue({audio_id: 'sess-1', segments: [], device: 'GPU'});
     qud.sessionTimestamps.mockResolvedValue({audio_id: 'sess-1', segments: []});
@@ -438,7 +438,7 @@ describe('a new recording on an ayah text', () => {
   });
 
   it("Align fetches the passage's text and sets it with the timings, in one patch", async () => {
-    setStudioState({uploadedAudio: 'mushaf-studio/reel/take.m4a'});
+    setStudioState({uploadedAudio: {MushafAyahText: 'mushaf-studio/reel/take.m4a'}});
     ayahPanel('align');
     fireEvent.click(screen.getByRole('button', {name: 'Align'}));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
@@ -460,7 +460,7 @@ describe('a new recording on an ayah text', () => {
 
   it('Align patches nothing when the text cannot be fetched, but keeps the session and the timings', async () => {
     quranComDown();
-    setStudioState({uploadedAudio: 'mushaf-studio/reel/take.m4a'});
+    setStudioState({uploadedAudio: {MushafAyahText: 'mushaf-studio/reel/take.m4a'}});
     ayahPanel('align');
     fireEvent.click(screen.getByRole('button', {name: 'Align'}));
     await waitFor(() => expect(getStudioState().error).not.toBeNull());
@@ -476,7 +476,10 @@ describe('a new recording on an ayah text', () => {
 
 describe('Source', () => {
   it('forgets the upload when a file of public/ is picked as the audio', async () => {
-    setStudioState({uploadedAudio: 'mushaf-studio/p/mine.m4a'});
+    // An upload on another composition is that composition's: it stays.
+    setStudioState({
+      uploadedAudio: {MushafRecitation: 'mushaf-studio/p/mine.m4a', MushafPage: 'mushaf-studio/p/page.m4a'},
+    });
     studio.getStaticFiles.mockReturnValue([
       {src: '/x', name: 'mushaf-studio/p/old.mp3', sizeInBytes: 2048, lastModified: 0},
     ]);
@@ -487,7 +490,7 @@ describe('Source', () => {
     fireEvent.click(screen.getByText('Use as audio'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(saved(0)).toEqual({audioFile: 'mushaf-studio/p/old.mp3'});
-    await waitFor(() => expect(getStudioState().uploadedAudio).toBeNull());
+    await waitFor(() => expect(getStudioState().uploadedAudio).toEqual({MushafPage: 'mushaf-studio/p/page.m4a'}));
   });
 
   it('warns that the mushaf is the Hafs print for a recitation in another riwayah, and uses it only once confirmed', async () => {

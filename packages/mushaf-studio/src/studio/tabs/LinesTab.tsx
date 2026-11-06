@@ -66,7 +66,7 @@ export const LinesTab: React.FC<TabProps> = (tabProps) => {
   return <RecitationLines {...tabProps} />;
 };
 
-const RecitationLines: React.FC<TabProps> = ({compositionId, props, fps}) => {
+const RecitationLines: React.FC<TabProps> = ({target, props, fps}) => {
   const {busy} = useStudioState();
   const t = useT();
   const resolved = resolvedOf(props);
@@ -81,7 +81,7 @@ const RecitationLines: React.FC<TabProps> = ({compositionId, props, fps}) => {
   const working = busy !== null;
   const splits: readonly LineSplit[] = props.splits;
   const save = (next: readonly LineSplit[]) =>
-    void runStudioTask(tNow('lines.busy.splits'), () => patchProps(compositionId, {splits: next}));
+    void runStudioTask(tNow('lines.busy.splits'), () => patchProps(target, {splits: next}));
   const addSplit = (line: MushafLineData, word: MushafWord) => {
     const split: LineSplit = {page: line.page, line: line.line, atWordId: word.wordId};
     if (splits.some((s) => sameSplit(s, split))) return;

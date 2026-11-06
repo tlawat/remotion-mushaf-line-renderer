@@ -71,27 +71,38 @@ export type StudioState = {
   /** `listQuranComTafsirs()` for every language, fetched once (by the Text tab, for the end card). */
   readonly quranComTafsirs: readonly QuranComResource[] | null;
   readonly session: StudioSession | null;
-  /** The last recording the user put into `public/` through the Source tab. */
-  readonly uploadedAudio: string | null;
+  /** By target key (`targetKeyOf()`): the last recording the user put into `public/` through the Source tab. */
+  readonly uploadedAudio: Readonly<Record<string, string>>;
   /**
-   * What `patchProps()` saved that the composition has not come back with yet (the Root reloads after
-   * the file is written): merged into every later save and into what the tabs see, so two changes in
-   * quick succession both land. Cleared by the panel when the props arrive equal to it.
+   * By target key: what `patchProps()` saved that the rendered props have not come back with yet
+   * (`calculateMetadata()` runs again after the Root is written). The tabs see the props with it
+   * applied, so a change shows at once; the panel drops it when the props arrive carrying it, or
+   * when the live props lost it (see `rolledBack`).
    */
-  readonly pendingPatch: PropsPatch | null;
+  readonly pendingPatches: Readonly<Record<string, PropsPatch>>;
   /**
-   * Per composition id: what `patchProps()` wrote that the Root file had not been read back with
-   * the last time a save looked (`savedDefaultProps`). Every save merges it in again, so a save made
-   * while `savedDefaultProps` still lags cannot write older values over newer ones. Unlike
-   * `pendingPatch` it is pruned only against `savedDefaultProps`, never against the props the
-   * composition renders, which can arrive before the Studio's saved copy does.
+   * By target key: what `patchProps()` sent to the Root that the live props
+   * (`useLiveEditorProps()`) do not show yet. The next save adds it to its base, so two saves in
+   * quick succession both land; every live update prunes what it carries, so an older panel value
+   * is never written over a later change made elsewhere.
    */
-  readonly unsavedPatches: Readonly<Record<string, PropsPatch>>;
+  readonly inFlightPatches: Readonly<Record<string, PropsPatch>>;
   /**
-   * What the last look the Look tab applied changed, as it was before: Undo saves `patch` on
-   * `compositionId`. In memory only; one level.
+   * By target key: what a panel save wrote that the live props lost right after it (the Props
+   * sidebar's JSON Reset goes back to the page-load props; a sidebar save can race the panel's).
+   * The dock offers to restore it; nothing is written until the user says so.
    */
-  readonly lookUndo: LookUndo | null;
+  readonly rolledBack: Readonly<Record<string, PropsPatch>>;
+  /**
+   * By target key: the looks the Look tab applied, the last one at the end, each with the fields it
+   * changed as they were before. Undo saves the last one's `patch`. In memory only.
+   */
+  readonly lookUndo: Readonly<Record<string, readonly LookUndo[]>>;
+  /**
+   * By target key, then by a name the tab chooses: what a tab was in the middle of (pickers, pending
+   * nudges, options), so a tab switch does not lose it. In memory only.
+   */
+  readonly drafts: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /**
    * The decoded recordings' envelopes by audio URL, for the Review tab's waveform. In memory only:
    * decoding again after a reload costs a second, storing them would cost megabytes.
@@ -99,12 +110,45 @@ export type StudioState = {
   readonly waveforms: Readonly<Record<string, WaveformEntry>>;
 };
 
-/** The fields a look changed, with their values from before it, and where. */
-export type LookUndo = {
+/**
+ * What the panel edits: a composition of the Root, or, with `propsKey`, the props a template keeps
+ * under that key of its composition's `defaultProps` (a drop-in slot).
+ */
+export type StudioTarget = {
   readonly compositionId: string;
+  /** The key of the composition's `defaultProps` the panel's props live under; the top level when absent. */
+  readonly propsKey?: string | undefined;
+  /**
+   * What a first save under `propsKey` starts from while the template holds `null` there (or
+   * nothing): complete props of the slot's kind, so the save writes props the slot can render.
+   * `{}` when absent.
+   */
+  readonly emptyProps?: Readonly<Record<string, unknown>> | undefined;
+};
+
+/** The key the store files a target's state under: `compositionId`, or `compositionId/propsKey`. */
+export const targetKeyOf = (target: StudioTarget | string): string =>
+  typeof target === 'string'
+    ? target
+    : target.propsKey
+      ? `${target.compositionId}/${target.propsKey}`
+      : target.compositionId;
+
+/** A target given as a bare composition id: the composition's top level. */
+export const toTarget = (target: StudioTarget | string): StudioTarget =>
+  typeof target === 'string' ? {compositionId: target} : target;
+
+/** How many looks Undo goes back through, per target. */
+export const LOOK_UNDO_DEPTH = 20;
+
+/** One look the Look tab applied: what it set, and those fields as they were before. */
+export type LookUndo = {
   /** The look's name, for the Undo button. */
   readonly name: string;
+  /** The fields the look changed, with their values from before it: what Undo saves. */
   readonly patch: PropsPatch;
+  /** What the look set, so Undo can tell the fields that still hold it from those changed since. */
+  readonly applied: PropsPatch;
 };
 
 const PANEL_KEY = 'mushaf-studio.panel';
@@ -156,6 +200,14 @@ const isSession = (value: unknown): value is StudioSession => {
   );
 };
 
+/** The string entries of a stored record (the uploads by target); `{}` for anything else, an older single path included. */
+const stringRecord = (value: unknown): Readonly<Record<string, string>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+      )
+    : {};
+
 const initialState = (): StudioState => {
   const panel = readJson('local', PANEL_KEY) as {
     tab?: unknown;
@@ -180,10 +232,12 @@ const initialState = (): StudioState => {
     quranComResources: null,
     quranComTafsirs: null,
     session: isSession(saved?.session) ? saved.session : null,
-    uploadedAudio: typeof saved?.uploadedAudio === 'string' ? saved.uploadedAudio : null,
-    pendingPatch: null,
-    unsavedPatches: {},
-    lookUndo: null,
+    uploadedAudio: stringRecord(saved?.uploadedAudio),
+    pendingPatches: {},
+    inFlightPatches: {},
+    rolledBack: {},
+    lookUndo: {},
+    drafts: {},
     waveforms: {},
   };
 };
@@ -242,6 +296,54 @@ export const studioStore = {
 /** The whole state, re-rendering the caller when any of it changes. */
 export const useStudioState = (): StudioState =>
   useSyncExternalStore(subscribeStudioStore, getStudioState, getStudioState);
+
+/**
+ * `record` with `key` set to `value`, or without `key` when `value` is `undefined`: how the keyed
+ * fields (`uploadedAudio`, `pendingPatches`, ...) are written.
+ */
+export const withEntry = <T>(
+  record: Readonly<Record<string, T>>,
+  key: string,
+  value: T | undefined,
+): Readonly<Record<string, T>> => {
+  if (value === undefined) {
+    if (!(key in record)) return record;
+    const {[key]: _dropped, ...rest} = record;
+    return rest;
+  }
+  return {...record, [key]: value};
+};
+
+/** A tab's draft `name` for a target key; `undefined` when it has none. */
+export const draftOf = (key: string, name: string): unknown => getStudioState().drafts[key]?.[name];
+
+/** Keeps a tab's draft for a target key; `undefined` forgets it. */
+export const setDraft = (key: string, name: string, value: unknown): void => {
+  const {drafts} = getStudioState();
+  const own = withEntry(drafts[key] ?? {}, name, value);
+  setStudioState({drafts: withEntry(drafts, key, Object.keys(own).length === 0 ? undefined : own)});
+};
+
+/**
+ * `useState()` kept in the store under the target key and `name`: it survives the tab being
+ * unmounted (a tab switch), and each target (composition or slot) has its own. `initial` is what
+ * it reads while nothing is kept.
+ */
+export const useStudioDraft = <T>(
+  key: string,
+  name: string,
+  initial: T,
+): readonly [T, (next: T | ((current: T) => T)) => void] => {
+  const read = () => getStudioState().drafts[key]?.[name];
+  const kept = useSyncExternalStore(subscribeStudioStore, read, read);
+  const value = kept === undefined ? initial : (kept as T);
+  const set = (next: T | ((current: T) => T)) => {
+    const stored = draftOf(key, name);
+    const current = stored === undefined ? initial : (stored as T);
+    setDraft(key, name, typeof next === 'function' ? (next as (current: T) => T)(current) : next);
+  };
+  return [value, set];
+};
 
 /** The panel's language, re-rendering the caller only when it changes. */
 export const useStudioLanguage = (): StudioLanguage =>

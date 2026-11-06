@@ -142,7 +142,7 @@ const passageOf = (props: TabProps['props']) => {
  * each written into the project and set as the card's file and what it shows. Nothing (a note) on
  * a composition without an end card.
  */
-const EndCardContent: React.FC<TabProps> = ({compositionId, props, project}) => {
+const EndCardContent: React.FC<TabProps> = ({target, props, project}) => {
   const {quranComTafsirs, busy} = useStudioState();
   const t = useT();
   const available = hasEndCard(props);
@@ -168,7 +168,7 @@ const EndCardContent: React.FC<TabProps> = ({compositionId, props, project}) => 
       const name = `tafsir-${id}-${chapter}-${fromAyah}-${toAyah}.json`;
       const path = await writeFile(projectPath(project, name), serialiseTafsir(fetched));
       setStudioState({busy: tNow('busy.updating')});
-      await patchProps(compositionId, {endCard: {tafsirFile: path, show: 'tafsir'}});
+      await patchProps(target, {endCard: {tafsirFile: path, show: 'tafsir'}});
       setStudioState({notice: tNow('text.notice.endCard', {path})});
     });
   };
@@ -184,7 +184,7 @@ const EndCardContent: React.FC<TabProps> = ({compositionId, props, project}) => 
         serialiseChapterInfo(info),
       );
       setStudioState({busy: tNow('busy.updating')});
-      await patchProps(compositionId, {endCard: {chapterInfoFile: path, show: 'chapter-info'}});
+      await patchProps(target, {endCard: {chapterInfoFile: path, show: 'chapter-info'}});
       setStudioState({notice: tNow('text.notice.endCard', {path})});
     });
   };
@@ -234,7 +234,7 @@ const EndCardContent: React.FC<TabProps> = ({compositionId, props, project}) => 
 };
 
 const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
-  const {compositionId, props, project} = tabProps;
+  const {target, props, project} = tabProps;
   const {quranComResources, busy} = useStudioState();
   const t = useT();
   useEffect(() => {
@@ -272,7 +272,7 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
         await loadTextFile(KIND[field], field, path, io);
       }
       setStudioState({busy: tNow('busy.updating')});
-      await patchProps(compositionId, {text: {[field]: path}});
+      await patchProps(target, {text: {[field]: path}});
     });
 
   /** `-<surah>-<from>-<to>`: two compositions of one project keep their own files. */
@@ -280,7 +280,7 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
 
   /** Saves the translation layers: the whole list, the first one's file as `translationFile`. */
   const saveLayers = (next: readonly TranslationLayer[]) =>
-    void runStudioTask(tNow('busy.updating'), () => patchProps(compositionId, translationLayersPatch(next)));
+    void runStudioTask(tNow('busy.updating'), () => patchProps(target, translationLayersPatch(next)));
 
   /**
    * Fetches the chosen translation of the passage into the project and shows it: as the single
@@ -296,14 +296,14 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
       const name = `translation-${id}${suffix}.json`;
       const path = await writeFile(projectPath(project, name), serialiseTranslation(translation));
       if (!layered) {
-        await patchProps(compositionId, {text: {translationFile: path}});
+        await patchProps(target, {text: {translationFile: path}});
         return;
       }
       const next =
         layer === 'new'
           ? [...current, newTranslationLayer(props, path)]
           : current.map((entry, i) => (i === layer ? {...entry, file: path} : entry));
-      await patchProps(compositionId, translationLayersPatch(next));
+      await patchProps(target, translationLayersPatch(next));
     });
   };
 
@@ -314,7 +314,7 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
       const io = {fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init), staticFile};
       await loadTextFile('ayah', 'translationFile', path, io);
       setStudioState({busy: tNow('busy.updating')});
-      await patchProps(compositionId, translationLayersPatch([...current, newTranslationLayer(props, path)]));
+      await patchProps(target, translationLayersPatch([...current, newTranslationLayer(props, path)]));
     });
   };
 
@@ -340,7 +340,7 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
         return;
       }
       setStudioState({busy: tNow('busy.updating')});
-      await patchProps(compositionId, {textFile: path});
+      await patchProps(target, {textFile: path});
       setStudioState({notice: tNow('text.notice.textFileSet', {path})});
     });
   };
@@ -355,7 +355,7 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
         const gloss = await fetchQuranComWordGloss({field, language: lang, ...passage});
         const name = field === 'translation' ? `gloss-${lang}${suffix}.json` : `transliteration-${lang}${suffix}.json`;
         const path = await writeFile(projectPath(project, name), serialiseTranslation(gloss));
-        await patchProps(compositionId, {text: {[prop]: path}});
+        await patchProps(target, {text: {[prop]: path}});
       },
     );
   };

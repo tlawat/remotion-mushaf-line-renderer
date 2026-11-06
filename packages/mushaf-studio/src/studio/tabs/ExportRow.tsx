@@ -8,6 +8,7 @@ import {readFileText} from '../project';
 import {chaptersOf, copyToClipboard, descriptionOf, THUMBNAIL_COMPOSITION_ID, thumbnailPatchOf} from '../publish';
 import {describeError, runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
 import {
+  latestPanelProps,
   patchOtherComposition,
   projectPath,
   readTimingsFile,
@@ -58,8 +59,8 @@ export const captionsFromJson = (text: string, name: string): readonly Caption[]
  * `writeTimings` (the tab's: it writes the file and re-resolves the composition).
  */
 export const ExportRow: React.FC<
-  Pick<TabProps, 'props' | 'project'> & {readonly writeTimings: (next: StudioTimings) => Promise<void>}
-> = ({props, project, writeTimings}) => {
+  Pick<TabProps, 'target' | 'props' | 'project'> & {readonly writeTimings: (next: StudioTimings) => Promise<void>}
+> = ({target, props, project, writeTimings}) => {
   const {busy} = useStudioState();
   const t = useT();
   const [markers, setMarkers] = useState(false);
@@ -158,9 +159,12 @@ export const ExportRow: React.FC<
   };
 
   const copyDescription = () => {
-    if (!resolved) return;
+    // The props as they are now: the dock's own copy is refreshed only when the props it compares change.
+    const current = latestPanelProps(target, props);
+    const now = resolvedOf(current);
+    if (!now) return;
     try {
-      void copy(descriptionOf(props, resolved), tNow('review.notice.descriptionCopied'));
+      void copy(descriptionOf(current, now), tNow('review.notice.descriptionCopied'));
     } catch (error) {
       setStudioState({error: describeError(error)});
     }
@@ -168,8 +172,10 @@ export const ExportRow: React.FC<
 
   /** Saves the passage into `<MushafThumbnail>`'s props and selects it; says so when the Root has none. */
   const thumbnail = () => {
-    if (!resolved) return;
-    const patch = thumbnailPatchOf(props, resolved.timings);
+    const current = latestPanelProps(target, props);
+    const now = resolvedOf(current);
+    if (!now) return;
+    const patch = thumbnailPatchOf(current, now.timings);
     void runStudioTask(tNow('review.busy.thumbnail'), async () => {
       const found = await patchOtherComposition(THUMBNAIL_COMPOSITION_ID, patch);
       if (!found)

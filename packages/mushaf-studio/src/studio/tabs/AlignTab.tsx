@@ -13,6 +13,7 @@ import {
   runStudioTask,
   setHfToken,
   setStudioState,
+  targetKeyOf,
   t as tNow,
   useStudioState,
   useT,
@@ -43,8 +44,9 @@ const clock = (at: number): string => {
 };
 
 /** Align: sends a recording of `public/` to the QUD Universal Aligner and writes the timings it returns. */
-export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) => {
-  const {uploadedAudio, busy, progress, session} = useStudioState();
+export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
+  const {busy, progress, session, uploadedAudio: uploads} = useStudioState();
+  const uploadedAudio = uploads[targetKeyOf(target)] ?? null;
   const t = useT();
   const [model, setModel] = useState<QudModel>(session?.model ?? 'Base');
   const [device, setDevice] = useState<QudDevice>(session?.device ?? 'GPU');
@@ -94,7 +96,7 @@ export const AlignTab: React.FC<TabProps> = ({compositionId, props, project}) =>
         notice: notices.length > 0 ? notices.join(' ') : null,
       });
       await saveRecording({
-        compositionId,
+        target,
         props,
         project,
         audioFile: audio,

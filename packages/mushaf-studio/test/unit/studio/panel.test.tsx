@@ -288,7 +288,7 @@ describe('<MushafStudioPanel>', () => {
   });
 
   it('uses a catalogue recitation: two files into public/, one props patch, one re-evaluation', async () => {
-    setStudioState({uploadedAudio: 'mushaf-studio/my-fatiha/mine.m4a'});
+    setStudioState({uploadedAudio: {MushafRecitation: 'mushaf-studio/my-fatiha/mine.m4a'}});
     render(
       <MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} project="My Fatiha" />,
     );
@@ -339,7 +339,7 @@ describe('<MushafStudioPanel>', () => {
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     expect(getStudioState().error).toBeNull();
     // The clip is what Align works on now: an earlier upload is forgotten.
-    expect(getStudioState().uploadedAudio).toBeNull();
+    expect(getStudioState().uploadedAudio).toEqual({});
   });
 
   it('keeps the catalogue URL as the audio when the clip cannot be downloaded', async () => {
@@ -380,11 +380,11 @@ describe('<MushafStudioPanel>', () => {
       <MushafStudioPanel compositionId="MushafRecitation" props={resolvedProps(timings)} initialTab="lines" />,
     );
     expect(linesRenders.count).toBe(1);
-    // A new props object with the same content and a new `resolved` identity: what a frame gives.
+    // A new props object with the same groups and a `resolved` rebuilt with the same data: what a frame gives.
     rerender(
       <MushafStudioPanel
         compositionId="MushafRecitation"
-        props={resolvedProps(JSON.parse(JSON.stringify(timings)), {splits: []})}
+        props={resolvedProps(JSON.parse(JSON.stringify(timings)))}
         initialTab="lines"
       />,
     );
@@ -412,6 +412,16 @@ describe('<MushafStudioPanel>', () => {
       />,
     );
     expect(linesRenders.count).toBe(3);
+    // And any other group, one no tab shows included (the Props sidebar changed the overlay, say).
+    const overlay = {...defaultMushafRecitationProps.overlay, reciter: 'Mishary Alafasy'};
+    rerender(
+      <MushafStudioPanel
+        compositionId="MushafRecitation"
+        props={resolvedProps(realigned, {timingsFile: 'other.json', overlay})}
+        initialTab="lines"
+      />,
+    );
+    expect(linesRenders.count).toBe(4);
     expect(qud.listRecitations).not.toHaveBeenCalled();
   });
 
@@ -467,11 +477,11 @@ describe('<MushafStudioPanel>', () => {
     );
     expect(screen.getByText(/This composition has no printed lines/)).toBeTruthy();
     expect(linesRenders.count).toBe(1);
-    // The same content in a new object leaves the dock alone; another textFile reaches it.
+    // The same groups in a new object leave the dock alone; another textFile reaches it.
     rerender(
       <MushafStudioPanel
         compositionId="MushafAyahText"
-        props={JSON.parse(JSON.stringify(ayahTextProps())) as MushafAyahTextProps}
+        props={{...ayahTextProps(), resolved: JSON.parse(JSON.stringify(ayahTextProps().resolved))}}
         initialTab="lines"
       />,
     );
@@ -518,7 +528,9 @@ describe('<MushafStudioPanel>', () => {
       />,
     );
     expect(screen.getByText('1. mushaf-studio/p/t.json (font: auto)')).toBeTruthy();
-    expect(getStudioState().pendingPatch).toEqual({text: {translationFile: 'mushaf-studio/p/t.json'}});
+    expect(getStudioState().pendingPatches).toEqual({
+      MushafRecitation: {text: {translationFile: 'mushaf-studio/p/t.json'}},
+    });
     // The props arrive with it: the pending patch has done its job.
     rerender(
       <MushafStudioPanel
@@ -530,7 +542,7 @@ describe('<MushafStudioPanel>', () => {
         initialTab="text"
       />,
     );
-    await waitFor(() => expect(getStudioState().pendingPatch).toBeNull());
+    await waitFor(() => expect(getStudioState().pendingPatches).toEqual({}));
     expect(screen.getByText('1. mushaf-studio/p/t.json (font: auto)')).toBeTruthy();
   });
 });

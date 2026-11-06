@@ -32,6 +32,12 @@ const EN = {
   'panel.tabCrashed':
     'This tab stopped on an error (see the status line). Reload it; if it stops again, check the props.',
   'panel.reload': 'Reload',
+  'panel.rolledBack':
+    "The Root lost what the panel just saved ({fields}): the Props sidebar's JSON Reset goes back to the props from when the page loaded, and a sidebar save made during the panel's can write over it. Restore saves the panel's values again; × keeps the props as they are.",
+  'panel.rolledBackMore': '{fields} and {count} more',
+  'panel.restore': 'Restore',
+  'panel.keepAsIs': 'Keep the props as they are',
+  'panel.busy.restoring': "Restoring the panel's values...",
 
   'tab.source': 'Source',
   'tab.look': 'Look',
@@ -414,6 +420,12 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'panel.language': 'اللغة',
   'panel.tabCrashed': 'توقف هذا التبويب بسبب خطأ (انظر سطر الحالة). أعد تحميله؛ وإن توقف مرة أخرى فراجع الخصائص.',
   'panel.reload': 'إعادة التحميل',
+  'panel.rolledBack':
+    'فقد ملف Root ما حفظته اللوحة للتو ({fields}): زر Reset في عرض JSON للشريط الجانبي Props يعيد الخصائص كما كانت عند تحميل الصفحة، وقد يكتب حفظٌ من الشريط الجانبي أثناء حفظ اللوحة فوقه. «استعادة» تحفظ قيم اللوحة مرة أخرى، و× تُبقي الخصائص كما هي.',
+  'panel.rolledBackMore': '{fields} و{count} غيرها',
+  'panel.restore': 'استعادة',
+  'panel.keepAsIs': 'أبقِ الخصائص كما هي',
+  'panel.busy.restoring': 'جارٍ استعادة قيم اللوحة...',
 
   'tab.source': 'المصدر',
   'tab.look': 'المظهر',

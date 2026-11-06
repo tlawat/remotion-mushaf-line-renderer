@@ -124,7 +124,7 @@ describe('Look tab', () => {
 
     fireEvent.click(screen.getByText('Undo Night'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(getStudioState().lookUndo).toBeNull());
+    await waitFor(() => expect(getStudioState().lookUndo).toEqual({}));
     expect(saved(1, root)).toEqual(root);
     expect(screen.queryByText('Undo Night')).toBeNull();
     expect(card('classic').getAttribute('aria-pressed')).toBe('true');

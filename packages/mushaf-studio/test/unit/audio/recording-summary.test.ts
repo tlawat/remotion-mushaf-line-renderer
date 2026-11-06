@@ -109,7 +109,7 @@ describe('withRecordingSummary', () => {
 describe('saveRecording', () => {
   const save = (alignment: AlignmentSidecar | null = sidecar) =>
     saveRecording({
-      compositionId: 'MushafRecitation',
+      target: {compositionId: 'MushafRecitation'},
       props: defaultMushafRecitationProps,
       project: 'p',
       audioFile: 'mushaf-studio/p/clip.mp3',
@@ -122,7 +122,7 @@ describe('saveRecording', () => {
     const written = mocks.writeJsonFile.mock.calls[0]![1] as StudioTimings;
     expect(written.alignment!.audio).toEqual(SUMMARY);
     expect(mocks.patchProps).toHaveBeenCalledWith(
-      'MushafRecitation',
+      {compositionId: 'MushafRecitation'},
       expect.objectContaining({
         audioFile: 'mushaf-studio/p/clip.mp3',
         timingsFile: 'mushaf-studio/p/clip.timings.json',

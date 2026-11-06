@@ -48,26 +48,31 @@ export const descriptionOf = (props: StudioCompositionProps, resolved: StudioRes
   });
 };
 
-/** The props `<MushafThumbnail>` takes from the composition: the surah, the range timed, and the reciter as its title. */
+/**
+ * The props `<MushafThumbnail>` takes from the composition: the surah, the range timed, and the
+ * reciter as its title (no `title` when the composition names no reciter: the thumbnail keeps its own).
+ */
 export type ThumbnailPatch = {
   readonly surah: number;
   readonly fromAyah: number;
   readonly toAyah: number;
-  readonly title: string;
+  readonly title?: string;
 };
 
 /**
  * The thumbnail of the passage `timings` time: its lowest and highest ayah, titled with the overlay's
- * reciter. A thumbnail shows one surah: across surahs (version 2), the first one and its ayahs.
+ * reciter when there is one. A thumbnail shows one surah: across surahs (version 2), the first one
+ * and its ayahs.
  */
 export const thumbnailPatchOf = (props: StudioCompositionProps, timings: StudioTimings): ThumbnailPatch => {
   const surah = timings.version === 1 ? timings.surah : (timings.ayat[0]?.surah ?? 1);
   const ayahs = timings.ayat.filter((_, index) => surahOfAyah(timings, index) === surah).map((ayah) => ayah.ayah);
+  const title = reciterOf(props).trim();
   return {
     surah,
     fromAyah: ayahs.length === 0 ? 1 : Math.max(1, Math.min(...ayahs)),
     toAyah: ayahs.length === 0 ? 0 : Math.max(...ayahs),
-    title: reciterOf(props),
+    ...(title ? {title} : {}),
   };
 };
 

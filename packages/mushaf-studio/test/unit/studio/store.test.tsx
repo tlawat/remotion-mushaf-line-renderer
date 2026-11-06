@@ -1,17 +1,24 @@
 // @vitest-environment jsdom
+import {cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {MushafStudioError} from '../../../src/errors';
 import {
   describeError,
+  draftOf,
   getHfToken,
   getStudioState,
   loadOnce,
   resetStudioStore,
   runStudioTask,
+  setDraft,
   setHfToken,
   setStudioState,
   studioStore,
   subscribeStudioStore,
+  targetKeyOf,
+  toTarget,
+  useStudioDraft,
+  withEntry,
 } from '../../../src/studio/store';
 
 beforeEach(() => resetStudioStore());
@@ -55,11 +62,17 @@ describe('the studio store', () => {
       device: 'GPU',
       riwayah: 'hafs',
     } as const;
-    setStudioState({session, uploadedAudio: 'mushaf-studio/default/a.mp3', busy: 'x', error: 'y', catalogue: []});
-    expect(JSON.parse(sessionStorage.getItem('mushaf-studio.session')!)).toEqual({
+    const uploads = {MushafRecitation: 'mushaf-studio/default/a.mp3', 'Template/mushaf': 'mushaf-studio/t/b.mp3'};
+    setStudioState({
       session,
-      uploadedAudio: 'mushaf-studio/default/a.mp3',
+      uploadedAudio: uploads,
+      busy: 'x',
+      error: 'y',
+      catalogue: [],
+      pendingPatches: {MushafRecitation: {slice: true}},
+      drafts: {MushafRecitation: {review: {nudges: 1}}},
     });
+    expect(JSON.parse(sessionStorage.getItem('mushaf-studio.session')!)).toEqual({session, uploadedAudio: uploads});
     // A reload: a fresh module reads the storage back, the transient fields start over.
     vi.resetModules();
     const fresh = await import('../../../src/studio/store');
@@ -69,9 +82,12 @@ describe('the studio store', () => {
       collapsed: true,
       side: 'left',
       session,
-      uploadedAudio: 'mushaf-studio/default/a.mp3',
+      uploadedAudio: uploads,
     });
-    expect(state.pendingPatch).toBeNull();
+    expect(state.pendingPatches).toEqual({});
+    expect(state.inFlightPatches).toEqual({});
+    expect(state.lookUndo).toEqual({});
+    expect(state.drafts).toEqual({});
     expect(state.busy).toBeNull();
     expect(state.error).toBeNull();
     expect(state.catalogue).toBeNull();
@@ -82,7 +98,8 @@ describe('the studio store', () => {
 
   it('ignores junk in storage', async () => {
     localStorage.setItem('mushaf-studio.panel', '{"tab": "nope", "collapsed": "yes"}');
-    sessionStorage.setItem('mushaf-studio.session', '{"session": {"audioId": 1}}');
+    // An upload kept by an older panel, one path for every composition: not this one's to guess.
+    sessionStorage.setItem('mushaf-studio.session', '{"session": {"audioId": 1}, "uploadedAudio": "a.mp3"}');
     vi.resetModules();
     const fresh = await import('../../../src/studio/store');
     expect(fresh.getStudioState()).toMatchObject({
@@ -90,8 +107,57 @@ describe('the studio store', () => {
       collapsed: false,
       side: 'right',
       session: null,
-      uploadedAudio: null,
+      uploadedAudio: {},
     });
+    sessionStorage.setItem('mushaf-studio.session', '{"uploadedAudio": {"A": "a.mp3", "B": 2}}');
+    vi.resetModules();
+    const again = await import('../../../src/studio/store');
+    expect(again.getStudioState().uploadedAudio).toEqual({A: 'a.mp3'});
+  });
+
+  it('files state by target key: a composition id, or the id and the props key of a slot', () => {
+    expect(targetKeyOf('MushafRecitation')).toBe('MushafRecitation');
+    expect(targetKeyOf({compositionId: 'MushafRecitation'})).toBe('MushafRecitation');
+    expect(targetKeyOf({compositionId: 'Template', propsKey: 'mushaf'})).toBe('Template/mushaf');
+    expect(targetKeyOf({compositionId: 'Template', propsKey: ''})).toBe('Template');
+    expect(toTarget('A')).toEqual({compositionId: 'A'});
+    const target = {compositionId: 'T', propsKey: 'k'};
+    expect(toTarget(target)).toBe(target);
+  });
+
+  it('sets and removes keyed entries without touching the others', () => {
+    const record = {a: 1, b: 2};
+    expect(withEntry(record, 'c', 3)).toEqual({a: 1, b: 2, c: 3});
+    expect(withEntry(record, 'a', undefined)).toEqual({b: 2});
+    expect(withEntry(record, 'z', undefined)).toBe(record);
+    expect(record).toEqual({a: 1, b: 2});
+  });
+
+  it('keeps tab drafts by target key across unmounts, and forgets one on undefined', () => {
+    setDraft('A', 'nudges', [1]);
+    setDraft('A/slot', 'nudges', [2]);
+    expect(draftOf('A', 'nudges')).toEqual([1]);
+    expect(draftOf('A/slot', 'nudges')).toEqual([2]);
+    expect(draftOf('B', 'nudges')).toBeUndefined();
+    setDraft('A', 'nudges', undefined);
+    expect(getStudioState().drafts).toEqual({'A/slot': {nudges: [2]}});
+    const Counter = () => {
+      const [count, setCount] = useStudioDraft('A', 'count', 0);
+      return (
+        <button type="button" onClick={() => setCount((n) => n + 1)}>
+          {`count ${count}`}
+        </button>
+      );
+    };
+    const first = render(<Counter />);
+    fireEvent.click(screen.getByText('count 0'));
+    fireEvent.click(screen.getByText('count 1'));
+    first.unmount();
+    // A tab switch unmounts the tab: the draft is still there when it comes back.
+    render(<Counter />);
+    expect(screen.getByText('count 2')).toBeTruthy();
+    expect(draftOf('A', 'count')).toBe(2);
+    cleanup();
   });
 
   it('keeps the Hugging Face token in sessionStorage only', () => {
