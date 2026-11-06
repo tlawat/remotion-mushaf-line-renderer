@@ -37,14 +37,30 @@ const PAGE_LOAD: Props = {
 const remotion = () => {
   let file: Props = PAGE_LOAD;
   let live: Record<string, Props> = {};
+  let during: ((write: () => void) => void) | null = null;
   studio.saveDefaultProps.mockImplementation(
     async ({defaultProps}: {defaultProps: (v: {savedDefaultProps: Props}) => Props}) => {
-      file = defaultProps({savedDefaultProps: PAGE_LOAD});
+      const write = () => {
+        file = defaultProps({savedDefaultProps: PAGE_LOAD});
+      };
+      const hook = during;
+      during = null;
+      if (hook) hook(write);
+      else write();
     },
   );
   const model = {
     get file() {
       return file;
+    },
+    /** What happens while the next save is on its way: `write` is the server writing it (a throw fails it). */
+    set duringNextSave(hook: (write: () => void) => void) {
+      during = hook;
+    },
+    /** The Studio reads the Root again (the composition selected again, a reconnect): the same content, a new object. */
+    reread(now?: number) {
+      live = {...live, [ID]: structuredClone(file)};
+      api.observeLiveProps(live, now);
     },
     /** The file-change event reaches the browser: the live props become the file, the dock renders them. */
     echo(now?: number) {
@@ -184,5 +200,130 @@ describe('the save path against the Studio', () => {
     expect(getStudioState().rolledBack).toEqual({});
     await api.restoreRolledBack(ID);
     expect(studio.saveDefaultProps.mock.calls.length).toBe(saves);
+  });
+
+  it('drops what is in flight when a later save fails after the echo came, so a later sidebar edit stays', async () => {
+    const studioModel = remotion();
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    // The next save fails, but the first one's echo is rendered while it is on its way.
+    studioModel.duringNextSave = () => {
+      studioModel.echo();
+      throw new Error('The Studio disconnected');
+    };
+    await expect(api.patchProps(ID, {splits: [{page: 1, line: 1, atWordId: 1}]})).rejects.toThrow('disconnected');
+    expect(getStudioState().inFlightPatches).toEqual({});
+    // A minute later the user points audioFile at another file in the sidebar.
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.echo(Date.now() + 60_000);
+    await api.patchProps(ID, {layout: {background: '#000000'}});
+    expect(studioModel.file).toMatchObject({audioFile: 'mine.mp3', layout: {background: '#000000'}});
+    expect(getStudioState().rolledBack).toEqual({});
+  });
+
+  it('keeps carrying what is in flight when a later save fails before the echo, and lands it with the next', async () => {
+    const studioModel = remotion();
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    studioModel.duringNextSave = () => {
+      throw new Error('The Studio disconnected');
+    };
+    await expect(api.patchProps(ID, {splits: [{page: 1, line: 1, atWordId: 1}]})).rejects.toThrow('disconnected');
+    expect(getStudioState().inFlightPatches).toEqual({[ID]: {audioFile: 'take-1.mp3'}});
+    await api.patchProps(ID, {layout: {background: '#000000'}});
+    expect(studioModel.file).toMatchObject({audioFile: 'take-1.mp3', layout: {background: '#000000'}});
+    studioModel.echo();
+    expect(getStudioState().inFlightPatches).toEqual({});
+  });
+
+  it("drops what is in flight once the first live props after the save are the user's, past the race window", async () => {
+    const studioModel = remotion();
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    // The first live props the dock sees, long after, have the sidebar's recording.
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.echo(Date.now() + 60_000);
+    expect(getStudioState().inFlightPatches).toEqual({});
+    expect(getStudioState().rolledBack).toEqual({});
+    await api.patchProps(ID, {layout: {background: '#000000'}});
+    expect(studioModel.file).toMatchObject({audioFile: 'mine.mp3'});
+  });
+
+  it('judges a racing sidebar save that came, with the echo, before the save resolved', async () => {
+    const studioModel = remotion();
+    const before = studioModel.file;
+    // The server writes the panel's save and the echo is rendered; the sidebar, built from the
+    // props before it, writes over it; both are rendered before the panel's save resolves.
+    studioModel.duringNextSave = (write) => {
+      write();
+      studioModel.echo();
+      studioModel.sidebar(() => ({...before, layout: {visibleLines: 7, background: '#ffffff'}}));
+      studioModel.echo();
+    };
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    expect(getStudioState().rolledBack).toEqual({[ID]: {audioFile: 'take-1.mp3'}});
+    expect(getStudioState().inFlightPatches).toEqual({});
+    // Ten seconds later the user sets the recording in the sidebar; the next panel save keeps it.
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.echo(Date.now() + 10_000);
+    await api.patchProps(ID, {splits: []});
+    expect(studioModel.file).toMatchObject({audioFile: 'mine.mp3', layout: {visibleLines: 7}});
+  });
+
+  it('offers back what every save of the session wrote when the sidebar JSON Reset drops it', async () => {
+    const studioModel = remotion();
+    // Align, then a look.
+    await api.patchProps(ID, {audioFile: 'take-1.mp3', timingsFile: 'take-1.timings.json'});
+    studioModel.echo();
+    await api.patchProps(ID, {layout: {background: '#101418'}});
+    studioModel.echo();
+    studioModel.jsonReset(Date.now() + 10 * 60_000);
+    expect(getStudioState().rolledBack).toEqual({
+      [ID]: {audioFile: 'take-1.mp3', timingsFile: 'take-1.timings.json', layout: {background: '#101418'}},
+    });
+    await api.restoreRolledBack(ID);
+    expect(studioModel.file).toMatchObject({
+      audioFile: 'take-1.mp3',
+      timingsFile: 'take-1.timings.json',
+      layout: {visibleLines: 3, background: '#101418'},
+    });
+  });
+
+  it('does not offer back a field the user changed in the sidebar after the panel saved it', async () => {
+    const studioModel = remotion();
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    studioModel.echo();
+    await api.patchProps(ID, {layout: {background: '#101418'}});
+    studioModel.echo();
+    studioModel.sidebar((props) => ({...props, audioFile: 'mine.mp3'}));
+    studioModel.echo(Date.now() + 60_000);
+    studioModel.jsonReset(Date.now() + 10 * 60_000);
+    expect(getStudioState().rolledBack).toEqual({[ID]: {layout: {background: '#101418'}}});
+  });
+
+  it('does not bring a dismissed offer back when the Studio reads the same page-load props again', async () => {
+    const studioModel = remotion();
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    studioModel.echo();
+    // The JSON Reset, saved by the sidebar, then read again.
+    studioModel.sidebar(() => PAGE_LOAD);
+    studioModel.reread(Date.now() + 60_000);
+    expect(getStudioState().rolledBack).toEqual({[ID]: {audioFile: 'take-1.mp3'}});
+    api.dismissRolledBack(ID);
+    // The composition is selected again (after Set thumbnail, say): the same content, a new object.
+    studioModel.reread(Date.now() + 120_000);
+    expect(getStudioState().rolledBack).toEqual({});
+  });
+
+  it('keeps the offer when Restore fails, so it can be pressed again', async () => {
+    const studioModel = remotion();
+    await api.patchProps(ID, {audioFile: 'take-1.mp3'});
+    studioModel.echo();
+    studioModel.jsonReset(Date.now() + 10 * 60_000);
+    studioModel.duringNextSave = () => {
+      throw new Error('The Studio disconnected');
+    };
+    await expect(api.restoreRolledBack(ID)).rejects.toThrow('disconnected');
+    expect(getStudioState().rolledBack).toEqual({[ID]: {audioFile: 'take-1.mp3'}});
+    await api.restoreRolledBack(ID);
+    expect(studioModel.file).toMatchObject({audioFile: 'take-1.mp3'});
+    expect(getStudioState().rolledBack).toEqual({});
   });
 });

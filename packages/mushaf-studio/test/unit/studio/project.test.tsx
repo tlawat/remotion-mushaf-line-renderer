@@ -41,6 +41,7 @@ const {defaultMushafRecitationProps} = await import('../../../src/compositions/r
 const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
 const {resetStudioStore, getStudioState} = await import('../../../src/studio/store');
 const {isMushafStudioError} = await import('../../../src/errors');
+const {rememberPanelProps} = await import('../../../src/studio/studio-api');
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
 
 const recitation: MushafRecitationProps = {
@@ -204,7 +205,7 @@ describe('the Project menu', () => {
     expect(studio.saveDefaultProps).not.toHaveBeenCalled();
   });
 
-  it('exports what a Props-sidebar edit changed since the dock last rendered, a group no tab shows included', async () => {
+  it('exports what a Props-sidebar edit changed, a group no tab shows included', async () => {
     Object.assign(URL, {createObjectURL: vi.fn(() => 'blob:project'), revokeObjectURL: vi.fn()});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     const {rerender} = render(<MushafStudioPanel compositionId="MushafRecitation" props={recitation} />);
@@ -223,6 +224,20 @@ describe('the Project menu', () => {
       background: {color: '#123456'},
       overlay: {reciter: 'Mishary Alafasy'},
     });
+  });
+
+  it("exports the props the panel was last rendered with, not the dock's memoized snapshot", async () => {
+    Object.assign(URL, {createObjectURL: vi.fn(() => 'blob:project'), revokeObjectURL: vi.fn()});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={recitation} />);
+    // A render past the memo that the dock was not re-rendered for: only the click-time read sees it.
+    const later: MushafRecitationProps = {...recitation, audioFile: 'mushaf-studio/p/later.mp3'};
+    rememberPanelProps('MushafRecitation', later);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', {name: 'Export project'}));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    const [write] = studio.writeStaticFile.mock.calls[0] as unknown as [{filePath: string; contents: string}];
+    expect(JSON.parse(write.contents)).toEqual(project.projectFileOf('MushafRecitation', later));
   });
 
   const importFile = (contents: string) => {

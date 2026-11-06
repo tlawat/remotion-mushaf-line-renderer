@@ -248,17 +248,23 @@ export const latestPanelProps = <T extends Readonly<Record<string, unknown>>>(
 /** How long after a save resolves a live update that lacks what it wrote counts as a race with another writer. */
 export const RACE_WINDOW_MS = 5000;
 
-/** A save the dock watches the live props for: did they take it, and do they keep it? */
-type SaveWatch = {
+/** What the dock knows of the panel's saves at one target, judged against every new live props object. */
+type SaveRecord = {
   readonly target: StudioTarget;
-  /** Everything the save wrote at the target: the in-flight part it carried and its own patch. */
-  readonly written: Readonly<Record<string, unknown>>;
-  readonly resolvedAt: number;
-  /** The composition's live props object last looked at, so each update is judged once. */
+  /**
+   * What the panel's saves wrote at the target this session, merged across saves, less what the
+   * live props have since lost or changed: what a return to the page-load props is compared with.
+   */
+  written: Readonly<Record<string, unknown>> | null;
+  /** What the last save wrote (the in-flight part it carried and its own patch), less what was offered back. */
+  last: Readonly<Record<string, unknown>> | null;
+  /** When the last save resolved: a live update within `RACE_WINDOW_MS` of it that lacks `last` raced it. */
+  resolvedAt: number;
+  /** The composition's live props object last judged, so each one is judged once. */
   seen: unknown;
 };
 
-const watches = new Map<string, SaveWatch>();
+const records = new Map<string, SaveRecord>();
 /** `savedDefaultProps` by composition id: the page-load props, what the Props sidebar's JSON Reset goes back to. */
 const pageLoadProps = new Map<string, Readonly<Record<string, unknown>>>();
 
@@ -279,16 +285,23 @@ const serially = <T>(task: () => Promise<T>): Promise<T> => {
 const asPatch = (value: Readonly<Record<string, unknown>> | null): PropsPatch | undefined =>
   value === null ? undefined : (value as PropsPatch);
 
+/** `a` and `b` merged, `null` when both are. */
+const mergeParts = (
+  a: Readonly<Record<string, unknown>> | null,
+  b: Readonly<Record<string, unknown>> | null,
+): Readonly<Record<string, unknown>> | null => (a === null ? b : b === null ? a : deepMerge(a, b));
+
 /**
  * Merges `patch` into the target's props in the Root file and re-runs `calculateMetadata()`. The
  * target is a composition id, or `{compositionId, propsKey}` for props a template keeps under a key
  * of its `defaultProps`. The save starts from the live Root values (`useLiveEditorProps()`, kept by
  * the dock), so what the Props sidebar, the Studio's undo or a hand edit changed stays; only the
- * in-flight part of earlier panel saves (sent, not yet back in the live props) is added, never a
- * value the live props have already shown. Saves run one at a time, in call order.
+ * in-flight part of the save before (sent, and no live props seen since) is added, never a value
+ * the live props have already answered. Saves run one at a time, in call order.
  *
  * The store's `pendingPatches` shows the change in the tabs until the rendered props carry it; a
- * save that fails leaves it as it was (unless a later save is already pending) and rejects.
+ * save that fails leaves it as it was (unless a later save is already pending), leaves what the
+ * save before has in flight watched as it was, and rejects.
  */
 export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Promise<void> => {
   const to = toTarget(target);
@@ -299,9 +312,6 @@ export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Pr
   const pending = deepMerge(before[key] ?? {}, ownPatch) as PropsPatch;
   setStudioState({pendingPatches: withEntry(before, key, pending)});
   return serially(async () => {
-    // This save carries what is still in flight of the one before: it is the one watched now, and
-    // its own echo must not read as the earlier save's values going missing.
-    watches.delete(key);
     // Only what the live props do not show yet is carried: a value they have shown and someone
     // changed since is theirs.
     const start = liveProps[compositionId];
@@ -324,54 +334,73 @@ export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Pr
     }
     const whole = liveProps[compositionId];
     const after = whole === undefined ? null : targetPropsOf(whole, to);
-    // The live props may already carry the save (the Studio sends the new Root before it answers).
     const sent = after === null ? written : unappliedPart(after, written);
     setStudioState({inFlightPatches: withEntry(getStudioState().inFlightPatches, key, asPatch(sent))});
-    watches.set(key, {target: to, written, resolvedAt: Date.now(), seen: whole});
+    const record = records.get(key);
+    records.set(key, {
+      target: to,
+      written: deepMerge(record?.written ?? {}, written),
+      last: written,
+      resolvedAt: Date.now(),
+      // Live props that came during the save are its answer (the Studio sends the new Root before
+      // it answers, and a racing sidebar save can follow it): they are judged now, against it.
+      seen: start,
+    });
+    observeLiveProps(liveProps);
     reevaluateComposition();
   });
 };
 
 /**
- * Judges the live props the dock just rendered against the panel's recent saves (and keeps them, as
+ * Judges the live props the dock just rendered against the panel's saves (and keeps them, as
  * `rememberLiveProps()` does), once per new live props object of a composition:
  *
- * - what they carry is no longer in flight;
- * - what a save wrote and they lack, while the save is recent (`RACE_WINDOW_MS`, a sidebar save
- *   that raced it) or when they are the page-load props again (the sidebar's JSON Reset), is moved
- *   from `inFlightPatches` and `pendingPatches` to `rolledBack`: the dock offers to restore it, and
- *   no later save writes it back on its own;
- * - a later change of a saved field, after that window, is the user's: the save is no longer watched.
+ * - the first live props after a save are its answer: nothing it sent stays in flight past them,
+ *   so no later save writes an old panel value on its own;
+ * - what the last save wrote and they lack, while the save is recent (`RACE_WINDOW_MS`: a sidebar
+ *   save that raced it), is moved from `pendingPatches` to `rolledBack`: the dock offers to
+ *   restore it;
+ * - what any save of the session wrote and they lack, when they are the page-load props again, is
+ *   offered the same way. That is the sidebar's JSON Reset, but also the Studio's undo all the way
+ *   back or a checkout of the Root: the offer says what is gone, not why, and writes nothing;
+ * - any other change of a saved field is the user's: it is no longer the panel's to offer;
+ * - an offered value the live props carry again is no longer offered.
  *
+ * Each value is offered once: after Restore or ×, the same page-load props do not offer it again.
  * Writes the store only when something changed.
  */
 export const observeLiveProps = (live: LiveEditorProps, now: number = Date.now()): void => {
   liveProps = live;
   const state = getStudioState();
   let {inFlightPatches, pendingPatches, rolledBack} = state;
-  for (const [key, watch] of [...watches]) {
-    const whole = liveProps[watch.target.compositionId];
-    if (whole === undefined || whole === watch.seen) continue;
-    watch.seen = whole;
-    const own = targetPropsOf(whole, watch.target) ?? {};
-    const inFlight = inFlightPatches[key] as Readonly<Record<string, unknown>> | undefined;
-    if (inFlight !== undefined)
-      inFlightPatches = withEntry(inFlightPatches, key, asPatch(unappliedPart(own, inFlight)));
-    const lost = unappliedPart(own, watch.written);
-    if (lost === null) {
-      // Back (the Studio's undo of a reset, say): nothing to offer any more.
-      rolledBack = withEntry(rolledBack, key, undefined);
-      continue;
+  for (const [key, record] of records) {
+    const {compositionId} = record.target;
+    const whole = live[compositionId];
+    if (whole === undefined || whole === record.seen) continue;
+    record.seen = whole;
+    const own = targetPropsOf(whole, record.target) ?? {};
+    inFlightPatches = withEntry(inFlightPatches, key, undefined);
+    const offered = rolledBack[key] as Readonly<Record<string, unknown>> | undefined;
+    if (offered !== undefined) {
+      const still = unappliedPart(own, offered);
+      const back = still === null ? offered : withoutPart(offered, still);
+      if (back !== null) {
+        // Back (the Studio's undo of a reset, say): the panel's values again.
+        record.written = deepMerge(record.written ?? {}, back);
+        rolledBack = withEntry(rolledBack, key, asPatch(still));
+      }
     }
-    if (now - watch.resolvedAt > RACE_WINDOW_MS && !isPageLoad(watch.target.compositionId, whole)) {
-      watches.delete(key);
-      continue;
-    }
-    const left = inFlightPatches[key] as Readonly<Record<string, unknown>> | undefined;
-    if (left !== undefined) inFlightPatches = withEntry(inFlightPatches, key, asPatch(withoutPart(left, lost)));
+    if (record.last !== null && now - record.resolvedAt > RACE_WINDOW_MS) record.last = null;
+    const raced = record.last === null ? null : unappliedPart(own, record.last);
+    if (raced !== null && record.last !== null) record.last = withoutPart(record.last, raced);
+    const missing = record.written === null ? null : unappliedPart(own, record.written);
+    if (missing !== null && record.written !== null) record.written = withoutPart(record.written, missing);
+    const gone = mergeParts(missing, raced);
+    if (gone === null) continue;
     const shown = pendingPatches[key] as Readonly<Record<string, unknown>> | undefined;
-    if (shown !== undefined) pendingPatches = withEntry(pendingPatches, key, asPatch(withoutPart(shown, lost)));
-    rolledBack = withEntry(rolledBack, key, deepMerge(rolledBack[key] ?? {}, lost) as PropsPatch);
+    if (shown !== undefined) pendingPatches = withEntry(pendingPatches, key, asPatch(withoutPart(shown, gone)));
+    const lost = isPageLoad(compositionId, whole) ? gone : raced;
+    if (lost !== null) rolledBack = withEntry(rolledBack, key, deepMerge(rolledBack[key] ?? {}, lost) as PropsPatch);
   }
   if (
     inFlightPatches !== state.inFlightPatches ||
@@ -381,22 +410,35 @@ export const observeLiveProps = (live: LiveEditorProps, now: number = Date.now()
     setStudioState({inFlightPatches, pendingPatches, rolledBack});
 };
 
-/** Saves again what the live props lost after a panel save (`rolledBack`), at the user's request. */
+/**
+ * Saves again what the live props lost after a panel save (`rolledBack`), at the user's request.
+ * The offer goes once the save is written; a save that fails keeps it, so Restore can be pressed
+ * again.
+ */
 export const restoreRolledBack = async (target: StudioTarget | string): Promise<void> => {
   const key = targetKeyOf(target);
   const lost = getStudioState().rolledBack[key];
   if (lost === undefined) return;
-  setStudioState({rolledBack: withEntry(getStudioState().rolledBack, key, undefined)});
   await patchProps(target, lost);
+  const {rolledBack} = getStudioState();
+  const left = rolledBack[key] as Readonly<Record<string, unknown>> | undefined;
+  if (left !== undefined)
+    setStudioState({
+      rolledBack: withEntry(rolledBack, key, asPatch(withoutPart(left, lost as Readonly<Record<string, unknown>>))),
+    });
 };
 
-/** Forgets what the live props lost after a panel save: the user keeps the props as they are. */
+/**
+ * Forgets what the live props lost after a panel save: the user keeps the props as they are, and
+ * the same props coming back (the composition selected again, the Studio reconnecting) do not
+ * offer it again.
+ */
 export const dismissRolledBack = (target: StudioTarget | string): void =>
   setStudioState({rolledBack: withEntry(getStudioState().rolledBack, targetKeyOf(target), undefined)});
 
 /** Forgets the saves being watched, the page-load, live and panel props. For tests. */
 export const resetSaveTracking = (): void => {
-  watches.clear();
+  records.clear();
   panelProps.clear();
   pageLoadProps.clear();
   liveProps = {};

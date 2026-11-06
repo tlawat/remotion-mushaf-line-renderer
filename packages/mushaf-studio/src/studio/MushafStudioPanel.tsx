@@ -112,9 +112,9 @@ const StatusLine: React.FC = () => {
 const LISTED_FIELDS = 4;
 
 /**
- * Offers to save again what a panel save wrote and the live props lost right after it (the Props
- * sidebar's JSON Reset, a sidebar save that raced the panel's). Nothing is written unless the user
- * presses Restore.
+ * Offers to save again what the panel's saves wrote and the live props lost (the Props sidebar's
+ * JSON Reset or the Studio's undo back to the page-load props, a sidebar save that raced the
+ * panel's). Nothing is written unless the user presses Restore.
  */
 const RolledBack: React.FC<{readonly target: StudioTarget; readonly lost: PropsPatch}> = ({target, lost}) => {
   const {busy} = useStudioState();

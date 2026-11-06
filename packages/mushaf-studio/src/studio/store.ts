@@ -83,14 +83,16 @@ export type StudioState = {
   /**
    * By target key: what `patchProps()` sent to the Root that the live props
    * (`useLiveEditorProps()`) do not show yet. The next save adds it to its base, so two saves in
-   * quick succession both land; every live update prunes what it carries, so an older panel value
-   * is never written over a later change made elsewhere.
+   * quick succession both land; the first live props after the save clear it, whatever they hold
+   * (what they lack is offered in `rolledBack` or is the user's), so an older panel value is never
+   * written over a later change made elsewhere.
    */
   readonly inFlightPatches: Readonly<Record<string, PropsPatch>>;
   /**
-   * By target key: what a panel save wrote that the live props lost right after it (the Props
-   * sidebar's JSON Reset goes back to the page-load props; a sidebar save can race the panel's).
-   * The dock offers to restore it; nothing is written until the user says so.
+   * By target key: what the panel's saves wrote that the live props lost (a sidebar save that
+   * raced the last panel save; a return to the page-load props, as the Props sidebar's JSON Reset
+   * or the Studio's undo all the way back does). The dock offers to restore it; nothing is written
+   * until the user says so.
    */
   readonly rolledBack: Readonly<Record<string, PropsPatch>>;
   /**

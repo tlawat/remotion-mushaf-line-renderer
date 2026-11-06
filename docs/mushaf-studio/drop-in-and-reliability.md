@@ -87,8 +87,8 @@ A unit test pins the shapes these read, so a Remotion upgrade that changes them 
 - `patchProps(target, patch)` builds the save from
   `live[compositionId] ?? savedDefaultProps`, never from `savedDefaultProps` alone, and only adds
   the **in-flight** patches: the ones sent but not yet echoed back in the live props
-  (`unappliedPart(live, inFlight)`), cleared as soon as the live props carry them. No cumulative
-  replay.
+  (`unappliedPart(live, inFlight)`), cleared by the first live props seen after the save (what
+  they lack is offered back or is the user's, never kept for a later save). No cumulative replay.
 - Saves run one at a time (a promise queue), so two quick saves never start from one snapshot.
 - `target` is `{compositionId, propsKey?}`. With `propsKey`, the patch is applied under
   `defaultProps[propsKey]`; when that value is `null` or missing, the base is the slot defaults
@@ -100,9 +100,13 @@ A unit test pins the shapes these read, so a Remotion upgrade that changes them 
   every render outside the memo.
 - `patchOtherComposition()` (thumbnail) uses the same live base and keeps the thumbnail's own
   title when the reciter is empty.
-- The panel watches for its saved fields disappearing from the live props right after a save
-  (the Props sidebar's JSON "Reset" goes back to page-load props; a sidebar save can race a panel
-  save) and offers **Restore** instead of writing silently.
+- The panel watches for its saved fields disappearing from the live props and offers **Restore**
+  instead of writing silently: within `RACE_WINDOW_MS` of a save, what that save wrote (a sidebar
+  save can race a panel save); at any time, when the live props are the page-load props again,
+  what every panel save of the session wrote (the Props sidebar's JSON "Reset"; the Studio's undo
+  all the way back and a checkout of the Root look the same, so the notice says what is gone, not
+  why). A field the user changed since is theirs and is not offered; each value is offered once,
+  and the offer stays until Restore succeeds or × is pressed.
 
 ### 2.3 Data reliability
 
