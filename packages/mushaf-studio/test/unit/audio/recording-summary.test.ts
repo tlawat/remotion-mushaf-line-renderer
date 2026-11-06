@@ -19,13 +19,20 @@ vi.mock('../../../src/audio/analyze', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/audio/analyze')>()),
   analyzeAudio: (...args: unknown[]) => mocks.analyzeAudio(...args),
 }));
-vi.mock('../../../src/studio/studio-api', () => ({
+vi.mock('../../../src/studio/studio-api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/studio/studio-api')>()),
   patchProps: mocks.patchProps,
   projectPath: (project: string | undefined, name: string) => `mushaf-studio/${project ?? 'default'}/${name}`,
   writeFile: vi.fn(async (path: string) => path),
   writeJsonFile: mocks.writeJsonFile,
+  // A project with nothing in it yet, and a composition with no timings to compare with.
+  staticFileList: () => [],
+  readTimingsFile: vi.fn(async () => {
+    throw new Error('not there');
+  }),
 }));
-vi.mock('../../../src/studio/store', () => ({
+vi.mock('../../../src/studio/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/studio/store')>()),
   describeError: (error: unknown) => String(error),
   setStudioState: vi.fn(),
   t: (key: string) => key,
@@ -118,7 +125,7 @@ describe('saveRecording', () => {
     });
 
   it('writes the timings with the recording’s summary, then points the composition at them', async () => {
-    expect(await save()).toBe('mushaf-studio/p/clip.timings.json');
+    expect((await save()).timingsFile).toBe('mushaf-studio/p/clip.timings.json');
     const written = mocks.writeJsonFile.mock.calls[0]![1] as StudioTimings;
     expect(written.alignment!.audio).toEqual(SUMMARY);
     expect(mocks.patchProps).toHaveBeenCalledWith(

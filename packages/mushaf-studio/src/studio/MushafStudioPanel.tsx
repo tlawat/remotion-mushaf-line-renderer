@@ -319,6 +319,7 @@ const resolvedSignature = (props: StudioCompositionProps): string => {
     sidecar?.audioId ?? '',
     sidecar?.edits[sidecar.edits.length - 1]?.at ?? '',
     starts,
+    hasLines(resolved) ? (resolved.droppedSplits ?? []).length : 0,
   ].join(':');
 };
 

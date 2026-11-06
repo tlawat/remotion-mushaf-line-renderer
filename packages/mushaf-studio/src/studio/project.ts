@@ -4,6 +4,7 @@
 import type {StaticFile} from '@remotion/studio';
 import {mushafRecitationSchema} from '../compositions/recitation/schema';
 import {MushafStudioError} from '../errors';
+import {mushafPageSchema} from '../page/schema';
 import {MIRROR_FILES} from '../schema';
 import {mushafAyahTextSchema} from '../unicode/schema';
 import type {MessageKey, MessageParams} from './i18n';
@@ -35,11 +36,20 @@ export const PROJECT_FILE_NAME = 'project.json';
 const publicPath = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' && !isUrl(value) ? value.replace(/^\/+/, '') : null;
 
+/** `background.src` where the composition paints it: an image's or a video's; `''` for any other background. */
+const backgroundSrcOf = (record: Readonly<Record<string, unknown>>): string => {
+  const background = record.background;
+  if (typeof background !== 'object' || background === null) return '';
+  const {kind, src} = background as {readonly kind?: unknown; readonly src?: unknown};
+  return (kind === 'image' || kind === 'video') && typeof src === 'string' ? src : '';
+};
+
 /**
  * The `public/` paths a composition's props point to, sorted and once each: the audio, the timings,
  * the text files (every translation layer), the end card's tafsir and surah introduction, the
- * background image, an ayah text's Quran text, and the mushaf mirror when `data` reads it. URLs are
- * not files of the project and are left out.
+ * background image or video (`background.src`, and the older `layout.backgroundImage`), an ayah
+ * text's Quran text, and the mushaf mirror when `data` reads it. URLs are not files of the project
+ * and are left out.
  */
 export const collectProjectFiles = (props: StudioCompositionProps): readonly string[] => {
   const record = props as unknown as Readonly<Record<string, unknown>>;
@@ -54,6 +64,7 @@ export const collectProjectFiles = (props: StudioCompositionProps): readonly str
     card.tafsirFile,
     card.chapterInfoFile,
     props.layout.backgroundImage,
+    backgroundSrcOf(record),
   ];
   if (isAyahTextProps(props)) candidates.push(props.textFile);
   if (record.data === 'mirror') candidates.push(MIRROR_FILES.words, MIRROR_FILES.layout);
@@ -78,10 +89,14 @@ const invalid = (
   throw new MushafStudioError('BAD_PROJECT_FILE', t('project.invalid', {problem: t(problem, params)}), details);
 };
 
+/** The schema of the composition a project's props are for, told apart as `projectFits()` does. */
+const schemaOf = (props: Readonly<Record<string, unknown>>) =>
+  'textFile' in props ? mushafAyahTextSchema : 'pageView' in props ? mushafPageSchema : mushafRecitationSchema;
+
 /**
  * A project file read back, checked: version 1, a composition id, props that pass the schema of
- * the composition they are for (`<MushafAyahText>`'s when they carry `textFile`, else
- * `<MushafRecitation>`'s) and a list of files. `files` is completed with what the props point to,
+ * the composition they are for (`<MushafAyahText>`'s when they carry `textFile`, `<MushafPage>`'s
+ * when they carry `pageView`, else `<MushafRecitation>`'s) and a list of files. `files` is completed with what the props point to,
  * so a hand-edited list cannot hide a file. Throws a `BAD_PROJECT_FILE` error that names the problem.
  */
 export const validateProjectFile = (value: unknown): ProjectFile => {
@@ -96,8 +111,7 @@ export const validateProjectFile = (value: unknown): ProjectFile => {
   if (!isRecord(value.props)) return invalid('project.propsNotObject');
   if (!Array.isArray(value.files) || value.files.some((file) => typeof file !== 'string'))
     return invalid('project.filesNotList');
-  const schema = 'textFile' in value.props ? mushafAyahTextSchema : mushafRecitationSchema;
-  const parsed = schema.safeParse({...value.props, resolved: null});
+  const parsed = schemaOf(value.props).safeParse({...value.props, resolved: null});
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const where = issue?.path.join('.') || 'props';

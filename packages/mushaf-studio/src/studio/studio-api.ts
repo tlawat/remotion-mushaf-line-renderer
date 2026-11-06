@@ -15,6 +15,7 @@ import {
 } from '@remotion/studio';
 import {parseRecitationTimings} from '@tlawat/remotion-mushaf-line';
 import {staticFile} from 'remotion';
+import {forgetAudioAnalysis} from '../audio/analyze';
 import {MushafStudioError} from '../errors';
 import type {MushafLookPatch} from '../presets';
 import type {Review, Text} from '../schema';
@@ -22,6 +23,7 @@ import type {LineSplit, StudioTimings} from '../types';
 import type {LiveEditorProps} from './remotion-internals';
 import {getStudioState, type StudioTarget, setStudioState, t, targetKeyOf, toTarget, withEntry} from './store';
 import type {EndCardView, TranslationLayer} from './tab-props';
+import {forgetWaveform} from './waveform-peaks';
 
 /**
  * What the panel changes on the composition: the content props, the file fields of `text` (its
@@ -102,10 +104,45 @@ export const projectDir = (project: string | undefined): string =>
 
 export const projectPath = (project: string | undefined, name: string): string => `${projectDir(project)}/${name}`;
 
-/** Writes a file into `public/` and returns its path (what the props record). */
+/**
+ * Writes a file into `public/` and returns its path (what the props record). What the panel kept
+ * of an earlier file at that path (its waveform, its audio analysis) is forgotten, so nothing reads
+ * the old bytes under the same URL.
+ */
 export const writeFile = async (path: string, contents: string | ArrayBuffer): Promise<string> => {
   await writeStaticFile({filePath: path, contents});
+  const url = staticFile(path);
+  forgetWaveform(url);
+  forgetAudioAnalysis(url);
   return path;
+};
+
+/**
+ * `name` numbered `n` (2 and up) before its extension, the timings' double one included:
+ * `take.m4a` gives `take-2.m4a`, `take.timings.json` gives `take-2.timings.json`; 1 gives `name`.
+ */
+export const numberedName = (name: string, n: number): string => {
+  if (n <= 1) return name;
+  const slash = name.lastIndexOf('/') + 1;
+  const file = name.slice(slash);
+  const timings = file.endsWith('.timings.json') ? file.length - '.timings.json'.length : -1;
+  const dot = timings > 0 ? timings : file.lastIndexOf('.');
+  const at = dot > 0 ? slash + dot : name.length;
+  return `${name.slice(0, at)}-${n}${name.slice(at)}`;
+};
+
+/**
+ * The first of `path`, `numberedName(path, 2)`, `numberedName(path, 3)`, ... that `taken` does not
+ * have (paths of `public/`, as `staticFileList()` names them; by default those): where a new file
+ * goes without replacing one.
+ */
+export const freePublicPath = (
+  path: string,
+  taken: ReadonlySet<string> = new Set(staticFileList().map((file) => file.name.replace(/^\/+/, ''))),
+): string => {
+  let n = 1;
+  while (taken.has(numberedName(path, n))) n += 1;
+  return numberedName(path, n);
 };
 
 /** JSON with one entry per line, the way the committed samples are written, so diffs stay readable. */

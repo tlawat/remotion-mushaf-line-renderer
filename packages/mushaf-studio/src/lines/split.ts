@@ -92,6 +92,65 @@ export const applySplits = (
   return out;
 };
 
+/** What `fitSplits()` gives: the passage with the splits that fit applied, and those that do not. */
+export type FittedSplits = {
+  readonly lines: readonly MushafLineData[];
+  /** The splits left out, in the order `splits` gives them: their line is not in the passage, or their word cannot be split at. */
+  readonly dropped: readonly LineSplit[];
+};
+
+/**
+ * `applySplits()` that leaves out what does not fit instead of throwing: a split naming a line the
+ * passage does not have, or a word its line cannot be split at (hidden by the slice, the first word
+ * shown, or not on the line). What the Studio resolves with, so a range or `slice` changed under
+ * the splits still shows the composition, and the Mushaf panel that removes them; a render applies
+ * them with `applySplits()`, which refuses them.
+ *
+ * `fitSplits(fatihaLines(2, 5), [{page: 1, line: 8, atWordId: 30}])` keeps the lines and drops the split.
+ */
+export const fitSplits = (lines: readonly MushafLineData[], splits: readonly LineSplit[]): FittedSplits => {
+  if (splits.length === 0) return {lines, dropped: []};
+  const byLine = new Map<string, number[]>();
+  for (const split of splits) {
+    const key = keyOf(split);
+    byLine.set(key, [...(byLine.get(key) ?? []), split.atWordId]);
+  }
+  const misfits = new Set<string>();
+  const present = new Set(lines.map(keyOf));
+  for (const [key, ats] of byLine) if (!present.has(key)) for (const at of ats) misfits.add(`${key}:${at}`);
+  const out: MushafLineData[] = [];
+  for (const line of lines) {
+    const ats = byLine.get(keyOf(line));
+    if (!ats) {
+      out.push(line);
+      continue;
+    }
+    let rest = line;
+    for (const at of [...new Set(ats)].sort((a, b) => a - b)) {
+      try {
+        const [head, tail] = splitLineAt(rest, at);
+        out.push(head);
+        rest = tail;
+      } catch {
+        misfits.add(`${keyOf(line)}:${at}`);
+      }
+    }
+    out.push(rest);
+  }
+  return {lines: out, dropped: splits.filter((split) => misfits.has(`${keyOf(split)}:${split.atWordId}`))};
+};
+
+/**
+ * What the Studio's preview says about splits `fitSplits()` left out, `null` for none: which, why,
+ * and where to remove them.
+ */
+export const droppedSplitsWarning = (dropped: readonly LineSplit[]): string | null => {
+  if (dropped.length === 0) return null;
+  const named = dropped.map((split) => `page ${split.page} line ${split.line} at word ${split.atWordId}`).join(', ');
+  const one = dropped.length === 1;
+  return `${one ? 'A line split does' : `${dropped.length} line splits do`} not fit the passage and ${one ? 'is' : 'are'} not applied (${named}): the ayah range or slice changed since. Remove ${one ? 'it' : 'them'} in the Mushaf panel's Lines tab; a render refuses ${one ? 'it' : 'them'}.`;
+};
+
 /**
  * The word (by `wordId`) a split must name to cut a line before `position` of `ayah`, for the
  * panel: the first word of the line at that location in reading order, so a marker that shares the

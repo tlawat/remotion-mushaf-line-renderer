@@ -39,7 +39,8 @@ const project = await import('../../../src/studio/project');
 const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
 const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
-const {resetStudioStore, getStudioState} = await import('../../../src/studio/store');
+const {defaultMushafPageProps} = await import('../../../src/page/schema');
+const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 const {isMushafStudioError} = await import('../../../src/errors');
 const {rememberPanelProps} = await import('../../../src/studio/studio-api');
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
@@ -94,6 +95,24 @@ describe('collectProjectFiles / projectFileOf', () => {
     expect(project.collectProjectFiles(cdn)).toEqual(['mushaf-studio/p/a.timings.json', 'mushaf-studio/p/t.json']);
   });
 
+  it('adds the background image or video the composition paints, not a src its kind leaves unread', () => {
+    const withBackground = (kind: 'image' | 'video' | 'color' | 'gradient') =>
+      project.collectProjectFiles({
+        ...defaultMushafRecitationProps,
+        background: {...defaultMushafRecitationProps.background, kind, src: 'mushaf-studio/p/bg.mp4'},
+      });
+    const none = project.collectProjectFiles(defaultMushafRecitationProps);
+    expect(withBackground('image')).toEqual([...none, 'mushaf-studio/p/bg.mp4'].sort());
+    expect(withBackground('video')).toEqual([...none, 'mushaf-studio/p/bg.mp4'].sort());
+    expect(withBackground('color')).toEqual(none);
+    expect(withBackground('gradient')).toEqual(none);
+    const url = {
+      ...defaultMushafRecitationProps,
+      background: {...defaultMushafRecitationProps.background, kind: 'video' as const, src: 'https://x.y/bg.mp4'},
+    };
+    expect(project.collectProjectFiles(url)).toEqual(none);
+  });
+
   it("adds an ayah text's Quran text", () => {
     const files = project.collectProjectFiles({...defaultMushafAyahTextProps, textFile: 'mushaf-studio/r/text.json'});
     expect(files).toContain('mushaf-studio/r/text.json');
@@ -114,6 +133,29 @@ describe('validateProjectFile', () => {
 
   it('reads back what projectFileOf wrote', () => {
     expect(project.validateProjectFile(valid())).toEqual(project.projectFileOf('MushafRecitation', recitation));
+  });
+
+  it('reads back a project of every kind of composition, a page with its own groups', () => {
+    const page = {
+      ...defaultMushafPageProps,
+      audioFile: 'mushaf-studio/p/a.mp3',
+      timingsFile: 'mushaf-studio/p/a.timings.json',
+      pageView: {...defaultMushafPageProps.pageView, dimOtherLines: 0.5},
+    };
+    const kinds = [
+      ['MushafRecitation', recitation],
+      ['MushafAyahText', {...defaultMushafAyahTextProps, textFile: 'mushaf-studio/p/text.json'}],
+      ['MushafPage', page],
+    ] as const;
+    for (const [id, props] of kinds) {
+      const file = project.projectFileOf(id, props);
+      const back = project.validateProjectFile(JSON.parse(JSON.stringify(file)));
+      expect(back).toEqual(file);
+      expect(project.projectFits(back, props)).toBe(true);
+    }
+    const back = project.validateProjectFile(JSON.parse(JSON.stringify(project.projectFileOf('MushafPage', page))));
+    expect(back.props.pageView).toEqual(page.pageView);
+    expect(project.projectFits(back, recitation)).toBe(false);
   });
 
   it('names what is wrong', () => {
@@ -267,6 +309,17 @@ describe('the Project menu', () => {
         'project.json is imported: the props are saved; its 6 files are in public/.',
       ),
     );
+  });
+
+  it("forgets the Look tab's undo of the target, which was for the props the import replaced", async () => {
+    const file = project.projectFileOf('Other', recitation);
+    studio.getStaticFiles.mockReturnValue(file.files.map(entry));
+    const undo = {name: 'Night', patch: {theme: 'plain' as const}, applied: {theme: 'dark' as const}};
+    setStudioState({lookUndo: {MushafRecitation: [undo], MushafPage: [undo]}});
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
+    importFile(JSON.stringify(file));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getStudioState().lookUndo).toEqual({MushafPage: [undo]}));
   });
 
   it('names the missing files and changes nothing', async () => {

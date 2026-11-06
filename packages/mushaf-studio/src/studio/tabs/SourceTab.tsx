@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo} from 'react';
 import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../qud';
 import {isHafsRecitation} from '../../qud/riwayah';
 import type {QudRecitation} from '../../qud/types';
@@ -12,11 +12,21 @@ import {
   setStudioState,
   targetKeyOf,
   t as tNow,
+  useStudioDraft,
   useStudioState,
   useT,
   withEntry,
 } from '../store';
-import {AUDIO_EXTENSIONS, fileNameFor, isUrl, patchProps, projectPath, slugify, writeFile} from '../studio-api';
+import {
+  AUDIO_EXTENSIONS,
+  fileNameFor,
+  freePublicPath,
+  isUrl,
+  patchProps,
+  projectPath,
+  slugify,
+  writeFile,
+} from '../studio-api';
 import {colors, styles} from '../styles';
 import {ayahCount, surahLabel} from '../surahs';
 import type {TabProps} from '../tab-props';
@@ -45,12 +55,17 @@ export const SourceTab: React.FC<TabProps> = ({target, props, project}) => {
   useEffect(() => {
     void loadOnce('catalogue', () => listRecitations());
   }, []);
-  const [slug, setSlug] = useState('');
-  const [chapterChoice, setChapterChoice] = useState(0);
-  const [verses, setVerses] = useState<{readonly from: number; readonly to: number} | null>(null);
-  const [publicChoice, setPublicChoice] = useState('');
+  // The pickers in the store by target: a tab switch keeps what the user picked.
+  const [slug, setSlug] = useStudioDraft(key, 'source.slug', '');
+  const [chapterChoice, setChapterChoice] = useStudioDraft(key, 'source.chapter', 0);
+  const [verses, setVerses] = useStudioDraft<{readonly from: number; readonly to: number} | null>(
+    key,
+    'source.verses',
+    null,
+  );
+  const [publicChoice, setPublicChoice] = useStudioDraft(key, 'source.public', '');
   /** The slug of the recitation in another riwayah the user confirmed using on the Hafs mushaf; another one asks again. */
-  const [confirmedSlug, setConfirmedSlug] = useState<string | null>(null);
+  const [confirmedSlug, setConfirmedSlug] = useStudioDraft<string | null>(key, 'source.consent', null);
   const audioFiles = usePublicFiles(AUDIO_EXTENSIONS);
   const groups = useMemo(() => groupByReciter(catalogue ?? []), [catalogue]);
 
@@ -71,16 +86,19 @@ export const SourceTab: React.FC<TabProps> = ({target, props, project}) => {
       const segments = await getChapterSegments(query);
       const base = slugify(`${recitation.slug}-${chapter}-${from}-${to}`);
       let audio = segments.audio_url;
-      setStudioState({busy: tNow('source.busy.clip')});
+      const notices: string[] = [];
+      setStudioState({busy: tNow('source.busy.clip'), notice: null});
       try {
         const response = await fetch(segments.audio_url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         audio = await writeFile(projectPath(project, `${base}.mp3`), await response.arrayBuffer());
       } catch (error) {
-        setStudioState({notice: tNow('source.notice.clipFailed', {error: describeError(error)})});
+        const failed = tNow('source.notice.clipFailed', {error: describeError(error)});
+        notices.push(failed);
+        setStudioState({notice: failed});
       }
       const timings = timingsFromCatalogue(segments, {audio});
-      await saveRecording({
+      const saved = await saveRecording({
         target,
         props,
         project,
@@ -88,6 +106,8 @@ export const SourceTab: React.FC<TabProps> = ({target, props, project}) => {
         timings,
         timingsName: `${base}.timings.json`,
       });
+      const all = [...notices, ...saved.notices];
+      setStudioState({notice: all.length > 0 ? all.join(' ') : null});
       // The clip is what Align works on now, not an earlier upload.
       setUploaded(null);
     });
@@ -95,7 +115,11 @@ export const SourceTab: React.FC<TabProps> = ({target, props, project}) => {
 
   const upload = (file: File) => {
     void runStudioTask(tNow('source.busy.copying'), async () => {
-      const path = await writeFile(projectPath(project, fileNameFor(file.name)), await file.arrayBuffer());
+      // A free name: a file already there may be the recording the current timings were made of.
+      const path = await writeFile(
+        freePublicPath(projectPath(project, fileNameFor(file.name))),
+        await file.arrayBuffer(),
+      );
       setUploaded(path);
       setStudioState({notice: tNow('source.notice.copied', {name: file.name, path})});
     });

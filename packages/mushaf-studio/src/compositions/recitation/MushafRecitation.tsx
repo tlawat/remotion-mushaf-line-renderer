@@ -14,7 +14,7 @@ import {
   interlinearRows,
   interlinearTop,
 } from '../../interlinear';
-import {wordStarts} from '../../lines';
+import {droppedSplitsWarning, wordStarts} from '../../lines';
 import {
   audioClock,
   clipAyahKey,
@@ -81,7 +81,7 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
  * image or looping video, with a glow that follows the recitation's level), with up to three
  * translations stacked, the tajweed legend in a corner and an end card after the last ayah when
  * asked, the audio normalised and faded as `audio` says, and (in the Studio) the doubtful words
- * marked, the fonts and audio warnings, and the Mushaf panel docked.
+ * marked, the fonts, audio and dropped-splits warnings, and the Mushaf panel docked.
  *
  * Under a memorisation mode each ayah plays `memorize.repeat` times on the clip timeline (one
  * `<Audio>` per clip, the lines and words timed per clip, the window scrolling back to the ayah's
@@ -364,7 +364,11 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
         width={width}
         height={height}
       />
-      {isStudio && <StudioWarnings warnings={[fontSetup.warning, resolved.audioWarning]} />}
+      {isStudio && (
+        <StudioWarnings
+          warnings={[fontSetup.warning, resolved.audioWarning, droppedSplitsWarning(resolved.droppedSplits ?? [])]}
+        />
+      )}
       {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );

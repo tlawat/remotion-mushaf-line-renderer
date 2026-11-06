@@ -13,10 +13,10 @@ import {
 } from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
 import {describeValue, MushafStudioError} from '../../errors';
-import {applySplits, doubtfulWords} from '../../lines';
+import {applySplits, doubtfulWords, fitSplits} from '../../lines';
 import {clipTimeline, type MemorizeClip} from '../../memorize/timeline';
 import {dataSourceFrom, type Memorize, themeSelectionFrom} from '../../schema';
-import type {ResolvedRecitation, StudioTimings, StudioTimingsV1, StudioTimingsV2} from '../../types';
+import type {LineSplit, ResolvedRecitation, StudioTimings, StudioTimingsV1, StudioTimingsV2} from '../../types';
 import {loadTranslationLayers, recitedPassageOf, resolveEndCardContent, translationLayerSpecs} from '../extras';
 import {
   fileUrl,
@@ -35,6 +35,12 @@ export type ResolveRecitationOptions = {
   readonly staticFile?: ((path: string) => string) | undefined;
   /** `calculateMetadata()`'s `abortSignal`: the Studio aborts a resolution it no longer needs. */
   readonly signal?: AbortSignal | undefined;
+  /**
+   * Leave out the `splits` that do not fit the lines (`fitSplits()`, listed in `droppedSplits`)
+   * instead of refusing them with `BAD_LINE_SPLIT`: what the Studio's preview asks, so the panel
+   * that removes them stays on screen. Off by default: a render refuses them.
+   */
+  readonly lenientSplits?: boolean | undefined;
 };
 
 const bad = (message: string, details: Readonly<Record<string, unknown>> = {}): MushafStudioError =>
@@ -235,6 +241,8 @@ export type ResolvedRecitationWithClips = ResolvedRecitation & {readonly clips: 
 type PassageLines = {
   /** The lines found for the timings, splits applied, without the leading header lines. */
   readonly split: readonly MushafLineData[];
+  /** The splits left out (lenient only). */
+  readonly droppedSplits: readonly LineSplit[];
   /** `split` with the leading header lines first. */
   readonly lines: readonly MushafLineData[];
   readonly schedule: readonly LineSchedule[];
@@ -244,6 +252,18 @@ type LineSources = {
   readonly theme: MushafThemeSelection;
   readonly data: MushafDataSource | undefined;
   readonly spacingSeconds: number;
+  readonly lenientSplits: boolean;
+};
+
+/** The splits applied: strictly (`applySplits()`), or leaving out what does not fit (`fitSplits()`). */
+const withSplits = (
+  found: readonly MushafLineData[],
+  splits: readonly LineSplit[],
+  lenient: boolean,
+): {readonly split: readonly MushafLineData[]; readonly droppedSplits: readonly LineSplit[]} => {
+  if (!lenient) return {split: applySplits(found, splits), droppedSplits: []};
+  const fitted = fitSplits(found, splits);
+  return {split: fitted.lines, droppedSplits: fitted.dropped};
 };
 
 /**
@@ -254,10 +274,10 @@ type LineSources = {
 const oneSurahLines = async (
   timings: StudioTimingsV1,
   props: MushafRecitationProps,
-  {theme, data, spacingSeconds}: LineSources,
+  {theme, data, spacingSeconds, lenientSplits}: LineSources,
 ): Promise<PassageLines> => {
   const found = await getMushafLines({...recitedRange(timings), theme, slice: props.slice, data});
-  const split = applySplits(found, props.splits);
+  const {split, droppedSplits} = withSplits(found, props.splits, lenientSplits);
   const timed = scheduleLines(split, timings, {occurrence: props.highlight.occurrence});
   if (timed.length === 0) {
     const {first, last} = bounds(timings);
@@ -272,7 +292,7 @@ const oneSurahLines = async (
       ? await surahHeaderLines(timings.surah, split[0], props.header, {theme, data})
       : [];
   const schedule = withHeaderSlots(timed, headers.length, spacingSeconds);
-  return {split, lines: headers.length === 0 ? split : [...headers, ...split], schedule};
+  return {split, droppedSplits, lines: headers.length === 0 ? split : [...headers, ...split], schedule};
 };
 
 /**
@@ -285,10 +305,10 @@ const oneSurahLines = async (
 const acrossSurahsLines = async (
   timings: StudioTimingsV2,
   props: MushafRecitationProps,
-  {theme, data, spacingSeconds}: LineSources,
+  {theme, data, spacingSeconds, lenientSplits}: LineSources,
 ): Promise<PassageLines> => {
   const found = await getMushafLinesForRanges(recitedRanges(timings), {theme, slice: props.slice, data});
-  const split = applySplits(found, props.splits);
+  const {split, droppedSplits} = withSplits(found, props.splits, lenientSplits);
   if (scheduleLines(split, timings, {occurrence: props.highlight.occurrence}).length === 0) {
     throw bad(
       `No line of ayahs ${spanText(timings)} carries a timed word; the timings and the mushaf data do not agree. Realign the recording.`,
@@ -301,7 +321,7 @@ const acrossSurahsLines = async (
     from.ayah === 1 && first ? await surahHeaderLines(from.surah, first, props.header, {theme, data}) : [];
   const lines = headers.length === 0 ? split : [...headers, ...split];
   const timed = scheduleLines(lines, timings, {occurrence: props.highlight.occurrence});
-  return {split, lines, schedule: withInnerHeaderSlots(timed, lines, timings, spacingSeconds)};
+  return {split, droppedSplits, lines, schedule: withInnerHeaderSlots(timed, lines, timings, spacingSeconds)};
 };
 
 /**
@@ -309,7 +329,8 @@ const acrossSurahsLines = async (
  * range (one surah's timings only: timings that cross surahs are used whole) and to the ayahs the
  * recording carries whole, moves them `audioOffsetSeconds` earlier (see `audioOffsetFor()`), finds
  * the lines (`getMushafLines(recitedRange(...))`, or `getMushafLinesForRanges(recitedRanges(...))`
- * across surahs, sliced), applies the splits, schedules the lines (after the surah's header lines
+ * across surahs, sliced), applies the splits (refusing one that does not fit, or, with
+ * `lenientSplits`, leaving it out and listing it in `droppedSplits`), schedules the lines (after the surah's header lines
  * when `header` asks for them and the recitation starts at ayah 1, see `surahHeaderLines()` and
  * `withHeaderSlots()`; across surahs each later surah's header lines come before its ayah 1, see
  * `withInnerHeaderSlots()`), loads the translation and gloss files, and marks the doubtful
@@ -337,8 +358,9 @@ export const resolveRecitation = async (
     theme: themeSelectionFrom(props.theme, props.customTheme),
     data: dataSourceFrom(props.data, io.staticFile),
     spacingSeconds: headerSeconds(props.overlay),
+    lenientSplits: options.lenientSplits === true,
   };
-  const {split, lines, schedule} =
+  const {split, droppedSplits, lines, schedule} =
     timings.version === 1
       ? await oneSurahLines(timings, props, sources)
       : await acrossSurahsLines(timings, props, sources);
@@ -363,6 +385,7 @@ export const resolveRecitation = async (
     gloss,
     transliteration,
     doubtful: doubtfulWords(inRange, {threshold: props.review.confidenceThreshold}),
+    droppedSplits,
     clips: clipTimeline(timings, props.memorize),
     endCard,
   };

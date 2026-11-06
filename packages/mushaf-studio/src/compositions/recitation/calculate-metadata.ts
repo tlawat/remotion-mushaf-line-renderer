@@ -2,6 +2,7 @@ import {enterTiming, type RecitationTimings} from '@tlawat/remotion-mushaf-line'
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
 import {isIdentityTimeline, timelineDuration} from '../../memorize/timeline';
 import {sizeForAspect} from '../../schema';
+import {isInStudio} from '../../studio/environment';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../extras';
 import {STUDIO_FPS} from '../shared';
 import {type ResolvedRecitationWithClips, resolveRecitation, skipRecitationStart} from './resolve';
@@ -51,17 +52,25 @@ export const withRecitationAudio = async (
 };
 
 /**
+ * Whether `calculateMetadata()` runs for the Studio's preview (`isInStudio()`, and not for a render:
+ * `isRendering`), where splits that no longer fit are left out and warned about rather than refused.
+ */
+export const previewsLeniently = (isRendering: boolean): boolean => !isRendering && isInStudio();
+
+/**
  * `calculateMetadata` for `<Composition id="MushafRecitation">`: `resolved` (the content, the
  * audio's analysis when `audio` or the background's glow needs it, a background video's length),
  * width and height from the aspect, duration from the timings (moved `audioOffsetSeconds` earlier,
  * so it is the audio's from the trim on), or from the clip timeline when `memorize` repeats the
- * ayahs, plus the end card's seconds. `abortSignal` reaches every fetch.
+ * ayahs, plus the end card's seconds. `abortSignal` reaches every fetch. In the Studio's preview
+ * a split that no longer fits is left out (`resolved.droppedSplits`); a render refuses it.
  */
 export const calculateMushafRecitationMetadata: CalculateMetadataFunction<MushafRecitationProps> = async ({
   props,
   abortSignal,
+  isRendering,
 }) => {
-  const content = await resolveRecitation(props, {signal: abortSignal});
+  const content = await resolveRecitation(props, {signal: abortSignal, lenientSplits: previewsLeniently(isRendering)});
   const [resolved, backgroundVideoSeconds] = await Promise.all([
     withRecitationAudio(props, content, {fps: STUDIO_FPS, signal: abortSignal}),
     backgroundVideoSecondsFor(props.background, staticFile),

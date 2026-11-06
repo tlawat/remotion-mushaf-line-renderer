@@ -1,6 +1,6 @@
 import {recitedRanges} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo} from 'react';
 import {staticFile} from 'remotion';
 import {loadTextFile} from '../../compositions/shared';
 import {
@@ -20,7 +20,16 @@ import {
 import {unicodeFontOf} from '../../unicode/font';
 import {fetchQuranComText, QURAN_TEXT_SCRIPTS, type QuranTextScript, serialiseAyahWords} from '../../unicode/text';
 import {quranTextName} from '../recording';
-import {loadOnce, runStudioTask, setStudioState, t as tNow, useStudioState, useT} from '../store';
+import {
+  loadOnce,
+  runStudioTask,
+  setStudioState,
+  targetKeyOf,
+  t as tNow,
+  useStudioDraft,
+  useStudioState,
+  useT,
+} from '../store';
 import {JSON_EXTENSIONS, patchProps, projectPath, slugify, writeFile} from '../studio-api';
 import {styles} from '../styles';
 import {
@@ -149,9 +158,10 @@ const EndCardContent: React.FC<TabProps> = ({target, props, project}) => {
   useEffect(() => {
     if (available) void loadOnce('quranComTafsirs', () => listQuranComTafsirs({}));
   }, [available]);
-  const [language, setLanguage] = useState('en');
-  const [choice, setChoice] = useState(0);
-  const [infoLanguage, setInfoLanguage] = useState('en');
+  const key = targetKeyOf(target);
+  const [language, setLanguage] = useStudioDraft(key, 'text.tafsirLanguage', 'en');
+  const [choice, setChoice] = useStudioDraft(key, 'text.tafsir', 0);
+  const [infoLanguage, setInfoLanguage] = useStudioDraft(key, 'text.surahInfoLanguage', 'en');
   if (!available) return <Note>{t('text.noEndCard')}</Note>;
   const passage = passageOf(props);
   const card = endCardOf(props);
@@ -240,14 +250,18 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
   useEffect(() => {
     void loadOnce('quranComResources', () => listQuranComTranslations({}));
   }, []);
-  // An ayah text starts on the script its font sets: a text in another one would not resolve.
-  const [script, setScript] = useState<QuranTextScript>(() =>
+  // The pickers in the store by target: a tab switch keeps what the user picked. An ayah text starts
+  // on the script its font sets: a text in another one would not resolve.
+  const key = targetKeyOf(target);
+  const [script, setScript] = useStudioDraft<QuranTextScript>(
+    key,
+    'text.script',
     isAyahTextProps(props) ? unicodeFontOf(props.font).script : 'uthmani',
   );
-  const [language, setLanguage] = useState('en');
-  const [resourceChoice, setResourceChoice] = useState(0);
-  const [glossLanguage, setGlossLanguage] = useState('en');
-  const [publicChoice, setPublicChoice] = useState('');
+  const [language, setLanguage] = useStudioDraft(key, 'text.language', 'en');
+  const [resourceChoice, setResourceChoice] = useStudioDraft(key, 'text.resource', 0);
+  const [glossLanguage, setGlossLanguage] = useStudioDraft(key, 'text.glossLanguage', 'en');
+  const [publicChoice, setPublicChoice] = useStudioDraft(key, 'text.public', '');
   const jsonFiles = usePublicFiles(JSON_EXTENSIONS);
   const resources = useMemo(
     () => (quranComResources ?? []).filter((resource) => resource.language === language),

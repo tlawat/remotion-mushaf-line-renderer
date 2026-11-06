@@ -1,5 +1,13 @@
 import type * as React from 'react';
-import {applyLook, lookMatches, lookPatchFor, looksFor, lookUndoPatch, type MushafLook} from '../../presets';
+import {
+  applyLook,
+  lookMatches,
+  lookPatchFor,
+  lookRevertPatch,
+  looksFor,
+  lookUndoPatch,
+  type MushafLook,
+} from '../../presets';
 import type {MessageKey} from '../i18n';
 import {
   getStudioState,
@@ -39,8 +47,9 @@ const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chi
 
 /**
  * Look: one-click style presets. A card sets the style props its look names (through the same
- * `patchProps()` every tab uses) and never the content; Undo puts back what the last look changed.
- * Needs nothing resolved: it works before a recitation is chosen.
+ * `patchProps()` every tab uses) and never the content; Undo goes back through the looks applied to
+ * this target, last first, and puts back only the fields that still hold the look's values
+ * (`lookRevertPatch()`). Needs nothing resolved: it works before a recitation is chosen.
  */
 export const LookTab: React.FC<TabProps> = ({target, props}) => {
   const {busy, lookUndo} = useStudioState();
@@ -62,10 +71,22 @@ export const LookTab: React.FC<TabProps> = ({target, props}) => {
 
   const revert = () => {
     if (!undo) return;
-    void runStudioTask(tNow('look.busy.undoing', {name: undo.name}), async () => {
-      await patchProps(target, undo.patch);
+    const forget = () => {
       const stack = (getStudioState().lookUndo[key] ?? []).filter((entry) => entry !== undo);
       setStudioState({lookUndo: withEntry(getStudioState().lookUndo, key, stack.length > 0 ? stack : undefined)});
+    };
+    // Only the fields that still hold the look: one changed since (the sidebar, another look) is the user's.
+    const patch = lookRevertPatch(props, undo.applied, undo.patch);
+    if (patch === null) {
+      forget();
+      setStudioState({notice: tNow('look.notice.nothingToUndo', {name: undo.name})});
+      return;
+    }
+    const partial = JSON.stringify(patch) !== JSON.stringify(undo.patch);
+    void runStudioTask(tNow('look.busy.undoing', {name: undo.name}), async () => {
+      await patchProps(target, patch);
+      forget();
+      if (partial) setStudioState({notice: tNow('look.notice.keptChanged', {name: undo.name})});
     });
   };
 

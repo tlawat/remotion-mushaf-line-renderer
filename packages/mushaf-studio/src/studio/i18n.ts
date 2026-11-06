@@ -65,6 +65,14 @@ const EN = {
     'timingsFile {path} could not be read (HTTP {status}). Check the path (under public/) or the URL.',
   'error.textAfterTimings':
     'The timings are in public/{timingsFile}, but the Quran text for {surah}:{fromAyah}-{toAyah} could not be fetched: {error}; fetch it in the Text tab, then pick the timings again.',
+  'recording.notice.versioned':
+    'public/{kept} has your edits or other timings, so it is kept: the new timings are public/{path}, and the composition uses them.',
+  'recording.notice.cleared': {
+    one: 'Cleared {files}: it is not for the new passage, {passage}. Fetch it again in the Text tab.',
+    other:
+      'Cleared {count} files ({files}): they are not for the new passage, {passage}. Fetch them again in the Text tab.',
+  },
+  'recording.notice.sameRecording': 'The same recording as before: the ayah range and the line splits are kept.',
 
   'source.catalogue': 'Catalogue',
   'source.loadingCatalogue': 'Loading the reviewed recitations of the aligner...',
@@ -99,13 +107,15 @@ const EN = {
   'source.notice.copied': '{name} is now public/{path}. Nothing has been sent anywhere.',
 
   'look.note':
-    'A look sets the style props in one click; change any of them in the Props sidebar afterwards. The recitation, the timings and the translation files are left as they are.',
+    'A look sets the style props in one click, never where you placed the lines (their vertical position, offsets and margins); change any of them in the Props sidebar afterwards. The recitation, the timings and the translation files are left as they are.',
   'look.looks': 'Looks',
   'look.active': 'The props have this look',
   'look.undo': 'Undo {name}',
   'look.undoTitle': 'Put back what {name} changed',
   'look.busy.applying': 'Applying {name}...',
   'look.busy.undoing': 'Undoing {name}...',
+  'look.notice.nothingToUndo': 'Nothing of {name} is left to undo: every field it set has been changed since.',
+  'look.notice.keptChanged': '{name} is undone; the fields changed since it was applied keep their new values.',
   'look.chip.page': 'Page',
   'look.chip.ink': 'Ink',
   'look.chip.currentWord': 'Current word',
@@ -206,7 +216,8 @@ const EN = {
   'review.splitButton': 'Split segments',
   'review.sessionHint': 'Align this audio in this session first: the aligner keeps a session for a few hours only.',
   'review.realignTitle': 'Re-align with these boundaries (advanced)',
-  'review.boundaryNote': 'Each boundary is a stretch of the recording the aligner transcribes and matches on its own.',
+  'review.boundaryNote':
+    "Each boundary is a stretch of the recording the aligner transcribes and matches on its own, in seconds of the recording file (not of the composition). Every segment is listed, those outside the ayah range too: a re-align replaces the whole file's alignment.",
   'review.boundaryStart': 'Boundary {n} start',
   'review.boundaryEnd': 'Boundary {n} end',
   'review.removeBoundary': 'Remove this boundary',
@@ -276,6 +287,7 @@ const EN = {
   'waveform.label': 'Waveform of the recording: click to seek',
   'waveform.decoding': 'Decoding the recording...',
   'waveform.failed': 'No waveform: {error}',
+  'waveform.retry': 'Try again',
   'waveform.noWebAudio': 'this browser cannot decode audio here (no Web Audio).',
   'waveform.httpError': '{url} could not be read (HTTP {status}).',
   'waveform.tooLarge': 'the recording is {size} MB, too large to draw here.',
@@ -304,6 +316,16 @@ const EN = {
   'lines.splitsHint': 'Click a word that is not the first of its slot to start a new timed slot at it.',
   'lines.splitAt': 'p{page} l{line} at word {word}',
   'lines.removeSplit': 'Remove this split',
+  'lines.dropped': {
+    one: 'A split does not fit the passage any more (the ayah range or slice changed): the preview leaves it out, and a render refuses it.',
+    other:
+      '{count} splits do not fit the passage any more (the ayah range or slice changed): the preview leaves them out, and a render refuses them.',
+  },
+  'lines.removeDropped': {
+    one: 'Remove the split that does not fit',
+    other: 'Remove the {count} splits that do not fit',
+  },
+  'lines.notApplied': 'not applied',
   'lines.noPages': 'No pages yet: the composition resolves them from the timings file.',
   'lines.pages': 'Pages ({count})',
   'lines.page': 'Page {page}',
@@ -396,7 +418,7 @@ const EN = {
   'project.filesNotList': 'files is not a list of paths.',
   'project.badProps': 'props.{path}: {message}.',
   'project.otherKind':
-    'The project was saved from {composition}, a composition of the other kind (MushafRecitation or MushafAyahText): import it into one of that kind.',
+    'The project was saved from {composition}, a composition of another kind (MushafRecitation, MushafAyahText or MushafPage): import it into one of that kind.',
   'project.missing': {
     one: 'public/ lacks the file the project needs: {files}. Put it there and import again; nothing was changed.',
     other:
@@ -453,6 +475,11 @@ const AR: Readonly<Record<MessageKey, Message>> = {
     'تعذّرت قراءة ملف التوقيتات timingsFile {path} (HTTP {status}). تحقّق من المسار (داخل public/) أو من الرابط.',
   'error.textAfterTimings':
     'التوقيتات محفوظة في public/{timingsFile}، لكن تعذّر جلب نص القرآن للآيات {surah}:{fromAyah}-{toAyah}: {error}؛ اجلبه من تبويب النص، ثم اختر التوقيتات مرة أخرى.',
+  'recording.notice.versioned':
+    'في public/{kept} تعديلاتك أو توقيتات أخرى، فبقي كما هو: التوقيتات الجديدة في public/{path}، ويستعملها التركيب.',
+  'recording.notice.cleared':
+    'أُزيلت ملفات ({count}) لا تخص المقطع الجديد {passage}: {files}. اجلبها من جديد في تبويب النص.',
+  'recording.notice.sameRecording': 'هذا التسجيل نفسه: يبقى نطاق الآيات وتقسيمات الأسطر كما هي.',
 
   'source.catalogue': 'الفهرس',
   'source.loadingCatalogue': 'جارٍ تحميل التلاوات المراجَعة من أداة المحاذاة...',
@@ -485,13 +512,15 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'source.notice.copied': 'أصبح {name} الآن public/{path}. لم يُرسَل شيء إلى أي مكان.',
 
   'look.note':
-    'يضبط المظهر خصائص التنسيق بنقرة واحدة؛ ويمكنك تغيير أيٍّ منها بعد ذلك في الشريط الجانبي للخصائص (Props). أما التلاوة والتوقيتات وملفات الترجمة فتبقى كما هي.',
+    'يضبط المظهر خصائص التنسيق بنقرة واحدة، ولا يغيّر موضع الأسطر الذي ضبطته (موضعها العمودي وإزاحاتها وهوامشها)؛ ويمكنك تغيير أيٍّ منها بعد ذلك في الشريط الجانبي للخصائص (Props). أما التلاوة والتوقيتات وملفات الترجمة فتبقى كما هي.',
   'look.looks': 'المظاهر',
   'look.active': 'الخصائص مطابقة لهذا المظهر',
   'look.undo': 'تراجع عن {name}',
   'look.undoTitle': 'أعد ما غيّره {name}',
   'look.busy.applying': 'جارٍ تطبيق {name}...',
   'look.busy.undoing': 'جارٍ التراجع عن {name}...',
+  'look.notice.nothingToUndo': 'لم يبقَ من {name} ما يُتراجع عنه: تغيّر كل حقل ضبطه منذ تطبيقه.',
+  'look.notice.keptChanged': 'تم التراجع عن {name}؛ وتحتفظ الحقول التي تغيّرت منذ تطبيقه بقيمها الجديدة.',
   'look.chip.page': 'الصفحة',
   'look.chip.ink': 'الحبر',
   'look.chip.currentWord': 'الكلمة الحالية',
@@ -592,7 +621,8 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'review.splitButton': 'قسّم المقاطع',
   'review.sessionHint': 'حاذِ هذا الصوت في هذه الجلسة أولًا: فأداة المحاذاة لا تحتفظ بالجلسة إلا بضع ساعات.',
   'review.realignTitle': 'إعادة المحاذاة بهذه الحدود (متقدم)',
-  'review.boundaryNote': 'كل حدّ هو امتداد من التسجيل تفرّغه أداة المحاذاة وتطابقه مستقلًّا.',
+  'review.boundaryNote':
+    'كل حدّ هو امتداد من التسجيل تفرّغه أداة المحاذاة وتطابقه مستقلًّا، بثواني ملف التسجيل (لا التركيب). تُذكر المقاطع كلها، ومنها ما يقع خارج نطاق الآيات: إعادة المحاذاة تستبدل محاذاة الملف كله.',
   'review.boundaryStart': 'بداية الحد {n}',
   'review.boundaryEnd': 'نهاية الحد {n}',
   'review.removeBoundary': 'احذف هذا الحد',
@@ -643,6 +673,7 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'waveform.label': 'الشكل الموجي للتسجيل: انقر للانتقال',
   'waveform.decoding': 'جارٍ فك ترميز التسجيل...',
   'waveform.failed': 'لا يتوفر شكل موجي: {error}',
+  'waveform.retry': 'أعد المحاولة',
   'waveform.noWebAudio': 'لا يستطيع هذا المتصفح فك ترميز الصوت هنا (لا يتوفر Web Audio).',
   'waveform.httpError': 'تعذّرت قراءة {url} (HTTP {status}).',
   'waveform.tooLarge': 'حجم التسجيل {size} م.ب، وهو أكبر من أن يُرسم هنا.',
@@ -671,6 +702,10 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'lines.splitsHint': 'انقر على كلمة ليست الأولى في فترتها لتبدأ عندها فترة موقّتة جديدة.',
   'lines.splitAt': 'ص{page} س{line} عند الكلمة {word}',
   'lines.removeSplit': 'احذف هذا التقسيم',
+  'lines.dropped':
+    'لم تعد تقسيمات ({count}) تناسب المقطع (تغيّر نطاق الآيات أو القصّ): تتركها المعاينة، ويرفضها التصيير.',
+  'lines.removeDropped': 'احذف التقسيمات التي لا تناسب ({count})',
+  'lines.notApplied': 'غير مطبَّق',
   'lines.noPages': 'لا صفحات بعد: يستخرجها التركيب من ملف التوقيتات.',
   'lines.pages': 'الصفحات ({count})',
   'lines.page': 'الصفحة {page}',
@@ -759,7 +794,7 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'project.filesNotList': 'الحقل files ليس قائمة مسارات.',
   'project.badProps': 'props.{path}: {message}.',
   'project.otherKind':
-    'حُفظ المشروع من {composition}، وهو تركيب من النوع الآخر (MushafRecitation أو MushafAyahText): استورده في تركيب من ذلك النوع.',
+    'حُفظ المشروع من {composition}، وهو تركيب من نوع آخر (MushafRecitation أو MushafAyahText أو MushafPage): استورده في تركيب من ذلك النوع.',
   'project.missing':
     'تنقص public/ ملفات يحتاجها المشروع (عددها {count}): {files}. ضعها هناك ثم أعد الاستيراد؛ لم يُغيَّر شيء.',
 };

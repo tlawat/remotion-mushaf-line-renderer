@@ -6,7 +6,8 @@ import {useEffect, useRef} from 'react';
 import {useCurrentFrame} from 'remotion';
 import type {AlignmentSegment} from '../types';
 import {useStudioState, useT} from './store';
-import {colors, confidenceColor} from './styles';
+import {colors, confidenceColor, styles} from './styles';
+import {Button} from './ui';
 import {audioUrlOf, loadWaveform, peaksBetween, type WaveformEnvelope} from './waveform-peaks';
 
 export const WAVEFORM_WIDTH = 356;
@@ -146,7 +147,16 @@ export const Waveform: React.FC<{
         />
         <Cursor view={view} fps={fps} />
       </div>
-      {status ? <div style={{color: colors.muted, fontSize: 11}}>{status}</div> : null}
+      {status ? (
+        <div style={{...styles.row, color: colors.muted, fontSize: 11}}>
+          <span>{status}</span>
+          {entry?.status === 'error' ? (
+            <Button variant="ghost" onClick={() => void loadWaveform(url)}>
+              {t('waveform.retry')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 };

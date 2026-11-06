@@ -8,8 +8,10 @@ import {defaultMushafRecitationProps, mushafRecitationSchema} from '../../../src
 import {
   applyLook,
   LOOK_GROUPS,
+  LOOK_POSITION_FIELDS,
   lookMatches,
   lookPatchFor,
+  lookRevertPatch,
   looksFor,
   lookUndoPatch,
   MUSHAF_LOOKS,
@@ -40,6 +42,30 @@ describe('MUSHAF_LOOKS', () => {
       expect(look.name).not.toBe('');
       expect(look.description).not.toBe('');
       expect(look.applies.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('never moves what the user positioned: no look sets a position field, the frame looks included', () => {
+    for (const look of MUSHAF_LOOKS)
+      for (const field of LOOK_POSITION_FIELDS) {
+        const [group, key] = field.split('.') as [string, string];
+        expect((look.patch as Record<string, Record<string, unknown> | undefined>)[group] ?? {}).not.toHaveProperty(
+          key,
+        );
+      }
+    const placed = {
+      ...defaultMushafRecitationProps,
+      layout: {...defaultMushafRecitationProps.layout, verticalAlign: 0.3, offsetY: 40, marginX: 60},
+      text: {...defaultMushafRecitationProps.text, translationOffsetY: 20},
+    };
+    for (const id of ['reel', 'square']) {
+      const next = applyLook(placed, lookById(id));
+      expect([
+        next.layout.verticalAlign,
+        next.layout.offsetY,
+        next.layout.marginX,
+        next.text.translationOffsetY,
+      ]).toEqual([0.3, 40, 60, 20]);
     }
   });
 
@@ -78,14 +104,7 @@ describe('applyLook', () => {
       text: {...defaultMushafRecitationProps.text, translationFile: 't.json'},
     };
     const next = applyLook(props, lookById('reel'));
-    expect(next.layout).toEqual({
-      ...props.layout,
-      aspect: '9:16',
-      visibleLines: 0,
-      marginX: 140,
-      verticalAlign: 0.45,
-      offsetY: 0,
-    });
+    expect(next.layout).toEqual({...props.layout, aspect: '9:16', visibleLines: 0});
     expect(next.text.translationFile).toBe('t.json');
     expect(next.audioFile).toBe(props.audioFile);
     expect(next.splits).toBe(props.splits);
@@ -159,5 +178,47 @@ describe('lookUndoPatch', () => {
       patch: {theme: 'dark'},
     };
     expect(lookUndoPatch(defaultMushafAyahTextProps, themeOnly)).toEqual({});
+  });
+});
+
+describe('lookRevertPatch', () => {
+  const night = lookById('night');
+  const applied = lookPatchFor(defaultMushafRecitationProps, night);
+  const before = lookUndoPatch(defaultMushafRecitationProps, night);
+  const after = applyLook(defaultMushafRecitationProps, night);
+
+  it('puts back every field while the props still hold the look', () => {
+    expect(lookRevertPatch(after, applied, before)).toEqual(before);
+    expect(applyLook(after, {...night, patch: lookRevertPatch(after, applied, before)!})).toEqual(
+      defaultMushafRecitationProps,
+    );
+  });
+
+  it('leaves a field changed since alone, and reverts the others', () => {
+    const edited = {...after, layout: {...after.layout, background: '#222222'}, theme: 'sepia' as const};
+    const revert = lookRevertPatch(edited, applied, before)!;
+    expect(revert).not.toHaveProperty('theme');
+    expect(revert.layout).not.toHaveProperty('background');
+    expect(revert.layout).toEqual({color: defaultMushafRecitationProps.layout.color, backgroundImage: ''});
+    expect(revert.highlight).toEqual(before.highlight);
+    const back = applyLook(edited, {...night, patch: revert});
+    expect(back.layout.background).toBe('#222222');
+    expect(back.theme).toBe('sepia');
+    expect(back.highlight).toEqual(defaultMushafRecitationProps.highlight);
+  });
+
+  it('is null when every field the look set has changed since', () => {
+    const reel = lookById('reel');
+    const reelApplied = lookPatchFor(defaultMushafRecitationProps, reel);
+    const reelBefore = lookUndoPatch(defaultMushafRecitationProps, reel);
+    const changed = applyLook(applyLook(defaultMushafRecitationProps, reel), {
+      ...reel,
+      patch: {
+        layout: {aspect: '1:1', visibleLines: 2},
+        animation: {enter: 'none', exit: 'none'},
+        text: {translationPosition: 'above', translationSize: 30},
+      },
+    });
+    expect(lookRevertPatch(changed, reelApplied, reelBefore)).toBeNull();
   });
 });

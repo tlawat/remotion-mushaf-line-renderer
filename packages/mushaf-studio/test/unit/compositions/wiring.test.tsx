@@ -318,6 +318,19 @@ describe('audio', () => {
     expect(lines).toContain('Mushaf Studio: No Web Audio here.');
   });
 
+  it('warns in the Studio only about the splits the preview left out', async () => {
+    const props = recitationProps();
+    const resolved = {...(await resolvedOf(props)), droppedSplits: [{page: 1, line: 8, atWordId: 26}]};
+    expect(mount(<MushafRecitation {...props} resolved={resolved} />).textContent).not.toContain('line split');
+    cleanup();
+    remotion.state.env.isStudio = true;
+    const studio = mount(<MushafRecitation {...props} resolved={resolved} />);
+    const lines = Array.from(studio.querySelector('[data-mushaf-warnings]')!.children).map((line) => line.textContent);
+    expect(lines).toContain(
+      "Mushaf Studio: A line split does not fit the passage and is not applied (page 1 line 8 at word 26): the ayah range or slice changed since. Remove it in the Mushaf panel's Lines tab; a render refuses it.",
+    );
+  });
+
   it('lets any other failure through', async () => {
     mocks.analyzeAudio.mockRejectedValue(new DOMException('Aborted', 'AbortError'));
     await expect(resolvedOf(recitationProps())).rejects.toThrow('Aborted');

@@ -852,3 +852,180 @@ describe('Text', () => {
     );
   });
 });
+
+describe('Review in recording time', () => {
+  it('keeps a nudge at its file time when the offset changes before Apply', async () => {
+    // Played from 2 s in, then (a lead-in changed in the sidebar, say) from 1 s in.
+    const {rerender} = panel(propsWith(reviewTimings(), {fromAyah: 3}, 2), 'review');
+    fireEvent.click(screen.getAllByTitle('Show the words')[1]!);
+    fireEvent.change(screen.getByLabelText('1:3:2 end'), {target: {value: '5.3'}});
+    rerender(
+      <MushafStudioPanel
+        compositionId="MushafRecitation"
+        props={propsWith(reviewTimings(), {fromAyah: 3}, 1)}
+        initialTab="review"
+      />,
+    );
+    // The same file time (7.3 s), shown one second later in the composition.
+    expect(screen.getByLabelText('1:3:2 end')).toHaveProperty('value', '6.3');
+    fireEvent.click(screen.getByText('Apply edits (1)'));
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(writtenJson(0).ayat[1]!.words![2]).toEqual({id: '1:3:2', start: 6, end: 7.3});
+  });
+
+  it('shows and sends the re-align boundaries in recording time, the segments before the range included', async () => {
+    setStudioState({session: session()});
+    qud.realignSession.mockResolvedValue({audio_id: 'abc', segments: []});
+    qud.sessionTimestamps.mockResolvedValue({audio_id: 'abc', segments: []});
+    qud.timingsFromQud.mockReturnValue({...reviewTimings(), alignment: {...reviewTimings().alignment!, edits: []}});
+    panel(propsWith(reviewTimings(), {fromAyah: 3}, 2), 'review');
+    fireEvent.click(screen.getByText(/Re-align with these boundaries/));
+    // The file's own times: segment 1 (ayah 2, before the range) at 0-3 s, not -2 to 1.
+    expect(screen.getByLabelText('Boundary 1 start')).toHaveProperty('value', '0');
+    expect(screen.getByLabelText('Boundary 1 end')).toHaveProperty('value', '3');
+    expect(screen.getByLabelText('Boundary 2 start')).toHaveProperty('value', '3.4');
+    fireEvent.change(screen.getByLabelText('Boundary 2 end'), {target: {value: '7.9'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Re-align'}));
+    await waitFor(() => expect(qud.realignSession).toHaveBeenCalledTimes(1));
+    expect((qud.realignSession.mock.calls[0] as unknown as [string, {timestamps: unknown}])[1].timestamps).toEqual([
+      {start: 0, end: 3},
+      {start: 3.4, end: 7.9},
+    ]);
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().error).toBeNull();
+  });
+});
+
+describe('drafts', () => {
+  const switchTab = (name: string) => fireEvent.click(screen.getByRole('tab', {name}));
+
+  it("keeps Review's nudges, boundaries, split options and selected word through a tab switch, per composition", () => {
+    panel(propsWith(reviewTimings()), 'review');
+    fireEvent.click(screen.getAllByTitle('Show the words')[1]!);
+    fireEvent.change(screen.getByLabelText('1:3:2 end'), {target: {value: '7.3'}});
+    fireEvent.click(screen.getAllByText('ٱلرَّحِيمِ')[0]!);
+    fireEvent.click(screen.getByText(/Re-align with these boundaries/));
+    fireEvent.change(screen.getByLabelText('Boundary 1 start'), {target: {value: '0.5'}});
+    fireEvent.click(screen.getByText(/Split segments\.\.\./));
+    fireEvent.change(screen.getByLabelText('Max verses'), {target: {value: '3'}});
+    switchTab('Lines');
+    expect(screen.queryByText(/Apply edits/)).toBeNull();
+    switchTab('Review');
+    expect(screen.getByText('Apply edits (1)')).toBeTruthy();
+    fireEvent.click(screen.getAllByTitle('Show the words')[1]!);
+    expect(document.body.querySelector('[data-selected="true"]')?.getAttribute('data-word-key')).toBe('1:3:2#0');
+    expect(screen.getByLabelText('1:3:2 end')).toHaveProperty('value', '7.3');
+    fireEvent.click(screen.getByText(/Re-align with these boundaries/));
+    expect(screen.getByLabelText('Boundary 1 start')).toHaveProperty('value', '0.5');
+    fireEvent.click(screen.getByText(/Split segments\.\.\./));
+    expect(screen.getByLabelText('Max verses')).toHaveProperty('value', '3');
+    // Another composition has drafts of its own.
+    cleanup();
+    render(<MushafStudioPanel compositionId="Second" props={propsWith(reviewTimings())} initialTab="review" />);
+    expect(screen.getByText('Apply edits (0)')).toBeTruthy();
+  });
+
+  it('shows no nudge made on another timings file', () => {
+    const {rerender} = panel(propsWith(reviewTimings()), 'review');
+    fireEvent.click(screen.getAllByTitle('Show the words')[1]!);
+    fireEvent.change(screen.getByLabelText('1:3:2 end'), {target: {value: '7.3'}});
+    expect(screen.getByText('Apply edits (1)')).toBeTruthy();
+    rerender(
+      <MushafStudioPanel
+        compositionId="MushafRecitation"
+        props={propsWith(reviewTimings(), {timingsFile: 'mushaf-studio/p/fatiha-2.timings.json'})}
+        initialTab="review"
+      />,
+    );
+    expect(screen.getByText('Apply edits (0)')).toBeTruthy();
+  });
+
+  it("keeps Align's options and the riwayah consent through a tab switch", () => {
+    panel(propsWith(reviewTimings()), 'align');
+    fireEvent.change(screen.getByLabelText('Model'), {target: {value: 'Large'}});
+    fireEvent.change(screen.getByLabelText('Riwayah'), {target: {value: 'warsh'}});
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Align the warsh recitation against the Hafs mushaf anyway'}));
+    switchTab('Review');
+    switchTab('Align');
+    expect(screen.getByLabelText('Model')).toHaveProperty('value', 'Large');
+    expect(screen.getByLabelText('Riwayah')).toHaveProperty('value', 'warsh');
+    expect(
+      screen.getByRole('checkbox', {name: 'Align the warsh recitation against the Hafs mushaf anyway'}),
+    ).toHaveProperty('checked', true);
+    expect(screen.getByRole('button', {name: 'Align'})).toHaveProperty('disabled', false);
+  });
+
+  it("keeps Source's pickers through a tab switch", async () => {
+    const hafs = recitationsFixture.recitations[0]!;
+    const warsh = {...hafs, slug: 'warsh_1', riwayah: "Warsh A'n Nafi'"};
+    qud.listRecitations.mockResolvedValue([hafs, warsh] as never);
+    studio.getStaticFiles.mockReturnValue([
+      {src: '/x', name: 'mushaf-studio/p/old.mp3', sizeInBytes: 2048, lastModified: 0},
+    ]);
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
+    await screen.findByRole('button', {name: 'Use this recitation'});
+    fireEvent.change(screen.getByLabelText('Reciter'), {target: {value: 'warsh_1'}});
+    fireEvent.click(
+      screen.getByRole('checkbox', {name: "Use the Warsh A'n Nafi' recitation with the Hafs mushaf anyway"}),
+    );
+    fireEvent.change(screen.getByRole('combobox', {name: 'Audio in public/'}), {
+      target: {value: 'mushaf-studio/p/old.mp3'},
+    });
+    switchTab('Look');
+    switchTab('Source');
+    expect(screen.getByLabelText('Reciter')).toHaveProperty('value', 'warsh_1');
+    expect(screen.getByRole('button', {name: 'Use this recitation'})).toHaveProperty('disabled', false);
+    expect(screen.getByRole('combobox', {name: 'Audio in public/'})).toHaveProperty('value', 'mushaf-studio/p/old.mp3');
+  });
+
+  it("keeps Text's pickers through a tab switch", () => {
+    panel(singleTranslation(propsWith(reviewTimings())), 'text');
+    fireEvent.change(screen.getByLabelText('Language (quran.com code, en, ur, id, ...)'), {target: {value: 'ur'}});
+    fireEvent.change(screen.getByRole('combobox', {name: 'Script'}), {target: {value: 'indopak'}});
+    switchTab('Lines');
+    switchTab('Text');
+    expect(screen.getByLabelText('Language (quran.com code, en, ur, id, ...)')).toHaveProperty('value', 'ur');
+    expect(screen.getByRole('combobox', {name: 'Script'})).toHaveProperty('value', 'indopak');
+  });
+});
+
+describe('dropped splits', () => {
+  it('marks the splits the preview left out, and removes them in one click', async () => {
+    const splits = [
+      {page: 1, line: 3, atWordId: 2},
+      {page: 1, line: 8, atWordId: 30},
+    ];
+    const props = propsWith(reviewTimings(), {splits});
+    const withDropped = {...props, resolved: {...props.resolved, droppedSplits: [splits[1]!]}};
+    panel(withDropped, 'lines');
+    expect(screen.getByRole('alert').textContent).toMatch(/^A split does not fit the passage any more/);
+    expect(document.body.querySelector('[data-dropped="true"]')?.textContent).toMatch(/p1 l8 at word 30 · not applied/);
+    expect(document.body.querySelectorAll('[data-dropped="false"]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', {name: 'Remove the split that does not fit'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    expect(saved(0, {splits})).toEqual({splits: [splits[0]]});
+  });
+
+  it('says nothing while every split fits', () => {
+    panel(propsWith(reviewTimings(), {splits: [{page: 1, line: 3, atWordId: 2}]}), 'lines');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.body.querySelector('[data-mushaf-control="dropped-splits"]')).toBeNull();
+  });
+});
+
+describe('uploads', () => {
+  it('copies a recording under a free name, never over a file of public/', async () => {
+    studio.getStaticFiles.mockReturnValue([
+      {src: '/x', name: 'mushaf-studio/mushafrecitation/take.m4a', sizeInBytes: 2048, lastModified: 0},
+    ]);
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
+    fireEvent.change(screen.getByLabelText('Own recording'), {
+      target: {files: [new File(['audio'], 'Take.m4a', {type: 'audio/mp4'})]},
+    });
+    await waitFor(() => expect(studio.writeStaticFile).toHaveBeenCalledTimes(1));
+    expect(written(0).filePath).toBe('mushaf-studio/mushafrecitation/take-2.m4a');
+    await waitFor(() =>
+      expect(getStudioState().uploadedAudio).toEqual({MushafRecitation: 'mushaf-studio/mushafrecitation/take-2.m4a'}),
+    );
+  });
+});

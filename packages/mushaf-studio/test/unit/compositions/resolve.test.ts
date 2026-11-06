@@ -17,8 +17,17 @@ vi.mock('../../../src/translations', () => ({
   TranslationBlock: () => null,
   GlossStrip: () => null,
 }));
+// Outside the Studio unless a test says otherwise, as in a render or on a server.
+const env = vi.hoisted(() => ({
+  isStudio: false,
+  isRendering: false,
+  isPlayer: false,
+  isClientSideRendering: false,
+  isReadOnlyStudio: false,
+}));
 vi.mock('remotion', async (importOriginal) => ({
   ...(await importOriginal<typeof import('remotion')>()),
+  getRemotionEnvironment: () => env,
   staticFile: (path: string) => mocks.staticFile(path),
 }));
 
@@ -328,6 +337,23 @@ describe('resolveRecitation', () => {
     expect(missing.code).toBe('BAD_LINE_SPLIT');
   });
 
+  it('leaves out, and lists, the splits that do not fit when asked to be lenient; refuses them otherwise', async () => {
+    // Line 8 is ayah 7's: not in a passage that ends at ayah 5. Word 6 is the first of its line.
+    const misfits = [
+      {page: 1, line: 8, atWordId: 26},
+      {page: 1, line: 3, atWordId: 1},
+    ];
+    const fits = {page: 1, line: 4, atWordId: 8};
+    const range = props({toAyah: 5, splits: [misfits[0]!, fits, misfits[1]!]});
+    const plain = await resolveRecitation(props({toAyah: 5}), {fetch: fetchJson(fatiha), staticFile});
+    const lenient = await resolveRecitation(range, {fetch: fetchJson(fatiha), staticFile, lenientSplits: true});
+    expect(lenient.droppedSplits).toEqual(misfits);
+    expect(lenient.lines).toHaveLength(plain.lines.length + 1);
+    expect(plain.droppedSplits).toEqual([]);
+    const strict = await rejection(resolveRecitation(range, {fetch: fetchJson(fatiha), staticFile}));
+    expect(strict.code).toBe('BAD_LINE_SPLIT');
+  });
+
   it('loads the translation, gloss and transliteration files of the right kinds', async () => {
     mocks.loadTranslation.mockImplementation(async (url: string) => (url.includes('ayah') ? ayahText : wordText));
     const text = {
@@ -488,6 +514,43 @@ describe('calculateMushafRecitationMetadata', () => {
         isRendering: true,
       });
       expect(portrait).toMatchObject({width: 1080, height: 1920});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('calculateMushafRecitationMetadata and splits that do not fit', () => {
+  const args = (isRendering: boolean) => ({
+    props: props({toAyah: 5, splits: [{page: 1, line: 8, atWordId: 26}]}),
+    defaultProps: props(),
+    abortSignal: new AbortController().signal,
+    compositionId: 'MushafRecitation',
+    isRendering,
+  });
+  const metadata = (isRendering: boolean) => Promise.resolve(calculateMushafRecitationMetadata(args(isRendering)));
+  const inStudio = async <T>(run: () => Promise<T>): Promise<T> => {
+    env.isStudio = true;
+    vi.stubGlobal('fetch', fetchJson(fatiha));
+    try {
+      return await run();
+    } finally {
+      env.isStudio = false;
+      vi.unstubAllGlobals();
+    }
+  };
+
+  it("leaves them out in the Studio's preview, listed in resolved.droppedSplits", async () => {
+    const result = await inStudio(() => metadata(false));
+    const resolved = (result.props as MushafRecitationProps).resolved as {droppedSplits: unknown};
+    expect(resolved.droppedSplits).toEqual([{page: 1, line: 8, atWordId: 26}]);
+  });
+
+  it('refuses them in a render, and outside the Studio', async () => {
+    expect((await rejection(inStudio(() => metadata(true)))).code).toBe('BAD_LINE_SPLIT');
+    vi.stubGlobal('fetch', fetchJson(fatiha));
+    try {
+      expect((await rejection(metadata(false))).code).toBe('BAD_LINE_SPLIT');
     } finally {
       vi.unstubAllGlobals();
     }

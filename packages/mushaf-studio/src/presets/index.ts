@@ -40,8 +40,21 @@ export type MushafLook = {
 };
 
 /**
+ * The fields a look never sets: where the lines and the translation sit (`layout.verticalAlign`,
+ * `layout.offsetY`, `layout.marginX`, `text.translationOffsetY`) is the user's to place, and a frame
+ * look applied after it would move it.
+ */
+export const LOOK_POSITION_FIELDS = [
+  'layout.verticalAlign',
+  'layout.offsetY',
+  'layout.marginX',
+  'text.translationOffsetY',
+] as const;
+
+/**
  * The looks the panel offers. Each is a whole design rather than a single setting, and sets only
- * what that design needs: a look that changes the frame leaves the colours alone, and the reverse.
+ * what that design needs: a look that changes the frame leaves the colours alone, and the reverse,
+ * and none moves what the user positioned (`LOOK_POSITION_FIELDS`).
  * A field a composition does not have (`theme` on `<MushafAyahText>`, `highlight` on
  * `<MushafPassage>`) is skipped when the look is applied to it.
  */
@@ -117,12 +130,12 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
   {
     id: 'reel',
     name: 'Reel 9:16',
-    description: 'A vertical frame for reels and stories: one line at a time, wide margins, the translation below.',
+    description: 'A vertical frame for reels and stories: one line at a time, the translation below.',
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
-      layout: {aspect: '9:16', visibleLines: 0, marginX: 140, verticalAlign: 0.45, offsetY: 0},
+      layout: {aspect: '9:16', visibleLines: 0},
       animation: {enter: 'fade', exit: 'fade'},
-      text: {translationPosition: 'below', translationSize: 44, translationOffsetY: 0},
+      text: {translationPosition: 'below', translationSize: 44},
     },
   },
   {
@@ -131,8 +144,8 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
     description: 'A square frame for a feed post: three lines, the neighbours faint, the translation below.',
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
-      layout: {aspect: '1:1', visibleLines: 3, neighbourOpacity: 0.35, marginX: 80, verticalAlign: 0.45, offsetY: 0},
-      text: {translationPosition: 'below', translationSize: 36, translationOffsetY: 0},
+      layout: {aspect: '1:1', visibleLines: 3, neighbourOpacity: 0.35},
+      text: {translationPosition: 'below', translationSize: 36},
     },
   },
   {
@@ -245,3 +258,33 @@ export const lookMatches = (props: Plain, look: MushafLook): boolean => {
  */
 export const lookUndoPatch = (props: Plain, look: MushafLook): MushafLookPatch =>
   pick(props, lookPatchFor(props, look) as Plain) as MushafLookPatch;
+
+/** `patch` with only the leaves at which `props` still hold `applied`'s value (`applied` gives the paths). */
+const stillHeld = (props: Plain, applied: Plain, patch: Plain): Record<string, unknown> | null => {
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(applied)) {
+    if (!(key in patch)) continue;
+    const current = props[key];
+    const before = patch[key];
+    if (isPlainObject(value)) {
+      if (!isPlainObject(current) || !isPlainObject(before)) continue;
+      const nested = stillHeld(current, value, before);
+      if (nested !== null) kept[key] = nested;
+    } else if (JSON.stringify(current) === JSON.stringify(value)) {
+      kept[key] = before;
+    }
+  }
+  return Object.keys(kept).length === 0 ? null : kept;
+};
+
+/**
+ * What undoing a look applied earlier puts back: `before` (its `lookUndoPatch()`, taken before it was
+ * applied) at only the fields that still hold what the look set (`applied`, its `lookPatchFor()`),
+ * so a field changed since (in the Props sidebar, by another look) keeps its new value. `null` when
+ * every field the look set has changed since: there is nothing of it left to undo.
+ */
+export const lookRevertPatch = (
+  props: Plain,
+  applied: MushafLookPatch,
+  before: MushafLookPatch,
+): MushafLookPatch | null => stillHeld(props, applied as Plain, before as Plain) as MushafLookPatch | null;

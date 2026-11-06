@@ -7,7 +7,7 @@ import {sliceWords} from '@tlawat/remotion-mushaf-line';
 import {describe, expect, it} from 'vitest';
 import {syntheticLine} from '../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines';
 import {isMushafStudioError} from '../../../src/errors';
-import {applySplits, splitLineAt, wordIdAt} from '../../../src/lines';
+import {applySplits, droppedSplitsWarning, fitSplits, splitLineAt, wordIdAt} from '../../../src/lines';
 
 const p2l3 = syntheticLine(2, 3);
 const p2l4 = syntheticLine(2, 4);
@@ -116,6 +116,59 @@ describe('applySplits', () => {
 
   it('propagates a bad word on a named line', () => {
     expect(failure(() => applySplits(passage, [{page: 2, line: 3, atWordId: 6}])).code).toBe('BAD_LINE_SPLIT');
+  });
+});
+
+describe('fitSplits', () => {
+  it('returns the passage itself and drops nothing without splits', () => {
+    expect(fitSplits(passage, [])).toEqual({lines: passage, dropped: []});
+    expect(fitSplits(passage, []).lines).toBe(passage);
+  });
+
+  it('applies what fits as applySplits() does, and leaves out the rest in their given order', () => {
+    const fits = [
+      {page: 3, line: 2, atWordId: 19},
+      {page: 2, line: 3, atWordId: 8},
+    ];
+    const misfits = [
+      {page: 1, line: 2, atWordId: 2}, // not in the passage
+      {page: 2, line: 3, atWordId: 6}, // the first word of its line
+      {page: 3, line: 2, atWordId: 99}, // not on the line
+    ];
+    const {lines, dropped} = fitSplits(passage, [misfits[0]!, fits[0]!, misfits[1]!, fits[1]!, misfits[2]!]);
+    expect(lines).toEqual(applySplits(passage, fits));
+    expect(dropped).toEqual(misfits);
+  });
+
+  it('leaves out a word a slice hides, and keeps a duplicate as one split', () => {
+    const sliced = [syntheticLine(3, 1, {slice: {ayah: 2}})]; // keeps 13, 14
+    expect(fitSplits(sliced, [{page: 3, line: 1, atWordId: 15}])).toEqual({
+      lines: sliced,
+      dropped: [{page: 3, line: 1, atWordId: 15}],
+    });
+    const twice = fitSplits(passage, [
+      {page: 2, line: 3, atWordId: 8},
+      {page: 2, line: 3, atWordId: 8},
+    ]);
+    expect(twice.dropped).toEqual([]);
+    expect(twice.lines).toHaveLength(5);
+  });
+});
+
+describe('droppedSplitsWarning', () => {
+  it('says nothing for none, and names each split and where to remove it', () => {
+    expect(droppedSplitsWarning([])).toBeNull();
+    expect(droppedSplitsWarning([{page: 1, line: 8, atWordId: 26}])).toBe(
+      "A line split does not fit the passage and is not applied (page 1 line 8 at word 26): the ayah range or slice changed since. Remove it in the Mushaf panel's Lines tab; a render refuses it.",
+    );
+    expect(
+      droppedSplitsWarning([
+        {page: 1, line: 8, atWordId: 26},
+        {page: 1, line: 3, atWordId: 1},
+      ]),
+    ).toMatch(
+      /^2 line splits do not fit the passage and are not applied \(page 1 line 8 at word 26, page 1 line 3 at word 1\)/,
+    );
   });
 });
 

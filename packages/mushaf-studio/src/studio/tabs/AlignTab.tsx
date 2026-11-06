@@ -15,6 +15,7 @@ import {
   setStudioState,
   targetKeyOf,
   t as tNow,
+  useStudioDraft,
   useStudioState,
   useT,
 } from '../store';
@@ -46,13 +47,15 @@ const clock = (at: number): string => {
 /** Align: sends a recording of `public/` to the QUD Universal Aligner and writes the timings it returns. */
 export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
   const {busy, progress, session, uploadedAudio: uploads} = useStudioState();
-  const uploadedAudio = uploads[targetKeyOf(target)] ?? null;
+  const key = targetKeyOf(target);
+  const uploadedAudio = uploads[key] ?? null;
   const t = useT();
-  const [model, setModel] = useState<QudModel>(session?.model ?? 'Base');
-  const [device, setDevice] = useState<QudDevice>(session?.device ?? 'GPU');
-  const [riwayah, setRiwayah] = useState<QudRiwayah>(session?.riwayah ?? 'hafs');
+  // The options in the store by target: a tab switch keeps what the user chose.
+  const [model, setModel] = useStudioDraft<QudModel>(key, 'align.model', session?.model ?? 'Base');
+  const [device, setDevice] = useStudioDraft<QudDevice>(key, 'align.device', session?.device ?? 'GPU');
+  const [riwayah, setRiwayah] = useStudioDraft<QudRiwayah>(key, 'align.riwayah', session?.riwayah ?? 'hafs');
   /** The riwayah the user confirmed aligning against the Hafs mushaf; another one asks again. */
-  const [confirmedRiwayah, setConfirmedRiwayah] = useState<QudRiwayah | null>(null);
+  const [confirmedRiwayah, setConfirmedRiwayah] = useStudioDraft<QudRiwayah | null>(key, 'align.consent', null);
   const [token, setToken] = useState(() => getHfToken());
   const [remembered, setRemembered] = useState(() => isHfTokenRemembered());
   // The recording the user just put into public/ wins over whatever the composition plays, a downloaded clip included.
@@ -95,7 +98,7 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
         session: {audioId: response.audio_id, align: response, audio, model, device, riwayah},
         notice: notices.length > 0 ? notices.join(' ') : null,
       });
-      await saveRecording({
+      const saved = await saveRecording({
         target,
         props,
         project,
@@ -103,6 +106,8 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
         timings,
         timingsName: `${stem}.timings.json`,
       });
+      const all = [...notices, ...saved.notices];
+      setStudioState({notice: all.length > 0 ? all.join(' ') : null});
     });
   };
 

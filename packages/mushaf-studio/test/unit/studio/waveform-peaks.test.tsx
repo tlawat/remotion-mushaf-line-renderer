@@ -35,9 +35,11 @@ const studio = vi.hoisted(() => ({
 }));
 vi.mock('@remotion/studio', () => studio);
 
-const {computePeaks, envelopeOf, peaksBetween, loadWaveform, audioUrlOf} = await import(
+const {computePeaks, envelopeOf, peaksBetween, loadWaveform, audioUrlOf, forgetWaveform} = await import(
   '../../../src/studio/waveform-peaks'
 );
+const {writeFile} = await import('../../../src/studio/studio-api');
+const analyze = await import('../../../src/audio/analyze');
 const {timeAtX, xAtTime} = await import('../../../src/studio/Waveform');
 const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
@@ -225,6 +227,41 @@ describe('loadWaveform', () => {
     });
   });
 
+  it('tries a failed recording again on the next load, and decodes a forgotten one again', async () => {
+    const {FakeAudioContext, made} = fakeAudioContext([new Float32Array([0.5, -0.5])], 2);
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ok: false, status: 404})
+      .mockResolvedValue({ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8)});
+    vi.stubGlobal('fetch', fetchMock);
+    await loadWaveform('/static/later.mp3');
+    expect(getStudioState().waveforms['/static/later.mp3']?.status).toBe('error');
+    await loadWaveform('/static/later.mp3');
+    expect(getStudioState().waveforms['/static/later.mp3']?.status).toBe('ready');
+    forgetWaveform('/static/later.mp3');
+    expect(getStudioState().waveforms).toEqual({});
+    await loadWaveform('/static/later.mp3');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(made.count).toBe(2);
+  });
+
+  it("forgets a path's waveform and audio analysis when the panel writes the file again", async () => {
+    const {FakeAudioContext} = fakeAudioContext([new Float32Array([0.5])], 1);
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8)})),
+    );
+    await loadWaveform('/static/p/take.m4a');
+    await loadWaveform('/static/p/other.m4a');
+    const forget = vi.spyOn(analyze, 'forgetAudioAnalysis');
+    await writeFile('p/take.m4a', new ArrayBuffer(4));
+    expect(studio.writeStaticFile).toHaveBeenCalledWith({filePath: 'p/take.m4a', contents: expect.any(ArrayBuffer)});
+    expect(Object.keys(getStudioState().waveforms)).toEqual(['/static/p/other.m4a']);
+    expect(forget).toHaveBeenCalledWith('/static/p/take.m4a');
+  });
+
   it('reads a public/ path through staticFile() and a URL as it is', () => {
     expect(audioUrlOf('mushaf-studio/p/a.mp3')).toBe('/static/mushaf-studio/p/a.mp3');
     expect(audioUrlOf('https://x.y/a.mp3')).toBe('https://x.y/a.mp3');
@@ -298,6 +335,22 @@ describe('the waveform in the Review tab', () => {
       vi.fn(async () => ({ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8)})),
     );
   };
+
+  it('offers to try a failed recording again', async () => {
+    const {FakeAudioContext} = fakeAudioContext([new Float32Array([0.5])], 1);
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ok: false, status: 404})
+      .mockResolvedValue({ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8)});
+    vi.stubGlobal('fetch', fetchMock);
+    canvasRecorder();
+    render(<MushafStudioPanel compositionId="MushafRecitation" props={props} initialTab="review" />);
+    await screen.findByText('No waveform: /static/mushaf-studio/p/a.mp3 could not be read (HTTP 404).');
+    fireEvent.click(screen.getByRole('button', {name: 'Try again'}));
+    await waitFor(() => expect(getStudioState().waveforms['/static/mushaf-studio/p/a.mp3']?.status).toBe('ready'));
+    expect(screen.queryByRole('button', {name: 'Try again'})).toBeNull();
+  });
 
   it('draws the segments in their confidence colours and the peaks, and shows the playhead', async () => {
     ready();

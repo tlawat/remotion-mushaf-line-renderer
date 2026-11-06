@@ -12,7 +12,17 @@ import {
   readFileText,
   validateProjectFile,
 } from './project';
-import {runStudioTask, type StudioTarget, setStudioState, t as tNow, useStudioState, useT} from './store';
+import {
+  getStudioState,
+  runStudioTask,
+  type StudioTarget,
+  setStudioState,
+  targetKeyOf,
+  t as tNow,
+  useStudioState,
+  useT,
+  withEntry,
+} from './store';
 import {latestPanelProps, type PropsPatch, patchProps, projectPath, staticFileList, writeJsonFile} from './studio-api';
 import {colors, styles} from './styles';
 import type {StudioCompositionProps} from './tab-props';
@@ -32,7 +42,8 @@ export const exportProject = async (
 /**
  * Imports a project file's text into the composition: validated, refused when its props are for
  * the other kind of composition or when `public/` lacks a file it needs (all of them named), else
- * its props saved with `patchProps()`.
+ * its props saved with `patchProps()`. The Look tab's undo of the target is forgotten: the looks it
+ * would go back through were applied to the props the import replaced.
  */
 export const importProject = async (target: StudioTarget | string, props: StudioCompositionProps, text: string) => {
   let json: unknown;
@@ -54,6 +65,7 @@ export const importProject = async (target: StudioTarget | string, props: Studio
       {missing},
     );
   await patchProps(target, project.props as PropsPatch);
+  setStudioState({lookUndo: withEntry(getStudioState().lookUndo, targetKeyOf(target), undefined)});
   return project;
 };
 

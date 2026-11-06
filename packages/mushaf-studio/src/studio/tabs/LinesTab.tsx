@@ -58,8 +58,9 @@ const PageSlots: React.FC<Pick<TabProps, 'props' | 'fps'>> = ({props, fps}) => {
 };
 
 /**
- * Lines: every scheduled slot with its words as chips; click a word to start a new slot there. On a
- * page composition, its pages and their times instead.
+ * Lines: every scheduled slot with its words as chips; click a word to start a new slot there. The
+ * splits the preview left out (`resolved.droppedSplits`) are marked, and one click removes them.
+ * On a page composition, its pages and their times instead.
  */
 export const LinesTab: React.FC<TabProps> = (tabProps) => {
   if (isPageProps(tabProps.props)) return <PageSlots props={tabProps.props} fps={tabProps.fps} />;
@@ -80,6 +81,9 @@ const RecitationLines: React.FC<TabProps> = ({target, props, fps}) => {
 
   const working = busy !== null;
   const splits: readonly LineSplit[] = props.splits;
+  // Left out by the preview (the range or slice changed under them): a render refuses them.
+  const dropped = (resolved.droppedSplits ?? []).filter((split) => splits.some((s) => sameSplit(s, split)));
+  const isDropped = (split: LineSplit) => dropped.some((s) => sameSplit(s, split));
   const save = (next: readonly LineSplit[]) =>
     void runStudioTask(tNow('lines.busy.splits'), () => patchProps(target, {splits: next}));
   const addSplit = (line: MushafLineData, word: MushafWord) => {
@@ -140,13 +144,34 @@ const RecitationLines: React.FC<TabProps> = ({target, props, fps}) => {
         </ul>
       </Section>
       <Section title={t('lines.splits', {count: splits.length})}>
+        {dropped.length > 0 ? (
+          <div data-mushaf-control="dropped-splits">
+            <p role="alert" style={{...styles.note, color: colors.warning}}>
+              {t('lines.dropped', {count: dropped.length})}
+            </p>
+            <Button
+              variant="primary"
+              disabled={working}
+              onClick={() => save(splits.filter((split) => !isDropped(split)))}
+            >
+              {t('lines.removeDropped', {count: dropped.length})}
+            </Button>
+          </div>
+        ) : null}
         {splits.length === 0 ? (
           <Note>{t('lines.splitsHint')}</Note>
         ) : (
           <ul style={styles.list}>
             {splits.map((split) => (
-              <li key={`${split.page}-${split.line}-${split.atWordId}`} style={{...styles.row, padding: '3px 0'}}>
-                <span>{t('lines.splitAt', {page: split.page, line: split.line, word: split.atWordId})}</span>
+              <li
+                key={`${split.page}-${split.line}-${split.atWordId}`}
+                data-dropped={isDropped(split) ? 'true' : 'false'}
+                style={{...styles.row, padding: '3px 0'}}
+              >
+                <span style={isDropped(split) ? {color: colors.warning} : undefined}>
+                  {t('lines.splitAt', {page: split.page, line: split.line, word: split.atWordId})}
+                  {isDropped(split) ? ` · ${t('lines.notApplied')}` : ''}
+                </span>
                 <Button
                   variant="ghost"
                   title={t('lines.removeSplit')}

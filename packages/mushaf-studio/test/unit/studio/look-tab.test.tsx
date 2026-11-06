@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The Look tab under jsdom: the cards each composition gets, the active look marked, one click
-// one saveDefaultProps with the look merged in, and Undo saving what the look changed back.
+// one saveDefaultProps with the look merged in, and Undo going back through the looks, each only
+// where the props still hold it.
 import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -39,7 +40,7 @@ const {defaultMushafRecitationProps, mushafRecitationSchema} = await import(
 );
 const {defaultMushafAyahTextProps, mushafAyahTextSchema} = await import('../../../src/unicode/schema');
 const {applyLook, looksFor, MUSHAF_LOOKS} = await import('../../../src/presets');
-const {resetStudioStore, getStudioState} = await import('../../../src/studio/store');
+const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 
 type SaveCall = [
   {
@@ -128,6 +129,79 @@ describe('Look tab', () => {
     expect(saved(1, root)).toEqual(root);
     expect(screen.queryByText('Undo Night')).toBeNull();
     expect(card('classic').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('undoes the looks last first, each only where the props still hold it', async () => {
+    const panel = (props: typeof defaultMushafRecitationProps) => (
+      <MushafStudioPanel compositionId="MushafRecitation" props={props} initialTab="look" />
+    );
+    const {rerender} = render(panel(defaultMushafRecitationProps));
+    fireEvent.click(card('night'));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    const night = applyLook(defaultMushafRecitationProps, look('night'));
+    rerender(panel(night));
+    fireEvent.click(card('karaoke'));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(getStudioState().lookUndo.MushafRecitation?.map((entry) => entry.name)).toEqual(['Night', 'Karaoke']);
+    const karaoke = applyLook(night, look('karaoke'));
+    rerender(panel(karaoke));
+    // The marker's colour set in the Props sidebar since (the Studio's live props answered the saves).
+    const edited = {...karaoke, highlight: {...karaoke.highlight, color: '#123456'}};
+    setStudioState({inFlightPatches: {}});
+    rerender(panel(edited));
+
+    fireEvent.click(screen.getByText('Undo Karaoke'));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    const undone = saved(2, edited) as typeof edited;
+    expect(undone.highlight).toEqual({...night.highlight, color: '#123456'});
+    expect(undone.animation).toEqual(night.animation);
+    expect(getStudioState().notice).toBe(
+      'Karaoke is undone; the fields changed since it was applied keep their new values.',
+    );
+    rerender(panel(undone));
+    setStudioState({inFlightPatches: {}});
+
+    // Night's own colour of the word was changed since too: only its other fields go back.
+    fireEvent.click(screen.getByText('Undo Night'));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(getStudioState().lookUndo).toEqual({}));
+    const back = saved(3, undone) as typeof edited;
+    expect(back.layout).toEqual(defaultMushafRecitationProps.layout);
+    expect(back.theme).toBe(defaultMushafRecitationProps.theme);
+    expect(back.highlight).toEqual({...defaultMushafRecitationProps.highlight, color: '#123456'});
+  });
+
+  it('saves nothing when every field the look set has changed since, and says so', async () => {
+    const panel = (props: typeof defaultMushafRecitationProps) => (
+      <MushafStudioPanel compositionId="MushafRecitation" props={props} initialTab="look" />
+    );
+    const {rerender} = render(panel(defaultMushafRecitationProps));
+    fireEvent.click(card('karaoke'));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    const karaoke = applyLook(defaultMushafRecitationProps, look('karaoke'));
+    rerender(panel(karaoke));
+    // Another style set by hand over every field Karaoke set.
+    rerender(
+      panel(
+        applyLook(karaoke, {
+          ...look('karaoke'),
+          patch: {
+            ...look('night').patch,
+            animation: {enter: 'none', exit: 'none'},
+            highlight: {mode: 'ayah', style: 'glow', color: '#000000', dimOthers: 0.9, dimUpcomingOnly: true},
+          },
+        }),
+      ),
+    );
+    fireEvent.click(screen.getByText('Undo Karaoke'));
+    expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1);
+    expect(getStudioState().lookUndo).toEqual({});
+    expect(getStudioState().notice).toBe(
+      'Nothing of Karaoke is left to undo: every field it set has been changed since.',
+    );
+    expect(screen.queryByText('Undo Karaoke')).toBeNull();
   });
 
   it('applies to an ayah text only what it has', async () => {

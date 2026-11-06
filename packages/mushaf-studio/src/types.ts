@@ -255,4 +255,10 @@ export type ResolvedRecitation = ResolvedExtras & {
   readonly transliteration: WordGloss | null;
   /** Word ids the Review tab marks, with their reasons. */
   readonly doubtful: Readonly<Record<string, readonly DoubtReason[]>>;
+  /**
+   * The `splits` the Studio's preview left out because they do not fit the lines (`fitSplits()`):
+   * the range or `slice` changed under them. The preview warns and the Lines tab removes them; a
+   * render refuses them (`BAD_LINE_SPLIT`), so it is `[]` there. Absent in a `resolved` made before it.
+   */
+  readonly droppedSplits?: readonly LineSplit[] | undefined;
 };
