@@ -140,15 +140,37 @@ export const fitSplits = (lines: readonly MushafLineData[], splits: readonly Lin
   return {lines: out, dropped: splits.filter((split) => misfits.has(`${keyOf(split)}:${split.atWordId}`))};
 };
 
+const namedSplits = (splits: readonly LineSplit[]): string =>
+  splits.map((split) => `page ${split.page} line ${split.line} at word ${split.atWordId}`).join(', ');
+
 /**
  * What the Studio's preview says about splits `fitSplits()` left out, `null` for none: which, why,
- * and where to remove them.
+ * and where to remove them. In English, like the composition's other preview warnings (the fonts,
+ * the audio analysis): `<StudioWarnings>` does not follow the panel's language.
  */
 export const droppedSplitsWarning = (dropped: readonly LineSplit[]): string | null => {
   if (dropped.length === 0) return null;
-  const named = dropped.map((split) => `page ${split.page} line ${split.line} at word ${split.atWordId}`).join(', ');
+  const named = namedSplits(dropped);
   const one = dropped.length === 1;
   return `${one ? 'A line split does' : `${dropped.length} line splits do`} not fit the passage and ${one ? 'is' : 'are'} not applied (${named}): the ayah range or slice changed since. Remove ${one ? 'it' : 'them'} in the Mushaf panel's Lines tab; a render refuses ${one ? 'it' : 'them'}.`;
+};
+
+/**
+ * The `BAD_LINE_SPLIT` a render throws for splits `fitSplits()` left out, `null` for none: what the
+ * composition refuses with when a `resolved` made for the Studio's preview reaches a render, which
+ * `calculateMetadata()` cannot tell apart from the preview (the Studio's in-browser render reports
+ * itself only through `useRemotionEnvironment()`). Names each split and the two ways out.
+ *
+ * `droppedSplitsError([{page: 1, line: 8, atWordId: 26}])?.details` is `{splits: [{page: 1, line: 8, atWordId: 26}]}`.
+ */
+export const droppedSplitsError = (dropped: readonly LineSplit[]): MushafStudioError | null => {
+  if (dropped.length === 0) return null;
+  const one = dropped.length === 1;
+  return new MushafStudioError(
+    'BAD_LINE_SPLIT',
+    `${one ? 'A line split does' : `${dropped.length} line splits do`} not fit the passage (${namedSplits(dropped)}), and a render does not leave ${one ? 'it' : 'them'} out. Remove ${one ? 'it' : 'them'} in the Mushaf panel's Lines tab (or from \`splits\`), or widen the ayah range or the slice back to ${one ? 'its line' : 'their lines'}.`,
+    {splits: dropped},
+  );
 };
 
 /**

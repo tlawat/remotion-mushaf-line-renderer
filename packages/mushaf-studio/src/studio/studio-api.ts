@@ -104,13 +104,28 @@ export const projectDir = (project: string | undefined): string =>
 
 export const projectPath = (project: string | undefined, name: string): string => `${projectDir(project)}/${name}`;
 
+// Every path writeFile() wrote this session: the Studio's list of public/ (staticFileList()) shows
+// a new file only once its public-folder watcher has told the page, so a name taken moments ago
+// would look free until then.
+const writtenPaths = new Set<string>();
+
+const publicPathOf = (name: string): string => name.replace(/^\/+/, '');
+
+/**
+ * The paths of `public/` a new file must not take: those `staticFileList()` names and those
+ * `writeFile()` wrote this session, which the list may not show yet.
+ */
+export const takenPublicPaths = (): ReadonlySet<string> =>
+  new Set([...staticFileList().map((file) => publicPathOf(file.name)), ...writtenPaths]);
+
 /**
  * Writes a file into `public/` and returns its path (what the props record). What the panel kept
  * of an earlier file at that path (its waveform, its audio analysis) is forgotten, so nothing reads
- * the old bytes under the same URL.
+ * the old bytes under the same URL, and the path counts as taken (`takenPublicPaths()`) at once.
  */
 export const writeFile = async (path: string, contents: string | ArrayBuffer): Promise<string> => {
   await writeStaticFile({filePath: path, contents});
+  writtenPaths.add(publicPathOf(path));
   const url = staticFile(path);
   forgetWaveform(url);
   forgetAudioAnalysis(url);
@@ -133,13 +148,10 @@ export const numberedName = (name: string, n: number): string => {
 
 /**
  * The first of `path`, `numberedName(path, 2)`, `numberedName(path, 3)`, ... that `taken` does not
- * have (paths of `public/`, as `staticFileList()` names them; by default those): where a new file
- * goes without replacing one.
+ * have (paths of `public/`, as `staticFileList()` names them; by default `takenPublicPaths()`, the
+ * files written this session included): where a new file goes without replacing one.
  */
-export const freePublicPath = (
-  path: string,
-  taken: ReadonlySet<string> = new Set(staticFileList().map((file) => file.name.replace(/^\/+/, ''))),
-): string => {
+export const freePublicPath = (path: string, taken: ReadonlySet<string> = takenPublicPaths()): string => {
   let n = 1;
   while (taken.has(numberedName(path, n))) n += 1;
   return numberedName(path, n);
@@ -473,9 +485,10 @@ export const restoreRolledBack = async (target: StudioTarget | string): Promise<
 export const dismissRolledBack = (target: StudioTarget | string): void =>
   setStudioState({rolledBack: withEntry(getStudioState().rolledBack, targetKeyOf(target), undefined)});
 
-/** Forgets the saves being watched, the page-load, live and panel props. For tests. */
+/** Forgets the saves being watched, the page-load, live and panel props, and the paths written. For tests. */
 export const resetSaveTracking = (): void => {
   records.clear();
+  writtenPaths.clear();
   panelProps.clear();
   pageLoadProps.clear();
   liveProps = {};

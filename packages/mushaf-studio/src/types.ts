@@ -258,7 +258,9 @@ export type ResolvedRecitation = ResolvedExtras & {
   /**
    * The `splits` the Studio's preview left out because they do not fit the lines (`fitSplits()`):
    * the range or `slice` changed under them. The preview warns and the Lines tab removes them; a
-   * render refuses them (`BAD_LINE_SPLIT`), so it is `[]` there. Absent in a `resolved` made before it.
+   * render refuses them (`BAD_LINE_SPLIT`): a server render resolves without leaving them out, so it
+   * is `[]` there, and `<MushafRecitation>` throws when it is not empty outside the preview (the
+   * Studio's in-browser render resolves as the preview does). Absent in a `resolved` made before it.
    */
   readonly droppedSplits?: readonly LineSplit[] | undefined;
 };

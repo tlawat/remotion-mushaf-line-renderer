@@ -85,6 +85,7 @@ const {parseAyahWords, serialiseAyahWords} = await import('../../../src/unicode/
 const {captionsToSrt, toCaptions} = await import('../../../src/captions');
 const {MushafStudioError} = await import('../../../src/errors');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
+const {resetSaveTracking} = await import('../../../src/studio/studio-api');
 type MushafAyahTextProps = import('../../../src/unicode/schema').MushafAyahTextProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
 type StudioTimingsV1 = import('../../../src/types').StudioTimingsV1;
@@ -257,6 +258,8 @@ const panel = (props: MushafRecitationProps, tab: 'align' | 'review' | 'lines' |
 
 beforeEach(() => {
   resetStudioStore();
+  // Each test's public/ starts empty: no file a test before it wrote counts as taken.
+  resetSaveTracking();
   env.isStudio = true;
   env.isRendering = false;
   env.isClientSideRendering = false;

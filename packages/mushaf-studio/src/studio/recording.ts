@@ -25,7 +25,7 @@ import {
   patchProps,
   projectPath,
   readTimingsFile,
-  staticFileList,
+  takenPublicPaths,
   writeFile,
   writeJsonFile,
 } from './studio-api';
@@ -109,7 +109,8 @@ export type TimingsPath = {
 
 /**
  * Where new timings go in the project without replacing reviewed ones: `name`, or, while a file of
- * `public/` (`taken`) is there with manual edits (`alignment.edits`) or other timings, the next of
+ * `public/` (`taken`; by default `takenPublicPaths()`, so a file this session wrote counts before
+ * the Studio lists it) is there with manual edits (`alignment.edits`) or other timings, the next of
  * `name-2.timings.json`, `-3`, ... (`numberedName()`) that is free or holds exactly these timings.
  * A file that cannot be read is not replaced either.
  */
@@ -122,7 +123,7 @@ export const timingsPathFor = async (
     readonly read?: ((path: string) => Promise<StudioTimings>) | undefined;
   } = {},
 ): Promise<TimingsPath> => {
-  const taken = options.taken ?? new Set(staticFileList().map((file) => file.name.replace(/^\/+/, '')));
+  const taken = options.taken ?? takenPublicPaths();
   const read = options.read ?? readTimingsFile;
   const first = projectPath(project, name);
   for (let n = 1; ; n += 1) {

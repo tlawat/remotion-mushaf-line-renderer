@@ -14,7 +14,7 @@ import {
   interlinearRows,
   interlinearTop,
 } from '../../interlinear';
-import {droppedSplitsWarning, wordStarts} from '../../lines';
+import {droppedSplitsError, droppedSplitsWarning, wordStarts} from '../../lines';
 import {
   audioClock,
   clipAyahKey,
@@ -81,7 +81,9 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
  * image or looping video, with a glow that follows the recitation's level), with up to three
  * translations stacked, the tajweed legend in a corner and an end card after the last ayah when
  * asked, the audio normalised and faded as `audio` says, and (in the Studio) the doubtful words
- * marked, the fonts, audio and dropped-splits warnings, and the Mushaf panel docked.
+ * marked, the fonts, audio and dropped-splits warnings, and the Mushaf panel docked. Outside the
+ * Studio's preview, a `resolved.droppedSplits` that is not empty throws `BAD_LINE_SPLIT`
+ * (`droppedSplitsError()`), so the Studio's in-browser render refuses those splits too.
  *
  * Under a memorisation mode each ayah plays `memorize.repeat` times on the clip timeline (one
  * `<Audio>` per clip, the lines and words timed per clip, the window scrolling back to the ayah's
@@ -103,6 +105,11 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
       {prop: 'resolved'},
     );
   }
+  // Only the Studio's preview leaves out the splits that no longer fit. calculateMetadata() cannot
+  // tell the preview from the Studio's in-browser render (both see isStudio without isRendering), so
+  // the render refuses them here, where useInStudio() can.
+  const refused = isStudio ? null : droppedSplitsError(resolved.droppedSplits ?? []);
+  if (refused) throw refused;
   const {lines, schedule, timings} = resolved;
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   // The frames before the end card: the audio fades out by their end, the card covers the rest.

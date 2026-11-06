@@ -17,7 +17,7 @@ const studio = vi.hoisted(() => ({
 }));
 vi.mock('@remotion/studio', () => studio);
 
-const {numberedName, freePublicPath, resetSaveTracking} = await import('../../../src/studio/studio-api');
+const {numberedName, freePublicPath, resetSaveTracking, writeFile} = await import('../../../src/studio/studio-api');
 const {isOtherRecording, saveRecording, sameTimings, stalePassageFiles, timingsPathFor} = await import(
   '../../../src/studio/recording'
 );
@@ -101,6 +101,17 @@ describe('numberedName / freePublicPath', () => {
     listed('p/take.m4a');
     expect(freePublicPath('p/take.m4a')).toBe('p/take-2.m4a');
   });
+
+  it('counts the files written this session before the Studio lists them', async () => {
+    // Two uploads of one name back to back: public/'s list still shows neither.
+    listed();
+    await writeFile(freePublicPath('p/take.m4a'), new ArrayBuffer(1));
+    await writeFile(freePublicPath('p/take.m4a'), new ArrayBuffer(1));
+    expect(writtenPaths()).toEqual(['p/take.m4a', 'p/take-2.m4a']);
+    expect(freePublicPath('p/take.m4a')).toBe('p/take-3.m4a');
+    resetSaveTracking();
+    expect(freePublicPath('p/take.m4a')).toBe('p/take.m4a');
+  });
 });
 
 describe('timingsPathFor', () => {
@@ -143,6 +154,23 @@ describe('timingsPathFor', () => {
       path: 'mushaf-studio/p/take-4.timings.json',
       kept: 'mushaf-studio/p/take.timings.json',
       same: false,
+    });
+  });
+
+  it('counts a timings file written this session before the Studio lists it', async () => {
+    listed();
+    const first = timingsOf(1, 7);
+    await writeFile('mushaf-studio/p/take.timings.json', JSON.stringify(first));
+    const files = {'mushaf-studio/p/take.timings.json': first};
+    expect(await timingsPathFor('p', 'take.timings.json', timingsOf(1, 6), {read: read(files)})).toEqual({
+      path: 'mushaf-studio/p/take-2.timings.json',
+      kept: 'mushaf-studio/p/take.timings.json',
+      same: false,
+    });
+    expect(await timingsPathFor('p', 'take.timings.json', first, {read: read(files)})).toEqual({
+      path: 'mushaf-studio/p/take.timings.json',
+      kept: null,
+      same: true,
     });
   });
 

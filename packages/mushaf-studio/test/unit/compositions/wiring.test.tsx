@@ -318,12 +318,42 @@ describe('audio', () => {
     expect(lines).toContain('Mushaf Studio: No Web Audio here.');
   });
 
-  it('warns in the Studio only about the splits the preview left out', async () => {
+  it('warns in the Studio preview about the splits it left out, and refuses them anywhere else', async () => {
     const props = recitationProps();
     const resolved = {...(await resolvedOf(props)), droppedSplits: [{page: 1, line: 8, atWordId: 26}]};
-    expect(mount(<MushafRecitation {...props} resolved={resolved} />).textContent).not.toContain('line split');
+    const refusal = (): unknown => {
+      try {
+        mount(<MushafRecitation {...props} resolved={resolved} />);
+      } catch (error) {
+        return error;
+      }
+      return null;
+    };
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      // Outside the Studio, and in the Studio's in-browser render: calculateMetadata() saw that
+      // page as the preview's, so the composition refuses what it left out.
+      expect(refusal()).toMatchObject({
+        name: 'MushafStudioError',
+        code: 'BAD_LINE_SPLIT',
+        details: {splits: [{page: 1, line: 8, atWordId: 26}]},
+      });
+      cleanup();
+      Object.assign(remotion.state.env, {isStudio: true, isRendering: false, isClientSideRendering: true});
+      const error = refusal() as InstanceType<typeof MushafStudioError>;
+      expect(error).toBeInstanceOf(MushafStudioError);
+      expect(error.code).toBe('BAD_LINE_SPLIT');
+      expect(error.message).toBe(
+        "A line split does not fit the passage (page 1 line 8 at word 26), and a render does not leave it out. Remove it in the Mushaf panel's Lines tab (or from `splits`), or widen the ayah range or the slice back to its line.",
+      );
+    } finally {
+      silence.mockRestore();
+    }
     cleanup();
-    remotion.state.env.isStudio = true;
+    // Nothing left out: nothing to refuse.
+    expect(() => mount(<MushafRecitation {...props} resolved={{...resolved, droppedSplits: []}} />)).not.toThrow();
+    cleanup();
+    remotion.state.env.isClientSideRendering = false;
     const studio = mount(<MushafRecitation {...props} resolved={resolved} />);
     const lines = Array.from(studio.querySelector('[data-mushaf-warnings]')!.children).map((line) => line.textContent);
     expect(lines).toContain(

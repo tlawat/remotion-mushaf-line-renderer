@@ -7,7 +7,14 @@ import {sliceWords} from '@tlawat/remotion-mushaf-line';
 import {describe, expect, it} from 'vitest';
 import {syntheticLine} from '../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines';
 import {isMushafStudioError} from '../../../src/errors';
-import {applySplits, droppedSplitsWarning, fitSplits, splitLineAt, wordIdAt} from '../../../src/lines';
+import {
+  applySplits,
+  droppedSplitsError,
+  droppedSplitsWarning,
+  fitSplits,
+  splitLineAt,
+  wordIdAt,
+} from '../../../src/lines';
 
 const p2l3 = syntheticLine(2, 3);
 const p2l4 = syntheticLine(2, 4);
@@ -168,6 +175,26 @@ describe('droppedSplitsWarning', () => {
       ]),
     ).toMatch(
       /^2 line splits do not fit the passage and are not applied \(page 1 line 8 at word 26, page 1 line 3 at word 1\)/,
+    );
+  });
+});
+
+describe('droppedSplitsError', () => {
+  it('is null for none, and a BAD_LINE_SPLIT naming each split and the fix otherwise', () => {
+    expect(droppedSplitsError([])).toBeNull();
+    const one = droppedSplitsError([{page: 1, line: 8, atWordId: 26}])!;
+    expect(one.code).toBe('BAD_LINE_SPLIT');
+    expect(one.details).toEqual({splits: [{page: 1, line: 8, atWordId: 26}]});
+    expect(one.message).toBe(
+      "A line split does not fit the passage (page 1 line 8 at word 26), and a render does not leave it out. Remove it in the Mushaf panel's Lines tab (or from `splits`), or widen the ayah range or the slice back to its line.",
+    );
+    expect(
+      droppedSplitsError([
+        {page: 1, line: 8, atWordId: 26},
+        {page: 1, line: 3, atWordId: 1},
+      ])!.message,
+    ).toBe(
+      "2 line splits do not fit the passage (page 1 line 8 at word 26, page 1 line 3 at word 1), and a render does not leave them out. Remove them in the Mushaf panel's Lines tab (or from `splits`), or widen the ayah range or the slice back to their lines.",
     );
   });
 });

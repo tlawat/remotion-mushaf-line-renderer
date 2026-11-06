@@ -52,8 +52,11 @@ export const withRecitationAudio = async (
 };
 
 /**
- * Whether `calculateMetadata()` runs for the Studio's preview (`isInStudio()`, and not for a render:
- * `isRendering`), where splits that no longer fit are left out and warned about rather than refused.
+ * Whether `calculateMetadata()` leaves out the splits that no longer fit rather than refusing them:
+ * on the Studio's page (`isInStudio()`) and not for a server render (`isRendering`). That includes
+ * the Studio's in-browser render (`@remotion/web-renderer`), which runs `calculateMetadata()` on the
+ * Studio's page with `isRendering` false and reports itself only through `useRemotionEnvironment()`;
+ * `<MushafRecitation>` refuses the splits there (`droppedSplitsError()`).
  */
 export const previewsLeniently = (isRendering: boolean): boolean => !isRendering && isInStudio();
 
@@ -62,8 +65,9 @@ export const previewsLeniently = (isRendering: boolean): boolean => !isRendering
  * audio's analysis when `audio` or the background's glow needs it, a background video's length),
  * width and height from the aspect, duration from the timings (moved `audioOffsetSeconds` earlier,
  * so it is the audio's from the trim on), or from the clip timeline when `memorize` repeats the
- * ayahs, plus the end card's seconds. `abortSignal` reaches every fetch. In the Studio's preview
- * a split that no longer fits is left out (`resolved.droppedSplits`); a render refuses it.
+ * ayahs, plus the end card's seconds. `abortSignal` reaches every fetch. On the Studio's page a
+ * split that no longer fits is left out (`resolved.droppedSplits`, `previewsLeniently()`); a server
+ * render refuses it here, the Studio's in-browser render when `<MushafRecitation>` renders.
  */
 export const calculateMushafRecitationMetadata: CalculateMetadataFunction<MushafRecitationProps> = async ({
   props,
