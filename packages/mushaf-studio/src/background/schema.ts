@@ -39,7 +39,9 @@ export const backgroundSchema = z.object({
   /** A `public/` path or an http(s) URL; read for `image` and `video` only. */
   src: z
     .string()
-    .describe('Image or video: a path in public/ or a URL (wins over layout.backgroundImage; empty: the colour only)'),
+    .describe(
+      'Image or video: a path in public/ or a URL (wins over layout.backgroundImage; empty: an image falls back to it, else the colour only)',
+    ),
   fit: z.enum(BACKGROUND_FITS).describe('Image or video: fill the frame (cover, cropped) or fit inside it (contain)'),
   /**
    * The video's own length, for a frame-exact loop in renders (`<OffthreadVideo>` in a `<Loop>`).

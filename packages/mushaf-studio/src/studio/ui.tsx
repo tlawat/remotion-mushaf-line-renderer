@@ -64,20 +64,18 @@ export const Note: React.FC<{readonly children: React.ReactNode}> = ({children})
 /**
  * Settings the current props make do nothing (`inactive.ts`): greyed out under the reason, and still
  * usable, so a file can be prepared before the option that shows it is turned on. `reason` `null`
- * renders the children as they are.
+ * shows the children as they are, in the same wrappers, so a reason that comes or goes (an option
+ * changed in the Props sidebar) keeps them mounted: focus, a caret and local state stay.
  */
 export const Inactive: React.FC<{readonly reason: string | null; readonly children: React.ReactNode}> = ({
   reason,
   children,
-}) =>
-  reason === null ? (
-    children
-  ) : (
-    <div data-mushaf-inactive="">
-      <p style={styles.inactiveNote}>{reason}</p>
-      <div style={styles.inactive}>{children}</div>
-    </div>
-  );
+}) => (
+  <div data-mushaf-inactive={reason === null ? undefined : ''}>
+    {reason === null ? null : <p style={styles.inactiveNote}>{reason}</p>}
+    <div style={reason === null ? undefined : styles.inactive}>{children}</div>
+  </div>
+);
 
 /** A number input bounded to `[min, max]`; what it reports is always a number inside the bounds. */
 export const NumberInput: React.FC<{

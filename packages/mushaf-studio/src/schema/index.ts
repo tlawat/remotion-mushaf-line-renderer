@@ -305,14 +305,15 @@ export const LEGEND_NAMES = ['en', 'ar', 'both'] as const;
 
 /**
  * The tajweed colours' legend in a corner (`<TajweedLegend>`): drawn only when `show` is on and the
- * theme tells the rules apart (`themeHasTajweedColors()`); under `plain`, `normal` or `black` there
- * is nothing to explain.
+ * theme tells the rules apart (`themeHasTajweedColors()`); under `plain`, `normal`, `black` and
+ * `p3`-`p5`, or a custom palette built on them or repainting every rule one colour, there is nothing
+ * to explain.
  */
 export const legendSchema = z.object({
   show: z
     .boolean()
     .describe(
-      'Show the tajweed colours’ legend: only under a theme that colours the rules apart (not plain, normal or black)',
+      'Show the tajweed colours’ legend: only when the theme gives the rules different colours (not plain, normal, black, p3-p5, nor a customTheme on those or overriding rules)',
     ),
   position: z.enum(OVERLAY_CORNERS).describe('Corner of the legend'),
   orientation: z.enum(['row', 'column']).describe('Swatches side by side (row) or one under the other (column)'),

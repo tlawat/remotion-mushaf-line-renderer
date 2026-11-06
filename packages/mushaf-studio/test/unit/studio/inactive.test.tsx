@@ -192,6 +192,23 @@ describe('the Text tab', () => {
     expect(getStudioState().error).toBeNull();
   });
 
+  it('keeps a section mounted, focus and all, while its reason comes and goes', async () => {
+    const {rerender} = textTab(recitation());
+    const add = (await screen.findByText('Add a layer: fetch for this passage')).closest('button')!;
+    add.focus();
+    const panel = (props: MushafRecitationProps) => (
+      <MushafStudioPanel compositionId="MushafRecitation" props={props} initialTab="text" />
+    );
+    rerender(panel(recitation({text: text({translationPosition: 'none'})})));
+    expect(inactive()).toHaveLength(1);
+    expect(screen.getByText('Add a layer: fetch for this passage').closest('button')).toBe(add);
+    expect(document.activeElement).toBe(add);
+    rerender(panel(recitation()));
+    expect(inactive()).toEqual([]);
+    expect(screen.getByText('Add a layer: fetch for this passage').closest('button')).toBe(add);
+    expect(document.activeElement).toBe(add);
+  });
+
   it('greys out an end-card file the card does not show, and says what Fetch will set', async () => {
     textTab(recitation({endCard: card({show: 'credits', tafsirFile: 'mushaf-studio/p/tafsir.json'})}));
     await screen.findByText('Fetch the tafsir for this passage');

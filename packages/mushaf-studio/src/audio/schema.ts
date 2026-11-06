@@ -19,10 +19,13 @@ export const audioSchema = z.object({
     .max(5)
     .step(0.1)
     .describe('Fade the audio out over this many seconds at the end of the recitation (before any end card)'),
-  /** Starts the audio later in the file, never past the first word's entrance; the timings move with it. */
+  /**
+   * Starts the audio later in the file, never into the lead-in before the first line (the
+   * `latestSeconds` of `silenceTrimSeconds()`); the timings move with it.
+   */
   trimSilence: z
     .boolean()
-    .describe('Skip the silence before the first word (never earlier than the first line’s animation.leadInSeconds)'),
+    .describe('Skip the silence before the first word (never into the lead-in before the first line)'),
   /** On top of the normalisation gain. */
   volume: z.number().min(0).max(2).step(0.05).describe('Volume (1: as normalised, 2: twice as loud)'),
 });

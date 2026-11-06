@@ -5,13 +5,17 @@ import {ZodZypesInternals} from '@remotion/zod-types';
 import {describe, expect, it} from 'vitest';
 import type {z} from 'zod';
 import {audioSchema} from '../../../src/audio/schema';
-import {backgroundSchema} from '../../../src/background/schema';
+import {backgroundFor} from '../../../src/background/compat';
+import {backgroundSchema, defaultBackground, glowSchema} from '../../../src/background/schema';
 import {mushafPassageSchema} from '../../../src/compositions/passage';
 import {mushafRecitationSchema} from '../../../src/compositions/recitation';
+import {themeHasTajweedColors} from '../../../src/content';
 import {mushafThumbnailSchema} from '../../../src/export';
 import {mushafPageSchema, pageViewSchema} from '../../../src/page/schema';
 import {
   customThemeSchema,
+  dataSchema,
+  defaultCustomTheme,
   endCardSchema,
   fontsSchema,
   headerSchema,
@@ -21,7 +25,10 @@ import {
   memorizeSchema,
   overlaySchema,
   recitationTextSchema,
+  THEME_NAMES,
   textSchema,
+  themeNameSchema,
+  themeSelectionFrom,
 } from '../../../src/schema';
 import {mushafAyahTextSlotSchema, mushafPageSlotSchema, mushafRecitationSlotSchema} from '../../../src/slots';
 import {mushafAyahTextSchema} from '../../../src/unicode';
@@ -86,7 +93,14 @@ describe('the Props sidebar', () => {
 describe('the descriptions of overlapping options', () => {
   it('say which of the page colour, background.color and the two images wins', () => {
     expect(backgroundSchema.shape.kind.description).toMatch(/color paints layout\.background/);
-    expect(backgroundSchema.shape.src.description).toMatch(/wins over layout\.backgroundImage/);
+    expect(backgroundSchema.shape.src.description).toMatch(
+      /wins over layout\.backgroundImage; empty: an image falls back to it, else the colour only/,
+    );
+    // What the two descriptions say, backgroundFor() does.
+    const layout = {background: '#101418', backgroundImage: 'legacy.jpg'};
+    const image = {...defaultBackground, kind: 'image' as const, src: ''};
+    expect(backgroundFor(image, layout).src).toBe('legacy.jpg');
+    expect(backgroundFor({...image, src: 'new.jpg'}, layout).src).toBe('new.jpg');
     expect(layoutSchema.shape.backgroundImage.description).toMatch(/^Legacy.*background\.src wins/);
     for (const schema of [mushafRecitationSchema, mushafAyahTextSchema, mushafPageSchema]) {
       expect(schema.shape.layout.description).toMatch(/painted when background\.kind is color/);
@@ -138,13 +152,39 @@ describe('the descriptions of overlapping options', () => {
       expect(schema.shape.hostAudio.description).toMatch(/wins over the audio cleanup/);
     }
     expect(audioSchema.shape.targetLufs.description).toMatch(/^Only when normalize is on/);
-    expect(audioSchema.shape.trimSilence.description).toMatch(/animation\.leadInSeconds/);
+    // The page has no animation group: the wording holds for all three compositions.
+    expect(audioSchema.shape.trimSilence.description).toMatch(/never into the lead-in before the first line/);
+    expect(audioSchema.shape.trimSilence.description).not.toMatch(/animation/);
     expect(audioSchema.shape.fadeOutSeconds.description).toMatch(/before any end card/);
   });
 
   it('say what fonts, the custom palette and the legend depend on', () => {
     expect(fontsSchema.description).toMatch(/Without registerMushafFonts\(\) every mode uses the CDN/);
     expect(customThemeSchema.description).toMatch(/^Used only when theme is custom/);
-    expect(legendSchema.shape.show.description).toMatch(/not plain, normal or black/);
+    expect(legendSchema.shape.show.description).toMatch(
+      /not plain, normal, black, p3-p5, nor a customTheme on those or overriding rules/,
+    );
+  });
+
+  it('name exactly the themes the legend is not drawn under', () => {
+    expect(THEME_NAMES.filter((theme) => !themeHasTajweedColors(theme))).toEqual([
+      'plain',
+      'black',
+      'normal',
+      'p3',
+      'p4',
+      'p5',
+    ]);
+    const custom = (patch: Partial<typeof defaultCustomTheme>) =>
+      themeHasTajweedColors(themeSelectionFrom('custom', {...defaultCustomTheme, ...patch}));
+    expect(custom({base: 'light'})).toBe(true);
+    expect(custom({base: 'p3'})).toBe(false);
+    expect(custom({base: 'light', override: {...defaultCustomTheme.override, rules: true}})).toBe(false);
+  });
+
+  it('say what the data source, the glow and the custom theme need', () => {
+    expect(dataSchema.description).toMatch(/mirror = the files in public\/data\/qpc-v4/);
+    expect(glowSchema.shape.enabled.description).toMatch(/analyses the whole recording/);
+    expect(themeNameSchema.description).toMatch(/custom: the customTheme palette/);
   });
 });

@@ -288,7 +288,7 @@ the text, each for the reason given. A unit test covers each.
   both. Besides the pairs above they cover `customTheme` (theme `custom` only), `legend.show` (a
   theme that colours the rules), `data` (`mirror` needs the files), `translationPosition` and
   `glossPosition` `'none'` (hidden, still read), `targetLufs` (with `normalize`), `trimSilence`
-  (never before `animation.leadInSeconds`), `fadeOutSeconds` (before the end card),
+  (never into the lead-in before the first line), `fadeOutSeconds` (before the end card),
   `glow.enabled` (analyses the whole recording) and `pageView.dimOtherLines` (on top of
   `highlight.dimOthers`).
 - The panel greys out what it shows of a losing option (`src/studio/inactive.ts`, `<Inactive>`):
