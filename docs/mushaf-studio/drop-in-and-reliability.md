@@ -1,9 +1,12 @@
 # Mushaf Studio: drop-in slots, panel reliability, audio sources
 
-Status: design for branch `claude/inspiring-sagan-wkujy0`. It follows a code investigation of
-`packages/mushaf-studio` against Remotion 4.0.539 (findings with file:line references in the
-session record). This page is the contract the implementation follows; where code and this page
-disagree after the work lands, the code's doc comments win and this page is updated.
+Status: implemented on branch `claude/inspiring-sagan-wkujy0`, in the commits after `edf2819`. It
+followed a code investigation of `packages/mushaf-studio` against Remotion 4.0.539 (findings with
+file:line references in the session record). This page was the contract the implementation
+followed; where the implementation differs, section 3 says how and why. Where code and this page
+disagree, the code's doc comments win and this page is updated. The user-facing account is in the
+package's README ([The Mushaf panel](../../packages/mushaf-studio/README.md#the-mushaf-panel),
+[Inside your own composition](../../packages/mushaf-studio/README.md#inside-your-own-composition)).
 
 ## 1. What was wrong
 
@@ -217,3 +220,86 @@ The schema descriptions say which option wins (they show in the Props sidebar), 
 `translationFile`, `glossPosition` vs the gloss files, `endCard.show` vs its files, the audio
 cleanup vs `hostAudio`, `fonts` vs the registered packages. The panel greys out what has no
 effect in the current state (e.g. the audio cleanup under `hostAudio`).
+
+## 3. What the implementation did differently
+
+The decisions above hold; these are the places where the code went further than, or differs from,
+the text, each for the reason given. A unit test covers each.
+
+### 3.1 Save path and Remotion internals (2.1, 2.2)
+
+- `StudioTarget` is `{compositionId, propsKey?, emptyProps?}`: the slot passes
+  `emptySlotPropsFor(kind)` as `emptyProps`, so `studio-api.ts` needs no knowledge of the kinds.
+- The race window is `RACE_WINDOW_MS` (5 s). The page-load comparison (a JSON Reset) works at any
+  time, against what every panel save of the session wrote.
+
+### 3.2 Data reliability (2.3)
+
+- The Studio's in-browser render (the Render queue's client-side jobs) runs `calculateMetadata()`
+  with `isStudio` and without `isRendering`, so it resolves leniently like the preview. The
+  composition itself therefore throws `BAD_LINE_SPLIT` (`droppedSplitsError()`) whenever
+  `resolved.droppedSplits` is not empty outside the Studio's preview (`useInStudio()` tells them
+  apart through the context): a dropped split never leaves a finished video silently.
+- The preview's dropped-splits warning is in English, like the composition's other preview
+  warnings: `<StudioWarnings>` does not follow the panel's language. The Lines tab's offer to
+  remove them is in both.
+- `writeFile()` records every path it writes (`takenPublicPaths()`), and `freePublicPath()` and
+  `timingsPathFor()` count those as taken: the Studio lists a new file only once its public-folder
+  watcher has told the page, and two quick writes of one name would otherwise pick the same name.
+- Saving another recording turns `hostAudio` off (it is the composition's own to play); aligning the
+  followed track keeps it on.
+
+### 3.3 Drop-in slots (2.4)
+
+- More exports than the sketch: `emptySlotPropsFor()`, `MUSHAF_SLOT_DEFAULTS`, `slotDurationOf()`
+  and `slotErrorOf()` (the slot and the panel read the length and the error the resolver left in
+  `resolved`), the types `MushafSlotOptions`, `ResolvedSlot`, `ResolveSlotOptions`,
+  `SlotResolutionError`, `MushafSlotKind`, and `MushafStudioPanelKind`. The slot also takes
+  `initialTab`.
+- The resolver catches only the package's own errors (`MushafStudioError`, `MushafError`) in the
+  Studio's preview; an abort or a bug passes through.
+- Two panels with one target key dock once (`dockOwnerOf()`): the first mounted owns the dock and
+  the dock's notices; each marks its doubts at its own start, and ends them with its box
+  (`durationInFrames`).
+
+### 3.4 Audio sources (2.5)
+
+- A followed `blob:` or `data:` track (a public/ file in the browser-hosted Studio has a `blob:`
+  src) is matched against the Studio's static files first; one that is not a public/ file is
+  copied into `public/` once and remembered for the session (`rememberTrackCopy()`), and a
+  `blob:` track of the saved name maps back to that file after a reload.
+- When Align works on the followed track, the live track's kind (an `<Audio>`, a `<Video>`)
+  decides whether its sound is decoded to WAV, not the file's extension.
+- "Play audioFile in the composition again" turns `hostAudio` off from Source.
+- The app's `MushafInTemplate` mutes its own track while the slot plays its own recording, so two
+  recitations never play at once; it keeps the track on the timeline, so Source still offers it.
+
+### 3.5 Options that conflict (2.6)
+
+- **Colour fields carry no description.** In Remotion 4.0.539 a `.describe()` on a `zColor()`
+  replaces the marker the Props sidebar draws its colour picker for (`__remotion-color`), so every
+  described colour field showed a text box instead. The colour fields now keep the marker (a test
+  walks every composition's schema for it), what each colour does is in its doc comment, and the
+  rules that concern a colour (`layout.background` is painted under `background.kind: 'color'`;
+  `background.color` only fills behind an image, a video or a gradient) are in the group's and in
+  `background.kind`'s descriptions.
+- Descriptions start with the rule that decides (`Used only when ...`, `... wins over ...`,
+  `ignored once ...`) and stay under 200 characters (the info bubble is 360 px wide); a test pins
+  both. Besides the pairs above they cover `customTheme` (theme `custom` only), `legend.show` (a
+  theme that colours the rules), `data` (`mirror` needs the files), `translationPosition` and
+  `glossPosition` `'none'` (hidden, still read), `targetLufs` (with `normalize`), `trimSilence`
+  (never before `animation.leadInSeconds`), `fadeOutSeconds` (before the end card),
+  `glow.enabled` (analyses the whole recording) and `pageView.dimOtherLines` (on top of
+  `highlight.dimOthers`).
+- The panel greys out what it shows of a losing option (`src/studio/inactive.ts`, `<Inactive>`):
+  the Text tab's translations while `text.translationPosition` is `'none'`, its word-by-word files
+  while `text.glossPosition` is `'none'`, an end-card file while `endCard.show` shows something
+  else; the Look tab's page-colour chips and a note under an image, a video, a gradient or a legacy
+  `layout.backgroundImage`. Greyed out, not disabled: a file can be fetched before it is shown. The
+  panel shows no audio cleanup controls, so the example in 2.6 (the cleanup under `hostAudio`) is
+  covered by the descriptions only (`audio` and `hostAudio` say which wins).
+- Not done: the schema keys keep their order (a legacy field still comes before the option that
+  replaced it), and the page and the ayah text still list the word-by-word and window fields they
+  ignore (their descriptions say so). Reordering or `.omit()`ing changes the sidebar and the saved
+  props' key order for every existing project; it is on the roadmap
+  ([plan.md](plan.md#7-roadmap)).

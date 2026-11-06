@@ -61,16 +61,16 @@ export const mushafAyahTextSchema = z.object({
     .describe('Line height of the Arabic text, in multiples of its size'),
   /** The shared layout; `visibleLines` and `neighbourOpacity` do not apply (one ayah is on screen at a time). */
   layout: layoutSchema.describe(
-    'Frame, colours, margins and position (lines on screen and their opacity do not apply)',
+    'Frame, page colour (painted when background.kind is color), margins and position. Lines on screen and their opacity do not apply',
   ),
   background: backgroundSchema.describe(
-    'Behind the ayah: a colour, a gradient, an image or a looping video, and a glow',
+    'Behind the ayah: a colour, a gradient, an image or a looping video, and a glow. background.color fills only behind an image, video or gradient',
   ),
   animation: ayahAnimationSchema.describe('How each ayah comes in and goes out'),
   highlight: highlightSchema.describe('What follows the recitation and how it is marked'),
   /** `'first-letters'` shows the first letter of each word to come, with a tatweel. */
   memorize: memorizeSchema.describe(
-    'Memorisation: repeat each ayah, hide the words to come or show their first letters',
+    'Memorisation: repeat each ayah, hide the words to come or show their first letters (no repeats under hostAudio)',
   ),
   /** The ayah translation goes under (or over) the ayah; the gloss fields do not apply. */
   text: textSchema.describe('The ayah translations (the word-by-word fields do not apply)'),

@@ -10,6 +10,7 @@ import {
   type MushafLook,
 } from '../../presets';
 import type {MessageKey} from '../i18n';
+import {pageColourInactive} from '../inactive';
 import {
   getStudioState,
   LOOK_UNDO_DEPTH,
@@ -26,23 +27,24 @@ import {styles} from '../styles';
 import {compositionKindOf, type StudioCompositionProps, type TabProps} from '../tab-props';
 import {Button, Note, Section} from '../ui';
 
-type Chip = {readonly label: MessageKey; readonly color: string};
+type Chip = {readonly label: MessageKey; readonly color: string; readonly inactive: boolean};
 
 /**
- * The colours the composition would have with the look: page, ink, the current word's mark (unless
- * the look marks nothing), and the rosette's accent of a custom theme or else the translation.
+ * The colours the composition would have with the look: page (greyed out where an image, a video or
+ * a gradient covers it), ink, the current word's mark (unless the look marks nothing), and the
+ * rosette's accent of a custom theme or else the translation.
  */
 const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chip[] => {
   const next = applyLook(props, look);
   const chips: Chip[] = [
-    {label: 'look.chip.page', color: next.layout.background},
-    {label: 'look.chip.ink', color: next.layout.color},
+    {label: 'look.chip.page', color: next.layout.background, inactive: pageColourInactive(next) !== null},
+    {label: 'look.chip.ink', color: next.layout.color, inactive: false},
   ];
   if (next.highlight.mode !== 'none' && next.highlight.style !== 'none')
-    chips.push({label: 'look.chip.currentWord', color: next.highlight.color});
+    chips.push({label: 'look.chip.currentWord', color: next.highlight.color, inactive: false});
   if ('theme' in next && next.theme === 'custom' && next.customTheme.override.accent)
-    chips.push({label: 'look.chip.rosette', color: next.customTheme.accent});
-  else chips.push({label: 'look.chip.translation', color: next.text.translationColor});
+    chips.push({label: 'look.chip.rosette', color: next.customTheme.accent, inactive: false});
+  else chips.push({label: 'look.chip.translation', color: next.text.translationColor, inactive: false});
   return chips;
 };
 
@@ -52,6 +54,8 @@ const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chi
  * this target, last first, and puts back only the fields that still hold the look's values
  * (`lookRevertPatch()`). Needs nothing resolved: it works before a recitation is chosen. In a
  * slot (`target.propsKey`) a look leaves `layout.aspect` alone (`lookInBox()`): the box decides the size.
+ * Under an image, a video or a gradient the page colour a look sets barely shows: its chip is greyed
+ * out and a note says where it still does (`pageColourInactive()`).
  */
 export const LookTab: React.FC<TabProps> = ({target, props}) => {
   const {busy, lookUndo} = useStudioState();
@@ -61,6 +65,7 @@ export const LookTab: React.FC<TabProps> = ({target, props}) => {
   const looks = looksFor(compositionKindOf(props)).map((look) => (inSlot ? lookInBox(look) : look));
   const key = targetKeyOf(target);
   const undo = lookUndo[key]?.at(-1) ?? null;
+  const covered = pageColourInactive(props);
 
   const choose = (look: MushafLook) => {
     const before = lookUndoPatch(props, look);
@@ -97,6 +102,11 @@ export const LookTab: React.FC<TabProps> = ({target, props}) => {
     <div>
       <Note>{t('look.note')}</Note>
       {inSlot ? <Note>{t('look.slotNote')}</Note> : null}
+      {covered ? (
+        <p style={styles.inactiveNote} data-mushaf-inactive="">
+          {t(covered.key, covered.params)}
+        </p>
+      ) : null}
       {undo ? (
         <div style={{...styles.row, marginBottom: 10}}>
           <Button onClick={revert} disabled={working} title={t('look.undoTitle', {name: undo.name})}>
@@ -127,7 +137,10 @@ export const LookTab: React.FC<TabProps> = ({target, props}) => {
                     <span
                       key={chip.label}
                       title={`${t(chip.label)}: ${chip.color}`}
-                      style={styles.swatch(chip.color)}
+                      data-inactive={chip.inactive ? '' : undefined}
+                      style={
+                        chip.inactive ? {...styles.swatch(chip.color), ...styles.inactive} : styles.swatch(chip.color)
+                      }
                     />
                   ))}
                 </span>

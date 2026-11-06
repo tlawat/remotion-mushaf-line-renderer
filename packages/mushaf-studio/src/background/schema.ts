@@ -9,28 +9,37 @@ export const KEN_BURNS = ['none', 'slow-zoom', 'pan-left', 'pan-right'] as const
 
 /** The glow behind the lines that breathes with the recitation (the `audioLevel` the composition passes). */
 export const glowSchema = z.object({
-  enabled: z.boolean().describe('A soft glow behind the lines that pulses with the recitation'),
-  color: zColor().describe('Colour of the glow'),
+  enabled: z
+    .boolean()
+    .describe('A soft glow behind the lines that pulses with the recitation (analyses the whole recording)'),
+  /** Colour of the glow. */
+  color: zColor(),
   /** Opacity at the loudest frame; a silent frame keeps 35% of it, so the glow never blinks out. */
   strength: z.number().min(0).max(1).step(0.05).describe('Opacity of the glow at the loudest moment'),
 });
 
 export const gradientSchema = z.object({
-  from: zColor().describe('First colour of the gradient'),
-  to: zColor().describe('Second colour of the gradient'),
+  /** First colour of the gradient. */
+  from: zColor(),
+  /** Second colour of the gradient. */
+  to: zColor(),
   /** CSS `linear-gradient()` angle: 0 runs bottom to top, 90 left to right, 180 top to bottom. */
   angle: z.number().int().min(0).max(360).step(5).describe('Direction of the gradient in degrees (180: top to bottom)'),
 });
 
 export const backgroundSchema = z.object({
-  kind: z.enum(BACKGROUND_KINDS).describe('Background: a colour, an image, a looping video or a gradient'),
+  kind: z
+    .enum(BACKGROUND_KINDS)
+    .describe('Background: a colour (color paints layout.background), an image, a looping video or a gradient'),
   /**
    * Painted under an image, a video or a gradient, so it also fills the bars a `contain` image or
    * video leaves. The `'color'` kind paints `layout.background` instead: the page colour stays there.
    */
-  color: zColor().describe('Colour behind an image, a video or a gradient (the color kind paints layout.background)'),
+  color: zColor(),
   /** A `public/` path or an http(s) URL; read for `image` and `video` only. */
-  src: z.string().describe('Image or video: a path in public/ or a URL (empty: the colour only)'),
+  src: z
+    .string()
+    .describe('Image or video: a path in public/ or a URL (wins over layout.backgroundImage; empty: the colour only)'),
   fit: z.enum(BACKGROUND_FITS).describe('Image or video: fill the frame (cover, cropped) or fit inside it (contain)'),
   /**
    * The video's own length, for a frame-exact loop in renders (`<OffthreadVideo>` in a `<Loop>`).

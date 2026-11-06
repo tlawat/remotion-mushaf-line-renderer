@@ -69,13 +69,17 @@ export const mushafRecitationSchema = z.object({
   fonts: fontsSchema,
   data: dataSchema,
   /** `layout.background` is the page colour; `layout.backgroundImage` is kept for files saved before `background`. */
-  layout: layoutSchema,
+  layout: layoutSchema.describe(
+    'Frame and lines. background is the page colour: painted when background.kind is color, and on the title card, counter and end card',
+  ),
   background: backgroundSchema.describe(
-    'Behind the lines: a colour, a gradient, an image or a looping video, and a glow',
+    'Behind the lines: a colour, a gradient, an image or a looping video, and a glow. background.color fills only behind an image, video or gradient',
   ),
   animation: animationSchema,
   highlight: highlightSchema,
-  memorize: memorizeSchema.describe('Memorisation: repeat each ayah, hide the words to come'),
+  memorize: memorizeSchema.describe(
+    'Memorisation: repeat each ayah, hide the words to come (no repeats under hostAudio)',
+  ),
   text: recitationTextSchema,
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   legend: legendSchema.describe('Legend of the tajweed colours (colour themes only)'),

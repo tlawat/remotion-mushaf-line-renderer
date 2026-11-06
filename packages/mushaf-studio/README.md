@@ -235,11 +235,11 @@ six tabs:
 | Tab        | What it does                                                                                                     |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
 | **Source** | Where the audio comes from, as one choice: the QUD catalogue's reviewed recitations, a recording of your own, a file already in `public/`, or a track the template plays. A "Now:" line says what plays now. |
-| **Look**   | One-click style presets (`MUSHAF_LOOKS`, `applyLook()`): theme, layout, animation, highlighting and text placement, never the content; **Undo** puts back the last look's changes. |
+| **Look**   | One-click style presets (`MUSHAF_LOOKS`, `applyLook()`): theme, layout, animation, highlighting and text placement, never the content or the positions you set; **Undo** goes back through the looks applied, putting back only the fields that still hold a look's values. |
 | **Align**  | Uploads the recording to the [QUD Universal Aligner](https://aligner.qud.dev) with streaming progress, then fetches the word times. Says first that the audio leaves the machine. |
 | **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align. Exports captions and imports them back. |
-| **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments. On `<MushafPage>`, the pages. |
-| **Text**   | Ayah translations and word-by-word glosses (`<MushafRecitation>` only) from quran.com, or a QUL file in `public/`; the end card's tafsir or surah introduction. |
+| **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments, and remove in one click the splits that no longer fit. On `<MushafPage>`, the pages. |
+| **Text**   | Ayah translations and word-by-word glosses (`<MushafRecitation>` only) from quran.com, or a QUL file in `public/`; the end card's tafsir or surah introduction. What the props hide is greyed out, with the reason. |
 
 **Where the audio comes from.** Source is one explicit choice of four, each with one button and a
 line that says what it replaces:
@@ -289,11 +289,45 @@ Every change goes through the same path: write the file(s) into `public/mushaf-s
 the props hold paths, and the files are fetched through `staticFile()`, so the Render dialog, the
 CLI and Lambda see the same inputs.
 
+**What a save keeps.** The panel never writes over what you did elsewhere:
+
+- **Saves start from the Studio's live props.** In Remotion 4.0.539 the props `saveDefaultProps()`
+  hands its callback are the Root as the page loaded it; the panel builds each save on the props the
+  Studio shows now instead (its editor context, read in one module, `remotion-internals.ts`), adds
+  only its own saves still on their way, and runs saves one at a time. A Props-sidebar edit, the
+  Studio's undo or a hand edit of the Root is never put back to an old value.
+- **Restore.** When the live props lose what the panel saved (the sidebar's JSON Reset or the
+  Studio's undo going back to the props from when the page loaded, a sidebar save racing a panel
+  save), the dock names the fields and offers **Restore**; × keeps the props as they are. It never
+  writes them back on its own, and a field you changed since is yours: it is not offered.
+- **Reviewed timings are never replaced.** A new alignment or catalogue download writes
+  `<name>.timings.json`, or, when that file has manual edits (nudges, a captions import: its
+  `alignment.edits`) or other timings, the next free `<name>-2.timings.json`, `-3`, ..., and says
+  so. The range and the splits are reset only for another recording (another file, other bytes,
+  another passage); then the translations, glosses, tafsir and surah introduction that do not fit
+  the new passage are cleared, each named (the end card shows nothing once its file goes). An upload
+  takes a free name too (`recitation-2.m4a`), so it never replaces the recording timings were made of.
+- **Splits that no longer fit** the range or `slice` are left out of the preview instead of taking
+  the composition (and the panel in it) down: they are listed in `resolved.droppedSplits`, the
+  preview names them, and Lines removes them in one click. A render (the CLI, Lambda, the Studio's
+  Render queue) still refuses them with `BAD_LINE_SPLIT`.
+- **Per composition.** Each composition, and each slot of a template, has its own pending save,
+  staged recording, look undo and tab drafts (Review's nudges, Align's options, the pickers); the
+  drafts survive a tab switch.
+- **What has no effect is greyed out.** A translation or a gloss whose position is `none`, an
+  end-card file the card does not show, a look's page colour under an image, a video or a gradient:
+  each is greyed out under the reason, and stays usable. The Props sidebar's descriptions say which
+  of two overlapping options wins (`layout.background` and `background.color`, `translations` and
+  `translationFile`, `header` and the intro card, `hostAudio` and the audio cleanup, ...).
+
 To put the panel in a composition of your own, render it there with the composition's id and props:
 
 ```tsx
 <MushafStudioPanel compositionId="MyRecitation" props={props} project="surah-yasin" />
 ```
+
+The compositions render it themselves unless given `panel={false}`. To drop a composition into a
+template instead, use a slot (below): it docks the panel for you.
 
 ## Inside your own composition
 
@@ -303,14 +337,17 @@ the template's frame, and the Mushaf panel saving under that key only.
 
 ```tsx
 import {MushafRecitationSlot, mushafRecitationSlotSchema, resolveMushafRecitationSlot} from '@tlawat/mushaf-studio';
+import {AbsoluteFill, type CalculateMetadataFunction, Composition} from 'remotion';
+import {z} from 'zod';
 
 const FPS = 30;
 const INTRO = 2 * FPS;
 const OUTRO = 2 * FPS;
 
 export const templateSchema = z.object({title: z.string(), mushaf: mushafRecitationSlotSchema});
+type TemplateProps = z.infer<typeof templateSchema>;
 
-export const calculateTemplateMetadata: CalculateMetadataFunction<z.infer<typeof templateSchema>> = async ({
+export const calculateTemplateMetadata: CalculateMetadataFunction<TemplateProps> = async ({
   props,
   abortSignal,
   isRendering,
@@ -319,51 +356,114 @@ export const calculateTemplateMetadata: CalculateMetadataFunction<z.infer<typeof
   return {props: {...props, mushaf: mushaf.props}, durationInFrames: INTRO + mushaf.durationInFrames + OUTRO};
 };
 
-export const Template: React.FC<z.infer<typeof templateSchema>> = ({title, mushaf}) => (
+export const Template: React.FC<TemplateProps> = ({title, mushaf}) => (
   <AbsoluteFill>
-    {/* your intro, your background, your outro */}
+    {/* your background, your intro, your outro */}
     <MushafRecitationSlot props={mushaf} propsKey="mushaf" from={INTRO} left={60} top={640} width={960} height={640} />
   </AbsoluteFill>
 );
 
-<Composition id="MyTemplate" component={Template} schema={templateSchema}
-  calculateMetadata={calculateTemplateMetadata} width={1080} height={1920} fps={FPS} durationInFrames={1}
-  defaultProps={{title: 'Al-Fatihah', mushaf: null}} />
+// In the Root: defaultProps an inline literal, the slot null until a recitation is picked.
+<Composition
+  id="MyTemplate"
+  component={Template}
+  schema={templateSchema}
+  calculateMetadata={calculateTemplateMetadata}
+  width={1080}
+  height={1920}
+  fps={FPS}
+  durationInFrames={1}
+  defaultProps={{title: 'Al-Fatihah', mushaf: null}}
+/>;
 ```
 
-- **`mushaf: null`** is a template with no recitation yet: the slot shows nothing, the panel opens
-  on Source, and its first save writes complete props under `mushaf`
-  (`emptySlotPropsFor('recitation')` with the change). Or start from a fully written literal of
-  `defaultMushafRecitationSlotProps` (the defaults with transparent backgrounds: the template paints
-  its own). Keep `defaultProps` an inline literal, never an identifier or a spread
-  (`mushaf: defaultMushafRecitationSlotProps`): the Studio cannot save into those, so every panel
-  save would fail.
-- **`resolveMushafRecitationSlot()`** resolves at the template's `fps` (the durations, the audio's
-  trim and the glow's levels are in its frames) and returns no size: the box decides it. `null`
-  props and an empty `timingsFile` give 0 frames. In the Studio's preview a bad file or range gives
-  `error` (the panel shows it and stays on screen to fix it) instead of throwing; a render rethrows.
-  The length is also in `resolved.durationInFrames`, which the slot sizes its `<Sequence>` by, so
-  the end card and the fade-out end with the recitation, not with the template.
-- **The panel** is docked beside the slot's `<Sequence>`, so it stays on every frame of the
-  template. Its seeks, waveform playhead and timeline markers are placed at the slot's start, the
-  YouTube chapters at the video's times; Look leaves `layout.aspect` alone, and Set thumbnail saves
-  `MushafThumbnail` without leaving the template. Several slots in one template share one dock,
-  with a picker; each has its own folder (`mushaf-studio/<template id>-<propsKey>/`).
-- `<MushafAyahTextSlot>`, `<MushafPageSlot>`, `resolveMushafAyahTextSlot()`,
-  `resolveMushafPageSlot()` and their schemas and defaults do the same for the other compositions;
-  the compositions themselves take `panel={false}` to leave the panel out.
+There is one slot per composition of the package that has a panel:
 
-- **The template's own audio.** A template that plays the recitation itself (its `<Audio>` with a
-  `name`, music under it, a voice-over) turns the slot's `hostAudio` on: the slot plays no audio of
-  its own and its words follow the template's track. The panel lists the template's tracks in
-  Source and works out the offset from where the track sits on the timeline.
+| Composition        | Schema                       | Resolver                         | Component                | Defaults                            |
+| ------------------ | ---------------------------- | -------------------------------- | ------------------------ | ----------------------------------- |
+| `MushafRecitation` | `mushafRecitationSlotSchema` | `resolveMushafRecitationSlot()`  | `<MushafRecitationSlot>` | `defaultMushafRecitationSlotProps`  |
+| `MushafAyahText`   | `mushafAyahTextSlotSchema`   | `resolveMushafAyahTextSlot()`    | `<MushafAyahTextSlot>`   | `defaultMushafAyahTextSlotProps`    |
+| `MushafPage`       | `mushafPageSlotSchema`       | `resolveMushafPageSlot()`        | `<MushafPageSlot>`       | `defaultMushafPageSlotProps`        |
+
+**The schema and the Root.** A slot's schema is the composition's, nullable: `null` is a template
+with no recitation yet. The slot then shows nothing and lasts 0 frames, the panel opens on Source,
+and its first save writes complete props under the key (`emptySlotPropsFor(kind)`, the slot defaults
+without the sample's files, with the change), so a look saved first does not bring the sample with
+it. Or start from `defaultMushafRecitationSlotProps` (the defaults with transparent backgrounds: the
+template paints its own) **written out** as a literal. Keep the template's `defaultProps` an inline
+literal, as for the compositions themselves ([Register the compositions](#register-the-compositions)):
+`mushaf: defaultMushafRecitationSlotProps`, an identifier or a spread renders, but the Studio cannot
+save into it, and every panel save fails.
+
+**The resolver**, in the template's `calculateMetadata()`:
+
+- resolves at the template's `fps`: the durations, the memorisation's clips, the audio's trim and
+  the glow's levels (`levelsFps`) are in the template's frames, at 30 or 60 alike;
+- returns `{props, durationInFrames, error}` and no size (the box decides it); the length is also in
+  `props.resolved.durationInFrames` (`slotDurationOf()`), which the slot sizes its `<Sequence>` by, so
+  the end card and the fade-out end with the recitation, not with the template;
+- gives 0 frames and no error for `null` props and an empty `timingsFile` (or an ayah text's empty
+  `textFile`);
+- never throws the package's own errors in the Studio's preview: a bad file or range gives `error`,
+  also left in `resolved`
+  (`slotErrorOf()`), so the panel shows it and stays on screen to fix it. When rendering
+  (`isRendering`, the CLI, Lambda) it rethrows, and the slot throws the message anywhere but the
+  Studio's preview, the Studio's in-browser render included.
+
+**The slot component** takes the template's field as `props` and the key it lives under as
+`propsKey`, and renders the composition (`panel={false}`) in a `<Sequence>` with the panel docked
+**beside** it, so the dock stays on every frame of the template, the intro and the outro included:
+
+| Option             | Default                         | What it does                                                                    |
+| ------------------ | ------------------------------- | ------------------------------------------------------------------------------- |
+| `props`            | (required)                      | The template's field: the composition's props, or `null`.                      |
+| `propsKey`         | (required)                      | The key of the template's `defaultProps` the panel saves under.                |
+| `from`             | `0`                             | The template frame the recitation starts at (the intro's length).              |
+| `durationInFrames` | `resolved.durationInFrames`     | How long the box shows the recitation; the doubt markers end there too.        |
+| `left`, `top`      | `0`                             | The box's corner, in template pixels.                                           |
+| `width`, `height`  | the template's size             | The box's size: the composition lays itself out for it (the box decides, not `layout.aspect`). |
+| `premountFor`      | none                            | Frames the box mounts early, so the fonts are in by its first frame.           |
+| `name`             | `Mushaf recitation`, ...        | The box's name on the Studio's timeline.                                        |
+| `style`            | none                            | More style for the box (a border radius, a clip).                               |
+| `panel`            | `true`                          | Dock the Mushaf panel in the Studio.                                            |
+| `project`          | `<template id>-<propsKey>`      | The panel's folder under `public/mushaf-studio/`.                               |
+| `initialTab`       | Source (for `null` props)       | The tab the panel opens on.                                                     |
+
+In a slot the panel places its seeks, waveform playhead and timeline markers at the slot's start
+(inside a `<Sequence>` of the template's too), and the YouTube chapters at the video's times; Look
+leaves `layout.aspect` alone; Set thumbnail saves `MushafThumbnail` without leaving the template.
+Several slots in one template share one dock, with a slot picker; two slots with one `propsKey`
+show one entry and dock once.
+
+**The template's own audio.** A template that plays the recitation itself (music under it, a
+voice-over, one `<Audio>` for the whole video) sets the slot's `hostAudio`: the slot plays no audio
+of its own, its words follow the template's track from `hostAudio.offsetSeconds`, the `audio`
+cleanup does nothing (the template's `<Audio>` owns its volume and fades), and `memorize` repeats
+are refused. The panel does it for you: Source lists the template's audio and video tracks from the
+Studio's timeline (**A track in this video**; the compositions' own `<Audio>` is `OWN_AUDIO_NAME`
+and left out), **Use this track** sets `audioFile` and the offset, and **Update timing** is offered
+when the track moves on the timeline. Give the template's `<Audio>` a `name`: the panel matches the
+track by it (`hostAudio.track`). Only a track at speed 1 that does not loop can be followed, and a
+video track's sound is sent to the aligner as WAV. Once the slot plays a recording of its own again
+(a catalogue download, Align of an upload), `followsHostAudio(props)` is false: mute the template's
+track then, or two recitations play at once:
+
+```tsx
+<Sequence from={INTRO} name="Template audio" layout="none">
+  <Audio src={staticFile(soundtrack)} name="Template audio" muted={mushaf !== null && !followsHostAudio(mushaf)} />
+</Sequence>
+```
 
 The app's `MushafInTemplate` composition ([`apps/mushaf-studio/src/MushafInTemplate.tsx`](../../apps/mushaf-studio/src/MushafInTemplate.tsx))
-is a working example, its own track (`soundtrack`) followed by the slot.
+is a working example: a 1080×1920 reel with its own schema, title, intro, outro and track
+(`soundtrack`), which the slot under `mushaf` follows.
 
 ## Props
 
-The schemas' descriptions are what the Props sidebar shows; the defaults are
+The schemas' descriptions are what the Props sidebar shows, in the info bubble beside each field's
+name; where two options overlap, the description says which one wins. A colour field has none: in
+Remotion 4.0.539 a description replaces `zColor()`'s marker and the sidebar then shows a text box
+instead of the colour picker, so colours are explained in their group's description. The defaults are
 `defaultMushafRecitationProps`, `defaultMushafAyahTextProps`, `defaultMushafPageProps` and
 `defaultMushafPassageProps` (and `defaultMushafThumbnailProps` for the `MushafThumbnail` still). The content props (the first table)
 are what the panel sets; the groups below are style, set in the sidebar.
@@ -381,7 +481,7 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'`            | When the recitation starts at ayah 1: the surah's header lines before it (see [`header`](#header-mushafrecitation-and-mushafpassage)). Across surahs, each later surah's header lines come between the two surahs as printed, whatever this says. |
 | `theme`       | `'plain'`, `'light'`, `'dark'`, `'sepia'`, `'black'`, `'normal'`, `'p1'`–`'p5'`, `'custom'` | `'plain'` | Colour theme of the mushaf line; `'custom'` uses `customTheme`. |
 | `customTheme` | object                      | see below                     | A preset and a colour per part.                              |
-| `fonts`       | `'fallback'`, `'cdn'`, `'package'` | `'fallback'`           | Where the page fonts come from: QUL's CDN with the fonts packages as fallback, the CDN only, or the packages only (offline). |
+| `fonts`       | `'fallback'`, `'cdn'`, `'package'` | `'fallback'`           | Where the page fonts come from: QUL's CDN with the registered fonts packages as fallback, the CDN only, or the packages only (the surah and juz name fonts from `public/fonts/`). Without `registerMushafFonts()` every mode uses the CDN, with a Studio warning. |
 | `data`        | `'mirror'`, `'cdn'`         | `'mirror'`                    | The mushaf data: the mirror in `public/data/qpc-v4/` through `staticFile()`, or QUL's exports on Tarteel's CDN. |
 | `layout`, `background`, `animation`, `highlight`, `memorize`, `text`, `overlay`, `legend`, `endCard`, `audio`, `review` | objects | see below | The style groups.                            |
 | `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translations, the gloss, the doubtful words, the audio's analysis (`audio`, `audioWarning`), the URL to play instead of a missing `audioFile` (`audioSrc`), the end card's content. Leave it `null`. |
@@ -482,8 +582,8 @@ recitation props as `MushafRecitation`; the defaults are `defaultMushafPageProps
 | `mode`            | `'word'`, `'ayah'`, `'none'`             | `'word'`    | What follows the recitation: the word, the whole ayah, or nothing. |
 | `style`           | `'color'`, `'glow'`, `'marker'`, `'none'` | `'color'`  | How the current word is marked: ink colour, a glow, a marker behind it. |
 | `color`           | colour                                   | `'#c8a45c'` | Colour of the mark.                                             |
-| `dimOthers`       | 0–1                                      | `1`         | Opacity of the other words (1: none).                           |
-| `dimUpcomingOnly` | boolean                                  | `false`     | Dim only the words still to come.                               |
+| `dimOthers`       | 0–1                                      | `1`         | Opacity of the other words (1: none). Ignored when `mode` is `'none'`; a word `memorize` hides stays hidden. |
+| `dimUpcomingOnly` | boolean                                  | `false`     | Dim only the words still to come (with `dimOthers` under 1).    |
 | `occurrence`      | `'first'`, `'last'`                      | `'first'`   | For a repeated word: follow its first or its last recitation.   |
 
 ### `memorize` (`MushafRecitation`, `MushafAyahText`)
@@ -506,19 +606,19 @@ hidden word's gloss is hidden too (its place kept), a faint word's gloss is fain
 | Field                  | Type                          | Default       | Description                                                  |
 | ---------------------- | ----------------------------- | ------------- | ------------------------------------------------------------ |
 | `translationFile`      | string                        | `''`          | Ayah translation file in `public/` (empty: none). Kept for files saved before `translations`: the one translation, set with the `translation*` fields below, while `translations` is empty; ignored once it is not. |
-| `translationPosition`  | `'below'`, `'above'`, `'none'` | `'below'`    | Where the ayah translation goes.                             |
-| `translationFont`      | CSS font family               | `'Georgia, "Noto Serif", serif'` | Font of the translation (`TRANSLATION_FONT_PRESETS` has more). |
-| `translationSize`      | 12–120 px                     | `40`          | Translation size.                                            |
-| `translationColor`     | colour                        | `'#4a4a4a'`   | Translation colour.                                          |
-| `translationDirection` | `'ltr'`, `'rtl'`              | `'ltr'`       | Writing direction of the translation.                        |
+| `translationPosition`  | `'below'`, `'above'`, `'none'` | `'below'`    | Where the ayah translation goes; `'none'` hides it (its files are still read, so a bad path still fails). |
+| `translationFont`      | CSS font family               | `'Georgia, "Noto Serif", serif'` | The single translation's font (`TRANSLATION_FONT_PRESETS` has more); ignored once `translations` has a layer. |
+| `translationSize`      | 12–120 px                     | `40`          | The single translation's size; ignored once `translations` has a layer. |
+| `translationColor`     | colour                        | `'#4a4a4a'`   | The single translation's colour; ignored once `translations` has a layer. |
+| `translationDirection` | `'ltr'`, `'rtl'`              | `'ltr'`       | The single translation's writing direction (layers follow their language). |
 | `translationOffsetY`   | −800–800 px                   | `0`           | Move the translation up (negative) or down from its place.   |
-| `glossFile`            | string                        | `''`          | Word-by-word translation file in `public/` (empty: none).    |
-| `transliterationFile`  | string                        | `''`          | Word-by-word transliteration file in `public/` (empty: none). |
+| `glossFile`            | string                        | `''`          | `MushafRecitation` only: word-by-word translation file in `public/` (empty: none). Read whatever `glossPosition` says; `'none'` hides it. |
+| `transliterationFile`  | string                        | `''`          | `MushafRecitation` only: word-by-word transliteration file in `public/` (empty: none), as `glossFile`. |
 | `glossFont`            | CSS font family               | `'"Noto Sans", "Helvetica Neue", Arial, sans-serif'` | Font of the gloss strip.     |
 | `glossSize`            | 12–120 px                     | `34`          | Gloss size.                                                  |
 | `glossColor`           | colour                        | `'#6a6a6a'`   | Gloss colour.                                                |
 | `glossPosition`        | `'strip'`, `'interlinear'`, `'none'` | `'strip'` | `MushafRecitation` only: the gloss in a strip at the bottom, under each printed word (`<InterlinearGlosses>`, capped to 0.3 of the line's type size, shrunk to fit its word), or nowhere. |
-| `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: Noto Serif for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
+| `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Once it has a layer (even one with an empty `file`), `translationFile` and the `translation*` type fields above are ignored. Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: Noto Serif for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
 
 ### `overlay`
 
@@ -534,7 +634,7 @@ and the ayah being heard (the translation block's key), and comes in as the card
 
 | Field          | Type                                                     | Default                         | Description                                               |
 | -------------- | -------------------------------------------------------- | ------------------------------- | --------------------------------------------------------- |
-| `title`        | `'none'`, `'intro'`, `'corner'`, `'both'`                | `'none'`                        | No title, the intro card, the corner label, or both.      |
+| `title`        | `'none'`, `'intro'`, `'corner'`, `'both'`                | `'none'`                        | No title, the intro card, the corner label, or both. The intro card names the surah: with `header` on too, the name shows twice at the start. |
 | `introSeconds` | 1–8                                                      | `3`                             | Seconds the intro card stays.                             |
 | `reciter`      | string                                                   | `''`                            | The reciter's name, under the range and in the corner (empty: none). The panel does not fill it: type it in the Props sidebar. |
 | `color`        | colour                                                   | `'#1b1b1b'`                     | Colour of the title texts and the surah name.             |
@@ -584,9 +684,9 @@ the in-browser web renderer (`renderMediaOnWeb()`) the compositions use `@remoti
 | Field            | Type         | Default | Description                                                                 |
 | ---------------- | ------------ | ------- | --------------------------------------------------------------------------- |
 | `normalize`      | boolean      | `true`  | Bring the recitation to `targetLufs`, its true peak kept under −1 dBFS (`gainFor()`). |
-| `targetLufs`     | −23 to −9    | `-14`   | Target loudness (−14: YouTube and social media, −23: broadcast).            |
+| `targetLufs`     | −23 to −9    | `-14`   | Only with `normalize`: target loudness (−14: YouTube and social media, −23: broadcast). |
 | `fadeInSeconds`  | 0–5          | `0.3`   | Fade in from the first frame.                                               |
-| `fadeOutSeconds` | 0–5          | `1`     | Fade out to the end of the recitation.                                      |
+| `fadeOutSeconds` | 0–5          | `1`     | Fade out to the end of the recitation (before any end card).                |
 | `trimSilence`    | boolean      | `false` | Skip the silence before the first word (`silenceTrimSeconds()`), never past the first line's entrance: it is added to `audioOffsetSeconds` and the timings move with it. |
 | `volume`         | 0–2          | `1`     | On top of the normalisation gain.                                           |
 
@@ -634,8 +734,8 @@ the card picked, or another surah's introduction, is `BAD_STUDIO_PROP`.
 | ----------------- | ------------------------------------------------ | -------- | ----------------------------------------------------- |
 | `show`            | `'none'`, `'credits'`, `'tafsir'`, `'chapter-info'` | `'none'` | The credits alone, with the tafsir of the last ayah recited (`tafsirEntryFor()`, its group), or with the surah's introduction. |
 | `seconds`         | 2–15                                             | `5`      | Seconds the card stays.                               |
-| `tafsirFile`      | string                                           | `''`     | Tafsir file in `public/`, for `'tafsir'`.             |
-| `chapterInfoFile` | string                                           | `''`     | Surah introduction file in `public/`, for `'chapter-info'`. |
+| `tafsirFile`      | string                                           | `''`     | Tafsir file in `public/`, read only when `show` is `'tafsir'` (which needs it). |
+| `chapterInfoFile` | string                                           | `''`     | Surah introduction file in `public/`, read only when `show` is `'chapter-info'` (which needs it). |
 
 ### `header` (`MushafRecitation` and `MushafPassage`)
 
@@ -650,7 +750,9 @@ one after the other before the first ayah line, and a header line the recording 
 is left out. In `MushafPassage` each holds that long, after the intro card. Under
 `fonts: 'package'` the surah-name and `quran-common` fonts are read from
 `public/fonts/surah-names-v4/surah_names.woff2` and `public/fonts/quran-common/quran-common.woff2`
-(`bun run qul fonts 1` downloads them; they are not committed).
+(`bun run qul fonts 1` downloads them; they are not committed). The intro card (`overlay.title`
+`'intro'` or `'both'`) names the surah too: with both on, the name shows twice at the start, so use
+one or the other.
 
 ### `review` (`MushafRecitation` only)
 
@@ -821,6 +923,31 @@ chapter.
 | `applySplits(lines, splits)`        | A passage with its `splits` applied, order preserved.                                     |
 | `doubtfulWords(timings, {threshold?})` | The doubtful words by id, with their reasons.                                          |
 | `wordIdAt(line, surah, ayah, position)` | The `wordId` a split must name to cut a line before a word.                           |
+| `fitSplits(lines, splits)`          | `applySplits()` that leaves out what does not fit instead of throwing: `{lines, dropped}`, what the Studio's preview resolves with. |
+| `droppedSplitsWarning(dropped)`, `droppedSplitsError(dropped)` | The preview's warning naming the dropped splits, and the `BAD_LINE_SPLIT` a render throws for them (`null` for none). |
+
+### Drop-in slots
+
+See [Inside your own composition](#inside-your-own-composition).
+
+| Export                                                         | Does                                                                        |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `mushafRecitationSlotSchema`, `mushafAyahTextSlotSchema`, `mushafPageSlotSchema` | A composition's schema, nullable: the field of a template's schema. |
+| `defaultMushafRecitationSlotProps`, `defaultMushafAyahTextSlotProps`, `defaultMushafPageSlotProps`, `MUSHAF_SLOT_DEFAULTS` | The defaults with transparent backgrounds. |
+| `emptySlotPropsFor(kind)`                                      | The slot defaults without the sample's files: what a first save into a `null` slot starts from. |
+| `resolveMushafRecitationSlot(props, {fps, abortSignal?, isRendering?})`, `resolveMushafAyahTextSlot()`, `resolveMushafPageSlot()` | `{props, durationInFrames, error}` at the template's fps, no size, never throwing the package's errors in the Studio's preview. |
+| `slotDurationOf(props)`, `slotErrorOf(props)`                  | The length and the error a resolver left in `props.resolved`.               |
+| `<MushafRecitationSlot>`, `<MushafAyahTextSlot>`, `<MushafPageSlot>` | The box's `<Sequence>` with the composition in it and the panel docked beside it (`MushafSlotOptions`). |
+
+### Audio
+
+| Export                                                   | Does                                                                              |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `hostAudioSchema`, `defaultHostAudio`, `hostAudioOf(props)`, `followsHostAudio(props)` | The `hostAudio` group, read leniently (props without it read as off). |
+| `assertNoHostRepeats(props, memorize)`                   | `BAD_STUDIO_PROP` for a `memorize` repeat under `hostAudio`.                     |
+| `OWN_AUDIO_NAME`                                         | The `name` of the compositions' own `<Audio>`, which the panel leaves out of the template's tracks. |
+| `encodeWav(samples, sampleRate)`, `audioToWav(blob, name, decode?)`, `WAV_SAMPLE_RATE` | A recording (a video's sound included) as a mono 16-bit WAV at 16 kHz, for the aligner. |
+| `analyzeAudio()`, `gainFor()`, `volumeAt()`, `silenceTrimSeconds()` | The analysis, the normalisation gain, the volume curve and the silence trim of [`audio`](#audio-mushafrecitation-mushafayahtext-mushafpage). |
 
 ### Fonts
 
@@ -838,7 +965,9 @@ sidebar controls: `themeNameSchema`, `customThemeSchema`, `fontsSchema`, `dataSc
 `layoutSchema`, `animationSchema`, `highlightSchema`, `textSchema`, `reviewSchema`,
 `lineSplitSchema`; their defaults (`defaultCustomTheme`, `defaultLayout`, `defaultAnimation`,
 `defaultHighlight`, `defaultText`, `defaultReview`); the value lists (`THEME_NAMES`, `ASPECTS`,
-`ENTRANCES`, `HIGHLIGHT_STYLES`, `MIRROR_FILES`).
+`ENTRANCES`, `HIGHLIGHT_STYLES`, `MIRROR_FILES`). Their descriptions say which of two overlapping
+options wins; their colour fields carry no description, so the Props sidebar shows a picker
+(`.describe()` on a `zColor()` turns it into a text box in Remotion 4.0.539).
 
 And the converters from those values to the main package's props, so your own composition paints
 the same way:

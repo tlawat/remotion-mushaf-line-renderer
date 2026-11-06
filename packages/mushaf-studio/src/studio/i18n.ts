@@ -483,6 +483,17 @@ const EN = {
   'text.busy.surahInfo': 'Fetching the surah introduction...',
   'text.notice.endCard': 'public/{path} is written and the end card shows it.',
 
+  'inactive.translationHidden':
+    'Not shown now: text.translationPosition is none. The files are still read; pick a position in the Props sidebar to show them.',
+  'inactive.glossHidden':
+    'Not shown now: text.glossPosition is none. Set it to strip or interlinear in the Props sidebar to show these files.',
+  'inactive.endCardFile':
+    'Not shown now: endCard.show is {show}. Fetching again sets it to {kind}, or pick {kind} in the Props sidebar.',
+  'inactive.pageColour':
+    "background.kind is {kind}, so a look's page colour shows only on what the composition paints itself (the title card, the counter, the end card).",
+  'inactive.pageColourLegacy':
+    'layout.backgroundImage (a legacy field) puts an image over the page colour. The looks that set colours empty it; a frame look keeps it.',
+
   'project.menu': 'Project',
   'project.export': 'Export project',
   'project.import': 'Import project...',
@@ -939,6 +950,17 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'text.busy.tafsir': 'جارٍ جلب {name}...',
   'text.busy.surahInfo': 'جارٍ جلب التعريف بالسورة...',
   'text.notice.endCard': 'كُتب public/{path} وتعرضه البطاقة الختامية.',
+
+  'inactive.translationHidden':
+    'لا تظهر الآن: قيمة text.translationPosition هي none. ما زالت الملفات تُقرأ؛ اختر موضعًا في شريط الخصائص لإظهارها.',
+  'inactive.glossHidden':
+    'لا تظهر الآن: قيمة text.glossPosition هي none. اجعلها strip أو interlinear في شريط الخصائص لإظهار هذه الملفات.',
+  'inactive.endCardFile':
+    'لا يظهر الآن: قيمة endCard.show هي {show}. الجلب من جديد يجعلها {kind}، أو اختر {kind} في شريط الخصائص.',
+  'inactive.pageColour':
+    'قيمة background.kind هي {kind}، فلا يظهر لون الصفحة الذي يضبطه المظهر إلا فيما يرسمه التركيب بنفسه (بطاقة العنوان والعدّاد والبطاقة الختامية).',
+  'inactive.pageColourLegacy':
+    'الحقل layout.backgroundImage (حقل قديم) يضع صورةً فوق لون الصفحة. المظاهر التي تضبط الألوان تُفرغه؛ ومظهر الإطار يُبقيه.',
 
   'project.menu': 'المشروع',
   'project.export': 'تصدير المشروع',

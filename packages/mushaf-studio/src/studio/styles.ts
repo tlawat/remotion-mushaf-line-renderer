@@ -169,6 +169,10 @@ export const styles = {
     whiteSpace: 'nowrap',
   }),
   note: {color: colors.muted, fontSize: 11, margin: '4px 0 8px'} as CSSProperties,
+  /** What the current props make do nothing (`<Inactive>`): greyed out, still usable. */
+  inactive: {opacity: 0.45} as CSSProperties,
+  /** The reason above it, at full strength so it reads. */
+  inactiveNote: {color: colors.warning, fontSize: 11, margin: '4px 0 8px'} as CSSProperties,
   list: {listStyle: 'none', margin: 0, padding: 0} as CSSProperties,
   listRow: (active: boolean): CSSProperties => ({
     borderBottom: `1px solid ${colors.border}`,

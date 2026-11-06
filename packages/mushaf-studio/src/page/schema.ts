@@ -35,9 +35,15 @@ export const pageViewSchema = z.object({
   lineHighlight: z
     .enum(LINE_HIGHLIGHTS)
     .describe('How the line being recited is marked: a band behind it, a rule under it'),
-  lineHighlightColor: zColor().describe('Colour of the band or the rule'),
+  /** Colour of the band or the rule. */
+  lineHighlightColor: zColor(),
   /** Opacity of the lines that are not being recited: 1 for no dimming. */
-  dimOtherLines: z.number().min(0).max(1).step(0.05).describe('Opacity of the other lines (1: none)'),
+  dimOtherLines: z
+    .number()
+    .min(0)
+    .max(1)
+    .step(0.05)
+    .describe('Opacity of the other lines (1: none), on top of highlight.dimOthers'),
   frame: z.enum(PAGE_FRAMES).describe('Page border: a thin double rule, or one with corner ornaments'),
   /** In Arabic-Indic digits, under the page. */
   pageNumber: z.boolean().describe('Show the page number under the page'),
@@ -60,7 +66,9 @@ export const PAGE_TRANSLATION_POSITIONS = ['auto', 'beside', 'below', 'none'] as
 export const pageTextSchema = textSchema.extend({
   translationPosition: z
     .enum(PAGE_TRANSLATION_POSITIONS)
-    .describe('Where the translation goes: beside the page, under it, wherever there is more room (auto), or nowhere'),
+    .describe(
+      'Where the translation goes: beside the page, under it, wherever there is more room (auto), or none (hidden; still read)',
+    ),
 });
 
 export type PageText = z.infer<typeof pageTextSchema>;
@@ -96,17 +104,19 @@ export const mushafPageSchema = z.object({
     .max(286)
     .describe('Last ayah to follow (0: as the timings say; timings across surahs are used whole)'),
   theme: themeNameSchema,
-  customTheme: customThemeSchema.describe('The palette used when theme is custom'),
+  customTheme: customThemeSchema,
   fonts: fontsSchema,
   data: dataSchema,
   /** The page is centred and scaled to fit; `visibleLines`, `neighbourOpacity`, `verticalAlign` and `offsetY` do not apply. */
   layout: layoutSchema.describe(
-    'Frame, colours and side margins (the page is centred: lines on screen, their opacity and position do not apply)',
+    'Frame, page colour (painted when background.kind is color) and margins. The page is centred: lines on screen, their opacity and position do not apply',
   ),
   background: backgroundSchema.describe(
-    'Around the page: a colour, a gradient, an image or a looping video, and a glow',
+    'Around the page: a colour, a gradient, an image or a looping video, and a glow. background.color fills only behind an image, video or gradient',
   ),
-  highlight: highlightSchema.describe('What follows the recitation inside the line and how it is marked'),
+  highlight: highlightSchema.describe(
+    'What follows the recitation inside the line and how it is marked (pageView marks the line)',
+  ),
   review: reviewSchema.describe('Studio only: the doubtful words of the alignment'),
   pageView: pageViewSchema.describe('The page: the current line’s mark, the border, the page number and the turn'),
   text: pageTextSchema.describe(

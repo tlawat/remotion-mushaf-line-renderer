@@ -19,6 +19,7 @@ import {
 } from '../../translations';
 import {unicodeFontOf} from '../../unicode/font';
 import {fetchQuranComText, QURAN_TEXT_SCRIPTS, type QuranTextScript, serialiseAyahWords} from '../../unicode/text';
+import {endCardFileInactive, type InactiveReason, translationInactive, wordByWordInactive} from '../inactive';
 import {quranTextName} from '../recording';
 import {
   loadOnce,
@@ -48,7 +49,7 @@ import {
   translationLayersOf,
   translationLayersPatch,
 } from '../tab-props';
-import {Button, Field, Note, Section} from '../ui';
+import {Button, Field, Inactive, Note, Section} from '../ui';
 import {usePublicFiles} from '../use-public-files';
 
 type FileField = 'translationFile' | 'glossFile' | 'transliterationFile';
@@ -126,6 +127,8 @@ const moved = (layers: readonly TranslationLayer[], from: number, to: number): T
  * file, or up to three layers where the composition takes `text.translations`) and a word gloss
  * from quran.com into `public/`, or any file already there; and for the end card, the passage's
  * tafsir and the surah's introduction. A page takes translations but no word gloss (it is printed whole).
+ * What the props hide (a translation or a gloss placed `'none'`, an end-card file the card does not
+ * show) is greyed out under the reason (`inactive.ts`), and stays usable.
  */
 export const TextTab: React.FC<TabProps> = (tabProps) => <TranslationsAndText {...tabProps} />;
 
@@ -166,6 +169,7 @@ const EndCardContent: React.FC<TabProps> = ({target, props, project}) => {
   const passage = passageOf(props);
   const card = endCardOf(props);
   const working = busy !== null;
+  const why = (reason: InactiveReason | null) => (reason ? t(reason.key, reason.params) : null);
   const tafsirs = (quranComTafsirs ?? []).filter((entry) => entry.language === language);
   const tafsir = tafsirs.find((entry) => entry.id === choice) ?? tafsirs[0];
 
@@ -202,7 +206,9 @@ const EndCardContent: React.FC<TabProps> = ({target, props, project}) => {
   return (
     <>
       <Section title={t('text.tafsir')}>
-        <Note>{t('text.now', {file: card.tafsirFile || t('common.none')})}</Note>
+        <Inactive reason={why(endCardFileInactive(props, 'tafsir'))}>
+          <Note>{t('text.now', {file: card.tafsirFile || t('common.none')})}</Note>
+        </Inactive>
         {quranComTafsirs === null ? (
           <Note>{t('text.loadingTafsirs')}</Note>
         ) : (
@@ -223,7 +229,9 @@ const EndCardContent: React.FC<TabProps> = ({target, props, project}) => {
         </Button>
       </Section>
       <Section title={t('text.surahInfo')}>
-        <Note>{t('text.now', {file: card.chapterInfoFile || t('common.none')})}</Note>
+        <Inactive reason={why(endCardFileInactive(props, 'chapter-info'))}>
+          <Note>{t('text.now', {file: card.chapterInfoFile || t('common.none')})}</Note>
+        </Inactive>
         <Field label={t('text.surahInfoLanguage')}>
           {(id) => (
             <input
@@ -384,6 +392,8 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
   const words = !isAyahTextProps(props) && !isPageProps(props);
   // Every composition here has a `text` group; one without would be given a key its schema refuses.
   const takesText = textGroupOf(props) !== null;
+  // What the props hide stays usable (a file can be fetched first), greyed out under the reason.
+  const why = (reason: InactiveReason | null) => (reason ? t(reason.key, reason.params) : null);
 
   return (
     <div>
@@ -420,136 +430,140 @@ const TranslationsAndText: React.FC<TabProps> = (tabProps) => {
             layered ? t('text.layers', {count: layers.length, max: MAX_TRANSLATION_LAYERS}) : t('text.ayahTranslation')
           }
         >
-          {layered ? (
-            layers.length === 0 ? (
-              <Note>{t('text.noLayers')}</Note>
+          <Inactive reason={why(translationInactive(props))}>
+            {layered ? (
+              layers.length === 0 ? (
+                <Note>{t('text.noLayers')}</Note>
+              ) : (
+                <ul style={styles.list} data-mushaf-control="translation-layers">
+                  {layers.map((layer, index) => (
+                    <li key={layerKeys[index]} style={{...styles.row, padding: '3px 0'}} data-layer={index}>
+                      <span style={{flex: '1 1 auto', overflowWrap: 'anywhere'}}>
+                        {t('text.layer', {n: index + 1, file: layer.file || t('common.none'), font: layer.font})}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        title={t('text.layerUp')}
+                        disabled={working || index === 0}
+                        onClick={() => saveLayers(moved(layers, index, index - 1))}
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        title={t('text.layerDown')}
+                        disabled={working || index === layers.length - 1}
+                        onClick={() => saveLayers(moved(layers, index, index + 1))}
+                      >
+                        ↓
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        title={t('text.layerFetch')}
+                        disabled={working || !resource || !passage}
+                        onClick={() => fetchTranslation(index)}
+                      >
+                        ⟳
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        title={t('text.layerRemove')}
+                        disabled={working}
+                        onClick={() => saveLayers(layers.filter((_, i) => i !== index))}
+                      >
+                        ×
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )
             ) : (
-              <ul style={styles.list} data-mushaf-control="translation-layers">
-                {layers.map((layer, index) => (
-                  <li key={layerKeys[index]} style={{...styles.row, padding: '3px 0'}} data-layer={index}>
-                    <span style={{flex: '1 1 auto', overflowWrap: 'anywhere'}}>
-                      {t('text.layer', {n: index + 1, file: layer.file || t('common.none'), font: layer.font})}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      title={t('text.layerUp')}
-                      disabled={working || index === 0}
-                      onClick={() => saveLayers(moved(layers, index, index - 1))}
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      title={t('text.layerDown')}
-                      disabled={working || index === layers.length - 1}
-                      onClick={() => saveLayers(moved(layers, index, index + 1))}
-                    >
-                      ↓
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      title={t('text.layerFetch')}
-                      disabled={working || !resource || !passage}
-                      onClick={() => fetchTranslation(index)}
-                    >
-                      ⟳
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      title={t('text.layerRemove')}
-                      disabled={working}
-                      onClick={() => saveLayers(layers.filter((_, i) => i !== index))}
-                    >
-                      ×
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : (
-            <Note>{t('text.now', {file: current('translationFile')})}</Note>
-          )}
-          {quranComResources === null ? (
-            <Note>{t('text.loadingList')}</Note>
-          ) : (
-            <>
-              <ResourcePicker
-                resources={quranComResources}
-                language={language}
-                onLanguage={(next) => {
-                  setLanguage(next);
-                  setResourceChoice(0);
-                }}
-                resource={resource}
-                onResource={setResourceChoice}
-                label={t('text.translation')}
-              />
-              <div style={styles.row}>
-                {layered ? (
-                  <Button
-                    variant="primary"
-                    onClick={() => fetchTranslation('new')}
-                    disabled={working || !resource || !passage || full}
-                  >
-                    {t('text.addLayer')}
-                  </Button>
-                ) : (
-                  <>
+              <Note>{t('text.now', {file: current('translationFile')})}</Note>
+            )}
+            {quranComResources === null ? (
+              <Note>{t('text.loadingList')}</Note>
+            ) : (
+              <>
+                <ResourcePicker
+                  resources={quranComResources}
+                  language={language}
+                  onLanguage={(next) => {
+                    setLanguage(next);
+                    setResourceChoice(0);
+                  }}
+                  resource={resource}
+                  onResource={setResourceChoice}
+                  label={t('text.translation')}
+                />
+                <div style={styles.row}>
+                  {layered ? (
                     <Button
                       variant="primary"
-                      onClick={() => fetchTranslation()}
-                      disabled={working || !resource || !passage}
+                      onClick={() => fetchTranslation('new')}
+                      disabled={working || !resource || !passage || full}
                     >
-                      {t('text.fetchForPassage')}
+                      {t('text.addLayer')}
                     </Button>
-                    <Button
-                      onClick={() => setFile('translationFile', '')}
-                      disabled={working || !textFileOf(props, 'translationFile')}
-                    >
-                      {t('text.none')}
-                    </Button>
-                  </>
-                )}
-              </div>
-              {layered ? <Note>{t('text.layersNote', {max: MAX_TRANSLATION_LAYERS})}</Note> : null}
-            </>
-          )}
+                  ) : (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() => fetchTranslation()}
+                        disabled={working || !resource || !passage}
+                      >
+                        {t('text.fetchForPassage')}
+                      </Button>
+                      <Button
+                        onClick={() => setFile('translationFile', '')}
+                        disabled={working || !textFileOf(props, 'translationFile')}
+                      >
+                        {t('text.none')}
+                      </Button>
+                    </>
+                  )}
+                </div>
+                {layered ? <Note>{t('text.layersNote', {max: MAX_TRANSLATION_LAYERS})}</Note> : null}
+              </>
+            )}
+          </Inactive>
         </Section>
       ) : (
         <Note>{t('text.noTextGroup')}</Note>
       )}
       {words ? (
         <Section title={t('text.wordByWord')}>
-          <Note>
-            {t('text.glossNow', {gloss: current('glossFile'), transliteration: current('transliterationFile')})}
-          </Note>
-          <Field label={t('text.glossLanguage')}>
-            {(id) => (
-              <input
-                id={id}
-                style={styles.input}
-                value={glossLanguage}
-                onChange={(e) => setGlossLanguage(e.target.value)}
-              />
-            )}
-          </Field>
-          <div style={styles.row}>
-            <Button onClick={() => fetchGloss('translation')} disabled={working || !passage}>
-              {t('text.fetchWordTranslation')}
-            </Button>
-            <Button onClick={() => fetchGloss('transliteration')} disabled={working || !passage}>
-              {t('text.fetchWordTransliteration')}
-            </Button>
-            <Button onClick={() => setFile('glossFile', '')} disabled={working || !textFileOf(props, 'glossFile')}>
-              {t('text.noGloss')}
-            </Button>
-            <Button
-              onClick={() => setFile('transliterationFile', '')}
-              disabled={working || !textFileOf(props, 'transliterationFile')}
-            >
-              {t('text.noTransliteration')}
-            </Button>
-          </div>
+          <Inactive reason={why(wordByWordInactive(props))}>
+            <Note>
+              {t('text.glossNow', {gloss: current('glossFile'), transliteration: current('transliterationFile')})}
+            </Note>
+            <Field label={t('text.glossLanguage')}>
+              {(id) => (
+                <input
+                  id={id}
+                  style={styles.input}
+                  value={glossLanguage}
+                  onChange={(e) => setGlossLanguage(e.target.value)}
+                />
+              )}
+            </Field>
+            <div style={styles.row}>
+              <Button onClick={() => fetchGloss('translation')} disabled={working || !passage}>
+                {t('text.fetchWordTranslation')}
+              </Button>
+              <Button onClick={() => fetchGloss('transliteration')} disabled={working || !passage}>
+                {t('text.fetchWordTransliteration')}
+              </Button>
+              <Button onClick={() => setFile('glossFile', '')} disabled={working || !textFileOf(props, 'glossFile')}>
+                {t('text.noGloss')}
+              </Button>
+              <Button
+                onClick={() => setFile('transliterationFile', '')}
+                disabled={working || !textFileOf(props, 'transliterationFile')}
+              >
+                {t('text.noTransliteration')}
+              </Button>
+            </div>
+          </Inactive>
         </Section>
       ) : (
         <Note>{t('text.glossOnlyRecitation')}</Note>

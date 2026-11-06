@@ -100,6 +100,7 @@ prints why the download failed (`Could not download ...`) and the Studio starts 
 | `MushafPage`       | The whole printed page the recitation is on, the line being recited marked, turning to the next page. The panel docks here too. |
 | `MushafPassage`    | A passage without audio: each line stays `holdSeconds`, then gives way to the next. Set the surah and the ayahs in the Props sidebar. |
 | `MushafThumbnail`  | A still at 1280×720: the surah's framed name, its opening line, a title and a subtitle. Review's **Thumbnail** sets it to the passage. |
+| `MushafInTemplate` | A template of its own (a 1080×1920 reel with a title, an intro, an outro and its own audio track) with a recitation dropped in under `mushaf`. The panel docks here too, on every frame. See [A template of your own](#a-template-of-your-own). |
 
 The three recitation compositions also read timings that cross surahs (version 2 of the timings
 format, for a juz or a hizb): the file is used whole, and each later surah's printed header comes
@@ -122,18 +123,30 @@ timings were written. The panel exists in the Studio only: it is never in a rend
 
 ### Source
 
-Where the recitation comes from.
+Where the recitation comes from, as one choice. A **Now:** line at the top says what the
+composition plays and where it came from; each choice has one button and a line that says what it
+replaces.
 
-- **Catalogue.** The aligner's catalogue lists about ninety reviewed recitations (reciter, riwayah,
-  style) and the chapters each covers. Pick one, a surah and an ayah range: the panel fetches the
-  reviewed segments with their word times, downloads the catalogue's clip of exactly that range,
-  writes both into the project's folder and points `audioFile` and `timingsFile` at them (if the
-  download fails, `audioFile` streams the clip from the catalogue instead). Nothing is uploaded and
-  there is nothing to align; go to Review. A recitation in another riwayah than Hafs (Warsh, Qalun,
-  Shu'bah) shows a warning first, since the page is the Hafs print and its words can differ: **Use
-  this recitation** waits until you tick the box that confirms it.
-- **Own recording.** Pick an audio file, or one already in `public/`. The panel copies it into the
-  project's folder and sets `audioFile`. It stays on your machine until you press Align.
+- **Download from the catalogue.** The aligner's catalogue lists about ninety reviewed recitations
+  (reciter, riwayah, style) and the chapters each covers. Pick one, a surah and an ayah range:
+  **Download into public/** fetches the reviewed segments with their word times from
+  aligner.qud.dev and the catalogue's clip of exactly that range from the host the aligner names (a
+  Hugging Face Space), writes both into the project's folder and points `audioFile` and
+  `timingsFile` at them. Nothing is uploaded and there is nothing to align; go to Review. If the
+  clip cannot be downloaded nothing is saved: **Retry the download**, or **Stream from** its host
+  on purpose (renders then need that host; the Now line offers the download again later). A
+  recitation in another riwayah than Hafs (Warsh, Qalun, Shu'bah) shows a warning first, since the
+  page is the Hafs print and its words can differ: the download waits until you tick the box that
+  confirms it.
+- **Upload my recording.** Pick an audio or video file: the panel copies it into the project's
+  folder under a free name (it never replaces a file there) and stages it for Align. It stays on
+  your machine until you press Align.
+- **A file already in public/.** **Align this file** stages it for Align; **Replace the audio only**
+  swaps `audioFile` and keeps the timings, with a warning that the highlight follows the old ones.
+- **A track in this video** (in a template with its own audio or video, `MushafInTemplate` for
+  one): **Use this track** makes the recitation follow the template's track (`hostAudio`) instead of
+  playing audio of its own; Align or Review it as usual, and **Update timing** when you move the
+  track on the timeline.
 
 ### Look
 
@@ -243,6 +256,12 @@ layer's file (a composition whose `translations` is empty shows it alone). The g
 (`chapter-info-<surah>-<lang>.json`). Each sets its file and makes the card show it
 (`endCard.show`); its length is `endCard.seconds` in the Props sidebar.
 
+What the props make do nothing is greyed out, with the reason: the translations while
+`text.translationPosition` is `none`, the word-by-word files while `text.glossPosition` is `none`, an
+end-card file while the card shows something else. Each stays usable, so a file can be fetched
+before it is shown. The Look tab greys out a look's page colour the same way under an image, a
+video or a gradient background.
+
 **Quran text** is what `MushafAyahText` sets, one ayah at a time. Pick the script (`uthmani` or
 `indopak`) and fetch the text of this passage: the panel saves it from quran.com as
 `text-<script>-<surah>-<from>-<to>.json` in the project's folder and, in `MushafAyahText`, makes it
@@ -291,6 +310,35 @@ QUL's CDN; under `fonts: 'package'` (offline) from `public/fonts/surah-names-v4/
 and `public/fonts/quran-common/quran-common.woff2`. Those two files are not committed: run
 `bun run qul fonts 1` at the repository root (it downloads them into `example/public/fonts/`) and
 copy the two folders into `apps/mushaf-studio/public/fonts/`.
+
+## A template of your own
+
+`MushafInTemplate` ([`src/MushafInTemplate.tsx`](src/MushafInTemplate.tsx)) is how a recitation goes
+into a composition you already have: a 1080×1920 reel with its own schema (a title, a subtitle, the
+intro's and the outro's seconds, the outro's line, its own `soundtrack`), and the recitation's props
+nested under one key, `mushaf`, its box placed by `<MushafRecitationSlot>`.
+
+- **The panel saves under `mushaf` only.** A look, an alignment or a translation picked in the panel
+  changes `mushaf` in `src/Root.tsx`; the template's title, intro and outro are left as they are,
+  and the Props sidebar edits them as usual. The panel stays docked on the intro and the outro too,
+  and its seeks and timeline markers are placed at the recitation's start.
+- **The template's length follows the recitation.** Its `calculateMetadata()` resolves `mushaf` at
+  the template's 30 fps (`resolveMushafRecitationSlot()`) and adds the intro and the outro. With
+  `mushaf: null` (try it in the Props sidebar) the template is its intro and outro alone, and the
+  panel opens on Source: the first recitation you pick writes complete props there. A bad file or
+  range shows nothing in the box and the reason in the panel, instead of taking the template down.
+- **The template plays the audio.** `soundtrack` is the template's own `<Audio>` (named
+  `Template audio` on the timeline), from the recitation's start, and the recitation follows it
+  (`mushaf.hostAudio`) rather than playing its own. Its default is the sample's recording, so it
+  needs `bun run --cwd apps/mushaf-studio sample` once (`bun run studio` runs it): a followed track
+  has no catalogue clip to fall back to. When the recitation plays a recording of its own again (a
+  catalogue download, Align of an upload, **Replace the audio only**), the template mutes its track
+  and keeps it on the timeline, so Source still offers **A track in this video**.
+
+Copy the file into your own project as a starting point: the package's README
+([Inside your own composition](../../packages/mushaf-studio/README.md#inside-your-own-composition))
+explains each part, and the two other slots (`<MushafAyahTextSlot>`, `<MushafPageSlot>`) work the
+same way.
 
 ## Rendering
 
@@ -374,7 +422,8 @@ apps/mushaf-studio/
 
 In `public/mushaf-studio/<project>/` (the composition's id, slugified) the panel writes
 `<reciter>-<surah>-<from>-<to>.mp3` and `.timings.json` for a catalogue pick, your recording and its
-`<name>.timings.json` after Align, and `translation-<id>-<surah>-<from>-<to>.json`, the gloss files
+`<name>.timings.json` after Align (or `<name>-2.timings.json`, `-3`, ... when the file there has
+your edits or other timings: a reviewed file is never replaced), and `translation-<id>-<surah>-<from>-<to>.json`, the gloss files
 and `text-<script>-<surah>-<from>-<to>.json` from the Text tab (or, on `MushafAyahText`, with a new
 recitation), `tafsir-<id>-<surah>-<from>-<to>.json` and `chapter-info-<surah>-<lang>.json` for the
 end card, and, from Review's export row, `<stem>.srt`, `<stem>.vtt`, `<stem>.ayahs.vtt` and
@@ -432,10 +481,10 @@ otherwise needs the King Fahd Complex's permission.
   open the Studio at `http://localhost:<port>`. The aligner accepts browser requests from
   `localhost` origins, not from a LAN address or a tunnel.
 - **No sound, or a render that times out on the audio**: the sample's recording is not in `public/`
-  yet (the Studio's notice says so), or a catalogue pick's download failed, so the clip streams from
-  a Hugging Face Space, which can be asleep or down. Run
+  yet (the Studio's notice says so), or `audioFile` streams the catalogue's clip (you chose
+  **Stream from** its host), from a Hugging Face Space that can be asleep or down. Run
   `bun run --cwd apps/mushaf-studio sample` (it retries once; the Space can take over a minute to
-  wake), or pick the recitation again in the Source tab, which downloads the clip into `public/`.
+  wake), or press **Download it into public/** on Source's Now line.
 - **The panel asks to confirm a riwayah**: the catalogue recitation, or the riwayah picked in Align,
   is not Hafs, and the page is the Hafs print. Words and their spelling can differ, so some words may
   be highlighted wrongly or stay untimed. Tick the box to go on anyway.

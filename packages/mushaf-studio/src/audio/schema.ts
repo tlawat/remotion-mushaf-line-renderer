@@ -11,11 +11,18 @@ export const audioSchema = z.object({
     .min(-23)
     .max(-9)
     .step(1)
-    .describe('Target loudness in LUFS (-14: YouTube and social media, -23: broadcast)'),
+    .describe('Only when normalize is on: target loudness in LUFS (-14: YouTube and social media, -23: broadcast)'),
   fadeInSeconds: z.number().min(0).max(5).step(0.1).describe('Fade the audio in over this many seconds'),
-  fadeOutSeconds: z.number().min(0).max(5).step(0.1).describe('Fade the audio out over this many seconds at the end'),
+  fadeOutSeconds: z
+    .number()
+    .min(0)
+    .max(5)
+    .step(0.1)
+    .describe('Fade the audio out over this many seconds at the end of the recitation (before any end card)'),
   /** Starts the audio later in the file, never past the first word's entrance; the timings move with it. */
-  trimSilence: z.boolean().describe('Skip the silence before the first word'),
+  trimSilence: z
+    .boolean()
+    .describe('Skip the silence before the first word (never earlier than the first line’s animation.leadInSeconds)'),
   /** On top of the normalisation gain. */
   volume: z.number().min(0).max(2).step(0.05).describe('Volume (1: as normalised, 2: twice as loud)'),
 });

@@ -192,16 +192,23 @@ apps on one package:
 
 - [`apps/mushaf-studio`](apps/mushaf-studio): a ready-made Remotion project. Remotion Studio, plus a
   Mushaf panel docked beside the preview (Source, Look, Align, Review, Lines, Text), five
-  compositions, and `bun run make` to go from a catalogue recitation to a video on the command line.
+  compositions, `MushafInTemplate` (a template of its own with a recitation dropped in, following
+  the template's audio track), and `bun run make` to go from a catalogue recitation to a video on
+  the command line.
   [README](apps/mushaf-studio/README.md): the panel, the props, rendering, privacy, licences.
 - [`apps/mushaf-web`](apps/mushaf-web): one static page that does the catalogue path in the browser,
   with nothing to install: a recitation, a look, a translation, a `<Player>` preview, and an
   in-browser render to a file. No own recordings, alignment or review.
   [README](apps/mushaf-web/README.md).
 - [`packages/mushaf-studio`](packages/mushaf-studio): `@tlawat/mushaf-studio`, the compositions, Zod
-  schemas and panel both apps use, for your own Remotion project.
+  schemas and panel both apps use, for your own Remotion project, as compositions of their own or
+  as drop-in slots inside a template you already have (`<MushafRecitationSlot>`,
+  `resolveMushafRecitationSlot()`; see
+  [Inside your own composition](packages/mushaf-studio/README.md#inside-your-own-composition)).
   [README](packages/mushaf-studio/README.md).
-- [docs/mushaf-studio/plan.md](docs/mushaf-studio/plan.md): the design, its decisions and the roadmap.
+- [docs/mushaf-studio/plan.md](docs/mushaf-studio/plan.md): the design, its decisions and the roadmap;
+  [drop-in-and-reliability.md](docs/mushaf-studio/drop-in-and-reliability.md): the drop-in slots,
+  the panel's save path and the explicit audio sources.
 
 From a clone of this repository:
 

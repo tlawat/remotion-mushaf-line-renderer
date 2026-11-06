@@ -137,6 +137,35 @@ design and the roadmap.
   timeline, follows one (a `blob:` track is copied into `public/` once and mapped back to that copy),
   and offers Update timing when it moves. The glow's levels are silent before
   a track that starts after the composition (`levelsWindow()`).
+- **Panel saves build on the Studio's live props.** In Remotion 4.0.539 the props
+  `saveDefaultProps()` hands its callback stay the Root as the page loaded it, so every panel save
+  wrote back the page-load value of every field it did not set (Props-sidebar edits, the Studio's
+  undo, hand edits of the Root) and replayed every value it had ever written. Saves now start from
+  the live props (`EditorPropsContext`, read in `remotion-internals.ts` only, its shapes pinned by
+  a test), add only the panel's saves still on their way, and run one at a time. When the live
+  props lose what the panel saved (the sidebar's JSON Reset, the Studio's undo, a racing sidebar
+  save), the dock names the fields and offers **Restore** instead of writing them back.
+- **Data that stays in step.** A timings file with manual edits or other timings is never
+  replaced: new timings go to `<name>-2.timings.json`, `-3`, ... (`timingsPathFor()`). The range and
+  the splits are reset only for another recording (`isOtherRecording()`), which also clears the
+  translations, glosses, tafsir and surah introduction that do not fit the new passage
+  (`stalePassageFiles()`). Uploads take a free name. Splits that no longer fit the range or `slice`
+  are left out of the Studio's preview (`fitSplits()`, `resolved.droppedSplits`) and removed in one
+  click in Lines; a render refuses them (`droppedSplitsError()`, `BAD_LINE_SPLIT`). Review keeps its
+  nudges and re-align boundaries in recording time. Drafts, uploads and look undo are kept per
+  composition (and slot) and survive a tab switch; frame looks no longer set positions, and Undo
+  puts back only the fields that still hold a look's values. `MushafPage` projects import, and
+  `background.src` is listed with a project's files.
+- **Which option wins.** The schema descriptions of overlapping options say which one wins
+  (`layout.background` and `background.color`, `layout.backgroundImage` and `background.src`,
+  `header` and the intro card, `highlight` and `memorize`, `translations` and `translationFile`,
+  `glossPosition` and the gloss files, `endCard.show` and its files, `hostAudio` and the audio
+  cleanup, `fonts` and the registered packages, `customTheme` and `theme`, `legend.show` and the
+  theme). Colour fields lost their descriptions: in Remotion 4.0.539 a `.describe()` replaces
+  `zColor()`'s marker, and the Props sidebar showed a text box instead of the colour picker. The
+  panel greys out what the props make do nothing, with the reason and in both languages: a
+  translation or a gloss placed `none`, an end-card file the card does not show, a look's page
+  colour under an image, a video or a gradient.
 - **CI.** After the render suite, CI builds `apps/mushaf-web`, downloads the sample's recording and
   runs the Studio smoke suite (`test:studio`, which now covers the Review tab). The root
   `bun run typecheck` checks `apps/mushaf-web` too.

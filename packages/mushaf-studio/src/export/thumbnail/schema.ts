@@ -31,10 +31,12 @@ export const mushafThumbnailSchema = z.object({
   customTheme: customThemeSchema,
   fonts: fontsSchema,
   data: dataSchema,
-  background: zColor().describe('Background colour'),
+  /** Background colour. */
+  background: zColor(),
   /** A `public/` path or an https URL, drawn over the colour and cropped to the frame. */
-  backgroundImage: z.string().describe('Background image in public/ (empty: none)'),
-  color: zColor().describe('Colour of the texts and the surah name (and the line under the plain theme)'),
+  backgroundImage: z.string().describe('Background image in public/, drawn over the background colour (empty: none)'),
+  /** Colour of the texts and the surah name (and the line under the plain theme). */
+  color: zColor(),
   font: z.string().describe('CSS font family of the title and subtitle'),
   /** px. */
   titleSize: z.number().int().min(16).max(160).describe('Title size in px'),
