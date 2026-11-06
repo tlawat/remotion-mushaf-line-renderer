@@ -13,7 +13,10 @@ export {
 export {
   calculateMushafRecitationMetadata,
   enterSeconds,
+  type ResolvedProps,
+  type ResolvePropsOptions,
   recitationDuration,
+  resolveRecitationProps,
   withRecitationAudio,
 } from './calculate-metadata';
 export {MushafRecitation} from './MushafRecitation';

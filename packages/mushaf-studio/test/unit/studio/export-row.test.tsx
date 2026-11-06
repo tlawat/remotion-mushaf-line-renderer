@@ -378,3 +378,43 @@ describe('thumbnail', () => {
     expect(thumbnailPatchOf(propsWith(timingsOf(1, 2), ''), crossing)).toEqual({surah: 113, fromAyah: 4, toAyah: 5});
   });
 });
+
+describe('in a slot of a template', () => {
+  /** The panel of a slot under `mushaf`, the recitation starting `frameOffset` frames into the template. */
+  const slot = (props: MushafRecitationProps, frameOffset: number) =>
+    render(
+      <MushafStudioPanel
+        compositionId="MyTemplate"
+        props={props}
+        propsKey="mushaf"
+        frameOffset={frameOffset}
+        initialTab="review"
+      />,
+    );
+
+  it("copies the chapters at the video's times: the slot's start later, the first still at 0:00", async () => {
+    const timings = timingsOf(4, 12);
+    slot(propsWith(timings), 150);
+    fireEvent.click(screen.getByRole('button', {name: 'Copy chapters'}));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const chapters = chaptersFromTimings(timings, {offsetSeconds: 5});
+    expect(writeText).toHaveBeenCalledWith(`${chapters.join('\n')}\n`);
+    expect(writeText.mock.calls[0]![0].startsWith('0:00 Al-Fatihah 1:2\n0:17 Al-Fatihah 1:3\n')).toBe(true);
+    // The description carries the same chapters.
+    fireEvent.click(screen.getByRole('button', {name: 'Copy description'}));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls[1]![0]).toContain('0:17 Al-Fatihah 1:3');
+  });
+
+  it('saves the thumbnail without leaving the template, and says where it went', async () => {
+    slot(propsWith(timingsOf(4, 12)), 150);
+    fireEvent.click(screen.getByRole('button', {name: 'Thumbnail'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(saveCall(0).compositionId).toBe('MushafThumbnail');
+    expect(studio.goToComposition).not.toHaveBeenCalled();
+    expect(getStudioState().notice).toBe(
+      'MushafThumbnail now shows 1:2-5. The Studio stays on this template: select MushafThumbnail in the sidebar to see it.',
+    );
+  });
+});

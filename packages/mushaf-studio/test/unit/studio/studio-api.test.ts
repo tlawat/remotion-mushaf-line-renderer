@@ -278,6 +278,12 @@ describe('the Studio API wrappers', () => {
     expect(await api.patchOtherComposition('MushafThumbnail', {surah: 2})).toBe(false);
   });
 
+  it('saves another composition without selecting it when asked (a slot stays on its template)', async () => {
+    expect(await api.patchOtherComposition('MushafThumbnail', {surah: 36}, {select: false})).toBe(true);
+    expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1);
+    expect(studio.goToComposition).not.toHaveBeenCalled();
+  });
+
   it('finds the part of a patch the props do not carry yet', () => {
     expect(api.unappliedPart({a: 1, b: {c: 2, d: 3}}, {a: 1, b: {c: 2}})).toBeNull();
     expect(api.unappliedPart({a: 1, b: {c: 2, d: 3}}, {a: 2, b: {c: 2, d: 4}, e: undefined})).toEqual({
@@ -311,6 +317,19 @@ describe('the Studio API wrappers', () => {
     expect(studio.play).toHaveBeenCalledTimes(1);
     api.seekTo(-1, 30);
     expect(studio.seek).toHaveBeenLastCalledWith(0);
+  });
+
+  it("seeks a slot's time at its start in the template: the offset added, never before the slot", () => {
+    api.seekTo(1.234, 30, 45);
+    expect(studio.seek).toHaveBeenLastCalledWith(82);
+    api.seekToTime(2, 60, 90);
+    expect(studio.seek).toHaveBeenLastCalledWith(210);
+    // A time before the recitation's 0 lands on its first frame, not in the intro.
+    api.seekToTime(-1, 30, 45);
+    expect(studio.seek).toHaveBeenLastCalledWith(45);
+    expect(studio.play).toHaveBeenCalledTimes(1);
+    expect(api.studioFrameOf(1, 30)).toBe(30);
+    expect(api.studioFrameOf(1, 30, 15)).toBe(45);
   });
 
   it('lists public files by extension, sorted, and copes with the Studio not answering', () => {

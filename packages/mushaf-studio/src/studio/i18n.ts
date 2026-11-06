@@ -38,6 +38,11 @@ const EN = {
   'panel.restore': 'Restore',
   'panel.keepAsIs': 'Keep the props as they are',
   'panel.busy.restoring': "Restoring the panel's values...",
+  'panel.slot': 'Slot',
+  'panel.slotPicker': 'Which slot of this template the panel edits',
+  'panel.slotEmpty':
+    'This template has no recitation under {key} yet. Pick a source: the first save writes complete props there, and the template keeps its own.',
+  'panel.slotError': 'The {key} slot shows nothing: {message}',
 
   'tab.source': 'Source',
   'tab.look': 'Look',
@@ -108,6 +113,7 @@ const EN = {
 
   'look.note':
     'A look sets the style props in one click, never where you placed the lines (their vertical position, offsets and margins); change any of them in the Props sidebar afterwards. The recitation, the timings and the translation files are left as they are.',
+  'look.slotNote': "In a slot the template's box decides the size: a look leaves layout.aspect as it is.",
   'look.looks': 'Looks',
   'look.active': 'The props have this look',
   'look.undo': 'Undo {name}',
@@ -259,6 +265,8 @@ const EN = {
   },
   'review.notice.descriptionCopied': 'The description is copied: paste it into YouTube.',
   'review.notice.thumbnail': '{id} now shows {surah}:{fromAyah}-{toAyah} and is open in the Studio.',
+  'review.notice.thumbnailSaved':
+    '{id} now shows {surah}:{fromAyah}-{toAyah}. The Studio stays on this template: select {id} in the sidebar to see it.',
   'error.noThumbnail':
     'The Root has no {id} composition: register <MushafThumbnail> under the id {id} (see the app README), then press Thumbnail again.',
   'review.notice.srt': {
@@ -448,6 +456,11 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'panel.restore': 'استعادة',
   'panel.keepAsIs': 'أبقِ الخصائص كما هي',
   'panel.busy.restoring': 'جارٍ استعادة قيم اللوحة...',
+  'panel.slot': 'الموضع',
+  'panel.slotPicker': 'أي موضع من هذا القالب تعدّله اللوحة',
+  'panel.slotEmpty':
+    'لا تلاوة في هذا القالب تحت {key} بعد. اختر مصدرًا: أول حفظ يكتب هناك خصائص كاملة، ويبقى للقالب ما له.',
+  'panel.slotError': 'لا يعرض الموضع {key} شيئًا: {message}',
 
   'tab.source': 'المصدر',
   'tab.look': 'المظهر',
@@ -513,6 +526,7 @@ const AR: Readonly<Record<MessageKey, Message>> = {
 
   'look.note':
     'يضبط المظهر خصائص التنسيق بنقرة واحدة، ولا يغيّر موضع الأسطر الذي ضبطته (موضعها العمودي وإزاحاتها وهوامشها)؛ ويمكنك تغيير أيٍّ منها بعد ذلك في الشريط الجانبي للخصائص (Props). أما التلاوة والتوقيتات وملفات الترجمة فتبقى كما هي.',
+  'look.slotNote': 'في الموضع يحدّد صندوق القالب المقاس: لا يغيّر المظهر layout.aspect.',
   'look.looks': 'المظاهر',
   'look.active': 'الخصائص مطابقة لهذا المظهر',
   'look.undo': 'تراجع عن {name}',
@@ -656,6 +670,8 @@ const AR: Readonly<Record<MessageKey, Message>> = {
   'review.notice.chaptersCopied': 'نُسخت الفصول ({count}): الصقها في وصف الفيديو.',
   'review.notice.descriptionCopied': 'نُسخ الوصف: الصقه في يوتيوب.',
   'review.notice.thumbnail': 'تعرض {id} الآن {surah}:{fromAyah}-{toAyah} وهي مفتوحة في الاستوديو.',
+  'review.notice.thumbnailSaved':
+    'تعرض {id} الآن {surah}:{fromAyah}-{toAyah}. يبقى الاستوديو على هذا القالب: اختر {id} من الشريط الجانبي لتراها.',
   'error.noThumbnail':
     'لا يحتوي الجذر على التركيب {id}: سجّل <MushafThumbnail> بالمعرّف {id} (انظر README التطبيق)، ثم اضغط زر الصورة المصغّرة مرة أخرى.',
   'review.notice.srt': 'كُتب public/{path}: عدد المقاطع النصية {count}، موقّتة على ملف الصوت.',

@@ -33,8 +33,10 @@ export * from './presets';
 export * from './qud';
 // Schema
 export * from './schema';
+// Drop-in slots
+export * from './slots';
 // Studio
-export {isInStudio, MushafStudioPanel, type MushafStudioPanelProps} from './studio';
+export {isInStudio, MushafStudioPanel, type MushafStudioPanelKind, type MushafStudioPanelProps} from './studio';
 // Translations
 export * from './translations';
 // Types

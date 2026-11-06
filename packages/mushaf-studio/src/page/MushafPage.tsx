@@ -23,6 +23,7 @@ import {
   translationsOf,
   useTranslationLayers,
   volumeCurveFor,
+  type WithPanelOption,
 } from '../compositions/parts';
 import {ayahAt, recordingUrl} from '../compositions/shared';
 import {passageSpan} from '../compositions/timings';
@@ -301,7 +302,7 @@ export const pageTranslationStyle = (
  * after the last ayah when asked; the audio normalised and faded as `audio` says. In the Studio, the
  * doubtful words are marked, the fonts and audio warnings shown, and the Mushaf panel docked.
  */
-export const MushafPage: React.FC<MushafPageProps> = (props) => {
+export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = true, ...props}) => {
   const {audioFile, fonts, layout, highlight, review, pageView, text, legend, endCard, audio} = props;
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
   const frame = useCurrentFrame();
@@ -439,7 +440,7 @@ export const MushafPage: React.FC<MushafPageProps> = (props) => {
         height={height}
       />
       {isStudio && <StudioWarnings warnings={[fontSetup.warning, resolved.audioWarning]} />}
-      {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
+      {isStudio && panel && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );
 };

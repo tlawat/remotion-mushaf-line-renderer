@@ -113,6 +113,13 @@ design and the roadmap.
   hides with its word (opacity 0, layout kept) or goes faint with it (0.12):
   `glossVisibilityFrom()`, `<InterlinearGlosses visibilityOf>`. The active word's gloss is
   highlighted as before.
+- **Drop-in slots.** A recitation, an ayah text or a page inside a template of your own, its props
+  under one key of the template's (`mushafRecitationSlotSchema`, `null` until one is picked):
+  `resolveMushafRecitationSlot()` (at the template's fps, no size, never throwing in the Studio's
+  preview), `<MushafRecitationSlot>` (the box's `<Sequence>`, the panel docked beside it on every
+  frame), and the same for `MushafAyahText` and `MushafPage`. The panel takes `propsKey`, `kind`
+  and `frameOffset`; the compositions take `panel={false}`; the glow's levels record their fps
+  (`levelsFps`). The app's `MushafInTemplate` is the example.
 - **CI.** After the render suite, CI builds `apps/mushaf-web`, downloads the sample's recording and
   runs the Studio smoke suite (`test:studio`, which now covers the Review tab). The root
   `bun run typecheck` checks `apps/mushaf-web` too.

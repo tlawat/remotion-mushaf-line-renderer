@@ -2,7 +2,7 @@
 // QUL font, for reels framing; the Quran text files it reads (text.ts), the font hook (font.ts),
 // the ayah component (AyahText.tsx), the schema, the resolver and `calculateMetadata`.
 export {AyahText, type AyahTextProps} from './AyahText';
-export {calculateMushafAyahTextMetadata, withAyahTextAudio} from './calculate-metadata';
+export {calculateMushafAyahTextMetadata, resolveAyahTextProps, withAyahTextAudio} from './calculate-metadata';
 export {
   UNICODE_FONT_IDS,
   UNICODE_FONTS,

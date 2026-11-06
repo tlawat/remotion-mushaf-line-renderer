@@ -9,6 +9,7 @@ import {
   applyLook,
   LOOK_GROUPS,
   LOOK_POSITION_FIELDS,
+  lookInBox,
   lookMatches,
   lookPatchFor,
   lookRevertPatch,
@@ -220,5 +221,35 @@ describe('lookRevertPatch', () => {
       },
     });
     expect(lookRevertPatch(changed, reelApplied, reelBefore)).toBeNull();
+  });
+});
+
+describe('lookInBox', () => {
+  it("drops layout.aspect (a slot's box decides the size) and keeps the rest of the look", () => {
+    const framing = MUSHAF_LOOKS.filter((look) => look.patch.layout?.aspect !== undefined);
+    expect(framing.length).toBeGreaterThan(0);
+    for (const look of framing) {
+      const boxed = lookInBox(look);
+      expect(boxed.patch.layout && 'aspect' in boxed.patch.layout).toBeFalsy();
+      const {layout: _layout, ...others} = look.patch;
+      const {layout: _boxed, ...kept} = boxed.patch;
+      expect(kept).toEqual(others);
+      // Applied to a recitation, it leaves the aspect where it was.
+      expect(applyLook(defaultMushafRecitationProps, boxed).layout.aspect).toBe(
+        defaultMushafRecitationProps.layout.aspect,
+      );
+    }
+    // A look that only framed loses its layout group altogether.
+    const onlyAspect: MushafLook = {
+      id: 'x',
+      name: 'X',
+      description: '',
+      applies: ['recitation'],
+      patch: {layout: {aspect: '1:1'}},
+    };
+    expect(lookInBox(onlyAspect).patch).toEqual({});
+    // A look that sets no aspect is returned as it is.
+    const night = MUSHAF_LOOKS.find((look) => look.id === 'night')!;
+    expect(lookInBox(night)).toBe(night);
   });
 });

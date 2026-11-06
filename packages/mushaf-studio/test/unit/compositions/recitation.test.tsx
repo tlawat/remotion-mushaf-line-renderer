@@ -499,6 +499,11 @@ describe('<MushafRecitation>', () => {
     expect(studio.textContent).toContain('Mushaf Studio: fonts is "package"');
     expect(studio.textContent).toContain('registerMushafFonts');
     cleanup();
+    // In a drop-in slot the panel is the slot's, docked beside the box: the composition draws none.
+    const inSlot = render(<MushafRecitation {...props({fonts: 'package'})} panel={false} />).container;
+    expect(inSlot.querySelector('[data-panel]')).toBeNull();
+    expect(inSlot.textContent).toContain('registerMushafFonts');
+    cleanup();
     expect(mount(props({fonts: 'cdn'})).textContent).not.toContain('registerMushafFonts');
     cleanup();
     // The Studio's own in-browser render: `isStudio` stays set, `isClientSideRendering` comes through the hook.

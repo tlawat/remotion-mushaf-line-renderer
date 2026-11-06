@@ -271,8 +271,8 @@ const round3 = (value: number): number => Math.round(value * 1000) / 1000;
  * (`needsAudioAnalysis()`) and says what to do with it: the gain that brings it to
  * `audio.targetLufs` (`gainFor()`, under `normalize`), the seconds of leading silence to skip
  * (`silenceTrimSeconds()`, under `trimSilence`, never past `latestSeconds`) and, for the glow, one
- * level per frame from the composition's new start (three decimals). With the glow off, the
- * sidecar's `audio` summary (written when the panel saved the timings) stands in for the analysis,
+ * level per frame of `fps` from the composition's new start (three decimals; `levelsFps` records
+ * the fps). With the glow off, the sidecar's `audio` summary (written when the panel saved the timings) stands in for the analysis,
  * so nothing is downloaded. An analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a
  * file the browser cannot fetch or decode) is not an error: the audio plays as it is, and `warning`
  * says why. Any other failure (an abort) passes through.
@@ -310,13 +310,11 @@ export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise
         latestSeconds: options.offsetSeconds + Math.max(0, options.latestSeconds),
       })
     : 0;
-  let levels: readonly number[] = [];
-  if (glowIsOn(background)) {
-    const from = Math.round((options.offsetSeconds + trimSeconds) * fps);
-    const count = Math.max(0, Math.ceil((options.endSeconds - trimSeconds + 1) * fps));
-    levels = analysis.levels.slice(from, from + count).map(round3);
-  }
-  return cleanup({gain, trimSeconds, levels}, null);
+  if (!glowIsOn(background)) return cleanup({gain, trimSeconds, levels: []}, null);
+  const from = Math.round((options.offsetSeconds + trimSeconds) * fps);
+  const count = Math.max(0, Math.ceil((options.endSeconds - trimSeconds + 1) * fps));
+  const levels = analysis.levels.slice(from, from + count).map(round3);
+  return cleanup({gain, trimSeconds, levels, levelsFps: fps}, null);
 };
 
 // ---------------------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import {
   applyLook,
+  lookInBox,
   lookMatches,
   lookPatchFor,
   lookRevertPatch,
@@ -49,13 +50,15 @@ const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chi
  * Look: one-click style presets. A card sets the style props its look names (through the same
  * `patchProps()` every tab uses) and never the content; Undo goes back through the looks applied to
  * this target, last first, and puts back only the fields that still hold the look's values
- * (`lookRevertPatch()`). Needs nothing resolved: it works before a recitation is chosen.
+ * (`lookRevertPatch()`). Needs nothing resolved: it works before a recitation is chosen. In a
+ * slot (`target.propsKey`) a look leaves `layout.aspect` alone (`lookInBox()`): the box decides the size.
  */
 export const LookTab: React.FC<TabProps> = ({target, props}) => {
   const {busy, lookUndo} = useStudioState();
   const t = useT();
   const working = busy !== null;
-  const looks = looksFor(compositionKindOf(props));
+  const inSlot = target.propsKey !== undefined;
+  const looks = looksFor(compositionKindOf(props)).map((look) => (inSlot ? lookInBox(look) : look));
   const key = targetKeyOf(target);
   const undo = lookUndo[key]?.at(-1) ?? null;
 
@@ -93,6 +96,7 @@ export const LookTab: React.FC<TabProps> = ({target, props}) => {
   return (
     <div>
       <Note>{t('look.note')}</Note>
+      {inSlot ? <Note>{t('look.slotNote')}</Note> : null}
       {undo ? (
         <div style={{...styles.row, marginBottom: 10}}>
           <Button onClick={revert} disabled={working} title={t('look.undoTitle', {name: undo.name})}>

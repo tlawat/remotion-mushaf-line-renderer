@@ -171,9 +171,25 @@ export const CompositionAudio: React.FC<CompositionAudioProps> = ({src, trimBefo
   );
 };
 
-/** The glow's level at `audioSeconds` of the recording's clock (`audioClock()`): `levelAt()` of the levels, 0 without them. */
+/** A composition's props with the panel option: what `<MushafRecitation>`, `<MushafAyahText>` and `<MushafPage>` take. */
+export type WithPanelOption<P> = P & {
+  /**
+   * Whether the composition docks the Mushaf panel in the Studio's preview (default `true`). A
+   * drop-in slot (`<MushafRecitationSlot>`) passes `false` and docks it beside its `<Sequence>`,
+   * so the panel stays on every frame of the template.
+   */
+  readonly panel?: boolean | undefined;
+};
+
+/**
+ * The glow's level at `audioSeconds` of the recording's clock (`audioClock()`): `levelAt()` of the
+ * levels, read at the fps they were measured at (`levelsFps`, else the composition's `fps`), 0
+ * without them.
+ */
 export const glowLevelAt = (analysis: ResolvedAudio | undefined, audioSeconds: number, fps: number): number =>
-  analysis === undefined || analysis.levels.length === 0 ? 0 : levelAt(analysis.levels, audioSeconds * fps);
+  analysis === undefined || analysis.levels.length === 0
+    ? 0
+    : levelAt(analysis.levels, audioSeconds * (analysis.levelsFps ?? fps));
 
 // ---------------------------------------------------------------------------------------------
 // Tajweed legend

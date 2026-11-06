@@ -48,6 +48,7 @@ import {
   translationsOf,
   useTranslationLayers,
   volumeCurveFor,
+  type WithPanelOption,
 } from '../parts';
 import {
   ayahAt,
@@ -91,7 +92,7 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
  * `wordVisibility()` says, their interlinear labels with them. `'first-letters'` cannot cut a
  * glyph-font word into letters: here it is `'blank-upcoming'` with a faint outline (opacity 0.12).
  */
-export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
+export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> = ({panel = true, ...props}) => {
   const {audioFile, fonts, layout, animation, highlight, memorize, text, review, overlay, legend, endCard, audio} =
     props;
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
@@ -376,7 +377,7 @@ export const MushafRecitation: React.FC<MushafRecitationProps> = (props) => {
           warnings={[fontSetup.warning, resolved.audioWarning, droppedSplitsWarning(resolved.droppedSplits ?? [])]}
         />
       )}
-      {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
+      {isStudio && panel && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );
 };

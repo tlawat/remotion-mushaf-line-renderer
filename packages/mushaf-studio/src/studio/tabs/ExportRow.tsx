@@ -54,13 +54,16 @@ export const captionsFromJson = (text: string, name: string): readonly Caption[]
 /**
  * The Review tab's export row: the captions of the timings file (SRT, `Caption[]` JSON, WebVTT by
  * word or by ayah) written into the project, the YouTube chapters and description copied to the
- * clipboard, and the thumbnail still set to the passage; none of these changes the timings or the
- * composition's props. Import captions reads a `Caption[]` JSON back into the timings file, through
+ * clipboard (the chapters at the video's times: `frameOffset` later in a slot), and the thumbnail
+ * still set to the passage (in a slot the Studio stays on the template, and the notice says where
+ * the thumbnail went); none of these changes the timings or the composition's props. Import captions reads a `Caption[]` JSON back into the timings file, through
  * `writeTimings` (the tab's: it writes the file and re-resolves the composition).
  */
 export const ExportRow: React.FC<
-  Pick<TabProps, 'target' | 'props' | 'project'> & {readonly writeTimings: (next: StudioTimings) => Promise<void>}
-> = ({target, props, project, writeTimings}) => {
+  Pick<TabProps, 'target' | 'props' | 'project' | 'fps' | 'frameOffset'> & {
+    readonly writeTimings: (next: StudioTimings) => Promise<void>;
+  }
+> = ({target, props, project, fps, frameOffset, writeTimings}) => {
   const {busy} = useStudioState();
   const t = useT();
   const [markers, setMarkers] = useState(false);
@@ -70,6 +73,10 @@ export const ExportRow: React.FC<
   const resolved = resolvedOf(props);
   const working = busy !== null;
   const noFile = !props.timingsFile;
+  // Where the recitation starts in the video: the chapters are the video's.
+  const videoOffset = frameOffset / fps;
+  // A slot's template is what the user is working on: the thumbnail is saved without leaving it.
+  const inSlot = target.propsKey !== undefined;
 
   /**
    * Writes the captions of the timings file into the project. The file, as the edits read it, not
@@ -146,7 +153,7 @@ export const ExportRow: React.FC<
   const copyChapters = () => {
     if (!resolved) return;
     try {
-      const chapters = chaptersOf(resolved.timings);
+      const chapters = chaptersOf(resolved.timings, videoOffset);
       if (chapters.length === 0) {
         setManual(null);
         setStudioState({notice: tNow('review.notice.noChapters')});
@@ -164,25 +171,33 @@ export const ExportRow: React.FC<
     const now = resolvedOf(current);
     if (!now) return;
     try {
-      void copy(descriptionOf(current, now), tNow('review.notice.descriptionCopied'));
+      void copy(descriptionOf(current, now, videoOffset), tNow('review.notice.descriptionCopied'));
     } catch (error) {
       setStudioState({error: describeError(error)});
     }
   };
 
-  /** Saves the passage into `<MushafThumbnail>`'s props and selects it; says so when the Root has none. */
+  /**
+   * Saves the passage into `<MushafThumbnail>`'s props and selects it (in a slot it stays on the
+   * template and says where the thumbnail is); says so when the Root has none.
+   */
   const thumbnail = () => {
     const current = latestPanelProps(target, props);
     const now = resolvedOf(current);
     if (!now) return;
     const patch = thumbnailPatchOf(current, now.timings);
     void runStudioTask(tNow('review.busy.thumbnail'), async () => {
-      const found = await patchOtherComposition(THUMBNAIL_COMPOSITION_ID, patch);
+      const found = await patchOtherComposition(THUMBNAIL_COMPOSITION_ID, patch, {select: !inSlot});
       if (!found)
         throw new MushafStudioError('BAD_STUDIO_PROP', tNow('error.noThumbnail', {id: THUMBNAIL_COMPOSITION_ID}), {
           compositionId: THUMBNAIL_COMPOSITION_ID,
         });
-      setStudioState({notice: tNow('review.notice.thumbnail', {id: THUMBNAIL_COMPOSITION_ID, ...patch})});
+      setStudioState({
+        notice: tNow(inSlot ? 'review.notice.thumbnailSaved' : 'review.notice.thumbnail', {
+          id: THUMBNAIL_COMPOSITION_ID,
+          ...patch,
+        }),
+      });
     });
   };
 

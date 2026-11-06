@@ -284,6 +284,11 @@ describe('<MushafAyahText>', () => {
     expect(panel.dataset.textFile).toBe('mushaf-studio/p/text-uthmani-1-2-7.json');
     expect(studio.querySelectorAll('[data-sequence]')).toHaveLength(6);
     cleanup();
+    // In a drop-in slot (`panel={false}`) the slot docks the panel, not the composition.
+    const inSlot = render(<MushafAyahText {...defaultMushafAyahTextProps} resolved={resolved} panel={false} />);
+    expect(inSlot.container.querySelector('[data-panel]')).toBeNull();
+    expect(inSlot.container.querySelectorAll('[data-sequence]')).toHaveLength(6);
+    cleanup();
     // The Studio's own in-browser render: `isStudio` stays set, `isClientSideRendering` comes through the hook.
     remotion.state.isClientSideRendering = true;
     expect(mount().querySelector('[data-panel]')).toBeNull();

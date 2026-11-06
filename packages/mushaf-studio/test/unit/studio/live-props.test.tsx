@@ -46,7 +46,7 @@ const {applyLook, MUSHAF_LOOKS} = await import('../../../src/presets');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 const {resetSaveTracking} = await import('../../../src/studio/studio-api');
 type Props = Record<string, unknown>;
-type PanelProps = React.ComponentProps<typeof MushafStudioPanel>['props'];
+type PanelProps = NonNullable<React.ComponentProps<typeof MushafStudioPanel>['props']>;
 
 const ID = 'MushafRecitation';
 const look = (id: string) => MUSHAF_LOOKS.find((entry) => entry.id === id)!;

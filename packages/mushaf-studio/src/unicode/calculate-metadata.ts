@@ -1,6 +1,11 @@
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../compositions/extras';
-import {recitationDuration, STUDIO_FPS} from '../compositions/recitation/calculate-metadata';
+import {
+  type ResolvedProps,
+  type ResolvePropsOptions,
+  recitationDuration,
+  STUDIO_FPS,
+} from '../compositions/recitation/calculate-metadata';
 import {isIdentityTimeline, timelineDuration} from '../memorize/timeline';
 import {sizeForAspect} from '../schema';
 import {type ResolvedAyahText, resolveAyahText, skipAyahTextStart} from './resolve';
@@ -40,28 +45,40 @@ export const withAyahTextAudio = async (
 };
 
 /**
- * `calculateMetadata` for `<Composition id="MushafAyahText">`: `resolved` (the content, the audio's
- * analysis when `audio` or the background's glow needs it, a background video's length), width and
- * height from the aspect, 30 fps, and the duration from the timings (the last ayah's end plus one
- * second, for it to leave), or from the clip timeline when `memorize` repeats the ayahs, plus the
- * end card's seconds.
+ * `resolved` of `<MushafAyahText>` and its length at `fps`: the content, the audio's analysis when
+ * `audio` or the background's glow needs it, a background video's length; the duration from the
+ * timings (the last ayah's end plus one second, for it to leave), or from the clip timeline when
+ * `memorize` repeats the ayahs, plus the end card's seconds. No size.
+ */
+export const resolveAyahTextProps = async (
+  props: MushafAyahTextProps,
+  options: ResolvePropsOptions,
+): Promise<ResolvedProps<MushafAyahTextProps>> => {
+  const {fps, signal} = options;
+  const content = await resolveAyahText(props);
+  const [resolved, backgroundVideoSeconds] = await Promise.all([
+    withAyahTextAudio(props, content, {fps, signal}),
+    backgroundVideoSecondsFor(props.background, staticFile),
+  ]);
+  const recitation = isIdentityTimeline(resolved.clips)
+    ? recitationDuration(resolved.timings, fps)
+    : timelineDuration(resolved.clips, fps);
+  return {
+    props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
+    durationInFrames: recitation + endCardFrames(props.endCard, fps),
+  };
+};
+
+/**
+ * `calculateMetadata` for `<Composition id="MushafAyahText">`: `resolveAyahTextProps()` at 30 fps
+ * (`resolved`: the content, the audio's analysis when `audio` or the background's glow needs it, a
+ * background video's length; the duration from the timings, or from the clip timeline when
+ * `memorize` repeats the ayahs, plus the end card's seconds), width and height from the aspect.
  */
 export const calculateMushafAyahTextMetadata: CalculateMetadataFunction<MushafAyahTextProps> = async ({
   props,
   abortSignal,
 }) => {
-  const content = await resolveAyahText(props);
-  const [resolved, backgroundVideoSeconds] = await Promise.all([
-    withAyahTextAudio(props, content, {fps: STUDIO_FPS, signal: abortSignal}),
-    backgroundVideoSecondsFor(props.background, staticFile),
-  ]);
-  const recitation = isIdentityTimeline(resolved.clips)
-    ? recitationDuration(resolved.timings, STUDIO_FPS)
-    : timelineDuration(resolved.clips, STUDIO_FPS);
-  return {
-    props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
-    ...sizeForAspect(props.layout.aspect),
-    fps: STUDIO_FPS,
-    durationInFrames: recitation + endCardFrames(props.endCard, STUDIO_FPS),
-  };
+  const resolved = await resolveAyahTextProps(props, {fps: STUDIO_FPS, signal: abortSignal});
+  return {...resolved, ...sizeForAspect(props.layout.aspect), fps: STUDIO_FPS};
 };

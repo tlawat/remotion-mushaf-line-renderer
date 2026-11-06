@@ -55,6 +55,12 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
   };
 });
 
+// The panel as a marker: whether the page docks it, and with which composition id.
+vi.mock('../../../src/studio', () => ({
+  MushafStudioPanel: (props: {compositionId: string}) => <div data-panel={props.compositionId} />,
+  isInStudio: () => false,
+}));
+
 const {MushafPage, defaultMushafPageProps, defaultPageView, OUTSIDE_OPACITY, pageGeometry, resolvePage} = await import(
   '../../../src/page'
 );
@@ -276,6 +282,16 @@ describe('<MushafPage>: the page around the lines', () => {
     expect(mocks.loadPageFont.mock.calls.map(([options]) => options)).toEqual([
       {mushaf: 'qpc-v4', theme: 'plain', page: 3, fontSrc: undefined, fallback: undefined},
     ]);
+  });
+
+  it("docks the panel in the Studio's preview only, and not with panel={false} (a drop-in slot docks its own)", async () => {
+    const p = await props();
+    expect(mount(p).querySelector('[data-panel]')).toBeNull();
+    cleanup();
+    remotion.state.env.isStudio = true;
+    expect(mount(p).querySelector<HTMLElement>('[data-panel]')?.dataset.panel).toBeTruthy();
+    cleanup();
+    expect(render(<MushafPage {...p} panel={false} />).container.querySelector('[data-panel]')).toBeNull();
   });
 
   it('plays the audio from the offset and throws a studio error without resolved', async () => {

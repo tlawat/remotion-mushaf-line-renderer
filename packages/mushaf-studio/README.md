@@ -26,6 +26,7 @@ design and its roadmap are in [docs/mushaf-studio/plan.md](../../docs/mushaf-stu
 - [Install](#install)
 - [Register the compositions](#register-the-compositions)
 - [The Mushaf panel](#the-mushaf-panel)
+- [Inside your own composition](#inside-your-own-composition)
 - [Props](#props)
 - [Data contract](#data-contract)
 - [Modules without the compositions](#modules-without-the-compositions)
@@ -271,6 +272,67 @@ To put the panel in a composition of your own, render it there with the composit
 ```tsx
 <MushafStudioPanel compositionId="MyRecitation" props={props} project="surah-yasin" />
 ```
+
+## Inside your own composition
+
+A template you already have (its title, its intro and outro, its own audio and schema) takes a
+recitation as a **slot**: the recitation's props under one key of the template's props, a box of
+the template's frame, and the Mushaf panel saving under that key only.
+
+```tsx
+import {MushafRecitationSlot, mushafRecitationSlotSchema, resolveMushafRecitationSlot} from '@tlawat/mushaf-studio';
+
+const FPS = 30;
+const INTRO = 2 * FPS;
+const OUTRO = 2 * FPS;
+
+export const templateSchema = z.object({title: z.string(), mushaf: mushafRecitationSlotSchema});
+
+export const calculateTemplateMetadata: CalculateMetadataFunction<z.infer<typeof templateSchema>> = async ({
+  props,
+  abortSignal,
+  isRendering,
+}) => {
+  const mushaf = await resolveMushafRecitationSlot(props.mushaf, {fps: FPS, abortSignal, isRendering});
+  return {props: {...props, mushaf: mushaf.props}, durationInFrames: INTRO + mushaf.durationInFrames + OUTRO};
+};
+
+export const Template: React.FC<z.infer<typeof templateSchema>> = ({title, mushaf}) => (
+  <AbsoluteFill>
+    {/* your intro, your background, your outro */}
+    <MushafRecitationSlot props={mushaf} propsKey="mushaf" from={INTRO} left={60} top={640} width={960} height={640} />
+  </AbsoluteFill>
+);
+
+<Composition id="MyTemplate" component={Template} schema={templateSchema}
+  calculateMetadata={calculateTemplateMetadata} width={1080} height={1920} fps={FPS} durationInFrames={1}
+  defaultProps={{title: 'Al-Fatihah', mushaf: null}} />
+```
+
+- **`mushaf: null`** is a template with no recitation yet: the slot shows nothing, the panel opens
+  on Source, and its first save writes complete props under `mushaf`
+  (`emptySlotPropsFor('recitation')` with the change). Or start from a fully written literal of
+  `defaultMushafRecitationSlotProps` (the defaults with transparent backgrounds: the template paints
+  its own). Keep `defaultProps` an inline literal, never an identifier or a spread
+  (`mushaf: defaultMushafRecitationSlotProps`): the Studio cannot save into those, so every panel
+  save would fail.
+- **`resolveMushafRecitationSlot()`** resolves at the template's `fps` (the durations, the audio's
+  trim and the glow's levels are in its frames) and returns no size: the box decides it. `null`
+  props and an empty `timingsFile` give 0 frames. In the Studio's preview a bad file or range gives
+  `error` (the panel shows it and stays on screen to fix it) instead of throwing; a render rethrows.
+  The length is also in `resolved.durationInFrames`, which the slot sizes its `<Sequence>` by, so
+  the end card and the fade-out end with the recitation, not with the template.
+- **The panel** is docked beside the slot's `<Sequence>`, so it stays on every frame of the
+  template. Its seeks, waveform playhead and timeline markers are placed at the slot's start, the
+  YouTube chapters at the video's times; Look leaves `layout.aspect` alone, and Set thumbnail saves
+  `MushafThumbnail` without leaving the template. Several slots in one template share one dock,
+  with a picker; each has its own folder (`mushaf-studio/<template id>-<propsKey>/`).
+- `<MushafAyahTextSlot>`, `<MushafPageSlot>`, `resolveMushafAyahTextSlot()`,
+  `resolveMushafPageSlot()` and their schemas and defaults do the same for the other compositions;
+  the compositions themselves take `panel={false}` to leave the panel out.
+
+The app's `MushafInTemplate` composition ([`apps/mushaf-studio/src/MushafInTemplate.tsx`](../../apps/mushaf-studio/src/MushafInTemplate.tsx))
+is a working example.
 
 ## Props
 

@@ -22,6 +22,7 @@ import {
   translationsOf,
   useTranslationLayers,
   volumeCurveFor,
+  type WithPanelOption,
 } from '../compositions/parts';
 import {ayahAt, recordingUrl} from '../compositions/shared';
 import {passageSpan} from '../compositions/timings';
@@ -117,7 +118,7 @@ export const ayahPresentationStyle = (
  * over the full word, hidden, so the lines break where the full text's do; the ayah-end marker is
  * kept as a cue.
  */
-export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
+export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({panel = true, ...props}) => {
   const {audioFile, layout, animation, highlight, memorize, text, fontSize, lineHeight, overlay, endCard, audio} =
     props;
   const {width, height, fps, durationInFrames, id} = useVideoConfig();
@@ -330,7 +331,7 @@ export const MushafAyahText: React.FC<MushafAyahTextProps> = (props) => {
         height={height}
       />
       {isStudio && <StudioWarnings warnings={[resolved.audioWarning]} />}
-      {isStudio && <MushafStudioPanel compositionId={id} props={props} />}
+      {isStudio && panel && <MushafStudioPanel compositionId={id} props={props} />}
     </AbsoluteFill>
   );
 };

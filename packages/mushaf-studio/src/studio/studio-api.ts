@@ -502,13 +502,14 @@ const isMissingComposition = (error: unknown): boolean =>
 /**
  * Merges `patch` into the props of another composition of the Root (the thumbnail still, say),
  * from its live Root values like `patchProps()` (the page-load props when the Studio has not read
- * them this session), after the panel's own saves, then selects it in the Studio. Resolves with
- * `false`, having saved nothing, when the Root has no composition `compositionId`; any other
- * failure is thrown.
+ * them this session), after the panel's own saves, then selects it in the Studio, unless `select`
+ * is `false` (a slot: the user stays on the template). Resolves with `false`, having saved nothing,
+ * when the Root has no composition `compositionId`; any other failure is thrown.
  */
 export const patchOtherComposition = (
   compositionId: string,
   patch: Readonly<Record<string, unknown>>,
+  options: {readonly select?: boolean | undefined} = {},
 ): Promise<boolean> =>
   serially(async () => {
     try {
@@ -520,21 +521,30 @@ export const patchOtherComposition = (
       if (isMissingComposition(error)) return false;
       throw error;
     }
-    goToComposition(compositionId);
+    if (options.select !== false) goToComposition(compositionId);
     return true;
   });
 
 /** Re-runs `calculateMetadata()` after a file the composition reads was rewritten. */
 export const reevaluate = (): void => reevaluateComposition();
 
-/** Moves the playhead to a time and plays from there. */
-export const seekTo = (seconds: number, fps: number): void => {
-  seek(Math.max(0, Math.round(seconds * fps)));
+/**
+ * The Studio frame of `seconds` of the recitation: `frameOffset` (the frame the recitation's frame 0
+ * is at in the composition the Studio shows: a slot's start in its template, 0 for a composition of
+ * its own) plus the seconds at `fps`, never before the recitation's start or frame 0.
+ */
+export const studioFrameOf = (seconds: number, fps: number, frameOffset = 0): number =>
+  Math.max(0, frameOffset + Math.max(0, Math.round(seconds * fps)));
+
+/** Moves the playhead to a time (seconds of the recitation, `frameOffset` frames into the composition) and plays from there. */
+export const seekTo = (seconds: number, fps: number, frameOffset = 0): void => {
+  seek(studioFrameOf(seconds, fps, frameOffset));
   play();
 };
 
-/** Moves the playhead to a time (seconds of the composition) without starting playback. */
-export const seekToTime = (seconds: number, fps: number): void => seek(Math.max(0, Math.round(seconds * fps)));
+/** Moves the playhead to a time (seconds of the recitation, `frameOffset` frames into the composition) without starting playback. */
+export const seekToTime = (seconds: number, fps: number, frameOffset = 0): void =>
+  seek(studioFrameOf(seconds, fps, frameOffset));
 
 /** Plays or pauses the Studio's preview, as its own Space key does. */
 export const togglePlayback = (): void => toggle();

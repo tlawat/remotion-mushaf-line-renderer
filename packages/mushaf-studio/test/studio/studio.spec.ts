@@ -285,3 +285,75 @@ test('MushafThumbnail mounts', async ({page}) => {
   expect(fatal, fatal.join('\n')).toHaveLength(0);
   await page.screenshot({path: test.info().outputPath('thumbnail.png'), fullPage: false});
 });
+
+/** The app's Root, from the suite's own folder: the drop-in test saves into it, and puts it back. */
+const appRootFile = (): string => path.join(test.info().project.testDir, '../../../../apps/mushaf-studio/src/Root.tsx');
+
+/** The `<Composition id="MushafInTemplate">` element of the Root, up to the next composition. */
+const templateBlockOf = (root: string): string => {
+  const start = root.indexOf('id="MushafInTemplate"');
+  expect(start, 'the Root has no MushafInTemplate').toBeGreaterThan(0);
+  const next = root.slice(start).search(/<(Composition|Still)\b/);
+  return next < 0 ? root.slice(start) : root.slice(start, start + next);
+};
+
+test('MushafInTemplate docks the panel on the intro and saves a look under `mushaf` only', async ({page}) => {
+  const rootFile = appRootFile();
+  const original = readFileSync(rootFile, 'utf8');
+  try {
+    const errors = await openComposition(page, 'MushafInTemplate');
+    await expect(page.locator('[data-template="MushafInTemplate"]')).toBeVisible({timeout: 180_000});
+    const panel = page.locator(PANEL);
+    // Frame 0 is the template's intro: the recitation's box starts 2 s later, and the panel is
+    // docked all the same (it sits beside the slot's Sequence, not in it).
+    const frameDisplay = page.locator('button[aria-label="Show timeline ticks as frames"]').first();
+    await expect(frameDisplay).toBeVisible();
+    expect(Number((await frameDisplay.textContent())?.trim())).toBeLessThan(60);
+    await expect(page.locator('[data-template-part="title"]')).toBeVisible();
+    // Nothing of the recitation shows yet (the box may be mounted ahead, hidden: its premountFor).
+    await expect(page.locator('.mushaf-line:visible')).toHaveCount(0);
+    await expect(panel).toBeVisible({timeout: 60_000});
+    for (const tab of ['Source', 'Look', 'Align', 'Review', 'Lines', 'Text']) {
+      await expect(panel.getByRole('tab', {name: tab})).toBeVisible();
+    }
+
+    // A look from the panel: saved in the Root under the template's `mushaf` key, nowhere else.
+    await panel.getByRole('tab', {name: 'Look'}).click();
+    await expect(panel.getByText(/a look leaves layout\.aspect as it is/)).toBeVisible();
+    await panel.locator('[data-look="night"]').click();
+    await expect
+      .poll(() => readFileSync(rootFile, 'utf8') !== original, {timeout: 60_000, message: 'the Root was never saved'})
+      .toBe(true);
+    await expect(panel.getByRole('status')).toContainText('Ready', {timeout: 60_000});
+    const before = templateBlockOf(original);
+    const after = templateBlockOf(readFileSync(rootFile, 'utf8'));
+    const ownOf = (block: string) => block.slice(0, block.indexOf('mushaf:'));
+    const slotOf = (block: string) => block.slice(block.indexOf('mushaf:'));
+    // The template's own props are as they were (the values, whatever the Studio's formatting).
+    const values = (block: string) =>
+      ['title', 'subtitle', 'introSeconds', 'outro', 'outroSeconds'].map((key) =>
+        new RegExp(`${key}:\\s*([^,\\n]+)`).exec(ownOf(block))?.[1]?.replace(/"/g, "'"),
+      );
+    expect(values(after)).toEqual(values(before));
+    expect(values(after)[0]).toBe("'Al-Fatihah'");
+    // The slot took the look: Night's page and theme, its files untouched.
+    expect(slotOf(after)).toMatch(/theme:\s*['"]dark['"]/);
+    expect(slotOf(after)).toMatch(/background:\s*['"]#101418['"]/);
+    expect(slotOf(after)).toMatch(/timingsFile:\s*['"]mushaf-studio\/fatiha\/timings\.json['"]/);
+    expect(ownOf(after)).not.toMatch(/#101418|theme:/);
+    // Nothing of the look went into another composition's props.
+    const elsewhere = (root: string) => root.replace(templateBlockOf(root), '');
+    expect(elsewhere(readFileSync(rootFile, 'utf8')).match(/#101418/g)?.length ?? 0).toBe(
+      elsewhere(original).match(/#101418/g)?.length ?? 0,
+    );
+    // Still on the intro, the panel still there.
+    expect(Number((await frameDisplay.textContent())?.trim())).toBeLessThan(60);
+    await expect(panel).toBeVisible();
+    await expect(errorOverlay(page)).toHaveCount(0);
+    const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+    expect(fatal, fatal.join('\n')).toHaveLength(0);
+    await page.screenshot({path: test.info().outputPath('template.png'), fullPage: false});
+  } finally {
+    writeFileSync(rootFile, original);
+  }
+});

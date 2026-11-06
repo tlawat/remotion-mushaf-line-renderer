@@ -181,6 +181,22 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
 export const looksFor = (kind: MushafLookKind): readonly MushafLook[] =>
   MUSHAF_LOOKS.filter((look) => look.applies.includes(kind));
 
+/**
+ * `look` as a drop-in slot applies it: without `layout.aspect`, since the template's box decides the
+ * slot's size (a slot resolver returns none). The look itself when it sets no aspect.
+ *
+ * ```ts
+ * lookInBox(reel).patch.layout; // {visibleLines: 0}: Reel's line at a time, not its 9:16 frame
+ * ```
+ */
+export const lookInBox = (look: MushafLook): MushafLook => {
+  const layout = look.patch.layout;
+  if (layout === undefined || !('aspect' in layout)) return look;
+  const {aspect: _aspect, ...rest} = layout;
+  const {layout: _layout, ...others} = look.patch;
+  return {...look, patch: Object.keys(rest).length > 0 ? {...others, layout: rest} : others};
+};
+
 type Plain = Readonly<Record<string, unknown>>;
 
 const isPlainObject = (value: unknown): value is Plain =>

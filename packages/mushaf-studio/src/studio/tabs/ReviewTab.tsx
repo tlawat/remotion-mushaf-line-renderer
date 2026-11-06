@@ -154,7 +154,7 @@ const isTyping = (target: EventTarget): boolean =>
  * options and the selected word stay in the store by target through a tab switch; nudges and
  * boundaries are kept in recording time, as the file and the aligner's session have them.
  */
-export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => {
+export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps, frameOffset}) => {
   const {session, busy, showDoubts} = useStudioState();
   const t = useT();
   const resolved = resolvedOf(props);
@@ -261,7 +261,7 @@ export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => 
     setSelectedWord(word.key);
     setExpanded((current) => (current.has(word.group) ? current : new Set(current).add(word.group)));
     if (word.group.startsWith('s')) setSelectedSegment(Number(word.group.slice(1)));
-    if (seek) seekToTime(word.start, fps);
+    if (seek) seekToTime(word.start, fps, frameOffset);
   };
 
   /** Writes new timings where the composition reads them (or into the project when it reads a URL) and re-resolves. */
@@ -451,7 +451,8 @@ export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => 
             threshold={threshold}
             selected={selectedSegment}
             fps={fps}
-            onSeek={(time) => seekToTime(time, fps)}
+            frameOffset={frameOffset}
+            onSeek={(time) => seekToTime(time, fps, frameOffset)}
           />
           <div style={{...styles.row, marginTop: 4}}>
             <input
@@ -486,7 +487,7 @@ export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => 
                   data-segment={segment.segment}
                   data-doubtful={isDoubtfulSegment(segment, threshold) ? 'true' : 'false'}
                   style={styles.listRow(open)}
-                  onClick={() => seekTo(segment.timeFrom, fps)}
+                  onClick={() => seekTo(segment.timeFrom, fps, frameOffset)}
                 >
                   <div style={styles.row}>
                     <Button
@@ -562,7 +563,7 @@ export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => 
             });
             return (
               // biome-ignore lint/a11y/useKeyWithClickEvents: the row is a seek target; the expand button is keyboard-reachable
-              <li key={key} style={styles.listRow(open)} onClick={() => seekTo(ayah.start, fps)}>
+              <li key={key} style={styles.listRow(open)} onClick={() => seekTo(ayah.start, fps, frameOffset)}>
                 <div style={styles.row}>
                   <Button
                     variant="ghost"
@@ -613,6 +614,8 @@ export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => 
         target={target}
         props={props}
         project={project}
+        fps={fps}
+        frameOffset={frameOffset}
         writeTimings={async (next) => {
           await writeTimings(next);
           // The nudges were made on the times the import replaced.
@@ -623,7 +626,7 @@ export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps}) => 
         <CompareTimings
           timingsFile={isUrl(props.timingsFile) ? '' : props.timingsFile}
           offset={offset}
-          onSeek={(time) => seekToTime(time, fps)}
+          onSeek={(time) => seekToTime(time, fps, frameOffset)}
         />
         <Note>{t('compare.note')}</Note>
       </Disclosure>

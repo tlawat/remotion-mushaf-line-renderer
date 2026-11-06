@@ -12,11 +12,12 @@ import {reciterOf, resolvedTranslationsOf, type StudioCompositionProps, type Stu
 export const THUMBNAIL_COMPOSITION_ID = 'MushafThumbnail';
 
 /**
- * YouTube chapters of the composition: `resolved.timings` start at the video's 0, so no offset.
+ * YouTube chapters of the composition: `resolved.timings` start at the recitation's 0, which is
+ * `offsetSeconds` into the video (a slot's start in its template; 0 for a composition of its own).
  * `[]` when the passage is too short for YouTube (fewer than 3 chapters 10 s apart).
  */
-export const chaptersOf = (timings: StudioTimings): readonly string[] =>
-  chaptersFromTimings(timings, {offsetSeconds: 0});
+export const chaptersOf = (timings: StudioTimings, offsetSeconds = 0): readonly string[] =>
+  chaptersFromTimings(timings, {offsetSeconds});
 
 /** Where a translation came from, as the credits name it. */
 const sourceName = (source: string): string => (source === 'qul' ? 'QUL, qul.tarteel.ai' : source);
@@ -30,10 +31,11 @@ const surahNameOf = (timings: StudioTimings): string => {
 
 /**
  * The description of `youtubeDescription()` for the composition: the surah (or surahs) and range of
- * the timings, the overlay's reciter, the chapters, and the credits (the translations the composition
- * loaded, by their `meta.name`, with the first one's source).
+ * the timings, the overlay's reciter, the chapters (`offsetSeconds` into the video, as
+ * `chaptersOf()`), and the credits (the translations the composition loaded, by their `meta.name`,
+ * with the first one's source).
  */
-export const descriptionOf = (props: StudioCompositionProps, resolved: StudioResolved): string => {
+export const descriptionOf = (props: StudioCompositionProps, resolved: StudioResolved, offsetSeconds = 0): string => {
   const {timings} = resolved;
   const translations = resolvedTranslationsOf(resolved);
   const names = [...new Set(translations.map((translation) => translation.meta.name.trim()).filter(Boolean))];
@@ -44,7 +46,7 @@ export const descriptionOf = (props: StudioCompositionProps, resolved: StudioRes
     reciter: reciterOf(props),
     translationName: names.join(', '),
     translationSource: first ? sourceName(first.meta.source) : undefined,
-    chapters: chaptersOf(timings),
+    chapters: chaptersOf(timings, offsetSeconds),
   });
 };
 

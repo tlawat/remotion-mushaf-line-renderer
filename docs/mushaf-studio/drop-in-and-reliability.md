@@ -153,9 +153,13 @@ and the same for `MushafAyahText` and `MushafPage` (`...AyahTextSlot`, `...PageS
   `{props, durationInFrames: 0, error: null}`; a `MushafStudioError` gives `error` (shown in the
   panel). It rethrows when rendering. It computes durations at the host's `fps` and returns no
   size. `resolved.durationInFrames` carries the length so the slot can size its `<Sequence>`.
+  The message of a failed resolution travels the same way (`resolved: {error}`, read by
+  `slotErrorOf()`), so the panel shows it without the template passing anything on, and the slot
+  throws it anywhere but the Studio's preview (the Studio's in-browser render included).
 - The slot renders `<Sequence from durationInFrames width height style={{left, top}}>` with the
-  composition inside (`panel={false}`), the doubt markers in their own `<Sequence from>`, and the
-  panel **beside** the Sequence, so the dock stays mounted on every frame of the host.
+  composition inside (`panel={false}`), the doubt markers in their own `<Sequence from>` (the
+  panel draws them there when it is given `frameOffset`), and the panel **beside** the Sequence,
+  so the dock stays mounted on every frame of the host.
 - The panel takes `propsKey`, `kind` (required when `props` is `null`) and `frameOffset` (the
   absolute frame of the slot's frame 0: enclosing Sequence start + `from`). Every seek adds it;
   the waveform playhead subtracts it; YouTube chapters add `frameOffset / fps`.

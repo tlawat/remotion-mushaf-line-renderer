@@ -187,6 +187,12 @@ export type ResolvedAudio = {
    * background's glow only; `[]` otherwise.
    */
   readonly levels: readonly number[];
+  /**
+   * The frame rate `levels` were measured at: one level per frame of it. A template at 60 fps that
+   * resolved its recitation at 30 still reads the level of the second being heard. Absent in a
+   * `resolved` made before it: the composition's own fps.
+   */
+  readonly levelsFps?: number | undefined;
 };
 
 /** What the end card shows besides the credits, read from its files in `calculateMetadata()`. */
@@ -218,6 +224,13 @@ export type ResolvedExtras = {
   readonly endCard?: ResolvedEndCard | undefined;
   /** `probeVideoSeconds()` of a background video whose `videoSeconds` is 0, when the browser could read it. */
   readonly backgroundVideoSeconds?: number | null | undefined;
+  /**
+   * The composition's length at the frame rate it was resolved for, the end card included: what a
+   * drop-in slot (`<MushafRecitationSlot>`) sizes its `<Sequence>` by. Set by the slot resolvers
+   * (`resolveMushafRecitationSlot()`); absent from `calculateMetadata()`'s, which returns it as the
+   * composition's `durationInFrames`.
+   */
+  readonly durationInFrames?: number | undefined;
 };
 
 /** What `calculateMetadata()` of `<MushafRecitation>` resolves once per render from the content props. */

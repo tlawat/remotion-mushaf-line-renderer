@@ -10,6 +10,7 @@ import {
   SAMPLE_AUDIO_FILE,
   SAMPLE_COMMAND,
 } from '../../../src/compositions/extras';
+import {glowLevelAt} from '../../../src/compositions/parts';
 import {defaultMushafRecitationProps} from '../../../src/compositions/recitation/schema';
 import {fileUrl, isHttpUrl, recordingUrl} from '../../../src/compositions/shared';
 import {MushafStudioError} from '../../../src/errors';
@@ -212,10 +213,23 @@ describe('resolveAudioCleanup', () => {
     const withGlow = await resolveAudioCleanup(cleanupOptions({background: glow, sidecar: sidecar({audio: SUMMARY})}));
     expect(mocks.analyzeAudio).toHaveBeenCalledTimes(1);
     expect(withGlow.audio.levels).toEqual([0.5, 1]);
+    // The levels say the fps they were measured at: a template at another fps reads them right.
+    expect(withGlow.audio.levelsFps).toBe(30);
+    const at60 = await resolveAudioCleanup(
+      cleanupOptions({background: glow, fps: 60, sidecar: sidecar({audio: SUMMARY})}),
+    );
+    expect(at60.audio.levelsFps).toBe(60);
+    expect(mocks.analyzeAudio).toHaveBeenLastCalledWith(
+      staticFile(SAMPLE_AUDIO_FILE),
+      expect.objectContaining({fps: 60}),
+    );
+    mocks.analyzeAudio.mockClear();
+    await resolveAudioCleanup(cleanupOptions({background: glow, sidecar: sidecar({audio: SUMMARY})}));
     await resolveAudioCleanup(cleanupOptions({sidecar: sidecar()}));
     const broken = {...sidecar(), audio: {lufs: 'loud'}} as unknown as AlignmentSidecar;
     const result = await resolveAudioCleanup(cleanupOptions({sidecar: broken}));
     expect(mocks.analyzeAudio).toHaveBeenCalledTimes(3);
+    expect(result.audio.levelsFps).toBeUndefined();
     expect(mocks.analyzeAudio).toHaveBeenLastCalledWith(
       staticFile(SAMPLE_AUDIO_FILE),
       expect.objectContaining({fps: 30}),
@@ -272,5 +286,17 @@ describe('recordingUrl', () => {
     expect(isHttpUrl('mushaf-studio/a.mp3')).toBe(false);
     expect(isHttpUrl('ftp://cdn.test/a.mp3')).toBe(false);
     expect(fileUrl('mushaf-studio/a.mp3', staticFile)).toBe(staticFile('mushaf-studio/a.mp3'));
+  });
+});
+
+describe('glowLevelAt', () => {
+  it('reads the level of the second heard at the fps the levels were measured at', () => {
+    const levels = Array.from({length: 60}, (_, i) => i / 100);
+    // Measured at 30 fps, read by a 60 fps template: second 1 is level 30, not 60.
+    expect(glowLevelAt({gain: 1, trimSeconds: 0, levels, levelsFps: 30}, 1, 60)).toBeCloseTo(0.3);
+    // A resolved made before levelsFps: the composition's fps.
+    expect(glowLevelAt({gain: 1, trimSeconds: 0, levels}, 1, 30)).toBeCloseTo(0.3);
+    expect(glowLevelAt({gain: 1, trimSeconds: 0, levels: []}, 1, 30)).toBe(0);
+    expect(glowLevelAt(undefined, 1, 30)).toBe(0);
   });
 });

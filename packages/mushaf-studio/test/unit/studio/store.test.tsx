@@ -3,11 +3,14 @@ import {cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {MushafStudioError} from '../../../src/errors';
 import {
+  activePanelOf,
   describeError,
   draftOf,
   getHfToken,
   getStudioState,
   loadOnce,
+  mountedPanelsOf,
+  registerPanel,
   resetStudioStore,
   runStudioTask,
   setDraft,
@@ -247,5 +250,31 @@ describe('the studio store', () => {
     finish();
     await task;
     expect(getStudioState().busy).toBeNull();
+  });
+});
+
+describe('the panels mounted in a composition', () => {
+  it('lists each key once in mount order, and shows the chosen one while it is mounted, else the first', () => {
+    expect(activePanelOf(getStudioState(), 'T')).toBeNull();
+    const first = registerPanel('T', {key: 'T/a', label: 'a'});
+    const second = registerPanel('T', {key: 'T/b', label: 'b'});
+    const again = registerPanel('T', {key: 'T/b', label: 'b'});
+    expect(mountedPanelsOf(getStudioState(), 'T').map((p) => p.key)).toEqual(['T/a', 'T/b']);
+    expect(activePanelOf(getStudioState(), 'T')).toBe('T/a');
+    setStudioState({activePanels: {T: 'T/b'}});
+    expect(activePanelOf(getStudioState(), 'T')).toBe('T/b');
+    // One of the two `b`s goes: it is still mounted.
+    again();
+    expect(activePanelOf(getStudioState(), 'T')).toBe('T/b');
+    second();
+    expect(activePanelOf(getStudioState(), 'T')).toBe('T/a');
+    // Released twice: counted once; the composition's entry goes with the last.
+    second();
+    first();
+    expect(getStudioState().panels).toEqual({});
+    // Another composition's panels are its own.
+    registerPanel('U', {key: 'U', label: 'U'});
+    expect(activePanelOf(getStudioState(), 'T')).toBeNull();
+    expect(activePanelOf(getStudioState(), 'U')).toBe('U');
   });
 });

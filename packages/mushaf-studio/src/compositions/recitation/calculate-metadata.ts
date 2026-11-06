@@ -60,32 +60,63 @@ export const withRecitationAudio = async (
  */
 export const previewsLeniently = (isRendering: boolean): boolean => !isRendering && isInStudio();
 
+/** Options of the resolvers that `calculateMetadata()` and the drop-in slots share. */
+export type ResolvePropsOptions = {
+  /** The frame rate the durations, the audio's trim and the glow's levels are computed at. */
+  readonly fps: number;
+  /** `calculateMetadata()`'s `abortSignal`: reaches every fetch. */
+  readonly signal?: AbortSignal | undefined;
+  /** Leave out the splits that no longer fit (`resolved.droppedSplits`) instead of refusing them. */
+  readonly lenientSplits?: boolean | undefined;
+};
+
+/** The props with `resolved` filled, and the composition's length in frames at the fps asked for. */
+export type ResolvedProps<P> = {readonly props: P; readonly durationInFrames: number};
+
 /**
- * `calculateMetadata` for `<Composition id="MushafRecitation">`: `resolved` (the content, the
- * audio's analysis when `audio` or the background's glow needs it, a background video's length),
- * width and height from the aspect, duration from the timings (moved `audioOffsetSeconds` earlier,
- * so it is the audio's from the trim on), or from the clip timeline when `memorize` repeats the
- * ayahs, plus the end card's seconds. `abortSignal` reaches every fetch. On the Studio's page a
- * split that no longer fits is left out (`resolved.droppedSplits`, `previewsLeniently()`); a server
- * render refuses it here, the Studio's in-browser render when `<MushafRecitation>` renders.
+ * `resolved` of `<MushafRecitation>` and its length at `fps`: the content, the audio's analysis
+ * when `audio` or the background's glow needs it, a background video's length; the duration from
+ * the timings (moved `audioOffsetSeconds` earlier), or from the clip timeline when `memorize`
+ * repeats the ayahs, plus the end card's seconds. No size: `calculateMetadata()` adds it, a slot's
+ * box decides it.
+ */
+export const resolveRecitationProps = async (
+  props: MushafRecitationProps,
+  options: ResolvePropsOptions,
+): Promise<ResolvedProps<MushafRecitationProps>> => {
+  const {fps, signal} = options;
+  const content = await resolveRecitation(props, {signal, lenientSplits: options.lenientSplits});
+  const [resolved, backgroundVideoSeconds] = await Promise.all([
+    withRecitationAudio(props, content, {fps, signal}),
+    backgroundVideoSecondsFor(props.background, staticFile),
+  ]);
+  const recitation = isIdentityTimeline(resolved.clips)
+    ? recitationDuration(resolved.timings, fps)
+    : timelineDuration(resolved.clips, fps);
+  return {
+    props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
+    durationInFrames: recitation + endCardFrames(props.endCard, fps),
+  };
+};
+
+/**
+ * `calculateMetadata` for `<Composition id="MushafRecitation">`: `resolveRecitationProps()` at 30
+ * fps (`resolved`: the content, the audio's analysis when `audio` or the background's glow needs
+ * it, a background video's length; the duration from the timings, or from the clip timeline when
+ * `memorize` repeats the ayahs, plus the end card's seconds), width and height from the aspect.
+ * `abortSignal` reaches every fetch. On the Studio's page a split that no longer fits is left out
+ * (`resolved.droppedSplits`, `previewsLeniently()`); a server render refuses it here, the Studio's
+ * in-browser render when `<MushafRecitation>` renders.
  */
 export const calculateMushafRecitationMetadata: CalculateMetadataFunction<MushafRecitationProps> = async ({
   props,
   abortSignal,
   isRendering,
 }) => {
-  const content = await resolveRecitation(props, {signal: abortSignal, lenientSplits: previewsLeniently(isRendering)});
-  const [resolved, backgroundVideoSeconds] = await Promise.all([
-    withRecitationAudio(props, content, {fps: STUDIO_FPS, signal: abortSignal}),
-    backgroundVideoSecondsFor(props.background, staticFile),
-  ]);
-  const recitation = isIdentityTimeline(resolved.clips)
-    ? recitationDuration(resolved.timings, STUDIO_FPS)
-    : timelineDuration(resolved.clips, STUDIO_FPS);
-  return {
-    props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
-    ...sizeForAspect(props.layout.aspect),
+  const resolved = await resolveRecitationProps(props, {
     fps: STUDIO_FPS,
-    durationInFrames: recitation + endCardFrames(props.endCard, STUDIO_FPS),
-  };
+    signal: abortSignal,
+    lenientSplits: previewsLeniently(isRendering),
+  });
+  return {...resolved, ...sizeForAspect(props.layout.aspect), fps: STUDIO_FPS};
 };

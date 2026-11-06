@@ -8,8 +8,12 @@ import type {MushafStudioPanelProps} from './index';
 import type {StudioTarget} from './store';
 import type {PropsPatch} from './studio-api';
 
-/** The props of a composition that renders the panel: `<MushafRecitation>`'s, `<MushafAyahText>`'s or `<MushafPage>`'s. */
-export type StudioCompositionProps = MushafStudioPanelProps['props'];
+/**
+ * The props of a composition that renders the panel: `<MushafRecitation>`'s, `<MushafAyahText>`'s
+ * or `<MushafPage>`'s. A slot that holds `null` is shown to the tabs as its kind's empty props
+ * (`emptySlotPropsFor()`).
+ */
+export type StudioCompositionProps = NonNullable<MushafStudioPanelProps['props']>;
 
 /** What every tab receives from the dock. */
 export type TabProps = {
@@ -20,6 +24,11 @@ export type TabProps = {
   readonly project: string | undefined;
   /** The composition's frame rate, for `seek()`. */
   readonly fps: number;
+  /**
+   * The Studio frame the recitation's frame 0 is at: a slot's start in its template, 0 for a
+   * composition of its own. Every seek adds it (`seekTo()`), the waveform's playhead subtracts it.
+   */
+  readonly frameOffset: number;
 };
 
 /**
@@ -47,9 +56,12 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 /** What `calculateMetadata()` puts in `props.resolved`: a recitation's (lines, schedule), an ayah text's (ayahs) or a page's (pages). */
 export type StudioResolved = ResolvedRecitation | ResolvedAyahText | ResolvedPage;
 
-/** `props.resolved` is `z.any()` in every schema; this is what `calculateMetadata()` puts there. */
+/**
+ * `props.resolved` is `z.any()` in every schema; this is what `calculateMetadata()` puts there.
+ * `null` until it has, and for what a slot resolver leaves when the props failed (`slotErrorOf()`).
+ */
 export const resolvedOf = (props: StudioCompositionProps): StudioResolved | null =>
-  (props.resolved ?? null) as StudioResolved | null;
+  isRecord(props.resolved) && 'timings' in props.resolved ? (props.resolved as StudioResolved) : null;
 
 /** Whether `resolved` is a recitation's, with printed lines and their schedule (a page's lines carry no schedule). */
 export const hasLines = (resolved: StudioResolved): resolved is ResolvedRecitation => 'schedule' in resolved;

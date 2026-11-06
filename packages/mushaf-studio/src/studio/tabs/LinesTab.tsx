@@ -23,7 +23,7 @@ const sameSplit = (a: LineSplit, b: LineSplit): boolean =>
  * A page composition's slots: every printed page with when it is on screen and how many of its
  * lines are recited; click one to seek there. The page shows its lines as printed: no splits.
  */
-const PageSlots: React.FC<Pick<TabProps, 'props' | 'fps'>> = ({props, fps}) => {
+const PageSlots: React.FC<Pick<TabProps, 'props' | 'fps' | 'frameOffset'>> = ({props, fps, frameOffset}) => {
   const t = useT();
   const resolved = resolvedOf(props);
   if (!resolved || !isPageResolved(resolved)) return <Note>{t('lines.noPages')}</Note>;
@@ -40,7 +40,7 @@ const PageSlots: React.FC<Pick<TabProps, 'props' | 'fps'>> = ({props, fps}) => {
                 data-page={slot.page}
                 style={styles.listRow(false)}
                 title={t('lines.seekPage', {page: slot.page})}
-                onClick={() => seekTo(slot.start, fps)}
+                onClick={() => seekTo(slot.start, fps, frameOffset)}
               >
                 <div style={styles.row}>
                   <strong>{t('lines.page', {page: slot.page})}</strong>
@@ -63,11 +63,12 @@ const PageSlots: React.FC<Pick<TabProps, 'props' | 'fps'>> = ({props, fps}) => {
  * On a page composition, its pages and their times instead.
  */
 export const LinesTab: React.FC<TabProps> = (tabProps) => {
-  if (isPageProps(tabProps.props)) return <PageSlots props={tabProps.props} fps={tabProps.fps} />;
+  if (isPageProps(tabProps.props))
+    return <PageSlots props={tabProps.props} fps={tabProps.fps} frameOffset={tabProps.frameOffset} />;
   return <RecitationLines {...tabProps} />;
 };
 
-const RecitationLines: React.FC<TabProps> = ({target, props, fps}) => {
+const RecitationLines: React.FC<TabProps> = ({target, props, fps, frameOffset}) => {
   const {busy} = useStudioState();
   const t = useT();
   const resolved = resolvedOf(props);
@@ -107,7 +108,11 @@ const RecitationLines: React.FC<TabProps> = ({target, props, fps}) => {
             const lineSplits = splits.filter((s) => s.page === line.page && s.line === line.line);
             return (
               // biome-ignore lint/a11y/useKeyWithClickEvents: the row is a seek target; its chips are buttons
-              <li key={`${slot.index}`} style={styles.listRow(false)} onClick={() => seekTo(slot.start, fps)}>
+              <li
+                key={`${slot.index}`}
+                style={styles.listRow(false)}
+                onClick={() => seekTo(slot.start, fps, frameOffset)}
+              >
                 <div style={styles.row}>
                   <strong>{t('lines.pageLine', {page: line.page, line: line.line})}</strong>
                   <span style={{color: colors.muted}}>{range(slot.start, slot.end, t('unit.seconds'))}</span>

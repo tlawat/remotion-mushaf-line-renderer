@@ -110,7 +110,17 @@ export type StudioState = {
    * decoding again after a reload costs a second, storing them would cost megabytes.
    */
   readonly waveforms: Readonly<Record<string, WaveformEntry>>;
+  /**
+   * By composition id: the panels mounted in it, in mount order (one per slot of a template; one
+   * for a composition of its own). One dock is shown per composition, the chosen panel's.
+   */
+  readonly panels: Readonly<Record<string, readonly MountedPanel[]>>;
+  /** By composition id: the target key of the panel the dock shows, as the slot picker chose it. */
+  readonly activePanels: Readonly<Record<string, string>>;
 };
+
+/** A panel mounted in a composition: its target key and the name the slot picker shows. */
+export type MountedPanel = {readonly key: string; readonly label: string};
 
 /**
  * What the panel edits: a composition of the Root, or, with `propsKey`, the props a template keeps
@@ -241,6 +251,8 @@ const initialState = (): StudioState => {
     lookUndo: {},
     drafts: {},
     waveforms: {},
+    panels: {},
+    activePanels: {},
   };
 };
 
@@ -345,6 +357,52 @@ export const useStudioDraft = <T>(
     setDraft(key, name, typeof next === 'function' ? (next as (current: T) => T)(current) : next);
   };
   return [value, set];
+};
+
+/**
+ * Counts a panel as mounted in `compositionId` (the dock's slot picker lists it) until the returned
+ * cleanup runs. A key mounted twice is listed once and stays until both are gone.
+ */
+export const registerPanel = (compositionId: string, panel: MountedPanel): (() => void) => {
+  const {panels} = getStudioState();
+  setStudioState({panels: withEntry(panels, compositionId, [...(panels[compositionId] ?? []), panel])});
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    const now = getStudioState().panels[compositionId] ?? [];
+    const at = now.findIndex((entry) => entry.key === panel.key);
+    if (at < 0) return;
+    const rest = [...now.slice(0, at), ...now.slice(at + 1)];
+    setStudioState({panels: withEntry(getStudioState().panels, compositionId, rest.length > 0 ? rest : undefined)});
+  };
+};
+
+/** The panels mounted in a composition, each key once, in mount order. */
+export const mountedPanelsOf = (state: StudioState, compositionId: string): readonly MountedPanel[] => {
+  const seen = new Set<string>();
+  return (state.panels[compositionId] ?? []).filter((entry) => {
+    if (seen.has(entry.key)) return false;
+    seen.add(entry.key);
+    return true;
+  });
+};
+
+/**
+ * The target key of the panel whose dock a composition shows: the one the slot picker chose while
+ * it is mounted, else the first mounted; `null` before any has mounted.
+ */
+export const activePanelOf = (state: StudioState, compositionId: string): string | null => {
+  const mounted = state.panels[compositionId] ?? [];
+  const chosen = state.activePanels[compositionId];
+  if (chosen !== undefined && mounted.some((entry) => entry.key === chosen)) return chosen;
+  return mounted[0]?.key ?? null;
+};
+
+/** The active panel's key of a composition (`activePanelOf()`), re-rendering the caller only when it changes. */
+export const useActivePanel = (compositionId: string): string | null => {
+  const read = () => activePanelOf(getStudioState(), compositionId);
+  return useSyncExternalStore(subscribeStudioStore, read, read);
 };
 
 /** The panel's language, re-rendering the caller only when it changes. */
