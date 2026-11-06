@@ -91,8 +91,10 @@ A unit test pins the shapes these read, so a Remotion upgrade that changes them 
   they lack is offered back or is the user's, never kept for a later save). No cumulative replay.
 - Saves run one at a time (a promise queue), so two quick saves never start from one snapshot.
 - `target` is `{compositionId, propsKey?}`. With `propsKey`, the patch is applied under
-  `defaultProps[propsKey]`; when that value is `null` or missing, the base is the slot defaults
-  of the kind (2.4) so the first save writes complete props.
+  `defaultProps[propsKey]`; when that value is `null` or missing, the base is
+  `emptySlotPropsFor(kind)`: the slot defaults of the kind (2.4) with `audioFile`, `timingsFile`
+  and `textFile` emptied, so the first save writes complete props and a first save that is not a
+  source (a look, say) does not bring the defaults' sample recitation with it.
 - Pending (optimistic) patches, uploads, look undo stacks and tab drafts are keyed by the panel's
   **target key**: `compositionId` or `compositionId/propsKey`.
 - The panel compares all props (every top-level key by identity, `resolved` by signature), and
@@ -160,13 +162,16 @@ and the same for `MushafAyahText` and `MushafPage` (`...AyahTextSlot`, `...PageS
   composition inside (`panel={false}`), the doubt markers in their own `<Sequence from>` (the
   panel draws them there when it is given `frameOffset`), and the panel **beside** the Sequence,
   so the dock stays mounted on every frame of the host.
-- The panel takes `propsKey`, `kind` (required when `props` is `null`) and `frameOffset` (the
-  absolute frame of the slot's frame 0: enclosing Sequence start + `from`). Every seek adds it;
-  the waveform playhead subtracts it; YouTube chapters add `frameOffset / fps`.
+- The panel takes `propsKey`, `kind` (required when `props` is `null`), `frameOffset` (the
+  absolute frame of the slot's frame 0: enclosing Sequence start + `from`) and `durationInFrames`
+  (the box's length, the slot's override included; the doubt markers end there). Every seek adds
+  `frameOffset`; the waveform playhead subtracts it; YouTube chapters add `frameOffset / fps`.
 - With `props === null` the panel opens Source; the first source writes complete props.
 - In a slot, the Look tab does not change `layout.aspect` (the box decides the size), and Set
   thumbnail does not navigate away without saying so.
 - Several slots in one template show one dock with a slot picker; dock space is reference-counted.
+  Two panels with one target key (two slots with one `propsKey`) list it once and dock once: the
+  first mounted owns the dock, each still marks its doubts at its own start.
 - The compositions take `panel?: boolean` (default `true`).
 - The glow's level array records its fps (`levelsFps`) so a 60 fps host reads it correctly.
 

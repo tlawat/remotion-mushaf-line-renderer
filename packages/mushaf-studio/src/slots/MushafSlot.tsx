@@ -101,7 +101,15 @@ const Slot = <P extends MushafRecitationProps | MushafAyahTextProps | MushafPage
     throw new MushafStudioError('BAD_STUDIO_PROP', `${propsKey}: ${error}`, {prop: propsKey});
   const frames = box.durationInFrames ?? slotDurationOf(props);
   const shown = props !== null && isResolved(props) && frames > 0;
-  const options = {compositionId: id, propsKey, frameOffset: start + from, project, initialTab};
+  // The box's length reaches the panel: its doubt markers end where the box does.
+  const options = {
+    compositionId: id,
+    propsKey,
+    frameOffset: start + from,
+    durationInFrames: frames,
+    project,
+    initialTab,
+  };
   return (
     <>
       {shown ? (

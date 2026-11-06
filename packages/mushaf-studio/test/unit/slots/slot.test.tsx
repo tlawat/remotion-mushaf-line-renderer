@@ -110,11 +110,15 @@ describe('<MushafRecitationSlot>', () => {
       propsKey: 'mushaf',
       kind: 'recitation',
       frameOffset: 145,
+      durationInFrames: 240,
     });
-    // An explicit length wins over the resolver's, and the box is the template's without a size.
+    // An explicit length wins over the resolver's, for the box and the panel (its doubt markers end
+    // with the box), and the box is the template's without a size.
     seen.sequences = [];
+    seen.panels = [];
     render(<MushafRecitationSlot props={resolvedProps(240)} propsKey="mushaf" durationInFrames={90} />);
     expect(seen.sequences[0]).toMatchObject({from: 0, durationInFrames: 90, width: 1080, height: 1920});
+    expect(seen.panels[0]).toMatchObject({durationInFrames: 90});
   });
 
   it('shows nothing in the box for null props, and the panel with null props and the kind', () => {

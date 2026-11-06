@@ -5,6 +5,7 @@ import {MushafStudioError} from '../../../src/errors';
 import {
   activePanelOf,
   describeError,
+  dockOwnerOf,
   draftOf,
   getHfToken,
   getStudioState,
@@ -276,5 +277,27 @@ describe('the panels mounted in a composition', () => {
     registerPanel('U', {key: 'U', label: 'U'});
     expect(activePanelOf(getStudioState(), 'T')).toBeNull();
     expect(activePanelOf(getStudioState(), 'U')).toBe('U');
+  });
+
+  it('gives the dock of a key mounted twice to the first of the two, then to the one left', () => {
+    expect(dockOwnerOf(getStudioState(), 'T')).toBeNull();
+    const a = {key: 'T/a', label: 'a'};
+    const first = {key: 'T/b', label: 'b'};
+    const second = {key: 'T/b', label: 'b'};
+    const releaseA = registerPanel('T', a);
+    const releaseFirst = registerPanel('T', first);
+    const releaseSecond = registerPanel('T', second);
+    expect(dockOwnerOf(getStudioState(), 'T')).toBe(a);
+    setStudioState({activePanels: {T: 'T/b'}});
+    // Both are active (one key); only the first mounted docks.
+    expect(dockOwnerOf(getStudioState(), 'T')).toBe(first);
+    // The owner goes: its own entry is taken out, not the other one's, and the other docks.
+    releaseFirst();
+    expect(getStudioState().panels.T).toEqual([a, second]);
+    expect(dockOwnerOf(getStudioState(), 'T')).toBe(second);
+    releaseSecond();
+    expect(dockOwnerOf(getStudioState(), 'T')).toBe(a);
+    releaseA();
+    expect(dockOwnerOf(getStudioState(), 'T')).toBeNull();
   });
 });

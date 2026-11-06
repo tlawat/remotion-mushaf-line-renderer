@@ -4,7 +4,9 @@
 import type {GetMushafLinesOptions} from '@tlawat/remotion-mushaf-line';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import fatiha from '../../fixtures/timings/fatiha.json';
+import fatihaText from '../../fixtures/unicode/fatiha-text.json';
 import {fatihaLines} from '../compositions/helpers/fatiha-lines';
+import {surah2Timings, syntheticMushafLines} from '../page/helpers';
 
 const mocks = vi.hoisted(() => ({getMushafLines: vi.fn()}));
 vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
@@ -39,9 +41,23 @@ const {
 const {recitationDuration} = await import('../../../src/compositions/recitation');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/types').ResolvedRecitation;
+type ResolvedAyahText = import('../../../src/unicode/resolve').ResolvedAyahText;
+type ResolvedPage = import('../../../src/page/resolve').ResolvedPage;
 
 const fetchJson = (body: unknown, status = 200) =>
   vi.fn(async () => ({ok: status < 400, status, json: async () => body})) as unknown as typeof fetch;
+
+/** `public/` as the Studio serves it: `files` by path under it, 404 for anything else. */
+const serve = (files: Readonly<Record<string, unknown>>) =>
+  vi.fn(async (url: string) => {
+    const body = files[url.replace(/^\/static\//, '')];
+    return body === undefined
+      ? new Response('{}', {status: 404})
+      : new Response(JSON.stringify(body), {status: 200, headers: {'content-type': 'application/json'}});
+  }) as unknown as typeof fetch;
+
+/** A two-second end card that needs no file: what the slot's length must count after the last ayah. */
+const credits = {show: 'credits', seconds: 2, tafsirFile: '', chapterInfoFile: ''} as const;
 
 const props = (changes: Partial<MushafRecitationProps> = {}): MushafRecitationProps => ({
   ...defaultMushafRecitationSlotProps,
@@ -180,6 +196,61 @@ describe('resolveMushafAyahTextSlot and resolveMushafPageSlot', () => {
     const noTimings = await resolveMushafPageSlot({...defaultMushafPageSlotProps, timingsFile: ''}, {fps: 30});
     expect(noTimings).toMatchObject({durationInFrames: 0, error: null});
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("resolve an ayah text at the template's fps, the end card counted, the length in resolved", async () => {
+    vi.stubGlobal(
+      'fetch',
+      serve({'mushaf-studio/fatiha/timings.json': fatiha, 'mushaf-studio/fatiha/text-uthmani.json': fatihaText}),
+    );
+    const ayahText = {...defaultMushafAyahTextSlotProps, endCard: credits};
+    const at30 = await resolveMushafAyahTextSlot(ayahText, {fps: 30});
+    const at60 = await resolveMushafAyahTextSlot(ayahText, {fps: 60});
+    const resolved = at60.props?.resolved as ResolvedAyahText;
+    expect(at60.error).toBeNull();
+    expect(resolved.ayahs).toHaveLength(6);
+    expect(at60.durationInFrames).toBe(recitationDuration(resolved.timings, 60) + 120);
+    expect(at30.durationInFrames).toBe(recitationDuration(resolved.timings, 30) + 60);
+    expect(at60.durationInFrames).toBeGreaterThan(at30.durationInFrames * 1.9);
+    expect(resolved.durationInFrames).toBe(at60.durationInFrames);
+    expect(slotDurationOf(at60.props)).toBe(at60.durationInFrames);
+    expect(Object.keys(at60).sort()).toEqual(['durationInFrames', 'error', 'props']);
+  });
+
+  it("resolve a page at the template's fps, the end card counted, the length in resolved", async () => {
+    mocks.getMushafLines.mockImplementation(async (options: GetMushafLinesOptions) => syntheticMushafLines(options));
+    vi.stubGlobal('fetch', serve({'surah2.json': surah2Timings}));
+    const page = {...defaultMushafPageSlotProps, timingsFile: 'surah2.json', endCard: credits};
+    const at30 = await resolveMushafPageSlot(page, {fps: 30});
+    const at60 = await resolveMushafPageSlot(page, {fps: 60});
+    const resolved = at60.props?.resolved as ResolvedPage;
+    expect(at60.error).toBeNull();
+    expect(resolved.pages.map((p) => p.page)).toEqual([2, 3]);
+    // The same 330 frames calculateMushafPageMetadata() gives at 30 fps, and the card's 60.
+    expect(at30.durationInFrames).toBe(330 + 60);
+    expect(at60.durationInFrames).toBe(recitationDuration(resolved.timings, 60) + 120);
+    expect(at60.durationInFrames).toBe(660 + 120);
+    expect(resolved.durationInFrames).toBe(at60.durationInFrames);
+    expect(slotDurationOf(at60.props)).toBe(at60.durationInFrames);
+  });
+
+  it("report a missing file in the Studio's preview and rethrow it when rendering", async () => {
+    vi.stubGlobal('fetch', serve({'mushaf-studio/fatiha/timings.json': fatiha}));
+    // The text file is not in public/.
+    const ayahText = defaultMushafAyahTextSlotProps;
+    const preview = await resolveMushafAyahTextSlot(ayahText, {fps: 30});
+    expect(preview.durationInFrames).toBe(0);
+    expect(preview.error).toMatch(/text-uthmani\.json/);
+    expect(slotErrorOf(preview.props)).toBe(preview.error);
+    // The render refuses with the very error the preview reported.
+    const refused = await rejection(resolveMushafAyahTextSlot(ayahText, {fps: 30, isRendering: true}));
+    expect(refused.message).toBe(preview.error);
+    expect(refused.code).toBe('TRANSLATION_FETCH_FAILED');
+    // A page whose timings are missing: the same in the preview, and anywhere outside the Studio.
+    const page = {...defaultMushafPageSlotProps, timingsFile: 'missing.timings.json'};
+    expect((await resolveMushafPageSlot(page, {fps: 30})).error).toMatch(/missing\.timings\.json/);
+    env.isStudio = false;
+    expect((await rejection(resolveMushafPageSlot(page, {fps: 30}))).code).toBe('BAD_STUDIO_PROP');
   });
 });
 

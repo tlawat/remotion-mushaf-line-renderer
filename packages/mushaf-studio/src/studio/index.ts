@@ -27,6 +27,12 @@ type PanelOptions = {
    * when it is rendered inside the composition.
    */
   readonly frameOffset?: number | undefined;
+  /**
+   * How many frames the recitation shows from `frameOffset` (a slot: its box's length, its
+   * `durationInFrames` when given): the doubt markers stop there. Default: what the props'
+   * resolver left in `resolved.durationInFrames`. Read only with `frameOffset`.
+   */
+  readonly durationInFrames?: number | undefined;
 };
 
 export type MushafStudioPanelProps = PanelOptions &

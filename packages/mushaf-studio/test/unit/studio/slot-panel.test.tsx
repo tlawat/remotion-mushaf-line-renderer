@@ -76,6 +76,7 @@ const {emptySlotPropsFor, defaultMushafRecitationSlotProps, mushafRecitationSlot
 const {MUSHAF_LOOKS, lookInBox} = await import('../../../src/presets');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 const {resetSaveTracking} = await import('../../../src/studio/studio-api');
+const {dockSpaceHolders, STUDIO_CONTAINER_ID} = await import('../../../src/studio/dock-space');
 type MushafRecitationProps = import('../../../src/compositions/recitation/schema').MushafRecitationProps;
 type StudioTimings = import('../../../src/types').StudioTimings;
 
@@ -232,6 +233,26 @@ describe('a slot with a recitation', () => {
     expect(clock.sequences.some((s) => s.from === 60 && s.durationInFrames === 30)).toBe(true);
   });
 
+  it("ends the markers with the slot's box when it says how long it is", () => {
+    const at = (durationInFrames: number) => {
+      clock.sequences = [];
+      cleanup();
+      render(
+        <MushafStudioPanel
+          compositionId="MyTemplate"
+          props={resolvedSlot()}
+          propsKey="mushaf"
+          frameOffset={45}
+          durationInFrames={durationInFrames}
+        />,
+      );
+      return clock.sequences.find((s) => s.name === 'Mushaf doubts');
+    };
+    // Shorter and longer than the resolver's 120 frames: the box's length, not the resolver's.
+    expect(at(50)).toMatchObject({from: 45, durationInFrames: 50});
+    expect(at(300)).toMatchObject({from: 45, durationInFrames: 300});
+  });
+
   it('adds no doubts track to the template when nothing is doubtful', () => {
     const sure: StudioTimings = {
       ...timings,
@@ -305,6 +326,30 @@ describe('several slots in one template', () => {
     const next = saved(0, {first: resolvedSlot(), second: null});
     expect((next.first as MushafRecitationProps).layout.background).toBe('transparent');
     expect((next.second as MushafRecitationProps).layout.background).toBe('#101418');
+  });
+
+  it('show one dock for two slots with one key, and keep it when the first goes', () => {
+    const root = document.createElement('div');
+    root.id = STUDIO_CONTAINER_ID;
+    document.body.append(root);
+    const {rerender} = render(
+      <>
+        <MushafStudioPanel key="a" compositionId="MyTemplate" props={resolvedSlot()} propsKey="mushaf" />
+        <MushafStudioPanel key="b" compositionId="MyTemplate" props={resolvedSlot()} propsKey="mushaf" />
+      </>,
+    );
+    expect(docks()).toHaveLength(1);
+    // One key, one entry in the picker: no picker.
+    expect(screen.queryByRole('combobox', {name: 'Which slot of this template the panel edits'})).toBeNull();
+    // The space for the dock is reserved once, as for one panel.
+    expect(dockSpaceHolders()).toBe(1);
+    rerender(<MushafStudioPanel key="b" compositionId="MyTemplate" props={resolvedSlot()} propsKey="mushaf" />);
+    expect(docks()).toHaveLength(1);
+    expect(getStudioState().panels.MyTemplate?.map((p) => p.key)).toEqual(['MyTemplate/mushaf']);
+    expect(dockSpaceHolders()).toBe(1);
+    cleanup();
+    root.remove();
+    expect(dockSpaceHolders()).toBe(0);
   });
 
   it('keeps the dock when the picked slot goes, on the one left', () => {

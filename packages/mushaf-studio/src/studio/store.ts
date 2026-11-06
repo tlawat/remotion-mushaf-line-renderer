@@ -361,7 +361,9 @@ export const useStudioDraft = <T>(
 
 /**
  * Counts a panel as mounted in `compositionId` (the dock's slot picker lists it) until the returned
- * cleanup runs. A key mounted twice is listed once and stays until both are gone.
+ * cleanup runs. A key mounted twice (two slots with one `propsKey`) is listed once and stays until
+ * both are gone; the cleanup takes out its own `panel` (by identity), so `dockOwnerOf()` can tell
+ * the two apart.
  */
 export const registerPanel = (compositionId: string, panel: MountedPanel): (() => void) => {
   const {panels} = getStudioState();
@@ -371,7 +373,7 @@ export const registerPanel = (compositionId: string, panel: MountedPanel): (() =
     if (done) return;
     done = true;
     const now = getStudioState().panels[compositionId] ?? [];
-    const at = now.findIndex((entry) => entry.key === panel.key);
+    const at = now.indexOf(panel);
     if (at < 0) return;
     const rest = [...now.slice(0, at), ...now.slice(at + 1)];
     setStudioState({panels: withEntry(getStudioState().panels, compositionId, rest.length > 0 ? rest : undefined)});
@@ -399,9 +401,19 @@ export const activePanelOf = (state: StudioState, compositionId: string): string
   return mounted[0]?.key ?? null;
 };
 
-/** The active panel's key of a composition (`activePanelOf()`), re-rendering the caller only when it changes. */
-export const useActivePanel = (compositionId: string): string | null => {
-  const read = () => activePanelOf(getStudioState(), compositionId);
+/**
+ * The one registered panel that draws the dock of a composition: the first mounted with the
+ * `activePanelOf()` key. Two panels with one key edit the same props, and both are active; only
+ * this one docks, so the template shows one dock and reserves its space once.
+ */
+export const dockOwnerOf = (state: StudioState, compositionId: string): MountedPanel | null => {
+  const key = activePanelOf(state, compositionId);
+  return (state.panels[compositionId] ?? []).find((entry) => entry.key === key) ?? null;
+};
+
+/** Whether `panel` (as given to `registerPanel()`) is `dockOwnerOf()` its composition, re-rendering the caller when that changes. */
+export const useDockOwner = (compositionId: string, panel: MountedPanel): boolean => {
+  const read = () => dockOwnerOf(getStudioState(), compositionId) === panel;
   return useSyncExternalStore(subscribeStudioStore, read, read);
 };
 

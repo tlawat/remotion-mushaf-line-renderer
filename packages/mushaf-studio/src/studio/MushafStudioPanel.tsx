@@ -24,7 +24,7 @@ import {
   setStudioState,
   targetKeyOf,
   t as tNow,
-  useActivePanel,
+  useDockOwner,
   useStudioState,
   useT,
   withEntry,
@@ -375,20 +375,25 @@ const StudioDock: React.FC<{
 };
 
 /**
- * The Studio part of the panel: the doubt markers and, when it is the composition's chosen panel
- * (`activePanelOf()`: several slots of a template show one dock), the dock. Re-rendered only when
- * `propsEqual()` says so, or when the chosen panel changes.
+ * The Studio part of the panel: the doubt markers and, when it is the composition's dock owner
+ * (`dockOwnerOf()`: several slots of a template, or two with one key, show one dock), the dock.
+ * Re-rendered only when `propsEqual()` says so, or when the dock owner changes.
  */
 const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
   const view = usePanelView(panelProps);
   const {compositionId, propsKey} = panelProps;
   const label = propsKey ?? compositionId;
-  useEffect(() => registerPanel(compositionId, {key: view.key, label}), [compositionId, view.key, label]);
-  const active = useActivePanel(compositionId) === view.key;
+  // This mount's own entry: two panels with one key are told apart by it, and only one docks.
+  const mount = useMemo(() => ({key: view.key, label}), [view.key, label]);
+  useEffect(() => registerPanel(compositionId, mount), [compositionId, mount]);
+  const owner = useDockOwner(compositionId, mount);
   // Where the panel is rendered, and where the recitation starts: the same unless the panel sits
   // beside the recitation's <Sequence> (a slot).
   const ownStart = useOwnSequenceStart();
   const frameOffset = panelProps.frameOffset ?? ownStart;
+  // As long as the recitation is shown: the slot's box when it says (its `durationInFrames` wins
+  // over the resolver's), so no marker lands past the box's end.
+  const frames = panelProps.durationInFrames ?? slotDurationOf(panelProps.props);
   return (
     // The timeline markers are rendered where the panel is (Sequences register where they are
     // rendered), in a Sequence of their own at the recitation's start in a slot; the dock is
@@ -396,11 +401,9 @@ const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
     <>
       <DoubtMarkers
         props={view.base}
-        {...(panelProps.frameOffset === undefined
-          ? {}
-          : {from: frameOffset - ownStart, durationInFrames: slotDurationOf(panelProps.props)})}
+        {...(panelProps.frameOffset === undefined ? {} : {from: frameOffset - ownStart, durationInFrames: frames})}
       />
-      {active ? <StudioDock panelProps={panelProps} view={view} frameOffset={frameOffset} /> : null}
+      {owner ? <StudioDock panelProps={panelProps} view={view} frameOffset={frameOffset} /> : null}
     </>
   );
 };
@@ -454,7 +457,8 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
     a.initialTab !== b.initialTab ||
     a.propsKey !== b.propsKey ||
     a.kind !== b.kind ||
-    a.frameOffset !== b.frameOffset
+    a.frameOffset !== b.frameOffset ||
+    a.durationInFrames !== b.durationInFrames
   )
     return false;
   if (a.props === null || b.props === null) return a.props === b.props;
