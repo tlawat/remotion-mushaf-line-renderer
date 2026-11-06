@@ -289,13 +289,16 @@ test('MushafThumbnail mounts', async ({page}) => {
 /** The app's Root, from the suite's own folder: the drop-in test saves into it, and puts it back. */
 const appRootFile = (): string => path.join(test.info().project.testDir, '../../../../apps/mushaf-studio/src/Root.tsx');
 
-/** The `<Composition id="MushafInTemplate">` element of the Root, up to the next composition. */
-const templateBlockOf = (root: string): string => {
-  const start = root.indexOf('id="MushafInTemplate"');
-  expect(start, 'the Root has no MushafInTemplate').toBeGreaterThan(0);
+/** The `<Composition id="…">` element of the Root, up to the next composition. */
+const compositionBlockOf = (root: string, id: string): string => {
+  const start = root.indexOf(`id="${id}"`);
+  expect(start, `the Root has no ${id}`).toBeGreaterThan(0);
   const next = root.slice(start).search(/<(Composition|Still)\b/);
   return next < 0 ? root.slice(start) : root.slice(start, start + next);
 };
+
+/** The `<Composition id="MushafInTemplate">` element of the Root, up to the next composition. */
+const templateBlockOf = (root: string): string => compositionBlockOf(root, 'MushafInTemplate');
 
 test('MushafInTemplate docks the panel on the intro, offers its own audio track, and saves a look under `mushaf` only', async ({
   page,
@@ -369,6 +372,276 @@ test('MushafInTemplate docks the panel on the intro, offers its own audio track,
     const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
     expect(fatal, fatal.join('\n')).toHaveLength(0);
     await page.screenshot({path: test.info().outputPath('template.png'), fullPage: false});
+  } finally {
+    writeFileSync(rootFile, original);
+  }
+});
+
+// The user's complaint, in the real Studio: an edit in the Props sidebar and a save from the panel,
+// in either order, must each keep what the other wrote, and neither may drop the alignment.
+
+/**
+ * The composition's `defaultProps` as the Root holds them, evaluated: the object literal after
+ * `defaultProps={`, found by matching its braces outside string literals. The Studio reformats
+ * the Root when it saves, so the values are compared, never the text.
+ */
+const savedPropsOf = (root: string, id: string): Record<string, unknown> => {
+  const block = compositionBlockOf(root, id);
+  const at = block.indexOf('defaultProps={');
+  expect(at, `${id} has no inline defaultProps`).toBeGreaterThan(0);
+  const open = at + 'defaultProps={'.length;
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = open; i < block.length; i++) {
+    const c = block[i]!;
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = null;
+    } else if (c === "'" || c === '"' || c === '`') quote = c;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) {
+      // The Studio writes an enum's value as `'1:1' as const`: TypeScript, not JavaScript.
+      const literal = block.slice(open, i + 1).replace(/\s+as\s+const\b/g, '');
+      return new Function(`return (${literal});`)() as Record<string, unknown>;
+    }
+  }
+  throw new Error(`${id}'s defaultProps never close`);
+};
+
+type Tree = {readonly [key: string]: unknown};
+const isTree = (value: unknown): value is Tree => typeof value === 'object' && value !== null && !Array.isArray(value);
+/** `base` with `patch` merged in, objects key by key, anything else replaced. */
+const merged = (base: Tree, patch: Tree): Tree =>
+  Object.fromEntries(
+    [...new Set([...Object.keys(base), ...Object.keys(patch)])].map((key) => {
+      const [b, p] = [base[key], patch[key]];
+      return [key, p === undefined ? b : isTree(b) && isTree(p) ? merged(b, p) : p];
+    }),
+  );
+
+/**
+ * The composition's saved props, read now; `null` while the Studio is writing the Root (it is not
+ * written atomically: a read can find it empty or cut short).
+ */
+const readSaved = (rootFile: string, id: string): Record<string, unknown> | null => {
+  const root = readFileSync(rootFile, 'utf8');
+  if (!root.includes(`id="${id}"`)) return null;
+  try {
+    return savedPropsOf(root, id);
+  } catch {
+    return null;
+  }
+};
+
+/** Waits for the Root to hold `expected` (a whole `defaultProps` object) for composition `id`. */
+const expectSaved = async (rootFile: string, id: string, expected: Tree, message: string) => {
+  await expect.poll(() => readSaved(rootFile, id), {timeout: 60_000, message}).toEqual(expected);
+};
+
+/** The Props sidebar's row for `jsonPath` (its label carries `data-json-path`). */
+const sidebarField = (page: Page, jsonPath: string) =>
+  page.locator(`[data-json-path="${jsonPath}"]`).locator('xpath=..');
+
+/** Types `value` into a number field of the Props sidebar as a user does: click the value, type, Enter. */
+const setSidebarNumber = async (page: Page, jsonPath: string, value: number) => {
+  const field = sidebarField(page, jsonPath);
+  await field.locator('button.__remotion_input_dragger').click();
+  const input = field.locator('input.__remotion_input_dragger_input');
+  await expect(input).toBeVisible();
+  await input.fill(String(value));
+  await input.press('Enter');
+  await expect(field.locator('button.__remotion_input_dragger')).toHaveText(String(value));
+};
+
+/** Picks `value` in an enum field of the Props sidebar: open its menu, click the option. */
+const setSidebarEnum = async (page: Page, jsonPath: string, value: string) => {
+  // The field's menu button (its label also holds a button: the description's info bubble).
+  const menu = sidebarField(page, jsonPath).locator('button.__remotion-studio-menu-initiator');
+  await menu.click();
+  await page.locator('.__remotion-studio-menu-item').getByText(value, {exact: true}).click();
+  await expect(menu).toHaveAccessibleName(value);
+};
+
+/** Types `value` into a text field of the Props sidebar; the sidebar saves a text field when it loses focus. */
+const setSidebarText = async (page: Page, jsonPath: string, value: string) => {
+  const input = page.locator(`input[name="${jsonPath}"]`);
+  await input.click();
+  await input.fill(value);
+  await input.press('Tab');
+};
+
+/** The looks' patches as the panel writes them (restated from `MUSHAF_LOOKS`: a look that changes is updated here). */
+const NIGHT: Tree = {
+  theme: 'dark',
+  layout: {background: '#101418', color: '#e8e2d6', backgroundImage: ''},
+  highlight: {mode: 'word', style: 'glow', color: '#f2c66d', dimOthers: 1},
+  text: {translationColor: '#b8b2a6', glossColor: '#8e98a3'},
+};
+const SQUARE: Tree = {
+  layout: {aspect: '1:1', visibleLines: 3, neighbourOpacity: 0.35},
+  text: {translationPosition: 'below', translationSize: 36},
+};
+
+/** Applies `lookId` from the panel's Look tab and waits for the panel to be ready again. */
+const applyLook = async (page: Page, lookId: string) => {
+  const panel = page.locator(PANEL);
+  await panel.getByRole('tab', {name: 'Look'}).click();
+  await panel.locator(`[data-look="${lookId}"]`).click();
+  await expect(panel.getByRole('status')).toContainText('Ready', {timeout: 60_000});
+};
+
+/** The alignment the sample's compositions start with: what the user's complaint says goes missing. */
+const ALIGNMENT = {audioFile: 'mushaf-studio/fatiha/audio.mp3', timingsFile: 'mushaf-studio/fatiha/timings.json'};
+
+/** The other compositions' props, unchanged: nothing of a save leaks into them. */
+const expectOthersUnchanged = (original: string, now: string, id: string) => {
+  for (const other of ['MushafRecitation', 'MushafPassage', 'MushafAyahText', 'MushafPage', 'MushafInTemplate']) {
+    if (other !== id) expect(savedPropsOf(now, other), other).toEqual(savedPropsOf(original, other));
+  }
+};
+
+test('MushafRecitation: a layout edit in the Props sidebar survives a look from the panel, and so does the alignment', async ({
+  page,
+}) => {
+  const rootFile = appRootFile();
+  const original = readFileSync(rootFile, 'utf8');
+  const start = savedPropsOf(original, 'MushafRecitation');
+  expect(start).toMatchObject(ALIGNMENT);
+  expect(start.layout).toMatchObject({aspect: '16:9', marginX: 120});
+  try {
+    const errors = await openComposition(page, 'MushafRecitation');
+    await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
+    const panel = page.locator(PANEL);
+    await expect(panel).toBeVisible();
+
+    // (a) The sidebar: the layout's aspect (the composition resizes) and margin, each saved into
+    // the Root by the Studio.
+    await setSidebarEnum(page, 'layout.aspect', '9:16');
+    await expectSaved(
+      rootFile,
+      'MushafRecitation',
+      merged(start, {layout: {aspect: '9:16'}}),
+      'the sidebar never saved layout.aspect',
+    );
+    await setSidebarNumber(page, 'layout.marginX', 200);
+    const afterSidebar = merged(start, {layout: {aspect: '9:16', marginX: 200}});
+    await expectSaved(rootFile, 'MushafRecitation', afterSidebar, 'the sidebar never saved layout.marginX');
+
+    // (b) The panel: a look, which writes into the same `layout` group.
+    await applyLook(page, 'night');
+
+    // (c) The Root: the sidebar's edit, the alignment and the look, and nothing else changed.
+    await expectSaved(rootFile, 'MushafRecitation', merged(afterSidebar, NIGHT), 'the look was not saved as expected');
+    const saved = savedPropsOf(readFileSync(rootFile, 'utf8'), 'MushafRecitation');
+    expect(saved.layout).toMatchObject({aspect: '9:16', marginX: 200});
+    expect(saved).toMatchObject(ALIGNMENT);
+    expectOthersUnchanged(original, readFileSync(rootFile, 'utf8'), 'MushafRecitation');
+    // Nothing raced: the panel offers nothing back.
+    await expect(panel.locator('[data-mushaf-control="rolled-back"]')).toHaveCount(0);
+    await expect(errorOverlay(page)).toHaveCount(0);
+    const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+    expect(fatal, fatal.join('\n')).toHaveLength(0);
+  } finally {
+    writeFileSync(rootFile, original);
+  }
+});
+
+test('MushafRecitation: a panel save, a sidebar edit of what it wrote, then another panel save, keeps the sidebar edit and the alignment', async ({
+  page,
+}) => {
+  const rootFile = appRootFile();
+  const original = readFileSync(rootFile, 'utf8');
+  const start = savedPropsOf(original, 'MushafRecitation');
+  expect(start).toMatchObject({...ALIGNMENT, splits: []});
+  try {
+    const errors = await openComposition(page, 'MushafRecitation');
+    await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
+    const panel = page.locator(PANEL);
+    await expect(panel).toBeVisible();
+
+    // A panel save first: the Square look writes layout.visibleLines and layout.neighbourOpacity.
+    await applyLook(page, 'square');
+    const afterLook = merged(start, SQUARE);
+    await expectSaved(rootFile, 'MushafRecitation', afterLook, 'the Square look was not saved as expected');
+    // Past the window in which a sidebar save counts as racing the panel's: this is a later edit.
+    await page.waitForTimeout(6000);
+
+    // The sidebar changes two of the values that look wrote.
+    await setSidebarNumber(page, 'layout.visibleLines', 5);
+    await expectSaved(
+      rootFile,
+      'MushafRecitation',
+      merged(afterLook, {layout: {visibleLines: 5}}),
+      'the sidebar never saved layout.visibleLines',
+    );
+    await setSidebarNumber(page, 'layout.neighbourOpacity', 0.6);
+    const afterSidebar = merged(afterLook, {layout: {visibleLines: 5, neighbourOpacity: 0.6}});
+    await expectSaved(rootFile, 'MushafRecitation', afterSidebar, 'the sidebar never saved layout.neighbourOpacity');
+
+    // Another panel save, of another kind: a line split from the Lines tab.
+    await panel.getByRole('tab', {name: 'Lines'}).click();
+    await panel.locator('button[title^="Split the line before"]').first().click();
+    await expect
+      .poll(() => (readSaved(rootFile, 'MushafRecitation')?.splits as unknown[] | undefined)?.length, {
+        timeout: 60_000,
+        message: 'the split was never saved',
+      })
+      .toBe(1);
+    await expect(panel.getByRole('status')).toContainText('Ready', {timeout: 60_000});
+
+    // The Root: the split added, the sidebar's values kept (the look's 3 and 0.35 not written
+    // again over them), the rest of the look and the alignment as they were.
+    const saved = savedPropsOf(readFileSync(rootFile, 'utf8'), 'MushafRecitation');
+    const [split] = saved.splits as Tree[];
+    expect(split).toEqual({page: expect.any(Number), line: expect.any(Number), atWordId: expect.any(Number)});
+    expect(saved).toEqual(merged(afterSidebar, {splits: [split]}));
+    expect(saved.layout).toMatchObject({aspect: '1:1', visibleLines: 5, neighbourOpacity: 0.6});
+    expect(saved).toMatchObject(ALIGNMENT);
+    expectOthersUnchanged(original, readFileSync(rootFile, 'utf8'), 'MushafRecitation');
+    await expect(panel.locator('[data-mushaf-control="rolled-back"]')).toHaveCount(0);
+    await expect(errorOverlay(page)).toHaveCount(0);
+    const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+    expect(fatal, fatal.join('\n')).toHaveLength(0);
+  } finally {
+    writeFileSync(rootFile, original);
+  }
+});
+
+test("MushafInTemplate: a sidebar edit of the template's own title survives a panel save under `mushaf`", async ({
+  page,
+}) => {
+  const rootFile = appRootFile();
+  const original = readFileSync(rootFile, 'utf8');
+  const start = savedPropsOf(original, 'MushafInTemplate');
+  expect(start.title).toBe('Al-Fatihah');
+  expect(start.mushaf).toMatchObject(ALIGNMENT);
+  try {
+    const errors = await openComposition(page, 'MushafInTemplate');
+    await expect(page.locator('[data-template="MushafInTemplate"]')).toBeVisible({timeout: 180_000});
+    const panel = page.locator(PANEL);
+    await expect(panel).toBeVisible({timeout: 60_000});
+
+    await setSidebarText(page, 'title', 'Al-Fatihah, recited');
+    const afterSidebar = merged(start, {title: 'Al-Fatihah, recited'});
+    await expectSaved(rootFile, 'MushafInTemplate', afterSidebar, 'the sidebar never saved the title');
+    await expect(page.locator('[data-template-part="title"]')).toContainText('Al-Fatihah, recited');
+
+    // In a slot a look leaves layout.aspect to the template's box (Night has none to leave).
+    await applyLook(page, 'night');
+    await expectSaved(
+      rootFile,
+      'MushafInTemplate',
+      merged(afterSidebar, {mushaf: NIGHT}),
+      'the look was not saved under `mushaf` as expected',
+    );
+    const saved = savedPropsOf(readFileSync(rootFile, 'utf8'), 'MushafInTemplate');
+    expect(saved.title).toBe('Al-Fatihah, recited');
+    expect(saved.mushaf).toMatchObject(ALIGNMENT);
+    expectOthersUnchanged(original, readFileSync(rootFile, 'utf8'), 'MushafInTemplate');
+    await expect(panel.locator('[data-mushaf-control="rolled-back"]')).toHaveCount(0);
+    await expect(errorOverlay(page)).toHaveCount(0);
+    const fatal = errors.filter((e) => !/favicon|net::ERR_|ResizeObserver/.test(e));
+    expect(fatal, fatal.join('\n')).toHaveLength(0);
   } finally {
     writeFileSync(rootFile, original);
   }
