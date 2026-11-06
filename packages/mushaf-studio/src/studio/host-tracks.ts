@@ -9,7 +9,7 @@ import {useVideoConfig} from 'remotion';
 import {OWN_AUDIO_NAME} from '../audio/host';
 import {isHttpUrl} from '../compositions/shared';
 import {type TimelineSequence, useTimelineSequences} from './remotion-internals';
-import {staticFileList} from './studio-api';
+import {staticFileList, trackCopyOf} from './studio-api';
 
 /** Why a track is listed but cannot be followed: `hostAudio` keeps one offset, so the track must play at speed 1, once. */
 export type HostTrackLimit = 'rate' | 'loop';
@@ -149,11 +149,14 @@ const decodePath = (path: string): string =>
     .join('/');
 
 /**
- * The `audioFile` of a track's URL, as `staticFile()` made it: the name of the `public/` file whose
- * `src` it is (`staticFiles`, the Studio's list), else the path after `staticBase` (the Studio's
+ * The `audioFile` of a track's URL, as `staticFile()` made it: the file its bytes were written to
+ * this session (`copyOf`, for a `blob:` or `data:` track used before), else the name of the
+ * `public/` file whose `src` it is (`staticFiles`, the Studio's list; in the browser-hosted Studio
+ * that `src` is itself a `blob:` URL), else the path after `staticBase` (the Studio's
  * `window.remotion_staticBase`), decoded segment by segment; an http(s) URL of the Studio's own
- * `origin` is read by its path the same way. Any other http(s) URL stays a URL; `blob:` and `data:`
- * need their bytes written. `null` for anything else (a relative path `staticFile()` did not make).
+ * `origin` is read by its path the same way. Any other http(s) URL stays a URL; any other `blob:`
+ * and `data:` need their bytes written. `null` for anything else (a relative path `staticFile()`
+ * did not make).
  */
 export const audioFileForTrack = (
   src: string,
@@ -161,8 +164,13 @@ export const audioFileForTrack = (
     readonly staticFiles: readonly {readonly name: string; readonly src: string}[];
     readonly staticBase?: string | null | undefined;
     readonly origin?: string | null | undefined;
+    readonly copyOf?: ((src: string) => string | null) | undefined;
   },
 ): TrackFile | null => {
+  const copy = options.copyOf?.(src) ?? null;
+  if (copy !== null) return {kind: 'public', path: copy};
+  const exact = options.staticFiles.find((file) => file.src === src);
+  if (exact) return {kind: 'public', path: exact.name.replace(/^\/+/, '')};
   if (/^(blob|data):/i.test(src)) return {kind: 'bytes', url: src};
   let path = src;
   if (isHttpUrl(src)) {
@@ -170,7 +178,7 @@ export const audioFileForTrack = (
     if (!options.origin || url.origin !== options.origin) return {kind: 'url', url: src};
     path = url.pathname;
   }
-  const named = options.staticFiles.find((file) => file.src === path || file.src === src);
+  const named = options.staticFiles.find((file) => file.src === path);
   if (named) return {kind: 'public', path: named.name.replace(/^\/+/, '')};
   const base = options.staticBase ?? '';
   if (base !== '' && path.startsWith(`${base}/`))
@@ -185,9 +193,12 @@ export const studioLocation = (): {readonly staticBase: string | null; readonly 
   return {staticBase: typeof base === 'string' ? base : null, origin: window.location?.origin ?? null};
 };
 
-/** `audioFileForTrack()` of a track against the Studio's own list of `public/`, static base and origin. */
+/**
+ * `audioFileForTrack()` of a track against the Studio's own list of `public/`, static base and
+ * origin, and the files tracks were written into this session (`trackCopyOf()`).
+ */
 export const studioTrackFile = (track: Pick<HostAudioTrack, 'src'>): TrackFile | null =>
-  audioFileForTrack(track.src, {staticFiles: staticFileList(), ...studioLocation()});
+  audioFileForTrack(track.src, {staticFiles: staticFileList(), ...studioLocation(), copyOf: trackCopyOf});
 
 /**
  * Whether the saved `hostAudio.offsetSeconds` and the live track's differ by more than half a frame
@@ -199,7 +210,9 @@ export const hostTrackMoved = (saved: number, live: number, fps: number): boolea
 /**
  * The live track the saved `hostAudio` follows: among the followable tracks whose file is
  * `audioFile` (`fileOf`, `audioFileForTrack()` in the panel), the one named `label`, else the first.
- * `null` when none plays that file.
+ * When none plays that file, a `blob:` or `data:` track named `label` (non-empty): its bytes were
+ * written into `audioFile` in an earlier session, and its URL is new on every page load. `null`
+ * when neither is found.
  */
 export const followedTrack = (
   tracks: readonly HostAudioTrack[],
@@ -211,5 +224,8 @@ export const followedTrack = (
     const file = fileOf(track);
     return file !== null && (file.kind === 'public' ? file.path : file.url) === audioFile;
   });
-  return playing.find((track) => track.label === label) ?? playing[0] ?? null;
+  const named = playing.find((track) => track.label === label) ?? playing[0];
+  if (named) return named;
+  if (label === '') return null;
+  return tracks.find((track) => track.label === label && fileOf(track)?.kind === 'bytes') ?? null;
 };

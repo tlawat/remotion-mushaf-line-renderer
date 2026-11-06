@@ -6,6 +6,7 @@ import {alignUrl, sessionTimestamps, timingsFromQud} from '../../qud';
 import type {QudAlignOptions, QudClientOptions, QudDevice, QudModel, QudRiwayah, QudStage} from '../../qud/types';
 import {alignWithCache} from '../align-cache';
 import {type AlignSource, alignSourceOf, hostOf, isVideoFile} from '../audio-source';
+import {followedTrack, studioTrackFile, useHostAudioTracks} from '../host-tracks';
 import type {MessageKey} from '../i18n';
 import {saveRecording} from '../recording';
 import {
@@ -22,7 +23,7 @@ import {
   useStudioState,
   useT,
 } from '../store';
-import {baseName, readPublicFile, slugify, stemOf} from '../studio-api';
+import {baseName, isUrl, readPublicFile, slugify, stemOf} from '../studio-api';
 import {colors, styles} from '../styles';
 import type {TabProps} from '../tab-props';
 import {Button, Field, Note, ProgressBar, Section} from '../ui';
@@ -51,8 +52,12 @@ const clock = (at: number): string => {
 const audioOf = (source: AlignSource): string | null =>
   source.kind === 'file' ? source.path : source.kind === 'url' ? source.url : null;
 
-/** Where the recording came from, in the words of the tab. */
-const OriginLine: React.FC<{readonly source: AlignSource; readonly track: string}> = ({source, track}) => {
+/** Where the recording came from, in the words of the tab; `video` when its sound is sent as a WAV. */
+const OriginLine: React.FC<{readonly source: AlignSource; readonly track: string; readonly video: boolean}> = ({
+  source,
+  track,
+  video,
+}) => {
   const t = useT();
   if (source.kind === 'none') return <Note>{t('align.noAudio')}</Note>;
   if (source.kind === 'catalogue') return <Note>{t('align.catalogue')}</Note>;
@@ -75,19 +80,20 @@ const OriginLine: React.FC<{readonly source: AlignSource; readonly track: string
         <span style={styles.code}>{audio}</span>
       </p>
       <Note>{line}</Note>
-      {isVideoFile(audio) ? <Note>{t('align.video')}</Note> : null}
+      {video ? <Note>{t('align.video')}</Note> : null}
     </div>
   );
 };
 
 /**
  * What the aligner answers for `source`: a file of `public/` read through the dev server (a
- * video's sound decoded into a WAV first, `audioToWav()`), or a URL fetched by the browser, both
- * through `alignWithCache()`; a URL the browser may not fetch (CORS) is downloaded by the aligner
- * itself (`alignUrl()`), with no cache.
+ * video's sound decoded into a WAV first, `audioToWav()`, when `video`), or a URL fetched by the
+ * browser, both through `alignWithCache()`; a URL the browser may not fetch (CORS) is downloaded
+ * by the aligner itself (`alignUrl()`), with no cache.
  */
 const alignSource = async (
   source: Extract<AlignSource, {kind: 'file' | 'url'}>,
+  video: boolean,
   align: QudAlignOptions,
   client: QudClientOptions,
 ) => {
@@ -107,7 +113,7 @@ const alignSource = async (
     const timestamps = await sessionTimestamps(response.audio_id, {}, client);
     return {align: response, timestamps, reused: false, alignedAt: null, name};
   }
-  if (blob !== null && isVideoFile(name)) {
+  if (blob !== null && video) {
     setStudioState({busy: tNow('align.busy.decoding')});
     blob = await audioToWav(blob, name);
     name = `${stemOf(name)}.wav`;
@@ -131,7 +137,7 @@ const alignSource = async (
  * before it sends anything, and writes the timings it returns. A recording the catalogue already
  * timed is not sent.
  */
-export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
+export const AlignTab: React.FC<TabProps> = ({target, props, project, frameOffset}) => {
   const {busy, progress, session, uploadedAudio: uploads, stagedFrom} = useStudioState();
   const key = targetKeyOf(target);
   const t = useT();
@@ -147,6 +153,14 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
   const source = alignSourceOf(props, {path: uploads[key] ?? null, origin: stagedFrom[key] ?? 'upload'});
   const audio = audioOf(source);
   const track = hostAudioOf(props).track;
+  const tracks = useHostAudioTracks(frameOffset);
+  // A video: by its file's extension, or, for the template's track, by what the template plays it
+  // with (a <Video> of a .webm says so only there).
+  const followed =
+    source.kind !== 'none' && source.kind !== 'catalogue' && source.origin === 'track'
+      ? followedTrack(tracks, props.audioFile, track, studioTrackFile)
+      : null;
+  const video = (audio !== null && isVideoFile(audio)) || followed?.kind === 'video';
   const working = busy !== null;
   // The page is the Hafs print: another riwayah aligns only once the user has said it may not match.
   const otherRiwayah = riwayah !== 'hafs';
@@ -158,6 +172,7 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
     void runStudioTask(tNow('align.busy.reading'), async () => {
       const result = await alignSource(
         source,
+        video,
         {model, device, riwayah, onProgress: (step) => setStudioState({progress: step})},
         client,
       );
@@ -197,7 +212,7 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
   return (
     <div>
       <Section title={t('align.audioTitle')}>
-        <OriginLine source={source} track={track} />
+        <OriginLine source={source} track={track} video={video} />
       </Section>
       <Section title={t('align.options')}>
         <div style={styles.row}>
@@ -329,7 +344,8 @@ export const AlignTab: React.FC<TabProps> = ({target, props, project}) => {
         {session ? (
           <Note>
             {t('align.lastSession', {
-              audio: session.audio,
+              // Where the recording is: a path of public/, or the URL it was fetched from.
+              audio: isUrl(session.audio) ? session.audio : `public/${session.audio}`,
               model: session.model,
               device: session.device,
               riwayah: session.riwayah,

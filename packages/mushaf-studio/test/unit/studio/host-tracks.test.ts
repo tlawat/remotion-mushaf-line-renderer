@@ -149,6 +149,24 @@ describe('audioFileForTrack()', () => {
     expect(audioFileForTrack('/elsewhere/a.mp3', options)).toBeNull();
     expect(audioFileForTrack('/static-abc/a.mp3', {staticFiles: []})).toBeNull();
   });
+
+  it("maps a blob: src the Studio's list gives a public/ file (the browser-hosted Studio) to that file", () => {
+    const hosted = [{name: 'a.mp3', src: 'blob:http://localhost:3000/a'}];
+    expect(audioFileForTrack('blob:http://localhost:3000/a', {staticFiles: hosted})).toEqual({
+      kind: 'public',
+      path: 'a.mp3',
+    });
+    expect(audioFileForTrack('blob:http://localhost:3000/b', {staticFiles: hosted})?.kind).toBe('bytes');
+  });
+
+  it('maps a blob: track whose bytes were written this session back to that file', () => {
+    const copyOf = (src: string) => (src === 'blob:http://localhost:3000/t' ? 'mushaf-studio/p/track.mp3' : null);
+    expect(audioFileForTrack('blob:http://localhost:3000/t', {...options, copyOf})).toEqual({
+      kind: 'public',
+      path: 'mushaf-studio/p/track.mp3',
+    });
+    expect(audioFileForTrack('blob:http://localhost:3000/u', {...options, copyOf})?.kind).toBe('bytes');
+  });
 });
 
 describe('a track that moved', () => {
@@ -182,5 +200,19 @@ describe('a track that moved', () => {
     expect(followedTrack(tracks, 'music.mp3', 'Template audio', fileOf)?.id).toBe('b');
     expect(followedTrack(tracks, 'music.mp3', 'Renamed', fileOf)?.id).toBe('a');
     expect(followedTrack(tracks, 'none.mp3', 'Template audio', fileOf)).toBeNull();
+  });
+
+  it('matches a blob: track by its name when no track plays the file its bytes went into', () => {
+    const bytesOf = (t: HostAudioTrack) =>
+      t.src.startsWith('blob:') ? {kind: 'bytes' as const, url: t.src} : fileOf(t);
+    const tracks = [
+      track({id: 'a', label: 'Music', src: '/static-abc/music.mp3'}),
+      track({id: 'b', label: 'Template audio', src: 'blob:http://localhost:3000/new'}),
+    ];
+    expect(followedTrack(tracks, 'mushaf-studio/p/track.webm', 'Template audio', bytesOf)?.id).toBe('b');
+    // A file a track plays wins; no name, or a name no blob: track has, matches nothing.
+    expect(followedTrack(tracks, 'music.mp3', 'Template audio', bytesOf)?.id).toBe('a');
+    expect(followedTrack(tracks, 'mushaf-studio/p/track.webm', '', bytesOf)).toBeNull();
+    expect(followedTrack(tracks, 'mushaf-studio/p/track.webm', 'Music', bytesOf)).toBeNull();
   });
 });

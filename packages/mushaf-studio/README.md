@@ -249,7 +249,7 @@ line that says what it replaces:
 | **Download from the catalogue** | **Download into public/**: the word timings from aligner.qud.dev and the clip of the ayahs from the host the aligner's answer names (a Hugging Face Space), both into `public/mushaf-studio/<project>/`. Nothing of yours is uploaded. When the clip cannot be downloaded nothing is saved: **Retry the download**, or **Stream from {host}**, which saves the clip's URL as `audioFile` (renders then need that host). |
 | **Upload my recording** | Copies the file into `public/` (it stays on this machine) and stages it for Align, which uploads it to aligner.qud.dev and says so first. The composition keeps playing what it plays until Align saves the timings. |
 | **A file already in public/** | **Align this file** (the default) stages it for Align; **Replace the audio only** sets `audioFile` and keeps the timings, with a warning that the highlight follows the old timings. |
-| **A track in this video** | Shown when the template has audio or video tracks on the Studio's timeline (the composition's own `<Audio>`, named `OWN_AUDIO_NAME`, is left out). **Use this track** sets `audioFile` to the track's file and turns `hostAudio` on with the second of it heard at the recitation's start. Only a track at speed 1 that does not loop can be followed. |
+| **A track in this video** | Shown when the template has audio or video tracks on the Studio's timeline (the composition's own `<Audio>`, named `OWN_AUDIO_NAME`, is left out). **Use this track** sets `audioFile` to the track's file and turns `hostAudio` on with the second of it heard at the recitation's start. Only a track at speed 1 that does not loop can be followed. A `blob:` or `data:` track is written into `public/` once; using it again, or after a reload, maps it back to that file. |
 
 The **Now:** line at the top says what the composition plays and where it came from (downloaded
 from the clip host, timed by the aligner, streaming a URL, the template's track). A stream, and a
@@ -257,7 +257,9 @@ missing `audioFile` the catalogue clip stands in for, get a **Download it into p
 Align works on the one recording Source staged for this composition, else on what it plays, and
 says which: a catalogue recitation is not aligned again (Review adjusts it); a URL is fetched by the
 browser and uploaded, or downloaded by the aligner itself (`alignUrl()`) when its host does not let
-the browser read it; a video's sound is decoded in the browser and sent as WAV (`audioToWav()`).
+the browser read it; a video's sound is decoded in the browser and sent as WAV (`audioToWav()`): a
+file of a video extension, or a template track the template plays with `<Video>` or
+`<OffthreadVideo>`, a `.webm` included.
 When the template's track has moved since its offset was saved, the dock offers **Update timing**;
 it never writes the offset on its own.
 

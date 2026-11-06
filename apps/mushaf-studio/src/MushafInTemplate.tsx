@@ -3,8 +3,15 @@
 // under one key (`mushaf`). The Mushaf panel saves there and leaves the template's own props alone;
 // it stays docked on every frame, the intro and the outro included. The recitation follows the
 // template's track (`mushaf.hostAudio`) instead of playing its audio itself: the panel's Source tab
-// lists the track under "A track in this video".
+// lists the track under "A track in this video". Once the slot plays a recording of its own (a
+// catalogue download, Align of an upload, "Replace the audio only", "Play audioFile in the
+// composition again" all turn `hostAudio` off), the template mutes its track rather than play a
+// second recitation over it; it keeps the track on the timeline, so Source still offers it.
+// The default `soundtrack` is the sample's recording (`bun run --cwd apps/mushaf-studio sample`, which
+// `bun run studio` runs): without that file nothing plays, since a slot that follows the template's
+// track has no catalogue clip to fall back to.
 import {
+  followsHostAudio,
   MushafRecitationSlot,
   mushafRecitationSlotSchema,
   resolveMushafRecitationSlot,
@@ -112,10 +119,15 @@ export const MushafInTemplate: React.FC<MushafInTemplateProps> = ({
         }}
       />
       {/* The template's own track, from the recitation's start: the slot's `hostAudio` follows it,
-          so the recitation plays nothing itself and its words keep time with this. */}
+          so the recitation plays nothing itself and its words keep time with this. Muted while the
+          recitation plays its own recording instead (still listed in Source, to follow it again). */}
       {soundtrack !== '' ? (
         <Sequence from={intro} name={TEMPLATE_AUDIO_NAME} layout="none">
-          <Audio src={staticFile(soundtrack)} name={TEMPLATE_AUDIO_NAME} />
+          <Audio
+            src={staticFile(soundtrack)}
+            name={TEMPLATE_AUDIO_NAME}
+            muted={mushaf !== null && !followsHostAudio(mushaf)}
+          />
         </Sequence>
       ) : null}
       <MushafRecitationSlot

@@ -5,7 +5,7 @@ import {getChapterSegments, listRecitations, timingsFromCatalogue} from '../../q
 import {isHafsRecitation} from '../../qud/riwayah';
 import type {QudChapterSegments, QudRecitation} from '../../qud/types';
 import {defaultSourceMode, hostOf, nowSourceOf, type SourceMode, VIDEO_EXTENSIONS} from '../audio-source';
-import {type HostAudioTrack, studioTrackFile, useHostAudioTracks} from '../host-tracks';
+import {followedTrack, type HostAudioTrack, studioTrackFile, useHostAudioTracks} from '../host-tracks';
 import type {MessageKey} from '../i18n';
 import {saveRecording} from '../recording';
 import {
@@ -32,6 +32,7 @@ import {
   projectDir,
   projectPath,
   reevaluate,
+  rememberTrackCopy,
   slugify,
   writeFile,
 } from '../studio-api';
@@ -510,17 +511,29 @@ const TrackSource: React.FC<TabProps & {readonly tracks: readonly HostAudioTrack
   const [choice, setChoice] = useStudioDraft(key, 'source.track', '');
   const usable = tracks.filter((track) => track.limit === null);
   const picked = usable.find((track) => trackKeyOf(track) === choice) ?? usable[0] ?? null;
-  const pickedFile = picked ? studioTrackFile(picked) : null;
-  const pickedName = pickedFile === null ? null : pickedFile.kind === 'public' ? pickedFile.path : pickedFile.url;
   const following = followsHostAudio(props);
+  // The track followed now keeps its file: a blob: track's bytes are already in audioFile.
+  const followed = following ? followedTrack(tracks, props.audioFile, hostAudioOf(props).track, studioTrackFile) : null;
+  const isFollowed = picked !== null && picked.id === followed?.id;
+  const pickedFile = picked ? studioTrackFile(picked) : null;
+  const pickedName = isFollowed
+    ? props.audioFile
+    : pickedFile === null || pickedFile.kind === 'bytes'
+      ? null
+      : pickedFile.kind === 'public'
+        ? pickedFile.path
+        : pickedFile.url;
   const working = busy !== null;
   const use = () => {
     if (!picked) return;
     void runStudioTask(tNow('source.busy.track'), async () => {
       const file = studioTrackFile(picked);
       let audioFile: string;
-      if (file === null || file.kind === 'bytes') {
-        // A blob: or data: URL is gone after a reload, and a render never sees it: its bytes go into public/.
+      if (isFollowed) {
+        audioFile = props.audioFile;
+      } else if (file === null || file.kind === 'bytes') {
+        // A blob: or data: URL is gone after a reload, and a render never sees it: its bytes go into
+        // public/, once (rememberTrackCopy()): using the track again maps back to that file.
         const response = await fetch(file?.url ?? picked.src);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
@@ -528,6 +541,7 @@ const TrackSource: React.FC<TabProps & {readonly tracks: readonly HostAudioTrack
           freePublicPath(projectPath(project, `track.${extensionFor(blob.type)}`)),
           await blob.arrayBuffer(),
         );
+        rememberTrackCopy(picked.src, audioFile);
       } else {
         audioFile = file.kind === 'public' ? file.path : file.url;
       }

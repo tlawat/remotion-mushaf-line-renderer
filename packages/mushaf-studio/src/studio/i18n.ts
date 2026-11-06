@@ -227,7 +227,7 @@ const EN = {
     'Your audio leaves this machine only when you press Align: it is uploaded to the QUD Universal Aligner (aligner.qud.dev), which keeps it for a few hours; the alignment it returns is CC-BY-4.0. The same file aligned again within those hours reuses that session instead of being uploaded again.',
   'align.button': 'Align',
   'align.lastSession':
-    'Last alignment in this session: public/{audio} ({model}, {device}, {riwayah}), session {id}. Split and re-align in Review use it.',
+    'Last alignment in this session: {audio} ({model}, {device}, {riwayah}), session {id}. Split and re-align in Review use it.',
   'align.busy.reading': 'Reading the audio...',
   'align.busy.checking': 'Looking for an earlier alignment of this file...',
   'align.busy.aligning': 'Aligning...',
@@ -709,7 +709,7 @@ const AR: Readonly<Record<MessageKey, Message>> = {
     'لا يغادر صوتك هذا الجهاز إلا حين تضغط «محاذاة»: إذ يُرفع إلى أداة المحاذاة الشاملة QUD (aligner.qud.dev) التي تحتفظ به بضع ساعات؛ والمحاذاة التي تعيدها مرخّصة بـ CC-BY-4.0. وإذا حاذيت الملف نفسه مرة أخرى خلال تلك الساعات أُعيد استخدام الجلسة نفسها بدلًا من رفعه من جديد.',
   'align.button': 'محاذاة',
   'align.lastSession':
-    'آخر محاذاة في هذه الجلسة: public/{audio} ({model}، {device}، {riwayah})، الجلسة {id}. يعتمد عليها التقسيم وإعادة المحاذاة في تبويب المراجعة.',
+    'آخر محاذاة في هذه الجلسة: {audio} ({model}، {device}، {riwayah})، الجلسة {id}. يعتمد عليها التقسيم وإعادة المحاذاة في تبويب المراجعة.',
   'align.busy.reading': 'جارٍ قراءة الصوت...',
   'align.busy.checking': 'جارٍ البحث عن محاذاة سابقة لهذا الملف...',
   'align.busy.aligning': 'جارٍ المحاذاة...',

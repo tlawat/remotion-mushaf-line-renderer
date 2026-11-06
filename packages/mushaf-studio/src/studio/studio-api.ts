@@ -488,10 +488,23 @@ export const restoreRolledBack = async (target: StudioTarget | string): Promise<
 export const dismissRolledBack = (target: StudioTarget | string): void =>
   setStudioState({rolledBack: withEntry(getStudioState().rolledBack, targetKeyOf(target), undefined)});
 
+// The file of public/ each `blob:` or `data:` track's bytes were written into this session, by the
+// track's URL: the same track maps back to that file instead of being copied again.
+const trackCopies = new Map<string, string>();
+
+/** Records that the bytes of the track at `src` (a `blob:` or `data:` URL) were written to `path` of `public/`. */
+export const rememberTrackCopy = (src: string, path: string): void => {
+  trackCopies.set(src, publicPathOf(path));
+};
+
+/** The file of `public/` the track at `src` was written into this session (`rememberTrackCopy()`), else `null`. */
+export const trackCopyOf = (src: string): string | null => trackCopies.get(src) ?? null;
+
 /** Forgets the saves being watched, the page-load, live and panel props, and the paths written. For tests. */
 export const resetSaveTracking = (): void => {
   records.clear();
   writtenPaths.clear();
+  trackCopies.clear();
   panelProps.clear();
   pageLoadProps.clear();
   liveProps = {};

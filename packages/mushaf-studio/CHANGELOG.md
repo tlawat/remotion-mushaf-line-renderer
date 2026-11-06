@@ -128,13 +128,14 @@ design and the roadmap.
   file the catalogue clip streams for can be downloaded from the Now line. Align works on the one
   staged recording and says where it came from; it does not re-align a catalogue recitation, aligns
   a URL (fetched by the browser, else by the aligner, `alignUrl()`), and sends a video's sound as
-  WAV (`encodeWav()`, `audioToWav()`).
+  WAV (`encodeWav()`, `audioToWav()`), a template's video track of any extension included.
 - **`hostAudio`.** An optional group in `MushafRecitation`, `MushafAyahText` and `MushafPage`
   (`hostAudioSchema`, `defaultHostAudio`, read by `hostAudioOf()`): the template plays the audio,
   the composition plays none, its timings start at `offsetSeconds` of the track, the audio cleanup
   does nothing, and `memorize` repeats are refused (`assertNoHostRepeats()`). The compositions'
   own `<Audio>` is named `OWN_AUDIO_NAME`. The panel lists the template's tracks from the Studio's
-  timeline, follows one, and offers Update timing when it moves. The glow's levels are silent before
+  timeline, follows one (a `blob:` track is copied into `public/` once and mapped back to that copy),
+  and offers Update timing when it moves. The glow's levels are silent before
   a track that starts after the composition (`levelsWindow()`).
 - **CI.** After the render suite, CI builds `apps/mushaf-web`, downloads the sample's recording and
   runs the Studio smoke suite (`test:studio`, which now covers the Review tab). The root

@@ -84,7 +84,9 @@ prints why the download failed (`Could not download ...`) and the Studio starts 
   mushaf data from the committed mirror (`data: 'mirror'`). The lines draw.
 - Once `public/mushaf-studio/fatiha/audio.mp3` is there, the sample plays. Before that, the notice
   says the file is missing, and the clip it falls back to cannot be reached either: run `sample`
-  once you are online.
+  once you are online. The same file is `MushafInTemplate`'s own track (`soundtrack`), which its
+  recitation follows (`mushaf.hostAudio`): until it is there that composition plays nothing, and no
+  clip stands in for it.
 - Loudness normalisation uses the summary in the timings, so it needs no download. The glow, which
   needs the recording's levels, analyses the recording itself.
 - The surah-name and juz fonts (the header lines, the intro card) come from QUL's CDN unless

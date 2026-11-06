@@ -541,7 +541,9 @@ export const RemotionRoot: React.FC = () => {
       {/* A template of your own with the recitation dropped in (see MushafInTemplate.tsx): its title, intro,
           outro and audio track (`soundtrack`) are its own props, the recitation's are under `mushaf` (null
           until one is picked). The recitation follows the template's track (`mushaf.hostAudio`) and plays
-          none itself. The panel saves there only, and stays docked on the intro and the outro too. */}
+          none itself; the track is the sample's recording, so it needs `bun run --cwd apps/mushaf-studio
+          sample` once (no catalogue clip stands in for a followed track). The panel saves there only, and
+          stays docked on the intro and the outro too. */}
       <Composition
         id="MushafInTemplate"
         component={MushafInTemplate}
