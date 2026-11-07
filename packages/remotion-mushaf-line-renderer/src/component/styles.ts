@@ -122,6 +122,21 @@ export const buildRowStyle = ({
   visibility: visible ? 'visible' : 'hidden',
 });
 
+/**
+ * The layer of the word bands (`wordBand`): the row's box, under the row, hidden with it until the
+ * line is ready. Its bands may reach past its sides (their soft ends past the outermost ink).
+ */
+export const buildBandLayerStyle = (visible: boolean): React.CSSProperties => ({
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  overflow: 'visible',
+  pointerEvents: 'none',
+  visibility: visible ? 'visible' : 'hidden',
+});
+
 /** A word a slice hides. `display: none` so the words that remain close up into one centred run. */
 export const HIDDEN_WORD_STYLE: React.CSSProperties = {display: 'none'};
 

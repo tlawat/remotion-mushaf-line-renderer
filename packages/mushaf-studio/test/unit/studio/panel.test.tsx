@@ -44,6 +44,7 @@ vi.mock('@remotion/studio', () => studio);
 const qud = vi.hoisted(() => ({
   listRecitations: vi.fn(),
   getChapterSegments: vi.fn(),
+  getChapterAudioUrl: vi.fn(),
   timingsFromCatalogue: vi.fn(),
   alignAudio: vi.fn(),
   sessionTimestamps: vi.fn(),
@@ -84,7 +85,7 @@ const {MushafStudioPanel, isInStudio} = await import('../../../src/studio');
 const {isStudioPreview} = await import('../../../src/studio/environment');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
-const {patchProps} = await import('../../../src/studio/studio-api');
+const {patchProps, resetSaveTracking} = await import('../../../src/studio/studio-api');
 const {defaultMushafAyahTextProps} = await import('../../../src/unicode/schema');
 const {parseAyahWords} = await import('../../../src/unicode/text');
 type StudioTimings = import('../../../src/types').StudioTimings;
@@ -175,6 +176,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   resetStudioStore();
+  resetSaveTracking();
 });
 
 describe('isInStudio / isStudioPreview', () => {
@@ -248,14 +250,14 @@ describe('<MushafStudioPanel>', () => {
       'Text',
     ]);
     expect(screen.getByRole('tab', {selected: true}).textContent).toBe('Source');
-    await screen.findByText('Use this recitation');
+    await screen.findByText('Download into public/');
     expect(qud.listRecitations).toHaveBeenCalledTimes(1);
     // Switching tabs is remembered; the catalogue is not fetched again when coming back.
     fireEvent.click(screen.getByRole('tab', {name: 'Lines'}));
     expect(getStudioState().tab).toBe('lines');
     expect(screen.getByRole('tab', {selected: true}).textContent).toBe('Lines');
     fireEvent.click(screen.getByRole('tab', {name: 'Source'}));
-    await screen.findByText('Use this recitation');
+    await screen.findByText('Download into public/');
     expect(qud.listRecitations).toHaveBeenCalledTimes(1);
   });
 
@@ -288,17 +290,27 @@ describe('<MushafStudioPanel>', () => {
   });
 
   it('uses a catalogue recitation: two files into public/, one props patch, one re-evaluation', async () => {
-    setStudioState({uploadedAudio: 'mushaf-studio/my-fatiha/mine.m4a'});
+    setStudioState({uploadedAudio: {MushafRecitation: 'mushaf-studio/my-fatiha/mine.m4a'}});
     render(
       <MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} project="My Fatiha" />,
     );
-    await screen.findByText('Use this recitation');
+    // A recording staged for Align opens Source on it; the catalogue is one choice away.
+    expect(screen.getByRole('radio', {name: 'Upload my recording'})).toHaveProperty('checked', true);
+    fireEvent.click(screen.getByRole('radio', {name: 'Download from the catalogue'}));
+    await screen.findByText('Download into public/');
+    // Before the answer the clip's host is not known; the note says where everything goes.
+    expect(
+      screen.getByText(
+        "Downloads the word timings from aligner.qud.dev and the audio of ayahs 1-7 from the aligner's audio host (named in its answer) into public/mushaf-studio/my-fatiha/. Nothing of yours is uploaded.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/^Replaces: the audio and the timings; a new recording also resets/)).toBeTruthy();
     expect(screen.getByRole('combobox', {name: 'Reciter'})).toHaveProperty('value', 'abdul_hamid_ghraio_2025_yt');
     expect(screen.getByRole('combobox', {name: 'Surah'})).toHaveProperty('value', '1');
     expect(screen.getByLabelText('From ayah')).toHaveProperty('value', '1');
     expect(screen.getByLabelText('To ayah')).toHaveProperty('value', '7');
     fireEvent.change(screen.getByLabelText('From ayah'), {target: {value: '2'}});
-    fireEvent.click(screen.getByText('Use this recitation'));
+    fireEvent.click(screen.getByText('Download into public/'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(qud.getChapterSegments).toHaveBeenCalledWith({
       slug: 'abdul_hamid_ghraio_2025_yt',
@@ -334,38 +346,64 @@ describe('<MushafStudioPanel>', () => {
     const next = call[0].defaultProps({savedDefaultProps: saved});
     expect(next).toMatchObject({audioFile: audioPath, timingsFile: timingsPath, fromAyah: 0, toAyah: 0, splits: []});
     expect(next.text).toEqual(saved.text);
-    expect(next.theme).toBe('plain');
+    expect(next.theme).toBe(saved.theme);
     expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     expect(getStudioState().error).toBeNull();
     // The clip is what Align works on now: an earlier upload is forgotten.
-    expect(getStudioState().uploadedAudio).toBeNull();
+    expect(getStudioState().uploadedAudio).toEqual({});
+    // The clip's host, read from the answer, is named from then on.
+    const host = new URL(chapterFixture.audio_url).host;
+    expect(
+      screen.getByText(new RegExp(`audio of ayahs 2-7 from ${host.replace(/\./g, '\\.')} into public/`)),
+    ).toBeTruthy();
   });
 
-  it('keeps the catalogue URL as the audio when the clip cannot be downloaded', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({ok: false, status: 503})),
-    );
+  it('saves nothing when the clip cannot be downloaded, then retries or streams it only when asked', async () => {
+    const host = new URL(chapterFixture.audio_url).host;
+    const fetchMock = vi.fn(async () => ({ok: false, status: 503}));
+    vi.stubGlobal('fetch', fetchMock);
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
-    await screen.findByText('Use this recitation');
-    fireEvent.click(screen.getByText('Use this recitation'));
+    await screen.findByText('Download into public/');
+    fireEvent.click(screen.getByText('Download into public/'));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain(`downloaded from ${host} (HTTP 503)`));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    // No remote URL slipped into audioFile: nothing written, nothing saved.
+    expect(studio.writeStaticFile).not.toHaveBeenCalled();
+    expect(studio.saveDefaultProps).not.toHaveBeenCalled();
+    expect(screen.getByText(/Nothing was saved: the composition plays what it played before/)).toBeTruthy();
+    // Retry: the host answers this time, the clip goes into public/.
+    fetchMock.mockImplementation(
+      async () => ({ok: true, status: 200, arrayBuffer: async () => new Uint8Array([1]).buffer}) as never,
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Retry the download'}));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
-    expect(studio.writeStaticFile).toHaveBeenCalledTimes(1);
-    expect(qud.timingsFromCatalogue).toHaveBeenCalledWith(chapterFixture, {audio: chapterFixture.audio_url});
-    const call = studio.saveDefaultProps.mock.calls[0] as unknown as [
+    expect(studio.writeStaticFile).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    // Down again, and this time the user streams it: the URL is saved, and the notice says what renders need.
+    fetchMock.mockImplementation(async () => ({ok: false, status: 503}) as never);
+    fireEvent.click(screen.getByText('Download into public/'));
+    fireEvent.click(await screen.findByRole('button', {name: `Stream from ${host}`}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(2));
+    expect(qud.timingsFromCatalogue).toHaveBeenLastCalledWith(chapterFixture, {audio: chapterFixture.audio_url});
+    const call = studio.saveDefaultProps.mock.calls[1] as unknown as [
       {defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>},
     ];
     expect(call[0].defaultProps({savedDefaultProps: {}}).audioFile).toBe(chapterFixture.audio_url);
-    await waitFor(() => expect(getStudioState().notice).toMatch(/could not be downloaded \(HTTP 503\)/));
+    await waitFor(() =>
+      expect(getStudioState().notice).toMatch(
+        new RegExp(`^audioFile is now the clip's URL: previews and renders need ${host}`),
+      ),
+    );
   });
 
   it('shows a failure in the status line, never as a React error', async () => {
     qud.getChapterSegments.mockRejectedValue(new Error('aligner down'));
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     render(<MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} />);
-    await screen.findByText('Use this recitation');
-    fireEvent.click(screen.getByText('Use this recitation'));
+    await screen.findByText('Download into public/');
+    fireEvent.click(screen.getByText('Download into public/'));
     await waitFor(() => expect(getStudioState().error).toBe('aligner down'));
     expect(screen.getByText('aligner down')).toBeTruthy();
     expect(studio.writeStaticFile).not.toHaveBeenCalled();
@@ -380,11 +418,11 @@ describe('<MushafStudioPanel>', () => {
       <MushafStudioPanel compositionId="MushafRecitation" props={resolvedProps(timings)} initialTab="lines" />,
     );
     expect(linesRenders.count).toBe(1);
-    // A new props object with the same content and a new `resolved` identity: what a frame gives.
+    // A new props object with the same groups and a `resolved` rebuilt with the same data: what a frame gives.
     rerender(
       <MushafStudioPanel
         compositionId="MushafRecitation"
-        props={resolvedProps(JSON.parse(JSON.stringify(timings)), {splits: []})}
+        props={resolvedProps(JSON.parse(JSON.stringify(timings)))}
         initialTab="lines"
       />,
     );
@@ -412,6 +450,16 @@ describe('<MushafStudioPanel>', () => {
       />,
     );
     expect(linesRenders.count).toBe(3);
+    // And any other group, one no tab shows included (the Props sidebar changed the overlay, say).
+    const overlay = {...defaultMushafRecitationProps.overlay, reciter: 'Mishary Alafasy'};
+    rerender(
+      <MushafStudioPanel
+        compositionId="MushafRecitation"
+        props={resolvedProps(realigned, {timingsFile: 'other.json', overlay})}
+        initialTab="lines"
+      />,
+    );
+    expect(linesRenders.count).toBe(4);
     expect(qud.listRecitations).not.toHaveBeenCalled();
   });
 
@@ -467,11 +515,11 @@ describe('<MushafStudioPanel>', () => {
     );
     expect(screen.getByText(/This composition has no printed lines/)).toBeTruthy();
     expect(linesRenders.count).toBe(1);
-    // The same content in a new object leaves the dock alone; another textFile reaches it.
+    // The same groups in a new object leave the dock alone; another textFile reaches it.
     rerender(
       <MushafStudioPanel
         compositionId="MushafAyahText"
-        props={JSON.parse(JSON.stringify(ayahTextProps())) as MushafAyahTextProps}
+        props={{...ayahTextProps(), resolved: JSON.parse(JSON.stringify(ayahTextProps().resolved))}}
         initialTab="lines"
       />,
     );
@@ -518,7 +566,9 @@ describe('<MushafStudioPanel>', () => {
       />,
     );
     expect(screen.getByText('1. mushaf-studio/p/t.json (font: auto)')).toBeTruthy();
-    expect(getStudioState().pendingPatch).toEqual({text: {translationFile: 'mushaf-studio/p/t.json'}});
+    expect(getStudioState().pendingPatches).toEqual({
+      MushafRecitation: {text: {translationFile: 'mushaf-studio/p/t.json'}},
+    });
     // The props arrive with it: the pending patch has done its job.
     rerender(
       <MushafStudioPanel
@@ -530,7 +580,7 @@ describe('<MushafStudioPanel>', () => {
         initialTab="text"
       />,
     );
-    await waitFor(() => expect(getStudioState().pendingPatch).toBeNull());
+    await waitFor(() => expect(getStudioState().pendingPatches).toEqual({}));
     expect(screen.getByText('1. mushaf-studio/p/t.json (font: auto)')).toBeTruthy();
   });
 });

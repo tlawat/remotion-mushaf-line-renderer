@@ -144,6 +144,19 @@ describe('<MushafLine> on a surah_name line', () => {
     expect(fetched()).toEqual([SURAH_NAMES_URL]);
   });
 
+  it('paints the frame in frameColor and leaves the name in the line colour', async () => {
+    const {container} = render(<MushafLine line={header} frameColor="#8c6c26" style={{color: 'rgb(28, 26, 22)'}} />);
+    await visible(container);
+    const [frame, name] = glyphs(container);
+    expect(frame!.dataset.glyph).toBe('frame');
+    expect(frame!.style.color).toBe('rgb(140, 108, 38)');
+    expect(name!.style.color).toBe('');
+    // Without it, both glyphs take the line's colour.
+    cleanup();
+    const plain = render(<MushafLine line={header} />);
+    expect(glyphs(plain.container).map((g) => g.style.color)).toEqual(['', '']);
+  });
+
   it('sets a basmallah line with the four glyphs of the surah-name font on the page baseline', async () => {
     expect(basmalah).toMatchObject({type: 'basmallah', fontFamily: 'mushaf-surah-names-v4'});
     const {container} = render(<MushafLine line={basmalah} />);
@@ -287,6 +300,14 @@ describe('<MushafSurahName> and <MushafJuzName>', () => {
     expect(glyphs(alone.container).map((g) => g.textContent)).toEqual(['ﯫ']); // An-Nas
     expect(glyphs(alone.container)[0]!.style.fontSize).toBe('80px');
     expect(alone.container.querySelector<HTMLElement>('.mushaf-surah-name')!.style.height).toBe('100px');
+  });
+
+  it('paints a standalone name’s frame in frameColor, and refuses one that is not a colour', () => {
+    const {container} = render(<MushafSurahName surah={1} frameColor="#d8b56a" />);
+    expect(glyphs(container).map((g) => g.style.color)).toEqual(['rgb(216, 181, 106)', '']);
+    cleanup();
+    expect(() => render(<MushafSurahName surah={1} frameColor="red;}" />)).toThrow(/frameColor> must be a CSS colour/);
+    expect(() => render(<MushafLine line={header} frameColor="red;}" />)).toThrow(/frameColor> must be a CSS colour/);
   });
 
   it('renders a juz name from the quran-common font', async () => {

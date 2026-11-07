@@ -1,8 +1,16 @@
 import type * as React from 'react';
 import {describe, expect, it} from 'vitest';
+import {fadeRise, fadeRiseStyle} from '../../src/animation/presentations/fade-rise';
 import {revealRtl, revealRtlStyle} from '../../src/animation/presentations/reveal-rtl';
 import {slideFade, slideFadeStyle} from '../../src/animation/presentations/slide-fade';
-import {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from '../../src/animation/timings';
+import {
+  CALM_EASINGS,
+  ENTER_EASING,
+  EXIT_EASING,
+  enterTiming,
+  exitTiming,
+  springyTiming,
+} from '../../src/animation/timings';
 
 const fps = 30;
 const sample = (timing: {getProgress: (o: {frame: number; fps: number}) => number}, frames: number) =>
@@ -152,5 +160,65 @@ describe('revealRtl', () => {
     // The band is clamped at the edges of the line, never negative or past 100 %.
     expect(style(0, 'entering', {softness: 20}).maskImage).toContain('#000 100.0000% 100%');
     expect(style(1, 'entering', {softness: 20}).maskImage).toContain('transparent 0 0.0000%');
+  });
+});
+
+describe('CALM_EASINGS', () => {
+  const at = (curve: (t: number) => number, frames: number) =>
+    Array.from({length: frames + 1}, (_, f) => Math.round(curve(f / frames) * 100) / 100);
+
+  it('soft settles a five-frame mark as the design samples it', () => {
+    expect(at(CALM_EASINGS.soft, 5)).toEqual([0, 0.3, 0.68, 0.89, 0.98, 1]);
+  });
+
+  it('inOut scrolls 24 frames with no lurch and no overshoot', () => {
+    const values = Array.from({length: 25}, (_, f) => CALM_EASINGS.inOut(f / 24));
+    expect(values[1]).toBeCloseTo(0.003, 3);
+    expect(values[12]).toBeCloseTo(0.5, 2);
+    expect(values[23]).toBeCloseTo(0.997, 3);
+    expect(deltas(values).every((d) => d >= 0)).toBe(true);
+    expect(Math.max(...values)).toBeLessThanOrEqual(1);
+  });
+
+  it('every curve starts at 0, ends at 1 and never goes back', () => {
+    for (const curve of Object.values(CALM_EASINGS)) {
+      const values = Array.from({length: 31}, (_, f) => curve(f / 30));
+      expect(values[0]).toBeCloseTo(0, 6);
+      expect(values[30]).toBeCloseTo(1, 6);
+      expect(deltas(values).every((d) => d >= -1e-9)).toBe(true);
+    }
+  });
+});
+
+describe('fadeRise', () => {
+  it('is a presentation that carries its props', () => {
+    const presentation = fadeRise({distance: 11});
+    expect(typeof presentation.component).toBe('function');
+    expect(presentation.props).toEqual({distance: 11});
+  });
+
+  it('enters from distance px below on its own curves and lands exactly in place', () => {
+    expect(fadeRiseStyle(0, 'entering', {distance: 11})).toEqual({opacity: 0, transform: 'translateY(11.0000px)'});
+    expect(fadeRiseStyle(1, 'entering', {distance: 11})).toEqual({opacity: 1, transform: 'translateY(0.0000px)'});
+    const mid = fadeRiseStyle(0.5, 'entering', {distance: 10});
+    expect(mid.opacity).toBeCloseTo(CALM_EASINGS.soft(0.5), 6);
+    expect(mid.transform).toBe(`translateY(${((1 - CALM_EASINGS.arrive(0.5)) * 10).toFixed(4)}px)`);
+  });
+
+  it('leaves without moving: the exiting side only fades', () => {
+    expect(fadeRiseStyle(0.25, 'exiting', {distance: 11})).toEqual({opacity: 0.75});
+    expect(fadeRiseStyle(1, 'exiting', {distance: 11})).toEqual({opacity: 0});
+  });
+
+  it('takes its own curves and extra styles, and clamps the progress', () => {
+    const linear = (t: number) => t;
+    expect(
+      fadeRiseStyle(0.5, 'entering', {distance: 8, easing: linear, riseEasing: linear, enterStyle: {color: 'red'}}),
+    ).toEqual({opacity: 0.5, transform: 'translateY(4.0000px)', color: 'red'});
+    expect(fadeRiseStyle(2, 'entering', {distance: 8}).opacity).toBe(1);
+    expect(fadeRiseStyle(-1, 'exiting', {distance: 8, exitStyle: {color: 'blue'}})).toEqual({
+      opacity: 1,
+      color: 'blue',
+    });
   });
 });

@@ -35,11 +35,15 @@ export const mushafPassageSchema = z.object({
   customTheme: customThemeSchema,
   fonts: fontsSchema,
   data: dataSchema,
-  layout: layoutSchema,
-  /** No audio here: the glow stays at rest. */
-  background: backgroundSchema.describe('Behind the lines: a colour, a gradient, an image or a looping video'),
+  layout: layoutSchema.describe(
+    'Frame and lines. background is the page colour: painted when background.kind is color, and on the title card',
+  ),
+  /** Nothing in it follows the audio, so a passage without one paints it the same. */
+  background: backgroundSchema.describe(
+    'Behind the lines: a colour, a gradient, an image or a looping video, a vignette and a slow zoom',
+  ),
   animation: animationSchema,
-  text: textSchema,
+  text: textSchema.describe('The ayah translations (the word-by-word fields do not apply)'),
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
@@ -54,7 +58,7 @@ export const defaultMushafPassageProps: MushafPassageProps = {
   slice: true,
   holdSeconds: 4,
   header: 'none',
-  theme: 'normal',
+  theme: 'custom',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
   data: 'mirror',

@@ -48,18 +48,23 @@ describe('resolvePage', () => {
   it('groups a passage across a page boundary into two pages, each loaded whole, starts non-decreasing', async () => {
     const resolved = await resolve();
     expect(resolved.pages.map((p) => p.page)).toEqual([2, 3]);
+    // The second page dissolves in turnSeconds (0.9) before its first word at 6 s.
     expect(resolved.pages.map((p) => [p.start, p.end])).toEqual([
-      [0, 5.4],
-      [5.4, 11],
+      [0, 5.1],
+      [5.1, 11],
     ]);
     for (let i = 1; i < resolved.pages.length; i++)
       expect(resolved.pages[i]!.start).toBeGreaterThanOrEqual(resolved.pages[i - 1]!.start);
     // The range first, unsliced, then each page whole, from the same theme and data.
     const data = {words: '/static/data/qpc-v4/words.json.zip', layout: '/static/data/qpc-v4/layout.db.zip'};
+    const theme = {
+      base: 'normal',
+      colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'},
+    };
     expect(calls()).toEqual([
-      {surah: 2, fromAyah: 1, toAyah: 4, theme: 'plain', data},
-      {page: 2, theme: 'plain', data},
-      {page: 3, theme: 'plain', data},
+      {surah: 2, fromAyah: 1, toAyah: 4, theme, data},
+      {page: 2, theme, data},
+      {page: 3, theme, data},
     ]);
     expect(resolved.pages[0]!.lines.map((l) => l.type)).toEqual(['surah_name', 'basmallah', 'ayah', 'ayah']);
     expect(resolved.pages[1]!.lines.map((l) => l.type)).toEqual(['ayah', 'ayah', 'surah_name', 'ayah']);
@@ -173,7 +178,7 @@ describe('calculateMushafPageMetadata', () => {
 });
 
 describe('mushafPageSchema', () => {
-  it('parses its defaults unchanged: the Fatiha sample, 16:9, a band, a simple frame, a sliding turn', () => {
+  it('parses its defaults unchanged: the Fatiha sample, 16:9, a band, a simple frame, a dissolving turn', () => {
     expect(mushafPageSchema.parse(defaultMushafPageProps)).toEqual(defaultMushafPageProps);
     expect(defaultMushafPageProps.timingsFile).toBe('mushaf-studio/fatiha/timings.json');
     // The sample's recording in the app's public/, as every composition plays it (audio-source.test.ts).
@@ -181,12 +186,12 @@ describe('mushafPageSchema', () => {
     expect(defaultMushafPageProps.layout.aspect).toBe('16:9');
     expect(defaultPageView).toEqual({
       lineHighlight: 'band',
-      lineHighlightColor: 'rgba(200,164,92,0.18)',
+      lineHighlightColor: '#b8913a',
       dimOtherLines: 1,
       frame: 'simple',
       pageNumber: true,
-      turn: 'slide',
-      turnSeconds: 0.6,
+      turn: 'fade',
+      turnSeconds: 0.9,
     });
   });
 
@@ -197,10 +202,15 @@ describe('mushafPageSchema', () => {
 
   it('bounds the page options', () => {
     const view = (changes: object) => pageViewSchema.safeParse({...defaultPageView, ...changes}).success;
-    expect(view({turnSeconds: 0.1})).toBe(false);
-    expect(view({turnSeconds: 2.5})).toBe(false);
+    expect(view({turnSeconds: 0.5})).toBe(false);
+    expect(view({turnSeconds: 1.6})).toBe(false);
     expect(view({dimOtherLines: 1.5})).toBe(false);
+    expect(view({dimOtherLines: 0.45})).toBe(false);
     expect(view({lineHighlight: 'glow'})).toBe(false);
-    expect(view({frame: 'ornate', turn: 'fade', lineHighlight: 'underline'})).toBe(true);
+    expect(view({frame: 'none', turn: 'cut', lineHighlight: 'none', turnSeconds: 0.6, dimOtherLines: 0.5})).toBe(true);
+    // The removed values are refused: migrateMushafProps() maps them.
+    expect(view({lineHighlight: 'underline'})).toBe(false);
+    expect(view({frame: 'ornate'})).toBe(false);
+    expect(view({turn: 'slide'})).toBe(false);
   });
 });

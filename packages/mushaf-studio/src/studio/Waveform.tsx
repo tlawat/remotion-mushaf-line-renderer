@@ -5,8 +5,10 @@ import type * as React from 'react';
 import {useEffect, useRef} from 'react';
 import {useCurrentFrame} from 'remotion';
 import type {AlignmentSegment} from '../types';
+import {useOwnSequenceStart} from './remotion-internals';
 import {useStudioState, useT} from './store';
-import {colors, confidenceColor} from './styles';
+import {colors, confidenceColor, styles} from './styles';
+import {Button} from './ui';
 import {audioUrlOf, loadWaveform, peaksBetween, type WaveformEnvelope} from './waveform-peaks';
 
 export const WAVEFORM_WIDTH = 356;
@@ -23,9 +25,17 @@ export const timeAtX = (view: WaveformView, x: number, width: number): number =>
 export const xAtTime = (view: WaveformView, seconds: number, width: number): number =>
   view.to > view.from ? ((seconds - view.from) / (view.to - view.from)) * width : 0;
 
-/** The playhead: the only part of the waveform that follows the frame. */
-const Cursor: React.FC<{readonly view: WaveformView; readonly fps: number}> = ({view, fps}) => {
-  const frame = useCurrentFrame();
+/**
+ * The playhead: the only part of the waveform that follows the frame. The panel may sit outside the
+ * recitation's `<Sequence>` (a slot), so the frame is made absolute (`useOwnSequenceStart()`) and
+ * the recitation's start (`frameOffset`) taken off.
+ */
+const Cursor: React.FC<{readonly view: WaveformView; readonly fps: number; readonly frameOffset: number}> = ({
+  view,
+  fps,
+  frameOffset,
+}) => {
+  const frame = useCurrentFrame() + useOwnSequenceStart() - frameOffset;
   const x = xAtTime(view, frame / fps, WAVEFORM_WIDTH);
   if (x < 0 || x > WAVEFORM_WIDTH) return null;
   return (
@@ -97,8 +107,10 @@ export const Waveform: React.FC<{
   readonly threshold: number;
   readonly selected: number | null;
   readonly fps: number;
+  /** The Studio frame of the recitation's frame 0 (`TabProps.frameOffset`); 0 by default. */
+  readonly frameOffset?: number | undefined;
   readonly onSeek: (seconds: number) => void;
-}> = ({audioFile, src, offset, view, segments, threshold, selected, fps, onSeek}) => {
+}> = ({audioFile, src, offset, view, segments, threshold, selected, fps, frameOffset = 0, onSeek}) => {
   const t = useT();
   const url = audioFile ? (src ? src : audioUrlOf(audioFile)) : '';
   const entry = useStudioState().waveforms[url];
@@ -144,9 +156,18 @@ export const Waveform: React.FC<{
             onSeek(timeAtX(view, event.clientX - rect.left, width));
           }}
         />
-        <Cursor view={view} fps={fps} />
+        <Cursor view={view} fps={fps} frameOffset={frameOffset} />
       </div>
-      {status ? <div style={{color: colors.muted, fontSize: 11}}>{status}</div> : null}
+      {status ? (
+        <div style={{...styles.row, color: colors.muted, fontSize: 11}}>
+          <span>{status}</span>
+          {entry?.status === 'error' ? (
+            <Button variant="ghost" onClick={() => void loadWaveform(url)}>
+              {t('waveform.retry')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 };

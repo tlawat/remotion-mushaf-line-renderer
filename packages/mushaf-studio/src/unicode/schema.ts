@@ -1,7 +1,9 @@
 import {z} from 'zod';
+import {defaultHostAudio, hostAudioSchema} from '../audio/host';
 import {audioSchema, defaultAudio} from '../audio/schema';
 import {backgroundSchema, defaultBackground} from '../background/schema';
 import {
+  animationSchema,
   defaultAnimation,
   defaultEndCard,
   defaultHighlight,
@@ -9,7 +11,6 @@ import {
   defaultMemorize,
   defaultOverlay,
   defaultText,
-  ENTRANCES,
   endCardSchema,
   highlightSchema,
   layoutSchema,
@@ -19,13 +20,8 @@ import {
 } from '../schema';
 import {UNICODE_FONT_IDS} from './font';
 
-/** How an ayah comes in and goes out: `animationSchema`'s vocabulary, without the window's scroll. */
-export const ayahAnimationSchema = z.object({
-  enter: z.enum(ENTRANCES).describe('How an ayah comes in'),
-  exit: z.enum(ENTRANCES).describe('How an ayah goes out'),
-  /** Seconds before its first word is heard at which an ayah starts to come in. */
-  leadInSeconds: z.number().min(0).max(3).step(0.1).describe('Seconds an ayah is on screen before its first word'),
-});
+/** How one ayah gives way to the next: `animationSchema` itself (the same three fields). */
+export const ayahAnimationSchema = animationSchema;
 
 /**
  * The props of `<MushafAyahText>`: one ayah at a time as Unicode text, for reels and short clips.
@@ -34,7 +30,11 @@ export const ayahAnimationSchema = z.object({
  */
 export const mushafAyahTextSchema = z.object({
   /** A `public/` path (`mushaf-studio/fatiha/audio.mp3`) or an https URL. */
-  audioFile: z.string().describe('Audio: a path in public/ or a URL'),
+  audioFile: z
+    .string()
+    .describe(
+      "Audio: a path in public/ or a URL (when the path is missing, the catalogue clip its timings name streams instead; under hostAudio, the file of the template's track)",
+    ),
   /** A `public/` path to a `RecitationTimings` JSON (with or without the studio's `alignment` sidecar). */
   timingsFile: z.string().describe('Timings JSON in public/'),
   /** 0 keeps the file's range. */
@@ -56,22 +56,28 @@ export const mushafAyahTextSchema = z.object({
     .describe('Line height of the Arabic text, in multiples of its size'),
   /** The shared layout; `visibleLines` and `neighbourOpacity` do not apply (one ayah is on screen at a time). */
   layout: layoutSchema.describe(
-    'Frame, colours, margins and position (lines on screen and their opacity do not apply)',
+    'Frame, page colour (painted when background.kind is color), margins and position. Lines on screen and their opacity do not apply',
   ),
   background: backgroundSchema.describe(
-    'Behind the ayah: a colour, a gradient, an image or a looping video, and a glow',
+    'Behind the ayah: a colour, a gradient, an image or a looping video, a vignette and a slow zoom. background.color fills only behind an image, video or gradient',
   ),
   animation: ayahAnimationSchema.describe('How each ayah comes in and goes out'),
   highlight: highlightSchema.describe('What follows the recitation and how it is marked'),
   /** `'first-letters'` shows the first letter of each word to come, with a tatweel. */
   memorize: memorizeSchema.describe(
-    'Memorisation: repeat each ayah, hide the words to come or show their first letters',
+    'Memorisation: repeat each ayah, hide the words to come or show their first letters (no repeats under hostAudio)',
   ),
   /** The ayah translation goes under (or over) the ayah; the gloss fields do not apply. */
   text: textSchema.describe('The ayah translations (the word-by-word fields do not apply)'),
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   endCard: endCardSchema.describe('A closing card after the last ayah'),
-  audio: audioSchema.describe('The recitation’s loudness, fades and leading silence'),
+  audio: audioSchema.describe(
+    'The recitation’s loudness, fades and leading silence (does nothing under hostAudio: the template’s <Audio> owns them)',
+  ),
+  /** Optional: props saved before it existed read as off (`hostAudioOf()`). */
+  hostAudio: hostAudioSchema
+    .optional()
+    .describe('Follow an audio track of the template instead of playing audioFile (wins over the audio cleanup)'),
   /** Filled by calculateMetadata; see `ResolvedAyahText`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
 });
@@ -82,8 +88,8 @@ export type AyahAnimation = z.infer<typeof ayahAnimationSchema>;
 /**
  * Defaults that work out of the box: the same Al-Fatihah sample as `<MushafRecitation>` (ayahs 2-7
  * by Abdul Hamid Ghraio from the aligner's catalogue, the audio in the app's `public/` beside the
- * timings committed there) with its Uthmani text beside them; a 9:16 reel, light
- * text on a dark page, the current word in gold.
+ * timings committed there) with its Uthmani text beside them; a 9:16 reel, warm ivory
+ * text on charcoal, the words still to come resting lighter.
  */
 export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   audioFile: 'mushaf-studio/fatiha/audio.mp3',
@@ -94,21 +100,18 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   font: 'uthmani-hafs',
   fontSize: 96,
   lineHeight: 1.9,
-  layout: {...defaultLayout, aspect: '9:16', background: '#101418', color: '#f4efe6'},
+  layout: {...defaultLayout, aspect: '9:16', marginX: 90, background: '#121416', color: '#f1eadb'},
   // The colour behind an image or a video: the dark page's.
-  background: {...defaultBackground, color: '#101418'},
-  animation: {
-    enter: defaultAnimation.enter,
-    exit: defaultAnimation.exit,
-    leadInSeconds: defaultAnimation.leadInSeconds,
-  },
-  highlight: {...defaultHighlight, color: '#c8a45c'},
+  background: {...defaultBackground, color: '#121416'},
+  animation: defaultAnimation,
+  highlight: defaultHighlight,
   memorize: defaultMemorize,
   // The shared default translation colour is a dark grey for a light page; this one reads on the dark page.
-  text: {...defaultText, translationColor: '#c9c1b2'},
+  text: {...defaultText, translationColor: '#b9b1a2', translationSize: 40},
   // The shared default title ink is the light page's; this one reads on the dark page.
   overlay: {...defaultOverlay, color: '#f4efe6'},
   endCard: defaultEndCard,
   audio: defaultAudio,
+  hostAudio: defaultHostAudio,
   resolved: null,
 };

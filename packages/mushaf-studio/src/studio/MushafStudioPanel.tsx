@@ -1,27 +1,59 @@
 import type * as React from 'react';
-import {memo, useEffect, useState} from 'react';
+import {memo, useEffect, useMemo, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
-import {LOOK_GROUPS} from '../presets';
+import {hostAudioOf} from '../audio/host';
+import {defaultMushafRecitationProps} from '../compositions/recitation/schema';
+import {defaultMushafPageProps} from '../page/schema';
+import {applyLook, formatOf, lookById, lookInBox, MUSHAF_FORMATS} from '../presets';
+import {describeMushafMigration, type MigrationNote, migrateMushafProps} from '../schema/migrate';
+import {slotDurationOf, slotErrorOf, unresolvedSlotErrorOf} from '../slots/resolve';
+import {emptySlotPropsFor, MUSHAF_SLOT_DEFAULTS} from '../slots/schema';
+import {defaultMushafAyahTextProps} from '../unicode/schema';
 import {reserveDockSpace} from './dock-space';
 import {DoubtMarkers} from './doubts';
 import {useInStudio} from './environment';
+import {hostTrackMoved, studioTrackFile, useFollowedTrack} from './host-tracks';
 import {directionOf, STUDIO_LANGUAGES} from './i18n';
-import type {MushafStudioPanelProps} from './index';
+import type {MushafStudioPanelKind, MushafStudioPanelProps} from './index';
 import {ProjectMenu} from './ProjectMenu';
+import {useLiveEditorProps, useOwnSequenceStart} from './remotion-internals';
 import {
   describeError,
+  getStudioState,
   LOADING_LABELS,
+  mountedPanelsOf,
+  registerPanel,
+  runStudioTask,
   STUDIO_TABS,
   type StudioTab,
+  type StudioTarget,
   setStudioState,
+  targetKeyOf,
+  t as tNow,
+  useDockOwner,
   useStudioState,
   useT,
+  withEntry,
 } from './store';
-import {applyPatch, patchApplied} from './studio-api';
+import {
+  applyPatch,
+  baseName,
+  dismissRolledBack,
+  isUrl,
+  observeLiveProps,
+  type PropsPatch,
+  patchApplied,
+  patchPaths,
+  patchProps,
+  rememberLiveProps,
+  rememberPanelProps,
+  replaceTargetProps,
+  restoreRolledBack,
+  targetPropsOf,
+} from './studio-api';
 import {colors, styles} from './styles';
 import {
-  endCardOf,
   hasLines,
   isAyahTextProps,
   isPageProps,
@@ -29,7 +61,6 @@ import {
   resolvedOf,
   type StudioCompositionProps,
   type TabProps,
-  textFileOf,
 } from './tab-props';
 import {AlignTab} from './tabs/AlignTab';
 import {LinesTab} from './tabs/LinesTab';
@@ -102,24 +133,313 @@ const StatusLine: React.FC = () => {
   );
 };
 
+/** How many field names the rolled-back notice lists before it says how many more there are. */
+const LISTED_FIELDS = 4;
+
+/**
+ * Offers to save again what the panel's saves wrote and the live props lost (the Props sidebar's
+ * JSON Reset or the Studio's undo back to the page-load props, a sidebar save that raced the
+ * panel's). Nothing is written unless the user presses Restore.
+ */
+const RolledBack: React.FC<{readonly target: StudioTarget; readonly lost: PropsPatch}> = ({target, lost}) => {
+  const {busy} = useStudioState();
+  const t = useT();
+  const paths = patchPaths(lost as Readonly<Record<string, unknown>>);
+  const listed = paths.slice(0, LISTED_FIELDS).join(', ');
+  const fields =
+    paths.length > LISTED_FIELDS
+      ? t('panel.rolledBackMore', {fields: listed, count: paths.length - LISTED_FIELDS})
+      : listed;
+  const restore = () => void runStudioTask(tNow('panel.busy.restoring'), () => restoreRolledBack(target));
+  return (
+    <div style={{...styles.status, ...styles.statusLine('notice')}} role="alert" data-mushaf-control="rolled-back">
+      <span style={{flex: '1 1 auto'}}>{t('panel.rolledBack', {fields})}</span>
+      <button type="button" style={styles.button('default', busy !== null)} disabled={busy !== null} onClick={restore}>
+        {t('panel.restore')}
+      </button>
+      <button
+        type="button"
+        style={styles.button('ghost', false)}
+        onClick={() => dismissRolledBack(target)}
+        title={t('panel.keepAsIs')}
+      >
+        ×
+      </button>
+    </div>
+  );
+};
+
+/**
+ * Under `hostAudio`, the live template track the composition follows (`useFollowedTrack()`): when it
+ * has moved since its offset was saved (`hostTrackMoved()`), the timings would run early or late,
+ * and "Update timing" saves the live offset; when no track plays `audioFile` any more (removed, or
+ * playing another file), the recitation is not heard, and the panel says so and offers to follow
+ * the track of that name now playing, or to play `audioFile` in the composition again. Nothing is
+ * written until a button is pressed.
+ */
+const HostTrackTiming: React.FC<{
+  readonly target: StudioTarget;
+  readonly props: StudioCompositionProps;
+  readonly frameOffset: number;
+  readonly fps: number;
+}> = ({target, props, frameOffset, fps}) => {
+  const state = useFollowedTrack(props, frameOffset);
+  const {busy} = useStudioState();
+  const t = useT();
+  const host = hostAudioOf(props);
+  const working = busy !== null;
+  if (state.kind === 'gone') {
+    const named = state.named;
+    const file = named === null ? null : studioTrackFile(named);
+    const playing = file === null || file.kind === 'bytes' ? null : file.kind === 'public' ? file.path : file.url;
+    const follow = () =>
+      void runStudioTask(tNow('source.busy.track'), async () => {
+        if (named === null || playing === null) return;
+        await patchProps(target, {
+          audioFile: playing,
+          hostAudio: {enabled: true, offsetSeconds: named.offsetSeconds, track: named.label},
+        });
+        setStudioState({notice: tNow('source.notice.tracked', {track: named.label})});
+      });
+    const own = () =>
+      void runStudioTask(tNow('busy.updating'), async () => {
+        await patchProps(target, {hostAudio: {...host, enabled: false}});
+        setStudioState({notice: tNow('source.notice.untracked', {file: props.audioFile})});
+      });
+    return (
+      <div style={{...styles.status, ...styles.statusLine('error')}} role="alert" data-mushaf-control="host-gone">
+        <span style={{flex: '1 1 auto'}}>
+          {t('panel.hostGone', {
+            track: host.track || baseName(props.audioFile),
+            file: isUrl(props.audioFile) ? props.audioFile : `public/${props.audioFile}`,
+          })}
+        </span>
+        {playing !== null ? (
+          <button type="button" style={styles.button('default', working)} disabled={working} onClick={follow}>
+            {t('panel.followNow')}
+          </button>
+        ) : null}
+        <button type="button" style={styles.button('ghost', working)} disabled={working} onClick={own}>
+          {t('source.track.stop')}
+        </button>
+      </div>
+    );
+  }
+  if (state.kind !== 'found') return null;
+  const live = state.track;
+  if (live.limit !== null || !hostTrackMoved(host.offsetSeconds, live.offsetSeconds, fps)) return null;
+  const update = () =>
+    void runStudioTask(tNow('panel.busy.timing'), async () => {
+      await patchProps(target, {hostAudio: {...host, offsetSeconds: live.offsetSeconds, track: live.label}});
+      setStudioState({notice: tNow('panel.notice.timing', {track: live.label, offset: live.offsetSeconds})});
+    });
+  return (
+    <div style={{...styles.status, ...styles.statusLine('notice')}} role="alert" data-mushaf-control="host-moved">
+      <span style={{flex: '1 1 auto'}}>
+        {t('panel.hostMoved', {track: live.label, live: live.offsetSeconds, saved: host.offsetSeconds})}
+      </span>
+      <button type="button" style={styles.button('default', working)} disabled={working} onClick={update}>
+        {t('panel.updateTiming')}
+      </button>
+    </div>
+  );
+};
+
+/** The defaults a kind's saved props are migrated with: a composition's own, or a slot's (transparent page). */
+const MIGRATION_DEFAULTS: {
+  readonly composition: Readonly<Record<MushafStudioPanelKind, Readonly<Record<string, unknown>>>>;
+  readonly slot: Readonly<Record<MushafStudioPanelKind, Readonly<Record<string, unknown>>>>;
+} = {
+  composition: {
+    recitation: defaultMushafRecitationProps,
+    'ayah-text': defaultMushafAyahTextProps,
+    page: defaultMushafPageProps,
+  },
+  slot: MUSHAF_SLOT_DEFAULTS,
+};
+
+/**
+ * What "Upgrade and apply the Mushaf look" saves: `props` migrated, the Mushaf look applied (in a
+ * slot without its aspect: the box decides), and outside a slot the margins and the vertical place
+ * the props' format recommends (the Landscape format's at 16:9). Pure.
+ */
+export const upgradeWithLook = (
+  props: Readonly<Record<string, unknown>>,
+  options: {readonly defaults: Readonly<Record<string, unknown>>; readonly inSlot: boolean},
+): Readonly<Record<string, unknown>> => {
+  const migrated = migrateMushafProps<Readonly<Record<string, unknown>>>(props, {defaults: options.defaults});
+  const mushaf = lookById('mushaf')!;
+  const looked = applyLook(migrated, options.inSlot ? lookInBox(mushaf) : mushaf);
+  if (options.inSlot) return looked;
+  const layout = looked.layout as {readonly aspect?: string} | undefined;
+  if (layout === undefined) return looked;
+  const format = formatOf(looked as never) ?? MUSHAF_FORMATS[0]!;
+  return {...looked, layout: {...layout, marginX: format.marginX, verticalAlign: format.verticalAlign}};
+};
+
+/** One change of the upgrade, as the "What changes" list shows it: `undefined` is "(none)". */
+const shownValue = (value: unknown): string => (value === undefined ? '—' : JSON.stringify(value));
+
+/**
+ * Shown on every tab while the target's props in the Root were saved by an earlier Mushaf Studio
+ * (`describeMushafMigration()` of the live Root values has notes): the preview already renders them
+ * migrated (`calculateMetadata()`), but the Root keeps the old fields, which the Props sidebar
+ * refuses. *What changes* lists every note (field, before, after, why); *Upgrade* saves the migrated
+ * props; *Upgrade and apply the Mushaf look* saves them with the Mushaf look (`upgradeWithLook()`).
+ * Nothing is written until a button is pressed.
+ */
+const UpgradeBanner: React.FC<{
+  readonly target: StudioTarget;
+  readonly notes: readonly MigrationNote[];
+  readonly defaults: Readonly<Record<string, unknown>>;
+}> = ({target, notes, defaults}) => {
+  const {busy} = useStudioState();
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const working = busy !== null;
+  const inSlot = target.propsKey !== undefined;
+  const upgrade = (withLook: boolean) =>
+    void runStudioTask(tNow('upgrade.busy'), async () => {
+      await replaceTargetProps(target, (own) =>
+        withLook ? upgradeWithLook(own, {defaults, inSlot}) : migrateMushafProps(own, {defaults}),
+      );
+      setOpen(false);
+      setStudioState({notice: tNow('upgrade.done', {count: notes.length})});
+    });
+  return (
+    <div
+      style={{...styles.status, ...styles.statusLine('notice'), flexWrap: 'wrap'}}
+      role="alert"
+      data-mushaf-control="upgrade"
+    >
+      <span style={{flex: '1 1 100%'}}>{t('upgrade.banner')}</span>
+      <button
+        type="button"
+        data-upgrade="migrate"
+        style={styles.button('primary', working)}
+        disabled={working}
+        onClick={() => upgrade(false)}
+      >
+        {t('upgrade.button')}
+      </button>
+      <button
+        type="button"
+        data-upgrade="details"
+        aria-expanded={open}
+        style={styles.button('default', false)}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? t('upgrade.hideDetails') : t('upgrade.details')}
+      </button>
+      <button
+        type="button"
+        data-upgrade="with-look"
+        style={styles.button('default', working)}
+        disabled={working}
+        onClick={() => upgrade(true)}
+      >
+        {t('upgrade.withLook')}
+      </button>
+      {open ? (
+        <div style={{flex: '1 1 100%'}} data-mushaf-control="upgrade-details">
+          <p style={{...styles.label, margin: '4px 0'}}>{t('upgrade.detailsTitle')}</p>
+          <ul style={{margin: 0, paddingInlineStart: 16}}>
+            {notes.map((note) => (
+              <li key={`${note.path}:${shownValue(note.from)}`} data-path={note.path} style={{marginBottom: 2}}>
+                <code style={styles.code}>{note.path}</code>{' '}
+                <span dir="ltr" style={styles.code}>
+                  {shownValue(note.from)} → {shownValue(note.to)}
+                </span>
+                <span style={styles.label}> · {t(`upgrade.reason.${note.code}`, note.params)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+/** What the dock renders from the panel's props: its target, the props the tabs see, its kind. */
+type PanelView = {
+  readonly target: StudioTarget;
+  readonly key: string;
+  readonly kind: MushafStudioPanelKind;
+  /** The props the tabs see: the panel's, or the kind's empty props while a slot holds `null`. */
+  readonly base: StudioCompositionProps;
+};
+
+/** The kind of a panel's props: `kind` when given, else told from the props. */
+const kindOf = (panelProps: MushafStudioPanelProps): MushafStudioPanelKind => {
+  if (panelProps.kind !== undefined) return panelProps.kind;
+  const {props} = panelProps;
+  return props === null
+    ? 'recitation'
+    : isPageProps(props)
+      ? 'page'
+      : isAyahTextProps(props)
+        ? 'ayah-text'
+        : 'recitation';
+};
+
+/** The target a panel saves to and files its state under, and what its tabs see. */
+const usePanelView = (panelProps: MushafStudioPanelProps): PanelView => {
+  const {compositionId, propsKey, props} = panelProps;
+  const kind = kindOf(panelProps);
+  const target = useMemo<StudioTarget>(
+    () => (propsKey ? {compositionId, propsKey, emptyProps: emptySlotPropsFor(kind)} : {compositionId}),
+    [compositionId, propsKey, kind],
+  );
+  const empty = useMemo(() => emptySlotPropsFor(kind), [kind]);
+  return {target, key: targetKeyOf(target), kind, base: props ?? empty};
+};
+
 /** The dock itself: Studio only, so `useVideoConfig()` and `document` are safe here. */
-const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, project, initialTab}) => {
+const StudioDock: React.FC<{
+  readonly panelProps: MushafStudioPanelProps;
+  readonly view: PanelView;
+  readonly frameOffset: number;
+}> = ({panelProps, view, frameOffset}) => {
+  const {compositionId, props, project, initialTab, propsKey} = panelProps;
+  const {target, key, base} = view;
   const state = useStudioState();
   const t = useT();
   const {fps} = useVideoConfig();
   const [host] = useState(() => (typeof document === 'undefined' ? null : document.body));
-  const {pendingPatch} = state;
+  // The Root as the Studio has it now: every save starts from it, whoever wrote it last.
+  const live = useLiveEditorProps();
+  rememberLiveProps(live);
+  useEffect(() => observeLiveProps(live), [live]);
+  const pendingPatch = state.pendingPatches[key];
+  // The target's props as the Root holds them: the upgrade banner reads these, not the migrated props rendered.
+  const savedWhole = live[compositionId];
+  const saved = savedWhole === undefined ? null : targetPropsOf(savedWhole, target);
+  const migrationDefaults = MIGRATION_DEFAULTS[propsKey ? 'slot' : 'composition'][view.kind];
+  const migrationNotes = useMemo(
+    () => (saved === null ? [] : describeMushafMigration(saved, {defaults: migrationDefaults})),
+    [saved, migrationDefaults],
+  );
   // The composition has come back with what was saved: the tabs read the props themselves again.
   useEffect(() => {
-    if (pendingPatch !== null && patchApplied(props, pendingPatch as Readonly<Record<string, unknown>>))
-      setStudioState({pendingPatch: null});
-  }, [props, pendingPatch]);
+    if (pendingPatch !== undefined && patchApplied(base, pendingPatch as Readonly<Record<string, unknown>>))
+      setStudioState({pendingPatches: withEntry(getStudioState().pendingPatches, key, undefined)});
+  }, [base, pendingPatch, key]);
+  // A slot with no recitation yet opens on Source: that is where its props begin.
+  const empty = props === null;
+  useEffect(() => {
+    if (empty) setStudioState({tab: 'source'});
+  }, [empty]);
   // The dock is an overlay; the Studio is told to leave it room, so the preview is never under it.
   useEffect(() => reserveDockSpace(state.collapsed, state.side), [state.collapsed, state.side]);
   if (!host) return null;
   const tab = state.tab ?? initialTab ?? 'source';
   const Tab = TABS[tab];
-  const shown = applyPatch(props, pendingPatch);
+  const shown = applyPatch(base, pendingPatch);
+  const lost = state.rolledBack[key];
+  // A slot's own folder, so two slots of a template never share one.
+  const folder = project ?? (propsKey ? `${compositionId}-${propsKey}` : undefined);
+  const slotError = slotErrorOf(props) ?? (propsKey ? unresolvedSlotErrorOf(view.kind, props, propsKey) : null);
+  const mounted = mountedPanelsOf(state, compositionId);
   const other = state.side === 'left' ? 'right' : 'left';
   const dock = (
     <aside
@@ -172,7 +492,7 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
                   </button>
                 ))}
               </fieldset>
-              <ProjectMenu compositionId={compositionId} props={shown} project={project} />
+              <ProjectMenu target={target} props={shown} project={folder} />
               <button
                 type="button"
                 style={styles.button('ghost', false)}
@@ -191,6 +511,26 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
               </button>
             </span>
           </header>
+          {mounted.length > 1 ? (
+            <label style={{...styles.row, padding: '6px 12px'}} data-mushaf-control="slot-picker">
+              <span style={styles.label}>{t('panel.slot')}</span>
+              <select
+                aria-label={t('panel.slotPicker')}
+                value={key}
+                onChange={(event) =>
+                  setStudioState({
+                    activePanels: withEntry(getStudioState().activePanels, compositionId, event.target.value),
+                  })
+                }
+              >
+                {mounted.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <div style={styles.tabs} role="tablist" aria-label={t('panel.tabs')}>
             {STUDIO_TABS.map((entry) => (
               <button
@@ -205,6 +545,9 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
               </button>
             ))}
           </div>
+          {migrationNotes.length > 0 ? (
+            <UpgradeBanner target={target} notes={migrationNotes} defaults={migrationDefaults} />
+          ) : null}
           <div style={styles.content} role="tabpanel">
             <TabErrorBoundary
               key={tab}
@@ -212,9 +555,32 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
               message={t('panel.tabCrashed')}
               reload={t('panel.reload')}
             >
-              <Tab compositionId={compositionId} props={shown} project={project ?? compositionId} fps={fps} />
+              <Tab
+                compositionId={compositionId}
+                target={target}
+                props={shown}
+                project={folder ?? compositionId}
+                fps={fps}
+                frameOffset={frameOffset}
+              />
             </TabErrorBoundary>
           </div>
+          {empty && propsKey ? (
+            <div style={{...styles.status, ...styles.statusLine('notice')}} data-mushaf-control="slot-empty">
+              {t('panel.slotEmpty', {key: propsKey})}
+            </div>
+          ) : null}
+          {slotError !== null ? (
+            <div
+              style={{...styles.status, ...styles.statusLine('error')}}
+              role="alert"
+              data-mushaf-control="slot-error"
+            >
+              {t('panel.slotError', {key: propsKey ?? compositionId, message: slotError})}
+            </div>
+          ) : null}
+          <HostTrackTiming target={target} props={shown} frameOffset={frameOffset} fps={fps} />
+          {lost ? <RolledBack target={target} lost={lost} /> : null}
           <StatusLine />
         </>
       )}
@@ -223,17 +589,36 @@ const StudioDock: React.FC<MushafStudioPanelProps> = ({compositionId, props, pro
   return createPortal(dock, host);
 };
 
+/**
+ * The Studio part of the panel: the doubt markers and, when it is the composition's dock owner
+ * (`dockOwnerOf()`: several slots of a template, or two with one key, show one dock), the dock.
+ * Re-rendered only when `propsEqual()` says so, or when the dock owner changes.
+ */
 const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
-  // Only the environment hook above this line: outside the Studio's preview nothing of the dock
-  // (and nothing of `document`) is touched.
-  const inStudio = useInStudio();
-  if (!inStudio) return null;
-  // The timeline markers are the composition's own children (Sequences register where they are
-  // rendered); the dock is portaled out of it.
+  const view = usePanelView(panelProps);
+  const {compositionId, propsKey} = panelProps;
+  const label = propsKey ?? compositionId;
+  // This mount's own entry: two panels with one key are told apart by it, and only one docks.
+  const mount = useMemo(() => ({key: view.key, label}), [view.key, label]);
+  useEffect(() => registerPanel(compositionId, mount), [compositionId, mount]);
+  const owner = useDockOwner(compositionId, mount);
+  // Where the panel is rendered, and where the recitation starts: the same unless the panel sits
+  // beside the recitation's <Sequence> (a slot).
+  const ownStart = useOwnSequenceStart();
+  const frameOffset = panelProps.frameOffset ?? ownStart;
+  // As long as the recitation is shown: the slot's box when it says (its `durationInFrames` wins
+  // over the resolver's), so no marker lands past the box's end.
+  const frames = panelProps.durationInFrames ?? slotDurationOf(panelProps.props);
   return (
+    // The timeline markers are rendered where the panel is (Sequences register where they are
+    // rendered), in a Sequence of their own at the recitation's start in a slot; the dock is
+    // portaled out of it.
     <>
-      <DoubtMarkers props={panelProps.props} />
-      <StudioDock {...panelProps} />
+      <DoubtMarkers
+        props={view.base}
+        {...(panelProps.frameOffset === undefined ? {} : {from: frameOffset - ownStart, durationInFrames: frames})}
+      />
+      {owner ? <StudioDock panelProps={panelProps} view={view} frameOffset={frameOffset} /> : null}
     </>
   );
 };
@@ -244,9 +629,10 @@ const Panel: React.FC<MushafStudioPanelProps> = (panelProps) => {
  * of the word starts are in it too. An ayah text has its ayahs, a page its pages, where a
  * recitation has its lines.
  */
-const resolvedSignature = (props: StudioCompositionProps): string => {
+const resolvedSignature = (props: StudioCompositionProps | null): string => {
+  if (props === null) return 'null';
   const resolved = resolvedOf(props);
-  if (!resolved) return 'none';
+  if (!resolved) return `none:${slotErrorOf(props) ?? ''}`;
   const {timings} = resolved;
   const schedule = hasLines(resolved) ? resolved.schedule : [];
   const last = schedule[schedule.length - 1];
@@ -268,50 +654,37 @@ const resolvedSignature = (props: StudioCompositionProps): string => {
     sidecar?.audioId ?? '',
     sidecar?.edits[sidecar.edits.length - 1]?.at ?? '',
     starts,
+    hasLines(resolved) ? (resolved.droppedSplits ?? []).length : 0,
+    resolved.durationInFrames ?? '',
   ].join(':');
 };
 
 /**
- * What one composition has and the others do not: an ayah text's file and font (its script), a
- * recitation's lines, a page's review threshold; and the end card's files where there is one.
- */
-const ownContent = (props: StudioCompositionProps): string => {
-  const card = endCardOf(props);
-  const own = isAyahTextProps(props)
-    ? ['ayah-text', props.textFile, props.font]
-    : isPageProps(props)
-      ? ['page', props.review.confidenceThreshold]
-      : ['recitation', props.slice, props.review.confidenceThreshold, props.splits];
-  return JSON.stringify([...own, card.show ?? null, card.tafsirFile ?? null, card.chapterInfoFile ?? null]);
-};
-
-/** The style groups a look sets, as one string: the Look tab marks the look the props have. */
-const styleSignature = (props: StudioCompositionProps): string =>
-  JSON.stringify(LOOK_GROUPS.map((group) => (props as Readonly<Record<string, unknown>>)[group] ?? null));
-
-/**
- * The composition re-renders on every frame; the panel must not. Content props are compared by
- * value, the style groups by a JSON signature (small objects, and the Look tab shows which look
- * they match), `resolved` by a fingerprint rather than by identity, so a parent that rebuilds the
- * props object each frame still leaves the dock alone.
+ * The composition re-renders on every frame; the panel must not. Every top-level prop is compared
+ * by identity (Remotion hands the composition the same group objects frame after frame, and a new
+ * one when anything in it changed), `resolved` by a fingerprint, so a `calculateMetadata()` that
+ * rebuilt the same data leaves the dock alone.
  */
 const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boolean => {
-  if (a.compositionId !== b.compositionId || a.project !== b.project || a.initialTab !== b.initialTab) return false;
-  const x = a.props;
-  const y = b.props;
-  return (
-    x.audioFile === y.audioFile &&
-    x.timingsFile === y.timingsFile &&
-    x.fromAyah === y.fromAyah &&
-    x.toAyah === y.toAyah &&
-    textFileOf(x, 'translationFile') === textFileOf(y, 'translationFile') &&
-    textFileOf(x, 'glossFile') === textFileOf(y, 'glossFile') &&
-    textFileOf(x, 'transliterationFile') === textFileOf(y, 'transliterationFile') &&
-    ownContent(x) === ownContent(y) &&
-    styleSignature(x) === styleSignature(y) &&
-    resolvedSignature(x) === resolvedSignature(y)
-  );
+  if (
+    a.compositionId !== b.compositionId ||
+    a.project !== b.project ||
+    a.initialTab !== b.initialTab ||
+    a.propsKey !== b.propsKey ||
+    a.kind !== b.kind ||
+    a.frameOffset !== b.frameOffset ||
+    a.durationInFrames !== b.durationInFrames
+  )
+    return false;
+  if (a.props === null || b.props === null) return a.props === b.props;
+  const x = a.props as Readonly<Record<string, unknown>>;
+  const y = b.props as Readonly<Record<string, unknown>>;
+  for (const key of new Set([...Object.keys(x), ...Object.keys(y)]))
+    if (key !== 'resolved' && !Object.is(x[key], y[key])) return false;
+  return resolvedSignature(a.props) === resolvedSignature(b.props);
 };
+
+const StudioPanel = memo(Panel, propsEqual);
 
 /**
  * The Mushaf panel: rendered inside a composition (`<MushafRecitation>`, `<MushafAyahText>` or `<MushafPage>`), it
@@ -320,7 +693,24 @@ const propsEqual = (a: MushafStudioPanelProps, b: MushafStudioPanelProps): boole
  * Review, Lines and Text and a Project menu, and marks the doubtful segments on the Studio's
  * timeline with empty `<Sequence>`s rendered in the composition itself. Every change it makes goes
  * through the same path: write the file(s) into `public/`, `saveDefaultProps()` on the
- * composition, then `reevaluateComposition()`. It never calls `delayRender()`, and only the
- * waveform's playhead re-renders with the frame.
+ * composition from its live Root values, then `reevaluateComposition()`. It never calls
+ * `delayRender()`, and only the waveform's playhead re-renders with the frame.
+ *
+ * In a template (a drop-in slot renders it beside its `<Sequence>`, so it stays on every frame),
+ * `propsKey` puts every save under that key of the template's props, `frameOffset` says where the
+ * recitation starts, and `props` may be `null` (no recitation yet: give `kind`; the panel opens on
+ * Source). Several panels in one composition show one dock, with a picker between them.
  */
-export const MushafStudioPanel: React.FC<MushafStudioPanelProps> = memo(Panel, propsEqual);
+export const MushafStudioPanel: React.FC<MushafStudioPanelProps> = (panelProps) => {
+  // Only the environment hook before this check: outside the Studio's preview nothing of the dock
+  // (and nothing of `document`) is touched.
+  const inStudio = useInStudio();
+  if (!inStudio) return null;
+  // Every frame, past the memo: what Export project, Copy description and Set thumbnail read when clicked.
+  const {compositionId, propsKey, props} = panelProps;
+  rememberPanelProps(
+    propsKey ? {compositionId, propsKey} : compositionId,
+    props ?? emptySlotPropsFor(kindOf(panelProps)),
+  );
+  return <StudioPanel {...panelProps} />;
+};

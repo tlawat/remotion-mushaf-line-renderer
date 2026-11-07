@@ -2,9 +2,9 @@ import {getMushafLines, type MushafLineData} from '@tlawat/remotion-mushaf-line'
 import {type CalculateMetadataFunction, staticFile as remotionStaticFile} from 'remotion';
 import {MushafStudioError} from '../../errors';
 import {ayahRangeText, surahEnglishName} from '../../overlay';
-import {dataSourceFrom, themeSelectionFrom} from '../../schema';
+import {dataSourceFrom, migrateMushafProps, themeSelectionFrom} from '../../schema';
 import {ayahCount} from '../../studio/surahs';
-import {type MushafThumbnailProps, THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH} from './schema';
+import {defaultMushafThumbnailProps, type MushafThumbnailProps, THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH} from './schema';
 
 /** What `calculateMushafThumbnailMetadata()` resolves: the printed line the thumbnail shows. */
 export type ResolvedThumbnail = {
@@ -57,11 +57,16 @@ export const resolveThumbnail = async (
 };
 
 /**
- * `calculateMetadata` for `<Still id="MushafThumbnail">`: `resolved` (`resolveThumbnail()`) and the
- * thumbnail's 1280×720.
+ * `calculateMetadata` for `<Still id="MushafThumbnail">`: the props migrated
+ * (`migrateMushafProps()`), `resolved` (`resolveThumbnail()`) and the thumbnail's 1280×720.
  */
-export const calculateMushafThumbnailMetadata: CalculateMetadataFunction<MushafThumbnailProps> = async ({props}) => ({
-  props: {...props, resolved: await resolveThumbnail(props)},
-  width: THUMBNAIL_WIDTH,
-  height: THUMBNAIL_HEIGHT,
-});
+export const calculateMushafThumbnailMetadata: CalculateMetadataFunction<MushafThumbnailProps> = async ({
+  props: saved,
+}) => {
+  const props = migrateMushafProps<MushafThumbnailProps>(saved, {defaults: defaultMushafThumbnailProps});
+  return {
+    props: {...props, resolved: await resolveThumbnail(props)},
+    width: THUMBNAIL_WIDTH,
+    height: THUMBNAIL_HEIGHT,
+  };
+};

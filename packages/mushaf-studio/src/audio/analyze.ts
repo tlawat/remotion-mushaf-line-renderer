@@ -15,7 +15,7 @@ export type AudioAnalysis = {
   readonly firstSoundSeconds: number | null;
   /** Frames per second `levels` is counted in. */
   readonly fps: number;
-  /** Level per video frame from the file's start, 0-1 relative to the loudest frame, for the glow. */
+  /** Level per video frame from the file's start, 0-1 relative to the loudest frame (no longer drawn: kept for code users). */
   readonly levels: readonly number[];
 };
 

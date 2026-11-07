@@ -17,8 +17,17 @@ vi.mock('../../../src/translations', () => ({
   TranslationBlock: () => null,
   GlossStrip: () => null,
 }));
+// Outside the Studio unless a test says otherwise, as in a render or on a server.
+const env = vi.hoisted(() => ({
+  isStudio: false,
+  isRendering: false,
+  isPlayer: false,
+  isClientSideRendering: false,
+  isReadOnlyStudio: false,
+}));
 vi.mock('remotion', async (importOriginal) => ({
   ...(await importOriginal<typeof import('remotion')>()),
+  getRemotionEnvironment: () => env,
   staticFile: (path: string) => mocks.staticFile(path),
 }));
 
@@ -26,6 +35,9 @@ const {
   audioOffsetFor,
   calculateMushafRecitationMetadata,
   defaultMushafRecitationProps,
+  delayRecitationStart,
+  introDelaySeconds,
+  recitationContentFrames,
   playableTimings,
   readTimings,
   recitationDuration,
@@ -92,7 +104,8 @@ describe('resolveRecitation', () => {
       surah: 1,
       fromAyah: 2,
       toAyah: 7,
-      theme: 'plain',
+      // The Mushaf palette: the default custom theme's gold-line rosettes on the ivory ground.
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
       slice: true,
       data: {words: '/static/data/qpc-v4/words.json.zip', layout: '/static/data/qpc-v4/layout.db.zip'},
     });
@@ -120,7 +133,10 @@ describe('resolveRecitation', () => {
       fetch: fetchJson(fatiha),
       staticFile,
     });
-    expect(linesArg().theme).toEqual({base: 'normal', colors: {accent: '#c8a45c', detail: '#c8a45c'}});
+    expect(linesArg().theme).toEqual({
+      base: 'normal',
+      colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'},
+    });
     expect(linesArg().data).toBeUndefined();
     expect(linesArg().slice).toBe(false);
     // 1:3:1 recited twice: the line of ayah 3 starts at its first or its last recitation.
@@ -328,6 +344,23 @@ describe('resolveRecitation', () => {
     expect(missing.code).toBe('BAD_LINE_SPLIT');
   });
 
+  it('leaves out, and lists, the splits that do not fit when asked to be lenient; refuses them otherwise', async () => {
+    // Line 8 is ayah 7's: not in a passage that ends at ayah 5. Word 6 is the first of its line.
+    const misfits = [
+      {page: 1, line: 8, atWordId: 26},
+      {page: 1, line: 3, atWordId: 1},
+    ];
+    const fits = {page: 1, line: 4, atWordId: 8};
+    const range = props({toAyah: 5, splits: [misfits[0]!, fits, misfits[1]!]});
+    const plain = await resolveRecitation(props({toAyah: 5}), {fetch: fetchJson(fatiha), staticFile});
+    const lenient = await resolveRecitation(range, {fetch: fetchJson(fatiha), staticFile, lenientSplits: true});
+    expect(lenient.droppedSplits).toEqual(misfits);
+    expect(lenient.lines).toHaveLength(plain.lines.length + 1);
+    expect(plain.droppedSplits).toEqual([]);
+    const strict = await rejection(resolveRecitation(range, {fetch: fetchJson(fatiha), staticFile}));
+    expect(strict.code).toBe('BAD_LINE_SPLIT');
+  });
+
   it('loads the translation, gloss and transliteration files of the right kinds', async () => {
     mocks.loadTranslation.mockImplementation(async (url: string) => (url.includes('ayah') ? ayahText : wordText));
     const text = {
@@ -462,7 +495,8 @@ describe('calculateMushafRecitationMetadata', () => {
         compositionId: 'MushafRecitation',
         isRendering: false,
       });
-      expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 857});
+      // The last ayah ends at 27.559 s (f827); the lines hold 45 frames and fade over 30.
+      expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 827 + 45 + 30});
       const resolved = (metadata.props as MushafRecitationProps).resolved as {lines: unknown[]; schedule: unknown[]};
       expect(resolved.lines).toHaveLength(6);
       expect(resolved.schedule).toHaveLength(6);
@@ -479,7 +513,8 @@ describe('calculateMushafRecitationMetadata', () => {
         compositionId: 'MushafRecitation',
         isRendering: false,
       });
-      expect(late.durationInFrames).toBe(389);
+      // Ayah 7 alone ends at 11.96 s of the composition (f359), then the hold and the fade.
+      expect(late.durationInFrames).toBe(359 + 45 + 30);
       const portrait = await calculateMushafRecitationMetadata({
         props: props({layout: {...defaultMushafRecitationProps.layout, aspect: '9:16'}}),
         defaultProps: props(),
@@ -488,6 +523,109 @@ describe('calculateMushafRecitationMetadata', () => {
         isRendering: true,
       });
       expect(portrait).toMatchObject({width: 1080, height: 1920});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('the intro delay', () => {
+  it('is introSeconds + cardIn + leadInSeconds less the first word, never negative, only with the card', () => {
+    const calm = {tempo: 'calm' as const, leadInSeconds: 0.4};
+    // 3 + 0.8 + 0.4 − 0.331: the first word at 4.2 s, settled 0.4 s after the window's 0.8 s entrance from 3 s.
+    expect(introDelaySeconds({title: 'intro', introSeconds: 3}, calm, 0.331)).toBe(3.869);
+    expect(introDelaySeconds({title: 'both', introSeconds: 3}, calm, 0.331)).toBe(3.869);
+    // Slow: cardIn is 34 frames (1.133 s).
+    expect(introDelaySeconds({title: 'intro', introSeconds: 3}, {tempo: 'slow', leadInSeconds: 0.4}, 0.331)).toBe(
+      Math.round((3 + 34 / 30 + 0.4 - 0.331) * 1e6) / 1e6,
+    );
+    // A recording that already waits long enough needs nothing more.
+    expect(introDelaySeconds({title: 'intro', introSeconds: 3}, calm, 4.2)).toBe(0);
+    expect(introDelaySeconds({title: 'intro', introSeconds: 3}, calm, 9)).toBe(0);
+    expect(introDelaySeconds({title: 'intro', introSeconds: 3}, calm, 4)).toBe(0.2);
+    // No card, no delay.
+    expect(introDelaySeconds({title: 'none', introSeconds: 3}, calm, 0.331)).toBe(0);
+    expect(introDelaySeconds({title: 'corner', introSeconds: 3}, calm, 0.331)).toBe(0);
+  });
+
+  it('moves the timings, the schedule and the clips later once, and says by how much', async () => {
+    const content = await resolveRecitation(props(), {fetch: fetchJson(fatiha), staticFile});
+    expect(delayRecitationStart(content, 0, defaultMushafRecitationProps.memorize)).toBe(content);
+    const delayed = delayRecitationStart(content, 3.869, defaultMushafRecitationProps.memorize);
+    expect(delayed.introDelaySeconds).toBe(3.869);
+    expect(delayed.audioOffsetSeconds).toBe(content.audioOffsetSeconds);
+    expect(delayed.timings.ayat[0]!.words![0]!.start).toBe(4.2);
+    expect(delayed.schedule[0]!.start).toBe(4.2);
+    expect(delayed.clips[0]!.compositionFrom).toBe(4.2);
+    expect(delayed.clips[0]!.audioFrom).toBe(4.2);
+  });
+
+  it('is applied by calculateMetadata after every skip, the duration growing by it; not under hostAudio', async () => {
+    vi.stubGlobal('fetch', fetchJson(fatiha));
+    try {
+      const run = (changes: Partial<MushafRecitationProps>) =>
+        calculateMushafRecitationMetadata({
+          props: props(changes),
+          defaultProps: props(),
+          abortSignal: new AbortController().signal,
+          compositionId: 'MushafRecitation',
+          isRendering: false,
+        });
+      const overlay = {...defaultMushafRecitationProps.overlay, title: 'intro' as const};
+      const metadata = await run({overlay});
+      const resolved = (metadata.props as MushafRecitationProps).resolved as {
+        introDelaySeconds: number;
+        timings: {ayat: {words: {start: number}[]; end: number}[]};
+      };
+      expect(resolved.introDelaySeconds).toBe(3.869);
+      expect(resolved.timings.ayat[0]!.words[0]!.start).toBe(4.2);
+      // The last ayah ends at 27.559 + 3.869 s (f943), then the hold and the fade.
+      expect(metadata.durationInFrames).toBe(Math.ceil((27.559 + 3.869) * 30) + 75);
+      // Under hostAudio the template's track decides when the recording is heard: nothing waits.
+      const host = await run({
+        overlay,
+        hostAudio: {enabled: true, offsetSeconds: 0, track: ''},
+      } as Partial<MushafRecitationProps>);
+      expect(
+        ((host.props as MushafRecitationProps).resolved as {introDelaySeconds?: number}).introDelaySeconds,
+      ).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('calculateMushafRecitationMetadata and splits that do not fit', () => {
+  const args = (isRendering: boolean) => ({
+    props: props({toAyah: 5, splits: [{page: 1, line: 8, atWordId: 26}]}),
+    defaultProps: props(),
+    abortSignal: new AbortController().signal,
+    compositionId: 'MushafRecitation',
+    isRendering,
+  });
+  const metadata = (isRendering: boolean) => Promise.resolve(calculateMushafRecitationMetadata(args(isRendering)));
+  const inStudio = async <T>(run: () => Promise<T>): Promise<T> => {
+    env.isStudio = true;
+    vi.stubGlobal('fetch', fetchJson(fatiha));
+    try {
+      return await run();
+    } finally {
+      env.isStudio = false;
+      vi.unstubAllGlobals();
+    }
+  };
+
+  it("leaves them out in the Studio's preview, listed in resolved.droppedSplits", async () => {
+    const result = await inStudio(() => metadata(false));
+    const resolved = (result.props as MushafRecitationProps).resolved as {droppedSplits: unknown};
+    expect(resolved.droppedSplits).toEqual([{page: 1, line: 8, atWordId: 26}]);
+  });
+
+  it('refuses them in a render, and outside the Studio', async () => {
+    expect((await rejection(inStudio(() => metadata(true)))).code).toBe('BAD_LINE_SPLIT');
+    vi.stubGlobal('fetch', fetchJson(fatiha));
+    try {
+      expect((await rejection(metadata(false))).code).toBe('BAD_LINE_SPLIT');
     } finally {
       vi.unstubAllGlobals();
     }
@@ -516,7 +654,7 @@ describe('timings across surahs', () => {
 
 describe('the clip timeline', () => {
   it('is resolved with the content, and calculateMetadata counts the frames from it when ayahs repeat', async () => {
-    const {clipTimeline, timelineDuration} = await import('../../../src/memorize');
+    const {clipTimeline, timelineEnd} = await import('../../../src/memorize');
     const once = await resolveRecitation(props(), {fetch: fetchJson(fatiha), staticFile});
     expect(once.clips).toEqual(clipTimeline(once.timings, defaultMushafRecitationProps.memorize));
     const memorize = {mode: 'blank-upcoming' as const, repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1};
@@ -531,8 +669,10 @@ describe('the clip timeline', () => {
       });
       const resolved = (metadata.props as MushafRecitationProps).resolved as typeof once;
       expect(resolved.clips).toHaveLength(18);
-      expect(metadata.durationInFrames).toBe(timelineDuration(resolved.clips, 30));
-      expect(metadata.durationInFrames).toBeGreaterThan(857);
+      // The last play's end, the hold and the fade.
+      expect(metadata.durationInFrames).toBe(Math.ceil(timelineEnd(resolved.clips) * 30) + 75);
+      expect(metadata.durationInFrames).toBe(recitationContentFrames(resolved, 'calm', 30));
+      expect(metadata.durationInFrames).toBeGreaterThan(902);
     } finally {
       vi.unstubAllGlobals();
     }

@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import {useId} from 'react';
 import {
   AbsoluteFill,
   Html5Video,
@@ -10,12 +11,15 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import {OWN_BACKGROUND_NAME} from '../audio/host';
 import {fileUrl} from '../compositions/shared';
-import type {Background, Glow, KenBurns} from './schema';
+import type {Layout} from '../schema';
+import {fromOklch, groundOf, isLightGround, relativeLuminance, toOklch} from '../schema/color';
+import {SINE} from '../schema/tokens';
+import type {Background, KenBurns} from './schema';
 
 /** Four decimals: stable strings in a transform or an opacity, free of float noise. */
 const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
-const clamp01 = (value: number): number => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
 
 /**
  * The layer under everything: the colour, and for `gradient` the CSS gradient over it. The colour
@@ -36,12 +40,11 @@ export const showsMedia = (background: Pick<Background, 'kind' | 'src'>): boolea
   (background.kind === 'image' || background.kind === 'video') && background.src !== '';
 
 /**
- * The Ken Burns transform at `frame`, over the whole composition (frame 0 to `durationInFrames - 1`,
- * linear, clamped): `slow-zoom` scales from 1 to `scale`; the pans hold `scale` and travel the
- * margin it gives, edge to edge, so no border ever shows: `pan-left` drifts the picture leftward,
- * `pan-right` rightward. `undefined` for `none`. Pure in its arguments.
+ * The slow zoom at `frame`, over the whole composition (frame 0 to `durationInFrames - 1`, eased on
+ * `SINE`, clamped): `slow-zoom` scales from 1 to `scale`, centred. `undefined` for `none`. Pure in
+ * its arguments.
  *
- * `kenBurnsTransform('slow-zoom', 1.2, 0, 300)` is `"scale(1)"`, at frame 299 `"scale(1.2)"`.
+ * `kenBurnsTransform('slow-zoom', 1.04, 0, 300)` is `"scale(1)"`, at frame 299 `"scale(1.04)"`.
  */
 export const kenBurnsTransform = (
   kind: KenBurns,
@@ -52,14 +55,10 @@ export const kenBurnsTransform = (
   if (kind === 'none') return undefined;
   const last = durationInFrames - 1;
   const progress =
-    last <= 0 ? 0 : interpolate(frame, [0, last], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  if (kind === 'slow-zoom') return `scale(${round4(1 + (scale - 1) * progress)})`;
-  // `translateX()` acts before `scale()` (right to left) in the element's own width: at `scale` the
-  // picture overflows the frame by (scale - 1) / 2 on each side, which is (scale - 1) / (2 scale)
-  // of the unscaled width.
-  const margin = ((scale - 1) / (2 * scale)) * 100;
-  const offset = kind === 'pan-left' ? margin * (1 - 2 * progress) : margin * (2 * progress - 1);
-  return `scale(${round4(scale)}) translateX(${round4(offset)}%)`;
+    last <= 0
+      ? 0
+      : interpolate(frame, [0, last], [0, 1], {easing: SINE, extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+  return `scale(${round4(1 + (scale - 1) * progress)})`;
 };
 
 /**
@@ -92,61 +91,124 @@ export const mediaStyle = (background: Pick<Background, 'fit'>): React.CSSProper
   objectFit: background.fit,
 });
 
-/** The share of `strength` a silent frame keeps, so the glow breathes rather than blinks. */
-export const GLOW_REST = 0.35;
+/** The darkest an image or a video is veiled: black under light ink, the page colour under dark ink. */
+export const MEDIA_DIM_FLOOR = {black: 0.45, page: 0.55} as const;
+
+/** The dim layer: its colour and opacity. */
+export type DimLayer = {readonly color: string; readonly opacity: number};
 
 /**
- * The glow's opacity for an audio level (0-1, clamped; anything not finite reads as silence):
- * `GLOW_REST × strength` at silence, rising linearly to `strength` at the loudest frame.
- * `glowOpacity(0.5, 0.8)` is 0.54.
+ * The layer that darkens the background, or `null` for none. An image or a video keeps a floor so
+ * the text always reads on it: under light ink (`relativeLuminance(layout.color) > 0.5`) black at
+ * `max(dim, 0.45)`, under dark ink a veil of the page colour at `max(dim, 0.55)`. A colour or a
+ * gradient takes `dim` as set, in black. Without `layout`, `dim` as set for every kind.
+ *
+ * `dimLayer({...defaultBackground, kind: 'image', src: 'sky.jpg'}, {background: '#121416', color: '#f1eadb'})` is black at 0.45.
  */
-export const glowOpacity = (level: number, strength: number): number =>
-  round4(clamp01(strength) * (GLOW_REST + (1 - GLOW_REST) * clamp01(level)));
+export const dimLayer = (
+  background: Pick<Background, 'kind' | 'src' | 'dim'>,
+  layout?: Pick<Layout, 'background' | 'color'> | undefined,
+): DimLayer | null => {
+  if (layout !== undefined && showsMedia(background)) {
+    return relativeLuminance(layout.color) > 0.5
+      ? {color: '#000', opacity: Math.max(background.dim, MEDIA_DIM_FLOOR.black)}
+      : {color: layout.background, opacity: Math.max(background.dim, MEDIA_DIM_FLOOR.page)};
+  }
+  return background.dim > 0 ? {color: '#000', opacity: background.dim} : null;
+};
 
 /**
- * The glow layer: a soft ellipse of `glow.color` centred at `centerY` (0 top, 1 bottom: where the
- * lines are), its opacity from `glowOpacity()` and swelling by up to 8% with the level.
+ * The vignette's edge colour on `ground`, as `r, g, b`: black on a dark ground, the ground itself
+ * 0.12 darker in OKLCH lightness on a light one (a warm page edge, not a grey one).
  */
-export const glowStyle = (
-  glow: Pick<Glow, 'color' | 'strength'>,
-  level: number,
-  centerY = 0.5,
-): React.CSSProperties => ({
-  position: 'absolute',
-  inset: 0,
-  backgroundImage: `radial-gradient(ellipse 60% 40% at 50% ${round4(clamp01(centerY) * 100)}%, ${glow.color}, transparent 70%)`,
-  opacity: glowOpacity(level, glow.strength),
-  transform: `scale(${round4(1 + 0.08 * clamp01(level))})`,
-});
+export const vignetteRgb = (ground: string): string => {
+  if (!isLightGround(ground)) return '0, 0, 0';
+  const oklch = toOklch(ground);
+  if (oklch === null) return '0, 0, 0';
+  const {r, g, b} = fromOklch({...oklch, l: Math.max(0, oklch.l - 0.12)});
+  return `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
+};
+
+/**
+ * The vignette at strength `vignette` (0-0.4) on `ground`: a radial gradient over an ellipse 120 % of
+ * the frame wide and 100 % high (radii of 60 % and 50 %), clear over its middle 55 %, darkening
+ * toward the edges like the fall-off of a page: about 0.6 of `vignette` at the middle of the sides,
+ * 0.9 at the top, all of it at the corners. `null` for 0.
+ *
+ * `vignetteStyle(0.22, '#121416').backgroundImage` is
+ * `"radial-gradient(ellipse 60% 50% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)"`.
+ */
+export const vignetteStyle = (vignette: number, ground: string): React.CSSProperties | null =>
+  vignette > 0
+    ? {
+        backgroundImage: `radial-gradient(ellipse 60% 50% at 50% 48%, transparent 55%, rgba(${vignetteRgb(ground)}, ${round4(vignette)}) 100%)`,
+      }
+    : null;
+
+/** Opacity of the noise that dithers the vignette against banding at video bitrates. */
+export const NOISE_OPACITY = 0.015;
+
+/** The noise's colour matrix: the three channels' mean in each (a grey around 50 %), alpha 1. */
+const NOISE_MATRIX = '0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0 0 0 0 1';
+
+/**
+ * A fine grey noise over the whole frame (`feTurbulence`, base frequency 0.9, one octave, seed 7: the
+ * same grain on every frame and every machine), at `NOISE_OPACITY`, so a smooth gradient does not
+ * band once a video is encoded. The grain is centred on 50 % grey (the turbulence taken in sRGB) and
+ * laid on with `mix-blend-mode: overlay`, where that grey changes nothing: it dithers the ground
+ * around its own colour and never lifts or darkens it.
+ */
+const Noise: React.FC = () => {
+  // A filter id per instance (two compositions on one page), without the colons useId() puts in.
+  const id = `mushaf-noise-${useId().replace(/[^\w-]/g, '')}`;
+  return (
+    <svg
+      data-mushaf-background-part="noise"
+      width="100%"
+      height="100%"
+      style={{position: 'absolute', left: 0, top: 0, opacity: NOISE_OPACITY, mixBlendMode: 'overlay'}}
+      aria-hidden="true"
+    >
+      <filter id={id} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves={1} seed={7} stitchTiles="stitch" />
+        {/* Grey around 50 % and opaque: the grain shifts lightness only, at the layer's own opacity. */}
+        <feColorMatrix type="matrix" values={NOISE_MATRIX} />
+      </filter>
+      <rect width="100%" height="100%" filter={`url(#${id})`} />
+    </svg>
+  );
+};
 
 export type MushafBackgroundProps = {
   readonly background: Background;
   /**
-   * The recitation's level on this frame, 0-1, for the glow: `levelAt(analysis.levels, frame)` from
-   * `src/audio`. 0 (the default) holds the glow at rest.
+   * The page colour and the ink (`layout.background`, `layout.color`): the floor an image or a video
+   * is dimmed to (`dimLayer()`) and the ground the vignette darkens (`groundOf()`) depend on them.
+   * Without them `dim` is drawn as set and the vignette darkens toward `background.color`.
    */
-  readonly audioLevel?: number | undefined;
-  /** Where the lines are, 0 top to 1 bottom (`layout.verticalAlign`): the glow's centre. Default 0.5. */
-  readonly glowY?: number | undefined;
+  readonly layout?: Pick<Layout, 'background' | 'color'> | undefined;
   /** For tests and other hosts; default Remotion's. */
   readonly staticFile?: ((path: string) => string) | undefined;
 };
 
 /**
  * Everything behind the lines, as an `<AbsoluteFill>` to put first in a composition: the colour or
- * the gradient, then the image (`<Img>`) or the video, then the dim layer, then the glow. The video
+ * the gradient, then the image (`<Img>`) or the video (zoomed very slowly when asked), then the dim
+ * layer (`dimLayer()`), then the vignette and its noise. Nothing follows the audio. The video
  * is always muted. With `videoSeconds` it is an `<OffthreadVideo>` in a `<Loop>` of that length,
  * frame-exact in a render; without it, `<Html5Video loop>`, which finds the length itself. Pure in
  * its props and the frame.
  */
 export const MushafBackground: React.FC<MushafBackgroundProps> = ({
   background,
-  audioLevel = 0,
-  glowY = 0.5,
+  layout,
   staticFile = remotionStaticFile,
 }) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
+  const dim = dimLayer(background, layout);
+  const ground = layout === undefined ? background.color : groundOf(layout, background.kind);
+  const vignette = vignetteStyle(background.vignette, ground);
   let media: React.ReactNode = null;
   if (showsMedia(background)) {
     const src = fileUrl(background.src, staticFile);
@@ -157,12 +219,12 @@ export const MushafBackground: React.FC<MushafBackgroundProps> = ({
         <Loop
           durationInFrames={Math.max(1, Math.round(background.videoSeconds * fps))}
           layout="none"
-          name="Background video"
+          name={OWN_BACKGROUND_NAME}
         >
           <OffthreadVideo src={src} muted style={style} />
         </Loop>
       );
-    else media = <Html5Video src={src} muted loop style={style} />;
+    else media = <Html5Video src={src} muted loop style={style} name={OWN_BACKGROUND_NAME} />;
   }
   return (
     <AbsoluteFill data-mushaf-background={background.kind} style={backgroundBaseStyle(background)}>
@@ -171,11 +233,14 @@ export const MushafBackground: React.FC<MushafBackgroundProps> = ({
           {media}
         </div>
       )}
-      {background.dim > 0 && (
-        <AbsoluteFill data-mushaf-background-part="dim" style={{backgroundColor: '#000', opacity: background.dim}} />
+      {dim !== null && (
+        <AbsoluteFill data-mushaf-background-part="dim" style={{backgroundColor: dim.color, opacity: dim.opacity}} />
       )}
-      {background.glow.enabled && background.glow.strength > 0 && (
-        <div data-mushaf-background-part="glow" style={glowStyle(background.glow, audioLevel, glowY)} />
+      {vignette !== null && (
+        <>
+          <AbsoluteFill data-mushaf-background-part="vignette" style={vignette} />
+          <Noise />
+        </>
       )}
     </AbsoluteFill>
   );

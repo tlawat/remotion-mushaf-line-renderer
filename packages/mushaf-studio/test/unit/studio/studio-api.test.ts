@@ -2,6 +2,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {isMushafStudioError} from '../../../src/errors';
 
 const studio = vi.hoisted(() => ({
+  goToComposition: vi.fn(),
   writeStaticFile: vi.fn(async () => undefined),
   saveDefaultProps: vi.fn(async () => undefined),
   reevaluateComposition: vi.fn(),
@@ -18,13 +19,22 @@ vi.mock('remotion', async (importOriginal) => ({
 }));
 
 const api = await import('../../../src/studio/studio-api');
-const {getStudioState, resetStudioStore, setStudioState} = await import('../../../src/studio/store');
+const {getStudioState, resetStudioStore} = await import('../../../src/studio/store');
 
 afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   resetStudioStore();
+  api.resetSaveTracking();
 });
+
+type Call = [
+  {compositionId: string; defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>},
+];
+
+/** What the `index`th save writes, given the page-load props the Studio passes as `savedDefaultProps`. */
+const write = (index: number, savedDefaultProps: Record<string, unknown>): Record<string, unknown> =>
+  (studio.saveDefaultProps.mock.calls[index] as unknown as Call)[0].defaultProps({savedDefaultProps});
 
 describe('deepMerge', () => {
   it('merges nested groups, replaces arrays and scalars, skips undefined, keeps the inputs', () => {
@@ -96,6 +106,7 @@ describe('the Studio API wrappers', () => {
       {compositionId: string; defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => unknown},
     ];
     expect(call[0].compositionId).toBe('MushafRecitation');
+    // The Studio has not read the composition's live props yet: the page-load props are the base.
     const saved = {audioFile: 'a.mp3', timingsFile: 'old.json', text: {translationFile: 'x.json', glossFile: ''}};
     expect(call[0].defaultProps({savedDefaultProps: saved})).toEqual({
       audioFile: 'a.mp3',
@@ -105,70 +116,194 @@ describe('the Studio API wrappers', () => {
     expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1);
   });
 
-  it('carries a patch the composition has not come back with into the next save', async () => {
-    type Call = [{defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>}];
-    // The Root has not reloaded between the two saves: `savedDefaultProps` is the same old object both times.
+  it('carries a patch the live props have not come back with into the next save', async () => {
+    // The Root has not been read back between the two saves: no live props, the same page-load props both times.
     const saved = {splits: [], text: {glossFile: 'g.json', transliterationFile: 't.json'}};
     await api.patchProps('MushafRecitation', {splits: [{page: 1, line: 2, atWordId: 3}]});
-    expect(getStudioState().pendingPatch).toEqual({splits: [{page: 1, line: 2, atWordId: 3}]});
+    expect(getStudioState().pendingPatches.MushafRecitation).toEqual({splits: [{page: 1, line: 2, atWordId: 3}]});
     await api.patchProps('MushafRecitation', {text: {glossFile: ''}});
-    expect(getStudioState().pendingPatch).toEqual({splits: [{page: 1, line: 2, atWordId: 3}], text: {glossFile: ''}});
-    const [first, second] = studio.saveDefaultProps.mock.calls as unknown as [Call, Call];
-    expect(first[0].defaultProps({savedDefaultProps: saved})).toEqual({
+    expect(getStudioState().pendingPatches.MushafRecitation).toEqual({
+      splits: [{page: 1, line: 2, atWordId: 3}],
+      text: {glossFile: ''},
+    });
+    expect(write(0, saved)).toEqual({
       splits: [{page: 1, line: 2, atWordId: 3}],
       text: {glossFile: 'g.json', transliterationFile: 't.json'},
     });
-    expect(second[0].defaultProps({savedDefaultProps: saved})).toEqual({
+    expect(write(1, saved)).toEqual({
       splits: [{page: 1, line: 2, atWordId: 3}],
       text: {glossFile: '', transliterationFile: 't.json'},
     });
-    // A save that fails leaves the pending patch as it was.
+    // A save that fails leaves the pending patch as it was, and the next save still runs.
     studio.saveDefaultProps.mockRejectedValueOnce(new Error('read-only'));
     await expect(api.patchProps('MushafRecitation', {text: {transliterationFile: ''}})).rejects.toThrow('read-only');
-    expect(getStudioState().pendingPatch).toEqual({splits: [{page: 1, line: 2, atWordId: 3}], text: {glossFile: ''}});
+    expect(getStudioState().pendingPatches.MushafRecitation).toEqual({
+      splits: [{page: 1, line: 2, atWordId: 3}],
+      text: {glossFile: ''},
+    });
     expect(studio.reevaluateComposition).toHaveBeenCalledTimes(2);
+    await api.patchProps('MushafRecitation', {slice: false});
+    expect(studio.saveDefaultProps).toHaveBeenCalledTimes(4);
   });
 
-  it('keeps a saved recording in later saves after the panel has cleared its pending patch', async () => {
-    type Call = [{defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>}];
-    const fatiha = {audioFile: 'fatiha/audio.mp3', timingsFile: 'fatiha/timings.json', splits: []};
-    await api.patchProps('MushafRecitation', {audioFile: 'r/30.mp3', timingsFile: 'r/30.json'});
-    const [first] = studio.saveDefaultProps.mock.calls as unknown as [Call];
-    first[0].defaultProps({savedDefaultProps: fatiha});
-    // The rendered props came back with the recording, so the panel dropped its pending patch...
-    setStudioState({pendingPatch: null});
-    // ...but the Studio's saved copy still has the Fatiha files when the next save starts.
-    const split = {page: 405, line: 1, atWordId: 55449};
-    await api.patchProps('MushafRecitation', {splits: [split]});
-    const second = studio.saveDefaultProps.mock.calls[1] as unknown as Call;
-    expect(second[0].defaultProps({savedDefaultProps: fatiha})).toEqual({
-      audioFile: 'r/30.mp3',
-      timingsFile: 'r/30.json',
-      splits: [split],
-    });
-  });
-
-  it('stops carrying what the saved props have caught up with, and keeps compositions apart', async () => {
-    type Call = [{defaultProps: (v: {savedDefaultProps: Record<string, unknown>}) => Record<string, unknown>}];
-    await api.patchProps('MushafRecitation', {audioFile: 'r/30.mp3'});
-    (studio.saveDefaultProps.mock.calls[0] as unknown as Call)[0].defaultProps({savedDefaultProps: {}});
-    // The other composition never sees this one's carried patch.
-    await api.patchProps('MushafPassage', {slice: false});
-    expect((studio.saveDefaultProps.mock.calls[1] as unknown as Call)[0].defaultProps({savedDefaultProps: {}})).toEqual(
-      {slice: false},
-    );
-    // The Root caught up, then the user changed audioFile in the Props sidebar: a later panel save keeps it.
+  it('starts every save from the live props, and keeps compositions apart', async () => {
+    const page = {audioFile: 'page-load.mp3', layout: {visibleLines: 3}};
+    api.rememberLiveProps({MushafRecitation: {audioFile: 'live.mp3', layout: {visibleLines: 5}}});
     await api.patchProps('MushafRecitation', {slice: true});
-    (studio.saveDefaultProps.mock.calls[2] as unknown as Call)[0].defaultProps({
-      savedDefaultProps: {audioFile: 'r/30.mp3'},
+    expect(write(0, page)).toEqual({audioFile: 'live.mp3', layout: {visibleLines: 5}, slice: true});
+    // Another composition has none of this one's in-flight patch, and no live props yet.
+    await api.patchProps('MushafPassage', {slice: false});
+    expect(write(1, {})).toEqual({slice: false});
+    expect(Object.keys(getStudioState().inFlightPatches).sort()).toEqual(['MushafPassage', 'MushafRecitation']);
+  });
+
+  it('runs one save at a time, in call order', async () => {
+    const order: string[] = [];
+    let finish!: () => void;
+    studio.saveDefaultProps.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          order.push('first starts');
+          finish = () => resolve(undefined);
+        }),
+    );
+    studio.saveDefaultProps.mockImplementationOnce(async () => {
+      order.push('second starts');
+      return undefined;
     });
-    expect(getStudioState().unsavedPatches.MushafRecitation).toEqual({slice: true});
-    await api.patchProps('MushafRecitation', {splits: []});
-    expect(
-      (studio.saveDefaultProps.mock.calls[3] as unknown as Call)[0].defaultProps({
-        savedDefaultProps: {audioFile: 'mine.mp3', slice: true},
-      }),
-    ).toEqual({audioFile: 'mine.mp3', slice: true, splits: []});
+    const first = api.patchProps('MushafRecitation', {slice: true}).then(() => order.push('first done'));
+    const second = api.patchProps('MushafRecitation', {splits: []}).then(() => order.push('second done'));
+    // Both changes show at once, but the second save waits for the first.
+    expect(getStudioState().pendingPatches.MushafRecitation).toEqual({slice: true, splits: []});
+    await vi.waitFor(() => expect(order).toEqual(['first starts']));
+    finish();
+    await Promise.all([first, second]);
+    expect(order).toEqual(['first starts', 'first done', 'second starts', 'second done']);
+    // The second carries the first: the live props had not come back with it.
+    expect(write(1, {})).toEqual({slice: true, splits: []});
+  });
+
+  it("nests a slot's patch under its props key, and starts an empty slot from its kind's props", async () => {
+    const target = {
+      compositionId: 'Template',
+      propsKey: 'mushaf',
+      emptyProps: {audioFile: '', layout: {aspect: '16:9'}},
+    };
+    api.rememberLiveProps({Template: {title: 'My video', mushaf: null}});
+    await api.patchProps(target, {audioFile: 'a.mp3', layout: {visibleLines: 2}});
+    expect(write(0, {title: 'page load', mushaf: null})).toEqual({
+      title: 'My video',
+      mushaf: {audioFile: 'a.mp3', layout: {aspect: '16:9', visibleLines: 2}},
+    });
+    expect(getStudioState().pendingPatches).toEqual({
+      'Template/mushaf': {audioFile: 'a.mp3', layout: {visibleLines: 2}},
+    });
+    // The live props come back with it; the next save merges into the slot's props and leaves the template's alone.
+    const live = {
+      Template: {title: 'My video', mushaf: {audioFile: 'a.mp3', layout: {aspect: '16:9', visibleLines: 2}}},
+    };
+    api.observeLiveProps(live);
+    expect(getStudioState().inFlightPatches).toEqual({});
+    await api.patchProps(target, {splits: []});
+    expect(write(1, {})).toEqual({
+      title: 'My video',
+      mushaf: {audioFile: 'a.mp3', layout: {aspect: '16:9', visibleLines: 2}, splits: []},
+    });
+    // A slot without `emptyProps` starts from nothing.
+    api.rememberLiveProps({Other: {mushaf: null}});
+    await api.patchProps({compositionId: 'Other', propsKey: 'other'}, {slice: true});
+    expect(write(2, {})).toEqual({mushaf: null, other: {slice: true}});
+  });
+
+  it("carries one slot's save in flight into a save of another slot of the template, and judges each by its own", async () => {
+    const intro = {compositionId: 'Template', propsKey: 'intro'};
+    const outro = {compositionId: 'Template', propsKey: 'outro'};
+    const aligned = {audioFile: 'take-1.mp3', timingsFile: 'take-1.timings.json'};
+    api.rememberLiveProps({
+      Template: {intro: {audioFile: 'a.mp3', timingsFile: 'a.timings.json'}, outro: {layout: {visibleLines: 3}}},
+    });
+    await api.patchProps(intro, aligned);
+    const first = write(0, {});
+    // The outro changes before the intro's save has come back: the save writes both.
+    await api.patchProps(outro, {layout: {visibleLines: 5}});
+    const second = write(1, {});
+    expect(second).toEqual({intro: aligned, outro: {layout: {visibleLines: 5}}});
+    // The intro's echo is older than the outro's save: nothing is offered, the outro's stays in flight.
+    api.observeLiveProps({Template: first});
+    expect(getStudioState().rolledBack).toEqual({});
+    expect(getStudioState().inFlightPatches).toEqual({'Template/outro': {layout: {visibleLines: 5}}});
+    api.observeLiveProps({Template: second});
+    expect(getStudioState().inFlightPatches).toEqual({});
+    expect(getStudioState().rolledBack).toEqual({});
+  });
+
+  it("reads and writes a target inside its composition's props", () => {
+    const whole = {title: 'x', mushaf: {a: 1}, empty: null};
+    expect(api.targetPropsOf(whole, {compositionId: 'T'})).toBe(whole);
+    expect(api.targetPropsOf(whole, {compositionId: 'T', propsKey: 'mushaf'})).toEqual({a: 1});
+    expect(api.targetPropsOf(whole, {compositionId: 'T', propsKey: 'empty'})).toBeNull();
+    expect(api.targetPropsOf(whole, {compositionId: 'T', propsKey: 'title'})).toBeNull();
+    expect(api.patchTarget(whole, {compositionId: 'T'}, {title: 'y'})).toEqual({...whole, title: 'y'});
+    expect(api.patchTarget(whole, {compositionId: 'T', propsKey: 'mushaf'}, {b: 2})).toEqual({
+      ...whole,
+      mushaf: {a: 1, b: 2},
+    });
+    expect(api.patchTarget(whole, {compositionId: 'T', propsKey: 'empty', emptyProps: {a: 0}}, {b: 2})).toEqual({
+      ...whole,
+      empty: {a: 0, b: 2},
+    });
+    expect(whole.empty).toBeNull();
+  });
+
+  it("removes the fields of a part from a patch, and names a patch's fields", () => {
+    expect(api.withoutPart({a: 1, b: {c: 2, d: 3}}, {b: {c: 0}})).toEqual({a: 1, b: {d: 3}});
+    expect(api.withoutPart({a: 1, b: {c: 2}}, {a: 5, b: {c: 0}})).toBeNull();
+    expect(api.withoutPart({s: [1]}, {s: [2]})).toBeNull();
+    expect(api.withoutPart({a: {b: 1}}, {a: 1})).toBeNull();
+    expect(api.patchPaths({audioFile: 'a', text: {glossFile: '', font: undefined}, splits: []})).toEqual([
+      'audioFile',
+      'text.glossFile',
+      'splits',
+    ]);
+  });
+
+  it('gives a click-time action the props the panel was last rendered with, pending patch applied', async () => {
+    const memoized = {audioFile: 'old.mp3', overlay: {reciter: ''}};
+    expect(api.latestPanelProps('MushafRecitation', memoized)).toBe(memoized);
+    api.rememberPanelProps('MushafRecitation', {audioFile: 'old.mp3', overlay: {reciter: 'Alafasy'}});
+    await api.patchProps('MushafRecitation', {audioFile: 'new.mp3'});
+    expect(api.latestPanelProps('MushafRecitation', memoized)).toEqual({
+      audioFile: 'new.mp3',
+      overlay: {reciter: 'Alafasy'},
+    });
+    expect(api.latestPanelProps({compositionId: 'Template', propsKey: 'k'}, memoized)).toBe(memoized);
+  });
+
+  it("saves another composition from its live props, after the panel's own saves", async () => {
+    api.rememberLiveProps({MushafThumbnail: {surah: 1, title: 'Sidebar title', theme: 'night'}});
+    let finish!: () => void;
+    studio.saveDefaultProps.mockImplementationOnce(() => new Promise((resolve) => (finish = () => resolve(undefined))));
+    const own = api.patchProps('MushafRecitation', {slice: true});
+    const other = api.patchOtherComposition('MushafThumbnail', {surah: 36});
+    await vi.waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    finish();
+    expect(await other).toBe(true);
+    await own;
+    const call = studio.saveDefaultProps.mock.calls[1] as unknown as Call;
+    expect(call[0].defaultProps({savedDefaultProps: {surah: 2, title: 'Page load', theme: 'plain'}})).toEqual({
+      surah: 36,
+      title: 'Sidebar title',
+      theme: 'night',
+    });
+    expect(studio.goToComposition).toHaveBeenCalledWith('MushafThumbnail');
+    studio.saveDefaultProps.mockRejectedValueOnce(new Error('No composition with the ID MushafThumbnail found.'));
+    expect(await api.patchOtherComposition('MushafThumbnail', {surah: 2})).toBe(false);
+  });
+
+  it('saves another composition without selecting it when asked (a slot stays on its template)', async () => {
+    expect(await api.patchOtherComposition('MushafThumbnail', {surah: 36}, {select: false})).toBe(true);
+    expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1);
+    expect(studio.goToComposition).not.toHaveBeenCalled();
   });
 
   it('finds the part of a patch the props do not carry yet', () => {
@@ -204,6 +339,19 @@ describe('the Studio API wrappers', () => {
     expect(studio.play).toHaveBeenCalledTimes(1);
     api.seekTo(-1, 30);
     expect(studio.seek).toHaveBeenLastCalledWith(0);
+  });
+
+  it("seeks a slot's time at its start in the template: the offset added, never before the slot", () => {
+    api.seekTo(1.234, 30, 45);
+    expect(studio.seek).toHaveBeenLastCalledWith(82);
+    api.seekToTime(2, 60, 90);
+    expect(studio.seek).toHaveBeenLastCalledWith(210);
+    // A time before the recitation's 0 lands on its first frame, not in the intro.
+    api.seekToTime(-1, 30, 45);
+    expect(studio.seek).toHaveBeenLastCalledWith(45);
+    expect(studio.play).toHaveBeenCalledTimes(1);
+    expect(api.studioFrameOf(1, 30)).toBe(30);
+    expect(api.studioFrameOf(1, 30, 15)).toBe(45);
   });
 
   it('lists public files by extension, sorted, and copes with the Studio not answering', () => {

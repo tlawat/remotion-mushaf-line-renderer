@@ -1,7 +1,11 @@
+import {MushafSurahName} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {Sequence, useCurrentFrame, useVideoConfig} from 'remotion';
 import {surahEnglishName} from '../overlay/surah-names';
-import {ayahRangeText} from '../overlay/TitleOverlay';
+import {ayahRangeText, latinRangeText, SMALL_CAPS, smallCapsLabel} from '../overlay/TitleOverlay';
+import type {FontProps} from '../schema/fonts';
+import {withAlpha} from '../schema/highlight';
+import {frameColorOf, frameGeometry, SINE, SOFT} from '../schema/tokens';
 import {SURAHS} from '../studio/surahs';
 import {ChapterInfoCard} from './ChapterInfoCard';
 import type {ChapterInfo} from './chapter-info';
@@ -42,6 +46,37 @@ export const endCardOpacity = (frame: number, fps: number, fadeInSeconds: number
   return frame <= 0 ? 0 : frame / fade;
 };
 
+/** Frames the end card's content takes to come in (on `SOFT`), at 30 fps. */
+export const END_CARD_IN_FRAMES = 30;
+/** Seconds of the end card's last fade to the ground (on `SINE`). */
+export const END_CARD_OUT_SECONDS = 1;
+
+/**
+ * The end card's content opacity `frame` frames into its `durationInFrames` (render-design.md 5.9):
+ * in over 30 frames on `SOFT`, held, and out to the ground over its last second on `SINE`.
+ */
+export const endCardContentOpacity = (frame: number, fps: number, durationInFrames: number): number => {
+  const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+  const fadeIn = Math.max(1, Math.round((END_CARD_IN_FRAMES / 30) * fps));
+  const fadeOut = Math.max(1, Math.min(Math.round(END_CARD_OUT_SECONDS * fps), durationInFrames - fadeIn));
+  const rise = SOFT(clamp01(frame / fadeIn));
+  const fall = SINE(clamp01((frame - (durationInFrames - fadeOut)) / fadeOut));
+  return Math.round(rise * (1 - fall) * 10_000) / 10_000;
+};
+
+/** The framed surah name of the end card's title, when the card is drawn as the render design's. */
+export type EndCardTitleGlyph = {
+  /** The lines' measure: the framed name spans 30 % of it. */
+  readonly measure: number;
+  /** The lines' type size and line box: the framed name is set at 30 % of them. */
+  readonly glyphSize: number;
+  readonly lineHeight: number;
+  /** The gold of the hairline, its lozenge and the name's frame (`metalOf()`). */
+  readonly metal: string;
+  /** The composition's `fontSrc` / `fontFallback`, for the surah-name font. */
+  readonly fontProps?: FontProps | undefined;
+};
+
 export type EndCardProps = {
   readonly surah: number;
   readonly fromAyah: number;
@@ -51,16 +86,24 @@ export type EndCardProps = {
   /** The frame the card starts at, in the parent's time, and how long it stays. */
   readonly from: number;
   readonly durationInFrames: number;
-  /** Seconds of the fade-in (default 0.6; 0 for none). */
+  /** Seconds of the fade-in (default 0.6; 0 for none). Ignored with `glyph`: the content comes in over 30 frames. */
   readonly fadeInSeconds?: number | undefined;
   readonly fontFamily: string;
+  /** The weight of the title and credits in `fontFamily` (the design's labels are 500); unset: the font's own. */
+  readonly fontWeight?: number | undefined;
   /** The Arabic surah name's family (default `fontFamily`). */
   readonly arabicFontFamily?: string | undefined;
-  /** px of the surah name; the rest is in proportion. */
+  /** px of the surah name; the rest is in proportion. Ignored with `glyph`, which sizes on the frame's label size. */
   readonly fontSize: number;
   readonly color: string;
-  /** The card covers the frame in this colour. */
+  /** The card covers the frame in this colour (with `glyph`, it comes in with the content). */
   readonly background: string;
+  /**
+   * The render design's card (5.9): the framed surah-name glyph and a gold hairline as the title,
+   * the body in the book serif, small-caps credits, the content dissolving in and out on the
+   * ground. Unset: the plain card (the English and Arabic names as text).
+   */
+  readonly glyph?: EndCardTitleGlyph | undefined;
   readonly credits?: EndCardCredits | undefined;
   /**
    * The credits as lines (`attributionLines()` of the video), one under the other, in place of the
@@ -78,19 +121,21 @@ export type EndCardProps = {
   readonly className?: string | undefined;
 };
 
-type EndCardContentProps = Omit<EndCardProps, 'from' | 'durationInFrames'>;
+type EndCardContentProps = Omit<EndCardProps, 'from'>;
 
-const EndCardContent: React.FC<EndCardContentProps> = ({
+/** The render design's end card: the framed name and hairline once, the body, the credits, dissolving in and out. */
+const DesignedEndCard: React.FC<EndCardContentProps & {readonly glyph: EndCardTitleGlyph}> = ({
   surah,
   fromAyah,
   toAyah,
   reciter,
-  fadeInSeconds,
+  durationInFrames,
   fontFamily,
+  fontWeight,
   arabicFontFamily,
-  fontSize,
   color,
   background,
+  glyph,
   credits,
   creditLines,
   tafsir,
@@ -99,7 +144,162 @@ const EndCardContent: React.FC<EndCardContentProps> = ({
   className,
 }) => {
   const frame = useCurrentFrame();
+  const {fps, width, height} = useVideoConfig();
+  const {label: L, unit: u} = frameGeometry(width, height);
+  const content = endCardContentOpacity(frame, fps, durationInFrames);
+  // The ground comes in with the content and stays: the card ends on the bare ground.
+  const ground = Math.min(1, SOFT(Math.min(1, Math.max(0, frame / Math.round((END_CARD_IN_FRAMES / 30) * fps)))));
+  const nameWidth = Math.round(glyph.measure * 0.3);
+  const nameSize = Math.round(glyph.glyphSize * 0.3);
+  const nameBox = Math.round(glyph.lineHeight * 0.3);
+  const lozenge = Math.round(7 * u);
+  const body = Math.round(0.95 * L);
+  const bodyStyle: React.CSSProperties = {
+    maxWidth: '62ch',
+    marginTop: Math.round(0.8 * L),
+    opacity: 0.75,
+    lineHeight: 1.5,
+    textWrap: 'pretty',
+  };
+  return (
+    <div
+      className={className ? `mushaf-end-card ${className}` : 'mushaf-end-card'}
+      data-mushaf-end-card=""
+      style={{position: 'absolute', inset: 0, color, fontFamily, textAlign: 'center', ...style}}
+    >
+      <div data-mushaf-end-card-part="ground" style={{position: 'absolute', inset: 0, background, opacity: ground}} />
+      <div
+        data-mushaf-end-card-part="content"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: frameGeometry(width, height).safe,
+          boxSizing: 'border-box',
+          opacity: content,
+        }}
+      >
+        <div data-mushaf-end-card-part="title" style={{width: nameWidth, height: nameBox}}>
+          <MushafSurahName
+            surah={surah}
+            framed
+            frameColor={frameColorOf(glyph.metal, background)}
+            fontSize={nameSize}
+            lineHeight={nameBox}
+            {...glyph.fontProps}
+          />
+        </div>
+        <div
+          data-mushaf-end-card-part="rule"
+          style={{
+            position: 'relative',
+            width: Math.round(glyph.measure * 0.18),
+            height: Math.max(1, 1.5 * u),
+            marginTop: Math.round(0.5 * nameBox),
+            marginBottom: Math.round(0.6 * L),
+            background: withAlpha(glyph.metal, 0.7),
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: lozenge,
+              height: lozenge,
+              background: withAlpha(glyph.metal, 0.7),
+              transform: 'translate(-50%, -50%) rotate(45deg)',
+            }}
+          />
+        </div>
+        <div
+          data-mushaf-end-card-part="range"
+          style={{...SMALL_CAPS, fontSize: L, fontWeight: fontWeight ?? 500, lineHeight: 1.4, opacity: 0.6}}
+        >
+          {surahEnglishName(surah)} · {smallCapsLabel(latinRangeText({surah, ayah: fromAyah}, {surah, ayah: toAyah}))}
+        </div>
+        {reciter?.trim() ? (
+          <div
+            data-mushaf-end-card-part="reciter"
+            style={{
+              fontStyle: 'italic',
+              fontWeight: 400,
+              fontSize: Math.round(0.95 * L),
+              lineHeight: 1.4,
+              opacity: 0.55,
+            }}
+          >
+            {reciter.trim()}
+          </div>
+        ) : null}
+        {tafsir ? (
+          <TafsirCard
+            tafsir={tafsir.tafsir}
+            ayahKey={tafsir.ayahKey}
+            maxLines={tafsir.maxLines}
+            fontFamily={fontFamily}
+            fontSize={body}
+            color={color}
+            style={{...bodyStyle, fontWeight: 400}}
+          />
+        ) : null}
+        {chapterInfo ? (
+          <ChapterInfoCard
+            info={chapterInfo}
+            showNames={false}
+            fontFamily={fontFamily}
+            arabicFontFamily={arabicFontFamily}
+            fontSize={body}
+            color={color}
+            style={{...bodyStyle, fontWeight: 400}}
+          />
+        ) : null}
+        <div
+          data-mushaf-end-card-part="credits"
+          style={{
+            ...SMALL_CAPS,
+            // 0.8 L at 60 %: small caps at the design's 0.75 L and 55 % read about 10 px tall at 1080p.
+            fontSize: Math.round(0.8 * L),
+            fontWeight: fontWeight ?? 500,
+            lineHeight: 1.5,
+            opacity: 0.6,
+            marginTop: Math.round(1.2 * L),
+          }}
+        >
+          {creditLines === undefined
+            ? endCardCreditLine(credits)
+            : creditLines.map((line) => <div key={line}>{line}</div>)}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EndCardContent: React.FC<EndCardContentProps> = (props) => {
+  const {
+    surah,
+    fromAyah,
+    toAyah,
+    reciter,
+    fadeInSeconds,
+    fontFamily,
+    arabicFontFamily,
+    fontSize,
+    color,
+    background,
+    credits,
+    creditLines,
+    tafsir,
+    chapterInfo,
+    style,
+    className,
+  } = props;
+  const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
+  if (props.glyph !== undefined) return <DesignedEndCard {...props} glyph={props.glyph} />;
   const arabic = SURAHS[surah - 1]?.arabic;
   const small = fontSize * 0.5;
   return (
@@ -181,14 +381,16 @@ const EndCardContent: React.FC<EndCardContentProps> = ({
 };
 
 /**
- * A closing card, independent of the composition it ends: the surah's name in English and Arabic,
- * the range ("1:1–7"), the reciter, an optional tafsir card of one ayah and/or chapter card, and
- * the credit line built from `credits` (`endCardCreditLine()`) or the lines of `creditLines`, centred over the frame in
- * `background`. It lives in its own `<Sequence>` (`from`, `durationInFrames`, named "End card") and
- * fades in over its first `fadeInSeconds`. Pure in its props and the frame.
+ * A closing card, independent of the composition it ends: the surah's name, the range, the reciter,
+ * an optional tafsir card of one ayah and/or chapter card, and the credit line built from `credits`
+ * (`endCardCreditLine()`) or the lines of `creditLines`, centred over the frame in `background`. It
+ * lives in its own `<Sequence>` (`from`, `durationInFrames`, named "End card"). With `glyph` it is
+ * the render design's card: the framed surah-name glyph and a gold hairline once as the title, the
+ * body in the book serif at most 62 ch wide, small-caps credits, the content coming in over 30
+ * frames and going to the ground over the last second. Pure in its props and the frame.
  */
 export const EndCard: React.FC<EndCardProps> = ({from, durationInFrames, ...content}) => (
   <Sequence from={from} durationInFrames={durationInFrames} name="End card">
-    <EndCardContent {...content} />
+    <EndCardContent {...content} durationInFrames={durationInFrames} />
   </Sequence>
 );

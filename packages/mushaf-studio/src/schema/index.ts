@@ -1,16 +1,134 @@
 // The Zod fragments every composition's schema is built from, and the converters that turn their
 // values into the package's own vocabulary. The Studio's Props sidebar renders these as controls
 // (enums, numbers with min/max/step, `zColor()` pickers, nested objects), so the shape here is the
-// user interface: names, order and descriptions are part of the contract.
+// user interface: names, order and descriptions are part of the contract. A description shows in
+// the info bubble beside its field's name; where two options overlap, it starts with the rule that
+// decides which one wins. A colour field has none: Remotion 4.0.539 draws its picker only while the
+// description is still `zColor()`'s own marker, so what a colour does goes in its doc comment and,
+// where a rule decides it, in its group's description.
 import {zColor} from '@remotion/zod-types';
 import type {MushafThemeSelection} from '@tlawat/remotion-mushaf-line';
 import {z} from 'zod';
+import {TEMPOS} from './tokens';
 
 // The converters, one file per concern; the fragments stay here because they are the contract.
-export {animationFrom, type LineAnimationProps, scrollTimingFrom} from './animation';
+export {
+  type AnimationFromOptions,
+  animationFrom,
+  type LineAnimationProps,
+  riseDistance,
+  scrollTimingFrom,
+  windowScrollTiming,
+} from './animation';
+export {
+  ACCENT_CHROMA,
+  ACCENT_CONTRAST,
+  capChroma,
+  contrast,
+  fromOklch,
+  groundOf,
+  isLightGround,
+  legibleAccent,
+  mixColors,
+  type Oklch,
+  parseColor,
+  type Rgba,
+  readableInk,
+  relativeLuminance,
+  TEXT_CONTRAST,
+  toHex,
+  toOklch,
+  WASH_ALPHA_CAP,
+  washAlpha,
+  washColor,
+} from './color';
 export {type DataSource, dataSchema, dataSourceFrom, MIRROR_FILES} from './data';
-export {type FontProps, type FontSetup, fontPropsFrom} from './fonts';
-export {activeWordStyleFrom, type WordStartIndex, type WordStyleOptions, wordStyleFrom} from './highlight';
+export {
+  ARABIC_LABEL_FAMILY,
+  ARABIC_LABEL_FONT,
+  BOOK_SERIF,
+  type FontProps,
+  type FontSetup,
+  fontPropsFrom,
+  type StudioFontRole,
+  type StudioFontStyle,
+  studioFontFamily,
+  studioFontStyle,
+} from './fonts';
+export {
+  activeWordStyleFrom,
+  drawsWordBand,
+  effectiveNeighbourOpacity,
+  effectiveRestOpacity,
+  inkTintFor,
+  type TintPath,
+  tintPath,
+  type WordStartIndex,
+  type WordStyleOptions,
+  wordBandFrom,
+  wordStyleFrom,
+} from './highlight';
+export {
+  type AyahSpan,
+  ayahEmphasis,
+  ayahSpanIndex,
+  ayahSpans,
+  type Boundary,
+  type BoundaryKind,
+  type BoundaryOptions,
+  boundaryStart,
+  hasWordTimes,
+  inkFill,
+  MIN_SPAN_FRAMES,
+  markerIds,
+  type OutgoingEndOptions,
+  outgoingEnd,
+  RELEASE_SECONDS,
+  type WordSpan,
+  type WordSpanOptions,
+  wordEmphasis,
+  wordSpanIndex,
+  wordSpans,
+  wordStartIndex,
+} from './marks';
+export {
+  describeMushafMigration,
+  MIGRATION_REASONS,
+  type MigrateOptions,
+  type MigrationNote,
+  type MigrationReason,
+  type MigrationReasonParams,
+  migrateMushafProps,
+  migrationReasonText,
+  mushafPropsNeedMigration,
+} from './migrate';
+export {
+  ACCENT_GOLD,
+  ARRIVE,
+  type DissolveOpacities,
+  type DissolveShares,
+  DURATIONS,
+  type DurationToken,
+  dissolve,
+  dissolveShares,
+  type FrameGeometry,
+  type FrameGeometryOptions,
+  frameColorOf,
+  frameGeometry,
+  GROUNDS,
+  type GroundTokens,
+  INOUT,
+  JADWAL_DEPTH_UNITS,
+  METAL,
+  metalOf,
+  SINE,
+  SOFT,
+  TEMPOS,
+  type Tempo,
+  tempoFrames,
+  tempoSeconds,
+} from './tokens';
+export {AYAH_WASH_SHAPE, type WashCap, type WashStyleOptions, washStyle} from './wash';
 
 /** The ten presets of the colour font plus `plain` (the monochrome font) and `custom` (see `customThemeSchema`). */
 export const THEME_NAMES = [
@@ -27,78 +145,165 @@ export const THEME_NAMES = [
   'p5',
 ] as const;
 
-export const themeNameSchema = z.enum([...THEME_NAMES, 'custom']).describe('Colour theme of the mushaf line');
+export const themeNameSchema = z
+  .enum([...THEME_NAMES, 'custom'])
+  .describe('Colour theme of the mushaf line (custom: the customTheme palette)');
 
 /** A custom palette: a preset to start from and a colour per part. Used when `theme` is `custom`. */
-export const customThemeSchema = z.object({
-  base: z
-    .enum(['light', 'dark', 'sepia', 'black', 'normal', 'p1', 'p2', 'p3', 'p4', 'p5'])
-    .describe('Preset to start from'),
-  ink: zColor().describe('The letters'),
-  silent: zColor().describe('Letters written but not pronounced'),
-  rules: zColor().describe('The seven tajweed rule colours (one colour for all)'),
-  frame: zColor().describe('The ayah-end rosette and its number'),
-  accent: zColor().describe('The rosette’s petals'),
-  detail: zColor().describe('The jewel at the top of the rosette'),
-  background: zColor().describe('The disc behind the ayah number'),
-  /** Which parts the colours above override; the others keep the preset's colours. */
-  override: z.object({
-    ink: z.boolean(),
-    silent: z.boolean(),
-    rules: z.boolean(),
-    frame: z.boolean(),
-    accent: z.boolean(),
-    detail: z.boolean(),
-    background: z.boolean(),
-  }),
-});
+export const customThemeSchema = z
+  .object({
+    base: z
+      .enum(['light', 'dark', 'sepia', 'black', 'normal', 'p1', 'p2', 'p3', 'p4', 'p5'])
+      .describe('Preset to start from'),
+    /** The letters. */
+    ink: zColor(),
+    /** Letters written but not pronounced. */
+    silent: zColor(),
+    /** The seven tajweed rule colours (one colour for all). */
+    rules: zColor(),
+    /** The ayah-end rosette and its number. */
+    frame: zColor(),
+    /** The rosette's petals. */
+    accent: zColor(),
+    /** The jewel at the top of the rosette. */
+    detail: zColor(),
+    /** The disc behind the ayah number. */
+    background: zColor(),
+    /** Which parts the colours above override; the others keep the preset's colours. */
+    override: z
+      .object({
+        ink: z.boolean(),
+        silent: z.boolean(),
+        rules: z.boolean(),
+        frame: z.boolean(),
+        accent: z.boolean(),
+        detail: z.boolean(),
+        background: z.boolean(),
+      })
+      .describe('The parts the colours above repaint; the others keep the base preset’s'),
+  })
+  .describe(
+    'Used only when theme is custom: a base preset and a colour per part (ink, silent letters, rules, rosette frame, accent, detail, number disc)',
+  );
 
 export const fontsSchema = z
   .enum(['fallback', 'cdn', 'package'])
   .describe(
-    'Where the page fonts come from: QUL’s CDN with the fonts packages as fallback, the CDN only, or the packages only (offline)',
+    'Page fonts: fallback = QUL’s CDN, then the registered fonts packages; cdn = CDN only; package = the packages (name fonts from public/fonts). Without registerMushafFonts() every mode uses the CDN',
   );
 
 export const ASPECTS = ['16:9', '9:16', '1:1', '4:5'] as const;
 
+/** The border of the frame: none, or a thin gold double rule inside the safe area (the jadwal of a printed page). */
+export const LAYOUT_FRAMES = ['none', 'hairline'] as const;
+
+/**
+ * The frame and the lines in it. `background` is the page colour: the `'color'` kind of the
+ * `background` group paints it (`background.color` only fills behind an image, a video or a
+ * gradient), and the title card, the counter and the end card use it whatever the kind.
+ * `backgroundImage` is kept for props saved before the `background` group (`backgroundFor()`).
+ */
 export const layoutSchema = z.object({
   aspect: z.enum(ASPECTS).describe('Frame shape: 16:9 landscape, 9:16 reels, 1:1 square, 4:5 portrait'),
   /** 0 shows one line at a time, replaced in place; 1-7 shows a window of that many line slots. */
   visibleLines: z.number().int().min(0).max(7).describe('Lines on screen at once (0: one line, replaced in place)'),
-  neighbourOpacity: z.number().min(0).max(1).step(0.05).describe('Opacity of the lines around the current one'),
+  neighbourOpacity: z
+    .number()
+    .min(0.15)
+    .max(0.5)
+    .step(0.05)
+    .describe('Opacity of the lines around the current one (under ink, kept 0.2 below restOpacity)'),
   /** px, at the composition's width. */
-  marginX: z.number().int().min(0).max(400).step(10).describe('Side margins in px'),
-  background: zColor().describe('Page colour'),
-  color: zColor().describe('Ink colour (plain theme, and every part a theme paints in currentColor)'),
-  /** A `public/` path of an image behind everything, or empty for none. */
-  backgroundImage: z.string().describe('Background image in public/ (empty: none)'),
+  marginX: z
+    .number()
+    .int()
+    .min(0)
+    .max(400)
+    .step(10)
+    .describe('Side margins in px (about 10 % of the width reads best at 16:9)'),
+  /** Page colour: painted when `background.kind` is `color`; the title card, counter and end card use it always. */
+  background: zColor(),
+  /** Ink colour: the plain theme's, and every part a theme paints in `currentColor`. */
+  color: zColor(),
+  frame: z
+    .enum(LAYOUT_FRAMES)
+    .describe('A thin gold double rule inside the safe area, as on a printed page (none: no border)'),
+  /** A `public/` path of an image behind everything, or empty for none: superseded by `background.src`. */
+  backgroundImage: z
+    .string()
+    .describe(
+      'Legacy image in public/: shown when background.kind is color, or image with an empty src (background.src wins; empty: none)',
+    ),
   /** Vertical position of the lines' block, 0 top, 0.5 middle, 1 bottom. */
-  verticalAlign: z.number().min(0).max(1).step(0.05).describe('Vertical position of the lines (0 top, 1 bottom)'),
+  /** Steps of 0.01: the formats place the lines at 0.45 (vertical), 0.47 (portrait) and 0.48 (square). */
+  verticalAlign: z.number().min(0).max(1).step(0.01).describe('Vertical position of the lines (0 top, 1 bottom)'),
   /** px, added to the block's position from `verticalAlign`: a nudge the canvas cannot write into the props itself. */
   offsetY: z.number().int().min(-800).max(800).step(10).describe('Move the lines up (negative) or down, in px'),
 });
 
+/** How a line or an ayah gives way to the next: a dissolve, a dissolve with a slight rise, or a cut. */
+export const LINE_MOTIONS = ['fade', 'rise', 'cut'] as const;
+/** @deprecated The `enter` / `exit` values saved before this design; `migrateMushafProps()` maps them to `lines`. */
 export const ENTRANCES = ['slide-fade', 'fade', 'reveal-rtl', 'none'] as const;
 
+/**
+ * How lines give way (the panel's "Motion"): always after the outgoing line's last word, by a
+ * staggered dissolve (`dissolve()`), with a rise of at most 0.12 em, or by a cut (the reduce-motion
+ * path; the marks still ease). `tempo: 'slow'` lengthens every change of line, ayah, page and card
+ * 1.4×; the word marks keep their pace, in sync with the voice.
+ */
 export const animationSchema = z.object({
-  enter: z.enum(ENTRANCES).describe('How a line comes in'),
-  exit: z.enum(ENTRANCES).describe('How a line goes out'),
-  /** Seconds a line is in place before its first word is heard. */
-  leadInSeconds: z.number().min(0).max(3).step(0.1).describe('Seconds a line is on screen before its first word'),
-  scroll: z.enum(['ease', 'spring']).describe('Curve of the window’s scroll between lines'),
+  lines: z
+    .enum(LINE_MOTIONS)
+    .describe(
+      'How a line or ayah gives way to the next, always after its last word: a dissolve, a dissolve with a slight rise, or a cut',
+    ),
+  tempo: z.enum(TEMPOS).describe('Pace of every change: calm, or slow (1.4× longer). The word mark keeps its pace'),
+  /** Seconds the incoming line waits, settled, before its first word, when the pause allows it. */
+  leadInSeconds: z
+    .number()
+    .min(0)
+    .max(2)
+    .step(0.1)
+    .describe('Longest a new line waits, settled, before its first word (it never comes before the last line ends)'),
 });
 
-export const HIGHLIGHT_STYLES = ['color', 'glow', 'marker', 'none'] as const;
+/** One mark at a time: ink (the words still to come rest lighter), tint (the word's ink in the accent), or wash (a faint band). */
+export const HIGHLIGHT_STYLES = ['ink', 'tint', 'wash'] as const;
+/** The `style` values saved before this design; `migrateMushafProps()` maps them. */
+export const LEGACY_HIGHLIGHT_STYLES = ['color', 'glow', 'marker', 'none'] as const;
 
+/**
+ * What follows the recitation and how it is marked: exactly one device, eased in and out, never a
+ * box, a halo or two marks together. `ink` dims only what is still to come on the current line and
+ * fills it in as it is heard; `tint` turns the word's (or ayah's) ink into the accent, read at 5:1 on
+ * the page (`legibleAccent()`); `wash` paints a faint, soft-ended band behind it. On a theme with
+ * tajweed colours a tint is shown as a wash, so the rules' colours are never repainted.
+ */
 export const highlightSchema = z.object({
-  mode: z.enum(['word', 'ayah', 'none']).describe('What follows the recitation: the word, the whole ayah, or nothing'),
-  style: z.enum(HIGHLIGHT_STYLES).describe('How the current word is marked: ink colour, a glow, a marker behind it'),
-  color: zColor().describe('Colour of the mark'),
-  /** Opacity of the words that are not current: 1 for no dimming. */
-  dimOthers: z.number().min(0).max(1).step(0.05).describe('Opacity of the other words (1: none)'),
-  /** Dim only the words not yet recited; the ones already heard stay at full opacity. */
-  dimUpcomingOnly: z.boolean().describe('Dim only the words still to come'),
-  /** Which recitation of a repeated word moves the highlight. */
+  mode: z
+    .enum(['word', 'ayah', 'none'])
+    .describe(
+      'What follows the recitation: each word, the whole ayah, or nothing. Word falls back to ayah when the timings have no word times',
+    ),
+  style: z
+    .enum(HIGHLIGHT_STYLES)
+    .describe(
+      'One mark: ink (text still to come rests lighter), tint (the ink turns the accent; a wash on tajweed themes) or wash (a faint band behind). Ignored when mode is none',
+    ),
+  /**
+   * The accent of tint and wash. A tint is darkened or lightened until it reads at 5:1 on the page
+   * (`legibleAccent()`), and its chroma is capped so a bright colour becomes antique gold; a wash
+   * paints it at a fixed faint strength. Ignored by ink.
+   */
+  color: zColor(),
+  restOpacity: z
+    .number()
+    .min(0.5)
+    .max(0.85)
+    .step(0.05)
+    .describe('Ink only: opacity of the words not yet marked on the current line (at least 0.65 on tajweed themes)'),
+  /** Which recitation of a repeated word moves the mark. */
   occurrence: z.enum(['first', 'last']).describe('For a repeated word: follow its first or its last recitation'),
 });
 
@@ -119,8 +324,9 @@ export const translationLayerSchema = z.object({
     .describe(
       '“auto” for the web font of the translation’s language (Arabic, Urdu, Bengali, Chinese, ...), or a CSS font family',
     ),
-  fontSize: z.number().int().min(12).max(120).describe('Size in px'),
-  color: zColor().describe('Colour'),
+  fontSize: z.number().int().min(12).max(120).describe('Size in px (never drawn larger than half the Arabic)'),
+  /** The layer's colour. */
+  color: zColor(),
 });
 
 /** At most this many stacked translations (`TranslationStack`'s limit). */
@@ -130,7 +336,7 @@ export const translationsSchema = z
   .array(translationLayerSchema)
   .max(MAX_TRANSLATIONS)
   .describe(
-    'Up to three translations stacked under each other (empty: translationFile alone, with the settings above)',
+    'Up to three stacked translations. Once one is added, translationFile and the translation font, size, colour and direction are ignored',
   );
 
 export const textSchema = z.object({
@@ -141,12 +347,28 @@ export const textSchema = z.object({
    */
   translationFile: z
     .string()
-    .describe('Ayah translation file in public/ (empty: none; ignored when translations is set)'),
-  translationPosition: z.enum(['below', 'above', 'none']).describe('Where the ayah translation goes'),
-  translationFont: z.string().describe('CSS font family of the translation'),
-  translationSize: z.number().int().min(12).max(120).describe('Translation size in px'),
-  translationColor: zColor().describe('Translation colour'),
-  translationDirection: z.enum(['ltr', 'rtl']).describe('Writing direction of the translation'),
+    .describe('Single ayah translation file in public/ (empty: none; ignored once translations has a layer)'),
+  translationPosition: z
+    .enum(['below', 'above', 'none'])
+    .describe('Where the ayah translation goes (none hides it; its files are still read)'),
+  translationFont: z
+    .string()
+    .describe(
+      'Single translation: “auto” (EB Garamond for Latin scripts, the language’s own font otherwise) or a CSS font family (ignored once translations has a layer)',
+    ),
+  translationSize: z
+    .number()
+    .int()
+    .min(12)
+    .max(120)
+    .describe(
+      'Single translation: size in px, never drawn larger than half the Arabic (ignored once translations has a layer)',
+    ),
+  /** The single translation's colour, ignored once `translations` has a layer. */
+  translationColor: zColor(),
+  translationDirection: z
+    .enum(['ltr', 'rtl'])
+    .describe('Single translation: writing direction (layers follow their language)'),
   /** px, added to the translation block's position under or over the lines. */
   translationOffsetY: z
     .number()
@@ -155,13 +377,27 @@ export const textSchema = z.object({
     .max(800)
     .step(10)
     .describe('Move the translation up (negative) or down, in px'),
-  /** A `public/` path to a word-by-word translation, or empty. */
-  glossFile: z.string().describe('Word-by-word translation file in public/ (empty: none)'),
-  /** A `public/` path to a word-by-word transliteration, or empty. */
-  transliterationFile: z.string().describe('Word-by-word transliteration file in public/ (empty: none)'),
-  glossFont: z.string().describe('CSS font family of the gloss strip'),
-  glossSize: z.number().int().min(12).max(120).describe('Gloss size in px'),
-  glossColor: zColor().describe('Gloss colour'),
+  /** A `public/` path to a word-by-word translation, or empty. Only `<MushafRecitation>` shows it. */
+  glossFile: z
+    .string()
+    .describe('MushafRecitation only: word-by-word translation in public/ (empty: none; glossPosition none hides it)'),
+  /** A `public/` path to a word-by-word transliteration, or empty. Only `<MushafRecitation>` shows it. */
+  transliterationFile: z
+    .string()
+    .describe(
+      'MushafRecitation only: word-by-word transliteration in public/ (empty: none; glossPosition none hides it)',
+    ),
+  glossFont: z
+    .string()
+    .describe('MushafRecitation only: “auto” (EB Garamond italic) or a CSS font family of the gloss'),
+  glossSize: z
+    .number()
+    .int()
+    .min(12)
+    .max(120)
+    .describe('MushafRecitation only: gloss size in px (interlinear: at most 0.3 of the Arabic)'),
+  /** The gloss's colour (`<MushafRecitation>` only). */
+  glossColor: zColor(),
   /** 1-3 translations, each with its file, font, size and colour; when set, `translationFile` and its type are not used. */
   translations: translationsSchema,
 });
@@ -178,25 +414,29 @@ export const GLOSS_POSITIONS = ['strip', 'interlinear', 'none'] as const;
 export const recitationTextSchema = textSchema.extend({
   glossPosition: z
     .enum(GLOSS_POSITIONS)
-    .describe('Where the word-by-word gloss goes: a strip at the bottom, under each printed word, or nowhere'),
+    .describe(
+      'Where glossFile and transliterationFile go: a strip at the bottom, under each printed word, or none (hidden; still read)',
+    ),
 });
 
 export const MEMORIZE_MODES = ['off', 'first-letters', 'blank-upcoming', 'blank-all', 'repeat'] as const;
 
 /**
  * Memorisation (hifz) modes. Every mode but `'off'` plays each ayah `repeat` times before the next,
- * `pauseSeconds` apart, with a "2/3" counter in a corner (the duration grows to match). The blank
+ * `pauseSeconds` apart, with a "2 / 3" counter in a corner (the duration grows to match). The blank
  * modes hide words on the first `revealAfterRepeats` plays: `'blank-upcoming'` the words not yet
  * recited, `'blank-all'` every word but the active one and those already recited in this play.
  * `'first-letters'` shows an upcoming word's first letter and a tatweel in Unicode text
  * (`<MushafAyahText>`); the printed lines' glyph fonts cannot be cut into letters, so there it is
- * `'blank-upcoming'` with a faint outline (opacity 0.12). `'repeat'` repeats without hiding.
+ * `'blank-upcoming'` with a faint ghost (opacity 0.14, 0.20 on a dark ground). A hidden word comes in
+ * over 7 frames at its own start; a word heard in the previous play goes back over 12 as the next
+ * starts. `'repeat'` repeats without hiding.
  */
 export const memorizeSchema = z.object({
   mode: z
     .enum(MEMORIZE_MODES)
     .describe(
-      'Memorisation: off, first letters of the words to come, blank the words to come, blank all but the recited words, or repeat only',
+      'Memorisation: off, first letters of the words to come (a faint outline on printed lines), blank the words to come, blank all but the recited, or repeat only. Its hiding wins over highlight.restOpacity',
     ),
   repeat: z.number().int().min(1).max(10).describe('Plays of each ayah before the next (every mode but off)'),
   pauseSeconds: z.number().min(0).max(5).step(0.1).describe('Seconds of silence between two plays of an ayah'),
@@ -212,7 +452,8 @@ export const reviewSchema = z.object({
   /** In the Studio only (never in a render): paint the words whose alignment is doubtful. */
   showDoubtful: z.boolean().describe('Studio only: mark words whose alignment is doubtful'),
   confidenceThreshold: z.number().min(0).max(1).step(0.05).describe('Segments under this confidence are doubtful'),
-  doubtColor: zColor().describe('Colour of the doubt mark'),
+  /** Colour of the doubt mark. */
+  doubtColor: zColor(),
 });
 
 export const OVERLAY_TITLES = ['none', 'intro', 'corner', 'both'] as const;
@@ -220,35 +461,63 @@ export const OVERLAY_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-
 
 /**
  * The title overlay: an intro card over the first seconds (the surah name in its printed frame, the
- * ayah range, the reciter) and a small label in a corner for the whole video (the surah, the ayah
- * being heard, the reciter). Nothing is shifted for the card: it covers the start and fades out.
+ * ayah range, the reciter, the translation's credit) and a small label in a corner for the whole
+ * video (the surah and the ayah being heard). The card adds its seconds: the recording starts
+ * after it (`resolved.introDelaySeconds`).
  */
 export const overlaySchema = z.object({
   title: z
     .enum(OVERLAY_TITLES)
-    .describe('Title: none, an intro card, a corner label, or both (intro card, then the corner label)'),
-  /** The card fades out 0.3 s before the first word when the recitation starts earlier than this. */
-  introSeconds: z.number().min(1).max(8).step(0.5).describe('Seconds the intro card stays'),
+    .describe(
+      'Title: none, an intro card, a corner label, or both. The intro card shows the surah name: with header on, it is shown twice',
+    ),
+  /** The video grows by what the card needs before the first word (`introDelaySeconds()`). */
+  introSeconds: z
+    .number()
+    .min(2)
+    .max(6)
+    .step(0.5)
+    .describe('Seconds the intro card stays; the recitation starts after it (the video grows to fit)'),
   /** Free text: the Mushaf panel does not fill it. */
-  reciter: z.string().describe('Reciter’s name, under the title and in the corner (empty: none)'),
-  color: zColor().describe('Colour of the title texts'),
-  font: z.string().describe('CSS font family of the title texts'),
+  reciter: z.string().describe('Reciter’s name, on the intro card (empty: none)'),
+  /** Colour of the title texts. */
+  color: zColor(),
+  font: z
+    .string()
+    .describe('“auto”: EB Garamond small caps, Amiri for Arabic; or a CSS font family for the title texts'),
   corner: z.enum(OVERLAY_CORNERS).describe('Corner of the label'),
-  /** px, at the composition's width. */
-  cornerSize: z.number().int().min(12).max(60).describe('Size of the corner label in px'),
+  /** px, at the composition's width; 0 follows the frame (`frameGeometry().label`). */
+  cornerSize: z
+    .number()
+    .int()
+    .min(0)
+    .max(60)
+    .describe('Size of the corner label in px (0: auto, 2.4 % of the frame height)'),
 });
 
 export const LEGEND_NAMES = ['en', 'ar', 'both'] as const;
 
 /**
- * The tajweed colours' legend in a corner (`<TajweedLegend>`): drawn only when `show` is on and the
- * theme tells the rules apart (`themeHasTajweedColors()`); under `plain`, `normal` or `black` there
- * is nothing to explain.
+ * The tajweed colours' legend, one centred row in a band of its own above or below the lines
+ * (`<TajweedLegend>`): the lines are fitted around the band, so it never covers them. Drawn only when `show` is on and the
+ * theme tells the rules apart (`themeHasTajweedColors()`); under `plain`, `normal`, `black` and
+ * `p3`-`p5`, or a custom palette built on them or repainting every rule one colour, there is nothing
+ * to explain.
  */
 export const legendSchema = z.object({
-  show: z.boolean().describe('Show the legend of the tajweed colours (only for a theme that colours the rules)'),
-  position: z.enum(OVERLAY_CORNERS).describe('Corner of the legend'),
-  orientation: z.enum(['row', 'column']).describe('Swatches side by side (row) or one under the other (column)'),
+  show: z
+    .boolean()
+    .describe(
+      'Show the tajweed colours’ legend: only when the theme gives the rules different colours (not plain, normal, black, p3-p5, nor a customTheme on those or overriding rules)',
+    ),
+  position: z
+    .enum(OVERLAY_CORNERS)
+    .describe(
+      'Band of the legend: top-* above the lines, bottom-* below them. Space is reserved, so it never covers the text',
+    ),
+  orientation: z
+    .enum(['row', 'column'])
+    .describe('Ignored: the legend is one centred row in its band (kept for saved props)'),
   names: z.enum(LEGEND_NAMES).describe('Names of the rules: English, Arabic or both'),
 });
 
@@ -264,18 +533,24 @@ export const END_CARD_KINDS = ['none', 'credits', 'tafsir', 'chapter-info'] as c
 export const endCardSchema = z.object({
   show: z
     .enum(END_CARD_KINDS)
-    .describe('A closing card: none, the credits, the tafsir of the last ayah, or the surah’s introduction'),
+    .describe(
+      'A closing card: none, the credits, the tafsir of the last ayah (needs tafsirFile), or the surah’s introduction (needs chapterInfoFile)',
+    ),
   seconds: z.number().min(2).max(15).step(0.5).describe('Seconds the end card stays (added to the video)'),
   /** A `public/` path or a URL to a tafsir file (`serialiseTafsir()`). */
-  tafsirFile: z.string().describe('Tafsir file in public/ (for the tafsir card)'),
+  tafsirFile: z.string().describe('Tafsir file in public/: read only when show is tafsir (the Text tab fetches it)'),
   /** A `public/` path or a URL to a chapter-info file (`serialiseChapterInfo()`). */
-  chapterInfoFile: z.string().describe('Surah introduction file in public/ (for the chapter-info card)'),
+  chapterInfoFile: z
+    .string()
+    .describe('Surah introduction file in public/: read only when show is chapter-info (the Text tab fetches it)'),
 });
 
 /** The surah's printed header before its first ayah: nothing, its name, or its name and basmalah (when it has one). */
 export const headerSchema = z
   .enum(['none', 'name', 'name-basmalah'])
-  .describe('When the passage starts at ayah 1: show the surah’s name (and basmalah) before it');
+  .describe(
+    'When the passage starts at ayah 1: the surah’s printed name (and basmalah) as lines before it. overlay.title’s intro card names it too: use one',
+  );
 
 export const lineSplitSchema = z.object({
   page: z.number().int().min(1).max(604),
@@ -289,6 +564,9 @@ export type CustomTheme = z.infer<typeof customThemeSchema>;
 export type Fonts = z.infer<typeof fontsSchema>;
 export type Layout = z.infer<typeof layoutSchema>;
 export type Animation = z.infer<typeof animationSchema>;
+export type LineMotion = (typeof LINE_MOTIONS)[number];
+export type LayoutFrame = (typeof LAYOUT_FRAMES)[number];
+export type HighlightStyle = (typeof HIGHLIGHT_STYLES)[number];
 export type Highlight = z.infer<typeof highlightSchema>;
 export type Text = z.infer<typeof textSchema>;
 export type Review = z.infer<typeof reviewSchema>;
@@ -304,59 +582,62 @@ export type LegendNames = (typeof LEGEND_NAMES)[number];
 export type EndCardKind = (typeof END_CARD_KINDS)[number];
 export type EndCardSettings = z.infer<typeof endCardSchema>;
 
+/**
+ * The Mushaf look's palette: the ink follows `layout.color`, and every rosette is a gold line
+ * drawing (`frame`, `detail`) on vellum (`accent`) around a disc of the ground (`background`):
+ * never a solid coin, never the pink and mint fills of `normal`.
+ */
 export const defaultCustomTheme: CustomTheme = {
   base: 'normal',
-  ink: '#1b1b1b',
-  silent: '#8a8a8a',
+  ink: '#1c1a16',
+  silent: '#8a8478',
   rules: '#1b6f3f',
-  frame: '#1b1b1b',
-  accent: '#c8a45c',
-  detail: '#c8a45c',
-  background: 'transparent',
-  override: {ink: false, silent: false, rules: false, frame: false, accent: true, detail: true, background: false},
+  frame: '#8c6c26',
+  accent: '#efe3c4',
+  detail: '#8c6c26',
+  background: '#f8f3e6',
+  override: {ink: false, silent: false, rules: false, frame: true, accent: true, detail: true, background: true},
 };
 
+/** Ivory page, warm black ink, three lines with their neighbours at 0.3, the side margins of 16:9, no border. */
 export const defaultLayout: Layout = {
   aspect: '16:9',
   visibleLines: 3,
-  neighbourOpacity: 0.45,
-  marginX: 120,
-  background: '#fbf7ee',
-  color: '#1b1b1b',
+  neighbourOpacity: 0.3,
+  marginX: 190,
+  background: '#f8f3e6',
+  color: '#1c1a16',
   backgroundImage: '',
   verticalAlign: 0.5,
   offsetY: 0,
+  frame: 'none',
 };
 
-export const defaultAnimation: Animation = {
-  enter: 'slide-fade',
-  exit: 'slide-fade',
-  leadInSeconds: 0.4,
-  scroll: 'ease',
-};
+/** Calm dissolves, a new line settled 0.4 s before its first word when the pause allows it. */
+export const defaultAnimation: Animation = {lines: 'fade', tempo: 'calm', leadInSeconds: 0.4};
 
+/** Each word followed in ink: the words still to come on the current line rest at 0.6 and fill in as they are heard. */
 export const defaultHighlight: Highlight = {
   mode: 'word',
-  style: 'color',
-  color: '#c8a45c',
-  dimOthers: 1,
-  dimUpcomingOnly: false,
+  style: 'ink',
+  color: '#b8913a',
+  restOpacity: 0.6,
   occurrence: 'first',
 };
 
 export const defaultText: Text = {
   translationFile: '',
   translationPosition: 'below',
-  translationFont: 'Georgia, "Noto Serif", serif',
-  translationSize: 40,
-  translationColor: '#4a4a4a',
+  translationFont: AUTO_FONT,
+  translationSize: 36,
+  translationColor: '#5a554c',
   translationDirection: 'ltr',
   translationOffsetY: 0,
   glossFile: '',
   transliterationFile: '',
-  glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
-  glossSize: 34,
-  glossColor: '#6a6a6a',
+  glossFont: AUTO_FONT,
+  glossSize: 30,
+  glossColor: '#6b6458',
   translations: [],
 };
 
@@ -366,19 +647,19 @@ export const defaultRecitationText: RecitationText = {...defaultText, glossPosit
 /** Off; when a mode is picked: three plays of each ayah, half a second apart, the text revealed from the second. */
 export const defaultMemorize: Memorize = {mode: 'off', repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1};
 
-/** No title; when one is turned on: a three-second card, dark ink in the translation's serif, the label top right. */
+/** No title; when one is turned on: a three-second card in the muted ink and the label face, the label top right at the frame's size. */
 export const defaultOverlay: Overlay = {
   title: 'none',
   introSeconds: 3,
   reciter: '',
-  color: '#1b1b1b',
-  font: 'Georgia, "Noto Serif", serif',
+  color: '#5a554c',
+  font: AUTO_FONT,
   corner: 'top-right',
-  cornerSize: 28,
+  cornerSize: 0,
 };
 
-/** Off; when turned on: bottom left, one rule under the other, named in English and Arabic. */
-export const defaultLegend: Legend = {show: false, position: 'bottom-left', orientation: 'column', names: 'both'};
+/** Off; when turned on: in a band under the lines, one centred row, named in English and Arabic. */
+export const defaultLegend: Legend = {show: false, position: 'bottom-left', orientation: 'row', names: 'both'};
 
 /** No end card; when one is picked: five seconds. */
 export const defaultEndCard: EndCardSettings = {show: 'none', seconds: 5, tafsirFile: '', chapterInfoFile: ''};
@@ -387,8 +668,8 @@ export const defaultEndCard: EndCardSettings = {show: 'none', seconds: 5, tafsir
 export const defaultTranslationLayer: TranslationLayerSettings = {
   file: '',
   font: AUTO_FONT,
-  fontSize: 40,
-  color: '#4a4a4a',
+  fontSize: 36,
+  color: '#5a554c',
 };
 
 export const defaultReview: Review = {showDoubtful: true, confidenceThreshold: 0.8, doubtColor: '#d94848'};

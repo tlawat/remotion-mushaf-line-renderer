@@ -38,8 +38,12 @@ vi.mock('../../../src/studio', () => ({
   isInStudio: () => false,
 }));
 
-const {MushafAyahText, defaultMushafAyahTextProps, resolveAyahText} = await import('../../../src/unicode');
+const {MushafAyahText, ayahPresence, ayahTextPlan, defaultMushafAyahTextProps, resolveAyahText} = await import(
+  '../../../src/unicode'
+);
+const {clipTimeline} = await import('../../../src/memorize');
 const {fakeFetch} = await import('../translations/helpers');
+const {frameGeometry, legibleAccent, markerIds, parseColor, washColor} = await import('../../../src/schema');
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
 type ResolvedAyahText = import('../../../src/unicode').ResolvedAyahText;
 
@@ -105,7 +109,7 @@ const at = (seconds: number) => {
 };
 
 describe('<MushafAyahText>', () => {
-  it('plays one Sequence per timed ayah, from the lead-in before its first word to where the next comes in', () => {
+  it('plays one Sequence per timed ayah, each change after the last word, the two overlapping only by the dissolve', () => {
     const root = mount();
     const all = sequences(root);
     expect(all.map((s) => s.dataset.sequence)).toEqual([
@@ -116,20 +120,41 @@ describe('<MushafAyahText>', () => {
       'Ayah 1:6',
       'Ayah 1:7',
     ]);
-    const lead = defaultMushafAyahTextProps.animation.leadInSeconds;
-    const fromOf = (start: number) => Math.max(0, Math.round((start - lead) * 30));
-    const starts = resolved.ayahs.map((a) => a.start);
-    expect(all.map((s) => Number(s.dataset.from))).toEqual(starts.map(fromOf));
-    expect(all.map((s) => Number(s.dataset.duration))).toEqual(
-      starts.map((start, i) => (i < starts.length - 1 ? fromOf(starts[i + 1]!) : 900) - fromOf(start)),
+    const plans = ayahTextPlan({
+      timings: resolved.timings,
+      clips: resolved.clips ?? clipTimeline(resolved.timings, defaultMushafAyahTextProps.memorize),
+      markers: markerIds(resolved.ayahs),
+      fps: 30,
+      leadInSeconds: defaultMushafAyahTextProps.animation.leadInSeconds,
+      tempo: 'calm',
+      motion: 'fade',
+    });
+    expect(all.map((s) => [Number(s.dataset.from), Number(s.dataset.duration)])).toEqual(
+      plans.map((plan) => [plan.from, plan.durationInFrames]),
     );
     expect(all.every((s) => s.dataset.premount === '30')).toBe(true);
-    // No two ayahs share a frame.
-    for (let i = 1; i < all.length; i++) {
-      expect(Number(all[i]!.dataset.from)).toBe(
-        Number(all[i - 1]!.dataset.from) + Number(all[i - 1]!.dataset.duration),
-      );
+    // The first ayah is settled the lead-in before its first word, after a 24-frame appearance.
+    const firstWord = resolved.timings.ayat[0]!.words![0]!.start;
+    expect(plans[0]!.from).toBe(Math.max(0, Math.round((firstWord - 0.4) * 30) - 24));
+    for (let i = 1; i < plans.length; i++) {
+      const outgoing = resolved.timings.ayat[i - 1]!;
+      const lastEnd = outgoing.words![outgoing.words!.length - 1]!.end;
+      // Late, never early: the change starts once the outgoing ayah's last word has ended.
+      expect(plans[i]!.enter.start).toBeGreaterThanOrEqual(Math.ceil(lastEnd * 30 - 1e-6));
+      // The two overlap only over the change, and are never both at reading strength.
+      const before = plans[i - 1]!;
+      expect(plans[i]!.from).toBeLessThan(before.from + before.durationInFrames);
+      for (let f = plans[i]!.enter.start; f <= plans[i]!.enter.start + plans[i]!.enter.duration; f++) {
+        const out = ayahPresence(before, f).opacity;
+        const into = ayahPresence(plans[i]!, f).opacity;
+        expect(Math.min(out, into)).toBeLessThanOrEqual(0.2);
+        expect(out + into).toBeGreaterThanOrEqual(0.15);
+      }
     }
+    // The last holds 1.5 s after the last word, then fades over a second: the composition ends there.
+    const last = plans[plans.length - 1]!;
+    expect(last.exit).toMatchObject({duration: 30, last: true});
+    expect(last.exit.start + 30).toBe(last.from + last.durationInFrames);
     expect(ayahBlock(root, '1:7').textContent).toContain('٧');
   });
 
@@ -147,12 +172,13 @@ describe('<MushafAyahText>', () => {
 
   it('paints the page and sets the ayah in the loaded font, centred in the margins at verticalAlign', () => {
     const root = mount({layout: {marginX: 100, verticalAlign: 0.3}, fontSize: 80, lineHeight: 2});
-    expect((root.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(16, 20, 24)');
+    expect((root.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(18, 20, 22)');
     const block = ayahBlock(root, '1:2');
     expect(block.style.fontFamily).toBe('mushaf-uthmanic-hafs');
     expect(block.style.fontSize).toBe('80px');
     expect(block.style.lineHeight).toBe('2');
-    expect(block.style.maxWidth).toBe('880px');
+    // 78 % of the frame, inside the margins.
+    expect(block.style.maxWidth).toBe('842px');
     expect(block.style.visibility).toBe('');
     const frame = block.parentElement!.parentElement!;
     expect(frame.style.left).toBe('100px');
@@ -170,58 +196,70 @@ describe('<MushafAyahText>', () => {
     at(5);
     const root = mount();
     const style = (key: string) => ayahBlock(root, key).parentElement!.style;
-    expect(style('1:3').opacity).toBe('1');
-    expect(style('1:3').transform).toBe('translateY(0.0000px)');
+    // Settled: no opacity of its own.
+    expect(style('1:3').opacity).toBe('');
+    // A dissolve: nothing moves.
+    expect(style('1:3').transform).toBe('');
     expect(style('1:2').opacity).toBe('0');
     expect(style('1:4').opacity).toBe('0');
     cleanup();
-    const still = mount({animation: {enter: 'none', exit: 'none'}});
+    const rise = mount({animation: {lines: 'rise'}});
+    // Risen into place: no transform left.
+    expect(ayahBlock(rise, '1:3').parentElement!.style.transform).toBe('');
+    cleanup();
+    const still = mount({animation: {lines: 'cut'}});
     expect(ayahBlock(still, '1:4').parentElement!.style.opacity).toBe('');
   });
 
-  it('highlights the word being recited and only that one', () => {
+  it('tints the word being recited in the accent read on the dark page, and only that one', () => {
     at(5); // 1:3:2 is heard from 4.563 to 5.693
-    const root = mount({highlight: {style: 'color', color: '#c8a45c'}});
+    const root = mount({highlight: {style: 'tint', color: '#c8a45c'}});
     const active = root.querySelectorAll<HTMLElement>('.mushaf-uword--active');
     expect(Array.from(active).map((s) => s.dataset.location)).toEqual(['1:3:2']);
-    expect(active[0]!.style.color).toBe('rgb(200, 164, 92)');
+    const accent = parseColor(legibleAccent('#c8a45c', '#121416'))!;
+    expect(active[0]!.style.color).toBe(`rgb(${accent.r}, ${accent.g}, ${accent.b})`);
     expect(word(root, '1:3:1').style.color).toBe('');
+    expect(word(root, '1:3:3').style.color).toBe('');
   });
 
-  it('glows or marks the word, as highlight.style says', () => {
+  it('washes the word being recited, faintly', () => {
     at(5);
-    const glow = mount({highlight: {style: 'glow', color: '#c8a45c'}});
-    expect(word(glow, '1:3:2').style.textShadow).toContain('0.25em');
-    cleanup();
-    const marker = mount({highlight: {style: 'marker', color: '#c8a45c'}});
-    expect(word(marker, '1:3:2').style.background).toContain('rgba(200, 164, 92, 0.35)');
+    const wash = mount({highlight: {style: 'wash', color: '#c8a45c'}});
+    // Drawn behind the text from where the word's ink is, not as the word's own background.
+    expect(word(wash, '1:3:2').style.backgroundImage).toBe('');
+    const bands = [...wash.querySelectorAll<HTMLElement>('[data-mushaf-word-band]')];
+    expect(bands).toHaveLength(1);
+    const strength = /, ([\d.]+)\)$/.exec(washColor('#c8a45c', 0.09))![1];
+    expect(bands[0]!.style.backgroundImage).toContain(`, ${strength}) `);
+    // The block isolates the bands under its text.
+    expect(wash.querySelector<HTMLElement>('.mushaf-ayah-text')!.style.isolation).toBe('isolate');
+    expect(bands[0]!.parentElement!.style.zIndex).toBe('-1');
   });
 
-  it('paints the whole ayah under mode "ayah", and nothing under mode "none"', () => {
+  it('marks nothing under mode "ayah" (the ayah on screen is the one recited), nor under mode "none"', () => {
     at(5);
-    const ayah = mount({highlight: {mode: 'ayah'}});
-    expect(ayah.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
-    for (const id of ['1:3:1', '1:3:2', '1:3:3']) expect(word(ayah, id).style.color).toBe('rgb(200, 164, 92)');
-    expect(word(ayah, '1:4:1').style.color).toBe('');
-    cleanup();
-    const none = mount({highlight: {mode: 'none', dimOthers: 0.3}});
-    expect(none.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
-    expect(word(none, '1:3:1').style.opacity).toBe('');
+    for (const mode of ['ayah', 'none'] as const) {
+      for (const style of ['ink', 'tint', 'wash'] as const) {
+        const root = mount({highlight: {mode, style}});
+        expect(root.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
+        // Only the word's own box: no opacity, colour or band.
+        for (const id of ['1:3:1', '1:3:2', '1:3:3', '1:4:1'])
+          expect(word(root, id).getAttribute('style')).toBe('display: inline-block;');
+        cleanup();
+      }
+    }
   });
 
-  it('dims the other words, or only those still to come (the marker at its ayah’s end)', () => {
+  it('rests the words still to come in ink and fills each in as heard (the marker at its ayah’s end)', () => {
     at(5);
-    const all = mount({highlight: {dimOthers: 0.4}});
-    expect(word(all, '1:3:2').style.opacity).toBe('');
-    expect(word(all, '1:3:1').style.opacity).toBe('0.4');
-    expect(word(all, '1:2:1').style.opacity).toBe('0.4');
+    const ink = mount();
+    expect(word(ink, '1:2:1').style.opacity).toBe('');
+    expect(word(ink, '1:3:1').style.opacity).toBe('');
+    expect(word(ink, '1:3:2').style.opacity).toBe('');
+    expect(word(ink, '1:3:3').style.opacity).toBe('0.6');
+    expect(word(ink, '1:4:1').style.opacity).toBe('0.6');
     cleanup();
-    const upcoming = mount({highlight: {dimOthers: 0.4, dimUpcomingOnly: true}});
-    expect(word(upcoming, '1:2:1').style.opacity).toBe('');
-    expect(word(upcoming, '1:3:1').style.opacity).toBe('');
-    expect(word(upcoming, '1:3:2').style.opacity).toBe('');
-    expect(word(upcoming, '1:3:3').style.opacity).toBe('0.4');
-    expect(word(upcoming, '1:4:1').style.opacity).toBe('0.4');
+    expect(word(mount({highlight: {restOpacity: 0.8}}), '1:3:3').style.opacity).toBe('0.8');
   });
 
   it('shows the translation of each ayah under it only when one is loaded', () => {
@@ -263,7 +301,13 @@ describe('<MushafAyahText>', () => {
     remotion.state.frame = 120; // 4 s: ayah 3
     const c = mount({overlay: both, highlight: {mode: 'none'}});
     expect(c.querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
-    expect(c.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Fatihah · 1:3');
+    expect(c.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Fatihah · 3');
+    cleanup();
+    // With the jadwal drawn the corner label sits inside its inner rule.
+    const ruled = mount({overlay: both, layout: {frame: 'hairline'}});
+    const {safe} = frameGeometry(remotion.state.width, remotion.state.height, {jadwal: true});
+    expect(ruled.querySelector('[data-mushaf-jadwal]')).not.toBeNull();
+    expect(ruled.querySelector<HTMLElement>('[data-mushaf-overlay="corner"]')!.style.right).toBe(`${safe}px`);
   });
 
   it('refuses to render without resolved, saying how to fill it', () => {
@@ -283,6 +327,11 @@ describe('<MushafAyahText>', () => {
     expect(panel.dataset.panel).toBe('MushafAyahText');
     expect(panel.dataset.textFile).toBe('mushaf-studio/p/text-uthmani-1-2-7.json');
     expect(studio.querySelectorAll('[data-sequence]')).toHaveLength(6);
+    cleanup();
+    // In a drop-in slot (`panel={false}`) the slot docks the panel, not the composition.
+    const inSlot = render(<MushafAyahText {...defaultMushafAyahTextProps} resolved={resolved} panel={false} />);
+    expect(inSlot.container.querySelector('[data-panel]')).toBeNull();
+    expect(inSlot.container.querySelectorAll('[data-sequence]')).toHaveLength(6);
     cleanup();
     // The Studio's own in-browser render: `isStudio` stays set, `isClientSideRendering` comes through the hook.
     remotion.state.isClientSideRendering = true;

@@ -1,10 +1,15 @@
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
+import {followsHostAudio} from '../audio/host';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../compositions/extras';
-import {recitationDuration} from '../compositions/recitation/calculate-metadata';
+import {
+  type ResolvedProps,
+  type ResolvePropsOptions,
+  recitationDuration,
+} from '../compositions/recitation/calculate-metadata';
 import {STUDIO_FPS} from '../compositions/shared';
-import {sizeForAspect} from '../schema';
+import {migrateMushafProps, sizeForAspect} from '../schema';
 import {PAGE_LEAD_IN_SECONDS, type ResolvedPage, resolvePage, skipPageStart} from './resolve';
-import type {MushafPageProps} from './schema';
+import {defaultMushafPageProps, type MushafPageProps} from './schema';
 
 /**
  * The audio cleanup of a resolved page (`resolveAudioCleanup()`): its gain, levels and the silence
@@ -22,7 +27,6 @@ export const withPageAudio = async (
   const {audio, warning, src} = await resolveAudioCleanup({
     audioFile: props.audioFile,
     audio: props.audio,
-    background: props.background,
     offsetSeconds: resolved.audioOffsetSeconds,
     latestSeconds: (resolved.lines[0]?.start ?? 0) - PAGE_LEAD_IN_SECONDS,
     endSeconds: timings.ayat[timings.ayat.length - 1]!.end,
@@ -30,6 +34,7 @@ export const withPageAudio = async (
     staticFile,
     signal: options.signal,
     sidecar: timings.alignment,
+    hostAudio: followsHostAudio(props),
   });
   return {
     ...skipPageStart(resolved, audio.trimSeconds, props.pageView.turnSeconds),
@@ -40,21 +45,37 @@ export const withPageAudio = async (
 };
 
 /**
- * `calculateMetadata` for `<Composition id="MushafPage">`: `resolved` (the pages, the translations,
- * the audio's analysis when `audio` or the background's glow needs it, the end card's content, a
- * background video's length), width and height from the aspect, duration from the timings (the
- * last ayah's end plus a second) plus the end card's seconds. `abortSignal` reaches every fetch.
+ * `resolved` of `<MushafPage>` and its length at `fps`, the props migrated first (`migrateMushafProps()`): the pages, the translations, the audio's
+ * analysis when `audio` needs it, the end card's content, a background
+ * video's length; the duration from the timings (the last ayah's end plus a second) plus the end
+ * card's seconds. No size.
  */
-export const calculateMushafPageMetadata: CalculateMetadataFunction<MushafPageProps> = async ({props, abortSignal}) => {
-  const content = await resolvePage(props, {signal: abortSignal});
+export const resolvePageProps = async (
+  saved: MushafPageProps,
+  options: ResolvePropsOptions,
+): Promise<ResolvedProps<MushafPageProps>> => {
+  const {fps, signal} = options;
+  // First: props saved by an earlier Mushaf Studio (or sent by a host) render the current design.
+  const props = migrateMushafProps<MushafPageProps>(saved, {defaults: defaultMushafPageProps});
+  const content = await resolvePage(props, {signal});
   const [resolved, backgroundVideoSeconds] = await Promise.all([
-    withPageAudio(props, content, {fps: STUDIO_FPS, signal: abortSignal}),
+    withPageAudio(props, content, {fps, signal}),
     backgroundVideoSecondsFor(props.background, staticFile),
   ]);
   return {
     props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
-    ...sizeForAspect(props.layout.aspect),
-    fps: STUDIO_FPS,
-    durationInFrames: recitationDuration(resolved.timings, STUDIO_FPS) + endCardFrames(props.endCard, STUDIO_FPS),
+    durationInFrames: recitationDuration(resolved.timings, fps) + endCardFrames(props.endCard, fps),
   };
+};
+
+/**
+ * `calculateMetadata` for `<Composition id="MushafPage">`: `resolvePageProps()` at 30 fps
+ * (`resolved`: the pages, the translations, the audio's analysis when `audio`
+ * needs it, the end card's content, a background video's length; the duration from the
+ * timings plus the end card's seconds), width and height from the aspect. `abortSignal` reaches
+ * every fetch.
+ */
+export const calculateMushafPageMetadata: CalculateMetadataFunction<MushafPageProps> = async ({props, abortSignal}) => {
+  const resolved = await resolvePageProps(props, {fps: STUDIO_FPS, signal: abortSignal});
+  return {...resolved, ...sizeForAspect(resolved.props.layout.aspect), fps: STUDIO_FPS};
 };

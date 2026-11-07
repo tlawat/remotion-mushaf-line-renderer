@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import {Sequence, useVideoConfig} from 'remotion';
+import {assertCssColor} from '../mushaf/colors';
 import {assertSurahNumber, DEFAULT_MUSHAF, getMushafDefinition} from '../mushaf/registry';
 import type {MushafSurahNameProps} from '../types';
 import {GlyphRenderer, surahHeaderItems} from './GlyphRenderer';
@@ -14,6 +15,7 @@ import {fontSizeForWidth, lineHeightForFontSize} from './styles';
 export const MushafSurahName: React.FC<MushafSurahNameProps> = ({
   surah,
   framed = true,
+  frameColor,
   mushaf,
   fontSize,
   lineHeight,
@@ -27,13 +29,14 @@ export const MushafSurahName: React.FC<MushafSurahNameProps> = ({
 }) => {
   const def = getMushafDefinition(mushaf ?? DEFAULT_MUSHAF);
   assertSurahNumber(surah);
+  if (frameColor !== undefined) assertCssColor('<MushafSurahName frameColor>', frameColor);
   const {width} = useVideoConfig();
   const baseFontSize = fontSize ?? fontSizeForWidth(width, def.id);
   const resolvedLineHeight = lineHeight ?? lineHeightForFontSize(baseFontSize);
   const body = (
     <GlyphRenderer
       def={def}
-      items={surahHeaderItems(def, surah, baseFontSize, framed)}
+      items={surahHeaderItems(def, surah, baseFontSize, framed, frameColor)}
       lineHeight={resolvedLineHeight}
       enter={enter}
       exit={exit}

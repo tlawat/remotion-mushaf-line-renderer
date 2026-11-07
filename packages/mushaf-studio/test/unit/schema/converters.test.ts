@@ -3,10 +3,9 @@ import {fade} from '@remotion/transitions/fade';
 import {
   enterTiming,
   exitTiming,
+  fadeRise,
   type MushafFontPackage,
   type MushafLineAnimation,
-  revealRtl,
-  slideFade,
   type WordContext,
 } from '@tlawat/remotion-mushaf-line';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -18,21 +17,40 @@ import {
   recitationDuration,
 } from '../../../src/compositions/recitation';
 import {registerMushafFonts} from '../../../src/fonts';
+import {audioClock, clipTimeline} from '../../../src/memorize';
 import * as schema from '../../../src/schema';
 import {
   activeWordStyleFrom,
   animationFrom,
   dataSchema,
   dataSourceFrom,
+  defaultCustomTheme,
   defaultHighlight,
   defaultLayout,
+  defaultMemorize,
   defaultReview,
   defaultText,
+  drawsWordBand,
+  effectiveNeighbourOpacity,
+  effectiveRestOpacity,
   fontPropsFrom,
+  frameGeometry,
   type Highlight,
+  inkTintFor,
+  markerIds,
+  riseDistance,
+  SINE,
+  SOFT,
   scrollTimingFrom,
   sizeForAspect,
+  studioFontFamily,
+  studioFontStyle,
   themeSelectionFrom,
+  tintPath,
+  washColor,
+  washStyle,
+  windowScrollTiming,
+  wordBandFrom,
   wordStyleFrom,
 } from '../../../src/schema';
 import {withAlpha} from '../../../src/schema/highlight';
@@ -61,52 +79,92 @@ describe('dataSchema / dataSourceFrom', () => {
 });
 
 describe('animationFrom', () => {
-  it('maps every entrance to a presentation on the package default timings', () => {
-    const slide = animationFrom({enter: 'slide-fade', exit: 'slide-fade'});
-    expect(asAnimation(slide.enter)?.presentation.component).toBe(slideFade().component);
-    expect(asAnimation(slide.exit)?.presentation.component).toBe(slideFade().component);
-    expect(asAnimation(slide.enter)?.presentation.props).toEqual({});
-    expect(framesOf(asAnimation(slide.enter))).toBe(enterTiming().getDurationInFrames({fps}));
-    expect(framesOf(asAnimation(slide.exit))).toBe(exitTiming().getDurationInFrames({fps}));
-    expect([framesOf(asAnimation(slide.enter)), framesOf(asAnimation(slide.exit))]).toEqual([15, 10]);
-
-    const faded = animationFrom({enter: 'fade', exit: 'fade'});
+  it('dissolves on both sides for fade, on the package default lengths and the calm curves', () => {
+    const faded = animationFrom({lines: 'fade'});
     expect(asAnimation(faded.enter)?.presentation.component).toBe(fade().component);
     expect(asAnimation(faded.enter)?.presentation.props).toEqual({});
     // fade() keeps the exiting side visible unless told otherwise.
     expect(asAnimation(faded.exit)?.presentation.props).toEqual({shouldFadeOutExitingScene: true});
-
-    const reveal = animationFrom({enter: 'reveal-rtl', exit: 'reveal-rtl'});
-    expect(asAnimation(reveal.enter)?.presentation.component).toBe(revealRtl().component);
+    expect([framesOf(asAnimation(faded.enter)), framesOf(asAnimation(faded.exit))]).toEqual([
+      enterTiming().getDurationInFrames({fps}),
+      exitTiming().getDurationInFrames({fps}),
+    ]);
+    // In on SOFT, out on SINE: half way through the entrance is SOFT(0.5).
+    expect(asAnimation(faded.enter)?.timing?.getProgress({frame: 7.5, fps})).toBeCloseTo(SOFT(0.5), 6);
+    expect(asAnimation(faded.exit)?.timing?.getProgress({frame: 5, fps})).toBeCloseTo(SINE(0.5), 6);
   });
 
-  it("leaves a side set to 'none' out, never undefined, so the result spreads into the component", () => {
-    expect(animationFrom({enter: 'none', exit: 'none'})).toEqual({});
-    const half = animationFrom({enter: 'slide-fade', exit: 'none'});
-    expect(Object.keys(half)).toEqual(['enter']);
+  it('rises the entering line a few px on a linear timing for rise, and leaves it unmoved', () => {
+    const rise = animationFrom({lines: 'rise'}, {fontSize: 90});
+    expect(asAnimation(rise.enter)?.presentation.component).toBe(fadeRise({distance: 1}).component);
+    expect(asAnimation(rise.enter)?.presentation.props).toEqual({distance: 11});
+    // fadeRise() has its own curves: the timing is linear, so nothing eases twice.
+    expect(asAnimation(rise.enter)?.timing?.getProgress({frame: 7.5, fps})).toBeCloseTo(0.5, 6);
+    expect(asAnimation(rise.exit)?.presentation.component).toBe(fade().component);
+    expect(riseDistance(52)).toBe(6);
+    expect(riseDistance(200)).toBe(12);
   });
 
-  it('divides the slide travel by the window height so it stays one line', () => {
-    const inWindow = animationFrom({enter: 'slide-fade', exit: 'slide-fade'}, {visibleLines: 4});
-    expect(asAnimation(inWindow.enter)?.presentation.props).toEqual({distance: 7});
-    expect(asAnimation(inWindow.exit)?.presentation.props).toEqual({distance: 7});
-    expect(
-      asAnimation(animationFrom({enter: 'slide-fade', exit: 'none'}, {visibleLines: 1}).enter)?.presentation.props,
-    ).toEqual({});
+  it('has neither side for cut, so the result spreads into the component', () => {
+    expect(animationFrom({lines: 'cut'})).toEqual({});
+    expect(animationFrom({lines: 'cut'}, {enterFrames: 14, exitFrames: 10})).toEqual({});
+  });
+
+  it('runs at the lengths of the boundary it is given, the first appearance on SINE', () => {
+    // A 20-frame line dissolve: the outgoing line over 10 frames, the incoming one over the last 14.
+    const line = animationFrom({lines: 'fade'}, {enterFrames: 14, exitFrames: 10});
+    expect([framesOf(asAnimation(line.enter)), framesOf(asAnimation(line.exit))]).toEqual([14, 10]);
+    expect(asAnimation(line.enter)?.timing?.getProgress({frame: 7, fps})).toBeCloseTo(SOFT(0.5), 6);
+    const first = animationFrom({lines: 'fade'}, {enterFrames: 24, enterEasing: SINE});
+    expect(asAnimation(first.enter)?.timing?.getProgress({frame: 12, fps})).toBeCloseTo(SINE(0.5), 6);
+    const rise = animationFrom({lines: 'rise'}, {fontSize: 52, enterFrames: 24, enterEasing: SINE});
+    expect(asAnimation(rise.enter)?.presentation.props).toEqual({distance: 6, easing: SINE});
+    expect(framesOf(asAnimation(rise.enter))).toBe(24);
+  });
+});
+
+describe('windowScrollTiming', () => {
+  it('is the calm scroll at the tempo, and a jump under cut', () => {
+    expect(windowScrollTiming({lines: 'fade', tempo: 'calm'}).getDurationInFrames({fps})).toBe(24);
+    expect(windowScrollTiming({lines: 'rise', tempo: 'slow'}).getDurationInFrames({fps})).toBe(34);
+    expect(windowScrollTiming({lines: 'fade', tempo: 'calm'}, 60).getDurationInFrames({fps: 60})).toBe(48);
+    const cut = windowScrollTiming({lines: 'cut', tempo: 'calm'});
+    expect(cut.getDurationInFrames({fps})).toBe(0);
+    expect(cut.getProgress({frame: 0, fps})).toBe(1);
+  });
+});
+
+describe('frameGeometry / studioFontStyle', () => {
+  it('gives the safe area, the label size, the hairline unit and the vertical frame’s bands', () => {
+    expect(frameGeometry(1920, 1080)).toEqual({safe: 54, label: 26, unit: 1, top: 54, bottom: 54});
+    expect(frameGeometry(1080, 1920)).toEqual({safe: 54, label: 37, unit: 1, top: 230, bottom: 346});
+    expect(frameGeometry(1080, 1080).label).toBe(26);
+    expect(frameGeometry(1080, 1350)).toMatchObject({label: 32, top: 54, bottom: 54});
+    expect(frameGeometry(3840, 2160)).toMatchObject({safe: 108, unit: 2});
+  });
+
+  it('sets auto in EB Garamond: 500 for translations and labels, 400 italic for the gloss', () => {
+    expect(studioFontStyle('auto', 'translation')).toEqual({
+      fontFamily: studioFontFamily('auto', 'translation'),
+      fontWeight: 500,
+    });
+    expect(studioFontStyle(' Auto ', 'label').fontWeight).toBe(500);
+    expect(studioFontStyle('auto', 'gloss')).toMatchObject({fontWeight: 400, fontStyle: 'italic'});
+    expect(studioFontStyle('auto', 'gloss').fontFamily).toMatch(/^"EB Garamond"/);
+    expect(studioFontStyle('Lora, serif', 'gloss')).toEqual({fontFamily: 'Lora, serif'});
   });
 });
 
 describe('scrollTimingFrom', () => {
-  it('is the eased default for ease and the package spring for spring', () => {
-    const ease = scrollTimingFrom('ease');
-    const spring = scrollTimingFrom('spring');
-    expect(ease.getDurationInFrames({fps})).toBe(15);
-    expect(spring.getDurationInFrames({fps})).toBeGreaterThan(0);
-    expect(spring.getDurationInFrames({fps})).not.toBe(15);
-    for (const timing of [ease, spring]) {
-      expect(timing.getProgress({frame: 0, fps})).toBe(0);
-      expect(timing.getProgress({frame: timing.getDurationInFrames({fps}), fps})).toBeCloseTo(1, 1);
-    }
+  it('is the calm scroll: 24 frames on INOUT, 34 slow, no lurch and no overshoot', () => {
+    const calm = scrollTimingFrom();
+    expect(calm.getDurationInFrames({fps})).toBe(24);
+    expect(scrollTimingFrom('slow').getDurationInFrames({fps})).toBe(34);
+    expect(calm.getProgress({frame: 0, fps})).toBe(0);
+    expect(calm.getProgress({frame: 1, fps})).toBeCloseTo(0.003, 3);
+    expect(calm.getProgress({frame: 12, fps})).toBeCloseTo(0.5, 2);
+    expect(calm.getProgress({frame: 24, fps})).toBe(1);
+    expect(calm.getProgress({frame: 40, fps})).toBe(1);
   });
 });
 
@@ -202,12 +260,54 @@ describe('withAlpha / activeWordStyleFrom', () => {
     expect('withAlpha' in schema).toBe(false);
   });
 
-  it('paints the ink, a glow, a marker, or nothing', () => {
+  it('migrates its argument and gives the mark at full emphasis: none for ink, the legible tint, a lone wash', () => {
     const color = '#c8a45c';
-    expect(activeWordStyleFrom({style: 'color', color})).toEqual({color});
-    expect(activeWordStyleFrom({style: 'glow', color})).toEqual({color, textShadow: '0 0 0.25em #c8a45c'});
-    expect(activeWordStyleFrom({style: 'marker', color})).toEqual({background: 'rgba(200, 164, 92, 0.35)'});
+    expect(activeWordStyleFrom({style: 'ink', color})).toBeUndefined();
+    expect(activeWordStyleFrom({style: 'tint', color})).toEqual({color: '#816321'});
+    // The old styles: a colour or a glow is a tint now, a marker a wash, none nothing.
+    expect(activeWordStyleFrom({style: 'color', color})).toEqual({color: '#816321'});
+    expect(activeWordStyleFrom({style: 'glow', color})).toEqual({color: '#816321'});
+    expect(activeWordStyleFrom({style: 'marker', color})).toEqual(
+      washStyle({color: washColor(color, 0.1), cap: 'both'}),
+    );
     expect(activeWordStyleFrom({style: 'none', color})).toBeUndefined();
+    // On a dark ground the tint is lightened instead.
+    expect(activeWordStyleFrom({style: 'tint', color: '#b8913a'}, '#121416')).toEqual({color: '#b19353'});
+  });
+});
+
+describe('tintPath / effectiveRestOpacity / effectiveNeighbourOpacity / inkTintFor', () => {
+  it('paints a tint in CSS under plain, as a wash on tajweed colours, else through the line palettes', () => {
+    expect(tintPath('plain')).toBe('css');
+    // normal follows the text colour only as its palette rule resolves it: a word's color cannot reach it.
+    expect(tintPath('normal')).toBe('palette');
+    expect(tintPath(themeSelectionFrom('custom', defaultCustomTheme))).toBe('palette');
+    for (const theme of ['light', 'dark', 'sepia', 'p1', 'p2'] as const) expect(tintPath(theme), theme).toBe('wash');
+    for (const theme of ['black', 'p3', 'p4', 'p5'] as const) expect(tintPath(theme), theme).toBe('palette');
+    const ownInk = {...defaultCustomTheme, override: {...defaultCustomTheme.override, ink: true}};
+    expect(tintPath(themeSelectionFrom('custom', ownInk))).toBe('palette');
+  });
+
+  it('raises the rest to 0.65 on tajweed themes, and keeps the neighbours 0.2 under it under ink', () => {
+    const ink = {...defaultHighlight, restOpacity: 0.5};
+    expect(effectiveRestOpacity(ink, 'plain')).toBe(0.5);
+    expect(effectiveRestOpacity(ink, 'light')).toBe(0.65);
+    expect(effectiveRestOpacity({restOpacity: 0.8}, 'light')).toBe(0.8);
+    expect(effectiveNeighbourOpacity(0.45, ink, 'plain')).toBe(0.3);
+    expect(effectiveNeighbourOpacity(0.45, ink, 'light')).toBe(0.45);
+    expect(effectiveNeighbourOpacity(0.3, defaultHighlight, 'plain')).toBe(0.3);
+    expect(effectiveNeighbourOpacity(0.45, {...ink, style: 'wash'}, 'plain')).toBe(0.45);
+    expect(effectiveNeighbourOpacity(0.45, {...ink, mode: 'none'}, 'plain')).toBe(0.45);
+  });
+
+  it('gives a line its inkTint only for a tint painted through palettes', () => {
+    const tint = {...defaultHighlight, style: 'tint' as const};
+    expect(inkTintFor(tint, 'black', '#121416')).toBe('#b19353');
+    expect(inkTintFor(tint, themeSelectionFrom('custom', defaultCustomTheme), '#f8f3e6')).toBe('#806321');
+    expect(inkTintFor(tint, 'plain', '#f8f3e6')).toBeUndefined();
+    expect(inkTintFor(tint, 'light', '#f8f3e6')).toBeUndefined();
+    expect(inkTintFor(defaultHighlight, 'black', '#121416')).toBeUndefined();
+    expect(inkTintFor({...tint, mode: 'none'}, 'black', '#121416')).toBeUndefined();
   });
 });
 
@@ -221,119 +321,248 @@ describe('wordStyleFrom', () => {
     (typeof line.words)[number],
   ];
   const w4 = other.words[0]!;
+  const timings = {
+    version: 1 as const,
+    surah: 1,
+    ayat: [
+      {
+        ayah: 1,
+        start: 0,
+        end: 3,
+        words: [
+          {id: '1:1:1', start: 0, end: 1},
+          {id: '1:1:2', start: 1, end: 2},
+          {id: '1:1:3', start: 2, end: 3},
+        ],
+      },
+      {
+        ayah: 2,
+        start: 4,
+        end: 6,
+        words: [
+          {id: '1:2:1', start: 4, end: 5},
+          {id: '1:2:2', start: 5, end: 6},
+        ],
+      },
+    ],
+  };
   const timingsIndex = {'1:1:1': 0, '1:1:2': 1, '1:1:3': 2, '1:2:1': 4};
-  const ctx = (frame: number, active = false): WordContext => ({line, frame, fps, active, inSlice: true});
-  const base = {review: defaultReview, doubtful: {}, timingsIndex, activeWordId: null, isStudio: false};
+  const ctx = (frame: number, changes: Partial<WordContext> = {}): WordContext => ({
+    line,
+    frame,
+    fps,
+    active: false,
+    inSlice: true,
+    linePosition: 0,
+    ...changes,
+  });
+  const base = {review: defaultReview, doubtful: {}, timingsIndex, timings, isStudio: false};
   const highlight = (changes: Partial<Highlight>): Highlight => ({...defaultHighlight, ...changes});
+  const ink = '#1c1a16';
 
-  it('paints nothing when nothing applies', () => {
-    const style = wordStyleFrom({...base, highlight: highlight({dimOthers: 1})});
-    expect(style(w1, ctx(0))).toBeUndefined();
-    expect(style(w1, ctx(0, true))).toBeUndefined();
-  });
-
-  it('dims every word that is not current', () => {
-    const style = wordStyleFrom({...base, highlight: highlight({dimOthers: 0.4}), activeWordId: '1:1:2'});
-    expect(style(w1, ctx(0))).toEqual({opacity: 0.4});
-    expect(style(w2, ctx(0, true))).toBeUndefined();
-    // Highlighting off: nothing is current, so nothing is dimmed either.
-    expect(wordStyleFrom({...base, highlight: highlight({mode: 'none', dimOthers: 0.4})})(w1, ctx(0))).toBeUndefined();
-  });
-
-  it('dims only the words still to come under dimUpcomingOnly, by the time the local frame maps to', () => {
-    const style = wordStyleFrom({...base, highlight: highlight({dimOthers: 0.4, dimUpcomingOnly: true})});
-    // 1 s: 1:1:1 (0 s) and 1:1:2 (1 s) were heard, 1:1:3 (2 s) has not.
-    expect(style(w1, ctx(30))).toBeUndefined();
-    expect(style(w2, ctx(30))).toBeUndefined();
-    expect(style(w3, ctx(30))).toEqual({opacity: 0.4});
+  it('ink: rests the words still to come at restOpacity and fills each in as it is heard', () => {
+    const style = wordStyleFrom({...base, highlight: highlight({})});
+    // 1.5 s: 1:1:1 and 1:1:2 are heard, 1:1:3 (2 s) and the next ayah are still to come.
+    expect(style(w1, ctx(45))).toBeUndefined();
+    expect(style(w2, ctx(45))).toBeUndefined();
+    expect(style(w3, ctx(45))).toEqual({opacity: 0.6});
+    expect(style(w4, ctx(45))).toEqual({opacity: 0.6});
+    // The fill over 6 frames from the word's start, on SOFT.
+    expect(style(w3, ctx(61))).toEqual({opacity: Math.round((0.6 + 0.4 * SOFT(1 / 6)) * 10_000) / 10_000});
+    expect(style(w3, ctx(63))?.opacity).toBeGreaterThan(style(w3, ctx(61))!.opacity as number);
+    expect(style(w3, ctx(66))).toBeUndefined();
     // The Sequence starts at frame 60: local frame 30 is 3 s of audio.
-    const offset = wordStyleFrom({
-      ...base,
-      highlight: highlight({dimOthers: 0.4, dimUpcomingOnly: true}),
-      sequenceFrom: 60,
-    });
+    const offset = wordStyleFrom({...base, highlight: highlight({}), sequenceFrom: 60});
     expect(offset(w3, ctx(30))).toBeUndefined();
-    expect(offset(w4, ctx(30))).toEqual({opacity: 0.4});
-    // A word the file never times is not known to be upcoming.
-    const untimed = wordStyleFrom({
+    expect(offset(w4, ctx(30))).toEqual({opacity: 0.6});
+  });
+
+  it('ink and marks under repeats: a new play eases from the previous play’s, never in one frame', () => {
+    // Ayah 1 (0-3 s) twice, half a second apart: play 2 from 3.5 s (f105), the recording back at 0 s.
+    const clips = clipTimeline(timings, {mode: 'repeat', repeat: 2, pauseSeconds: 0.5});
+    expect(clips[1]!.compositionFrom).toBe(3.5);
+    const repeated = {...base, memorize: {settings: {...defaultMemorize, mode: 'repeat' as const}, clips}};
+    const inkStyle = wordStyleFrom({...repeated, highlight: highlight({}), audioTime: audioClock(clips)});
+    const opacity = (frame: number) => Number(inkStyle(w2, ctx(frame))?.opacity ?? 1);
+    // 1:1:2 (heard at 1 s of each play) is at full ink at the end of play 1 and rests in play 2
+    // until its word: it goes back over rehide (12 frames) on SINE from the play's start.
+    expect(opacity(104)).toBe(1);
+    expect(opacity(105)).toBe(1);
+    expect(opacity(111)).toBeCloseTo(0.6 + 0.4 * (1 - SINE(0.5)), 4);
+    expect(opacity(117)).toBe(0.6);
+    expect(opacity(134)).toBe(0.6);
+    const largest = 0.4 * Math.max(...Array.from({length: 12}, (_, f) => SINE((f + 1) / 12) - SINE(f / 12)));
+    // (From f135 the word's own 6-frame fill takes it back to full ink.)
+    for (let frame = 96; frame <= 134; frame++) {
+      expect(Math.abs(opacity(frame) - opacity(frame - 1)), `f${frame}`).toBeLessThanOrEqual(largest + 1e-4);
+    }
+    // A wash the previous play ended on (1:1:2, the rosette named, held to its release) lets go over markOut.
+    const washBand = wordBandFrom({
+      ...repeated,
+      highlight: highlight({style: 'wash'}),
+      audioTime: audioClock(clips),
+      markers: markerIds([line]),
+    });
+    const washed = (frame: number) => washBand(w2, ctx(frame)) !== undefined;
+    expect(washed(104)).toBe(true);
+    expect(washed(105)).toBe(true);
+    expect(washed(110)).toBe(true);
+    expect(washed(115)).toBe(false);
+  });
+
+  it('ink: only the current line rests, by its distance from the centre slot, never compounding', () => {
+    const style = wordStyleFrom({...base, highlight: highlight({})});
+    expect(style(w3, ctx(45, {linePosition: 1}))).toBeUndefined();
+    expect(style(w3, ctx(45, {linePosition: -1.5}))).toBeUndefined();
+    expect(style(w3, ctx(45, {linePosition: 0.5}))).toEqual({opacity: 0.8});
+    expect(style(w3, ctx(45, {linePosition: -0.25}))).toEqual({opacity: 0.7});
+  });
+
+  it('ink: rests at 0.65 or more on a theme with tajweed colours, and a word nothing times is not dimmed', () => {
+    expect(wordStyleFrom({...base, theme: 'light', highlight: highlight({restOpacity: 0.5})})(w3, ctx(45))).toEqual({
+      opacity: 0.65,
+    });
+    const untimed = wordStyleFrom({...base, timings: undefined, timingsIndex: {}, highlight: highlight({})});
+    expect(untimed(w3, ctx(0))).toBeUndefined();
+  });
+
+  it("ink under mode ayah: every ayah but the one being recited rests; a word without a time takes its ayah's", () => {
+    const style = wordStyleFrom({...base, highlight: highlight({mode: 'ayah'})});
+    expect(style(w1, ctx(45))).toBeUndefined();
+    expect(style(w3, ctx(45))).toBeUndefined();
+    expect(style(w4, ctx(45))).toEqual({opacity: 0.6});
+    // Ayah 1 lets go at its release (3.25 s) over ayahMark: heard, it rests again.
+    expect(style(w1, ctx(150))).toEqual({opacity: 0.6});
+    // Without word times, mode word follows the ayahs.
+    const byAyah = wordStyleFrom({
       ...base,
       timingsIndex: {},
-      highlight: highlight({dimOthers: 0.4, dimUpcomingOnly: true}),
+      timings: {...timings, ayat: timings.ayat.map(({words: _words, ...ayah}) => ayah)},
+      highlight: highlight({mode: 'word'}),
     });
-    expect(untimed(w1, ctx(0))).toBeUndefined();
+    expect(byAyah(w3, ctx(45))).toBeUndefined();
+    expect(byAyah(w4, ctx(45))).toEqual({opacity: 0.6});
   });
 
-  it("falls back to the ayah's time for a word without one of its own under dimUpcomingOnly", () => {
-    const timings = {
-      version: 1 as const,
-      surah: 1,
-      ayat: [
-        {ayah: 1, start: 0, end: 3},
-        {ayah: 2, start: 4, end: 6},
-      ],
-    };
-    const dim = highlight({dimOthers: 0.4, dimUpcomingOnly: true});
-    // Nothing timed by word: a word is upcoming until its ayah starts, the marker until its ayah ends.
-    const byAyah = wordStyleFrom({...base, timingsIndex: {}, timings, highlight: dim});
-    expect(byAyah(w1, ctx(30))).toBeUndefined();
-    expect(byAyah(w2, ctx(30))).toBeUndefined();
-    expect(byAyah(w3, ctx(30))).toEqual({opacity: 0.4});
-    expect(byAyah(w3, ctx(90))).toBeUndefined();
-    expect(byAyah(w4, ctx(30))).toEqual({opacity: 0.4});
-    expect(byAyah(w4, ctx(120))).toBeUndefined();
-    // A word's own time wins over its ayah's.
-    const own = wordStyleFrom({...base, timingsIndex: {'1:1:2': 2}, timings, highlight: dim});
-    expect(own(w2, ctx(30))).toEqual({opacity: 0.4});
-    expect(own(w1, ctx(30))).toBeUndefined();
-    // An ayah the timings do not carry stays unknown, so it is not dimmed.
-    const other = wordStyleFrom({
+  it('tint: eases the word into the legible accent and out with a trail, the rosette never', () => {
+    const style = wordStyleFrom({...base, highlight: highlight({style: 'tint'}), ink, ground: '#f8f3e6'});
+    expect(style(w2, ctx(45))).toEqual({color: 'rgba(128, 99, 33, 1)'});
+    expect(style(w1, ctx(45))).toBeUndefined();
+    expect(style(w4, ctx(45))).toBeUndefined();
+    // 1.1 s: 1:1:2 coming in, 1:1:1 still letting go: both partly marked.
+    expect(style(w1, ctx(33))?.color).toMatch(/^rgba\(/);
+    expect(style(w2, ctx(33))?.color).toMatch(/^rgba\(/);
+    expect(style(w1, ctx(33))?.color).not.toBe('rgba(128, 99, 33, 1)');
+    // The ayah-end rosette keeps its own palette.
+    expect(style(w3, ctx(75))).toBeUndefined();
+    // Nothing before the word: no lead.
+    expect(style(w2, ctx(29))).toBeUndefined();
+  });
+
+  it('tint: a wash on tajweed colours, the line palettes on a fixed ink', () => {
+    const tajweed = {...base, theme: 'light' as const, highlight: highlight({style: 'tint'})};
+    // No letter recoloured: the line draws the wash behind the word instead.
+    expect(wordStyleFrom(tajweed)(w2, ctx(45))).toBeUndefined();
+    expect(wordBandFrom(tajweed)(w2, ctx(45))).toEqual({color: washColor(defaultHighlight.color, 0.1)});
+    expect(drawsWordBand(tajweed.highlight, 'light')).toBe(true);
+    expect(drawsWordBand(tajweed.highlight, 'black')).toBe(false);
+    const black = wordStyleFrom({...base, theme: 'black', ground: '#121416', highlight: highlight({style: 'tint'})});
+    const palette = (amount: number) => (amount < 0.125 ? undefined : `--tint-${Math.round(amount * 4)}`);
+    expect(black(w2, ctx(45, {inkPalette: palette}))).toEqual({fontPalette: '--tint-4'});
+    // A line without the tint palettes falls back to CSS colour.
+    expect(black(w2, ctx(45))?.color).toBe('rgba(177, 147, 83, 1)');
+  });
+
+  it('wash: a faint band behind the word, or behind every word of the ayah, the rosette included', () => {
+    const options = {...base, highlight: highlight({style: 'wash'})};
+    // The word carries no background: the line draws the band from where its ink is.
+    expect(wordStyleFrom(options)(w2, ctx(45))).toBeUndefined();
+    expect(drawsWordBand(options.highlight, 'plain')).toBe(true);
+    const word = wordBandFrom(options);
+    expect(word(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    expect(word(w1, ctx(45))).toBeUndefined();
+    expect(word(w3, ctx(75))).toBeUndefined();
+    const ayah = wordBandFrom({...base, highlight: highlight({mode: 'ayah', style: 'wash'})});
+    const band = {color: 'rgba(177, 147, 83, 0.1)'};
+    // One colour for the whole run: the line joins them into one shape.
+    expect([w1, w2, w3].map((w) => ayah(w, ctx(45)))).toEqual([band, band, band]);
+    expect(ayah(w4, ctx(45))).toBeUndefined();
+    // On a dark ground the band is a little stronger.
+    const dark = wordBandFrom({...base, ground: '#121416', highlight: highlight({style: 'wash'})});
+    expect(dark(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.09)'});
+    // Ink and tint draw no band.
+    expect(wordBandFrom({...base, highlight: highlight({style: 'tint'})})(w2, ctx(45))).toBeUndefined();
+    expect(drawsWordBand(highlight({style: 'ink'}), 'plain')).toBe(false);
+    expect(drawsWordBand(highlight({mode: 'none', style: 'wash'}), 'plain')).toBe(false);
+  });
+
+  it('wash: a word memorisation hides takes its band with it', () => {
+    const clips = clipTimeline(timings, {mode: 'blank-upcoming', repeat: 1, pauseSeconds: 0});
+    const band = wordBandFrom({
       ...base,
-      timingsIndex: {},
-      timings: {...timings, ayat: [timings.ayat[0]!]},
-      highlight: dim,
+      highlight: highlight({style: 'wash'}),
+      memorize: {settings: {...defaultMemorize, mode: 'blank-upcoming' as const}, clips},
     });
-    expect(other(w4, ctx(30))).toBeUndefined();
+    // 1:1:2 is heard (shown) at 1.5 s and washed; 1:2:1 is still to come (hidden): no band.
+    expect(band(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    expect(band(w4, ctx(45))).toBeUndefined();
   });
 
-  it('paints the active style on the whole ayah under mode: ayah', () => {
-    const style = wordStyleFrom({...base, highlight: highlight({mode: 'ayah', dimOthers: 0.4}), activeWordId: '1:1:2'});
-    expect(style(w1, ctx(0))).toEqual({color: '#c8a45c'});
-    expect(style(w2, ctx(0, true))).toEqual({color: '#c8a45c'});
-    expect(style(w3, ctx(0))).toEqual({color: '#c8a45c'});
-    expect(style(w4, ctx(0))).toEqual({opacity: 0.4});
-    expect(
-      wordStyleFrom({...base, highlight: highlight({mode: 'ayah'}), activeWordId: null})(w1, ctx(0)),
-    ).toBeUndefined();
-    expect(
-      wordStyleFrom({...base, highlight: highlight({mode: 'ayah', style: 'none'}), activeWordId: '1:1:2'})(w1, ctx(0)),
-    ).toBeUndefined();
+  it('holds the last word of an ayah to the release when the timings time its rosette as a word', () => {
+    // The rosette 1:1:3 has its own entry (2-3 s): told it is the marker, 1:1:2 keeps its band past 2 s.
+    const plain = wordBandFrom({...base, highlight: highlight({style: 'wash'})});
+    expect(plain(w2, ctx(75))).toBeUndefined();
+    const held = wordBandFrom({...base, highlight: highlight({style: 'wash'}), markers: markerIds([line])});
+    expect(held(w2, ctx(75))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    // It lets go at the release, 3.25 s, over markOut.
+    expect(held(w2, ctx(110))).toBeUndefined();
+    expect(held(w3, ctx(75))).toBeUndefined();
   });
 
-  it('underlines doubtful words in the Studio only, when asked, on top of the dimming', () => {
-    const doubtful = {'1:1:2': ['low-confidence' as const]};
+  it('carries no tint or wash on a line leaving the centre slot upward, full strength on one coming in', () => {
+    const style = wordBandFrom({...base, highlight: highlight({style: 'wash'})});
+    expect(style(w2, ctx(45, {linePosition: -0.5}))).toEqual({color: 'rgba(177, 147, 83, 0.05)'});
+    expect(style(w2, ctx(45, {linePosition: -1}))).toBeUndefined();
+    expect(style(w2, ctx(45, {linePosition: 0.6}))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    const tint = wordStyleFrom({...base, highlight: highlight({style: 'tint'}), ink, ground: '#f8f3e6'});
+    expect(tint(w2, ctx(45, {linePosition: -1}))).toBeUndefined();
+  });
+
+  it('marks nothing under mode none', () => {
+    for (const style of ['ink', 'tint', 'wash'] as const) {
+      const off = wordStyleFrom({...base, highlight: highlight({mode: 'none', style})});
+      expect([w1, w2, w3, w4].map((w) => off(w, ctx(45)))).toEqual([undefined, undefined, undefined, undefined]);
+      const noBand = wordBandFrom({...base, highlight: highlight({mode: 'none', style})});
+      expect([w1, w2, w3, w4].map((w) => noBand(w, ctx(45)))).toEqual([undefined, undefined, undefined, undefined]);
+    }
+  });
+
+  it('underlines doubtful words in the Studio only, when asked, on top of the mark', () => {
+    const doubtful = {'1:1:3': ['low-confidence' as const]};
     const mark = {textDecoration: 'underline dotted #d94848', textDecorationThickness: '0.08em'};
-    const studio = wordStyleFrom({...base, doubtful, isStudio: true, highlight: highlight({dimOthers: 0.4})});
-    expect(studio(w2, ctx(0))).toEqual({opacity: 0.4, ...mark});
-    expect(studio(w1, ctx(0))).toEqual({opacity: 0.4});
-    expect(wordStyleFrom({...base, doubtful, isStudio: true, highlight: highlight({})})(w2, ctx(0))).toEqual(mark);
-    expect(wordStyleFrom({...base, doubtful, isStudio: false, highlight: highlight({})})(w2, ctx(0))).toBeUndefined();
+    const studio = wordStyleFrom({...base, doubtful, isStudio: true, highlight: highlight({})});
+    expect(studio(w3, ctx(45))).toEqual({opacity: 0.6, ...mark});
+    expect(studio(w1, ctx(45))).toBeUndefined();
+    expect(wordStyleFrom({...base, doubtful, isStudio: false, highlight: highlight({})})(w3, ctx(45))).toEqual({
+      opacity: 0.6,
+    });
     const off = wordStyleFrom({
       ...base,
       doubtful,
       isStudio: true,
-      highlight: highlight({}),
+      highlight: highlight({mode: 'none'}),
       review: {...defaultReview, showDoubtful: false},
     });
-    expect(off(w2, ctx(0))).toBeUndefined();
+    expect(off(w3, ctx(0))).toBeUndefined();
     // The colour follows the review settings.
     const red = wordStyleFrom({
       ...base,
       doubtful,
       isStudio: true,
-      highlight: highlight({}),
+      highlight: highlight({mode: 'none'}),
       review: {...defaultReview, doubtColor: 'red'},
     });
-    expect(red(w2, ctx(0))?.textDecoration).toBe('underline dotted red');
+    expect(red(w3, ctx(0))?.textDecoration).toBe('underline dotted red');
   });
 });
 
@@ -363,7 +592,8 @@ describe('themeSelectionFrom / sizeForAspect / durations', () => {
     expect(themeSelectionFrom('plain', defaultMushafRecitationProps.customTheme)).toBe('plain');
     expect(themeSelectionFrom('custom', defaultMushafRecitationProps.customTheme)).toEqual({
       base: 'normal',
-      colors: {accent: '#c8a45c', detail: '#c8a45c'},
+      // The Mushaf palette: the ink follows layout.color, the rosettes are gold line work on vellum.
+      colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'},
     });
   });
 
@@ -378,7 +608,8 @@ describe('themeSelectionFrom / sizeForAspect / durations', () => {
     expect(recitationDuration({version: 1, surah: 1, ayat: [{ayah: 2, start: 0, end: 27.559}]}, 30)).toBe(857);
     expect(recitationDuration({version: 1, surah: 1, ayat: [{ayah: 2, start: 0, end: 0}]}, 30)).toBe(30);
     expect(exitTiming().getDurationInFrames({fps: 30})).toBe(10);
-    expect(passageDuration(5, 4, 30)).toBe(610);
-    expect(passageDuration(0, 4, 30)).toBe(10);
+    expect(passageDuration(5, 4, 30)).toBe(630);
+    expect(passageDuration(5, 4, 30, {lines: 'cut', tempo: 'calm'})).toBe(600);
+    expect(passageDuration(0, 4, 30)).toBe(30);
   });
 });

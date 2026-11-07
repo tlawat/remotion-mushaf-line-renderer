@@ -1,8 +1,13 @@
 // Unicode-text layouts: `<MushafAyahText>`, one ayah at a time as Unicode text in a
 // QUL font, for reels framing; the Quran text files it reads (text.ts), the font hook (font.ts),
 // the ayah component (AyahText.tsx), the schema, the resolver and `calculateMetadata`.
-export {AyahText, type AyahTextProps} from './AyahText';
-export {calculateMushafAyahTextMetadata, withAyahTextAudio} from './calculate-metadata';
+export {AYAH_WORD_SPACING, AyahText, type AyahTextProps} from './AyahText';
+export {
+  ayahTextContentFrames,
+  calculateMushafAyahTextMetadata,
+  resolveAyahTextProps,
+  withAyahTextAudio,
+} from './calculate-metadata';
 export {
   UNICODE_FONT_IDS,
   UNICODE_FONTS,
@@ -11,7 +16,8 @@ export {
   type UnicodeFontState,
   useUnicodeFont,
 } from './font';
-export {ayahPresentationStyle, MushafAyahText} from './MushafAyahText';
+export {AYAH_BLOCK_WIDTH, ayahPlanStyle, ayahPresentationStyle, MushafAyahText} from './MushafAyahText';
+export {type AyahPlan, type AyahPlanOptions, ayahPresence, ayahTextPlan} from './plan';
 export {
   type ResolveAyahTextOptions,
   type ResolvedAyah,

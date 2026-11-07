@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
     "render:ayah": "remotion render MushafAyahText out/ayah-text.mp4",
     "make": "bun scripts/make.ts",
-    "sample": "bun scripts/sample.ts"
+    "sample": "bun scripts/sample.ts",
+    "design": "bun scripts/design-stills.ts"
   },
   "dependencies": {
     "@remotion/cli": "4.0.539",

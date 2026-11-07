@@ -1,20 +1,25 @@
 // What is painted behind the lines (the `background` props group): a colour, a gradient, an image or
-// a looping video, with blur, dim and a Ken Burns move over the whole video, and a glow behind the
-// lines that pulses with the recitation. Pure in props and frame, like the lines.
+// a looping video, with blur, dim (a floor under an image or a video), a vignette dithered by a fixed
+// noise and a very slow zoom over the whole video; and the jadwal, the thin gold double rule of
+// `layout.frame`. Nothing follows the audio. Pure in props and frame, like the lines.
 
-export {backgroundFor} from './compat';
+export {backgroundFor, groundFor} from './compat';
+export {Jadwal, type JadwalProps, type JadwalRule, jadwalOpacity, jadwalRules} from './Jadwal';
 export {
   backgroundBaseStyle,
-  GLOW_REST,
-  glowOpacity,
-  glowStyle,
+  type DimLayer,
+  dimLayer,
   kenBurnsTransform,
+  MEDIA_DIM_FLOOR,
   MushafBackground,
   type MushafBackgroundProps,
   mediaBoxStyle,
   mediaStyle,
+  NOISE_OPACITY,
   probeVideoSeconds,
   showsMedia,
+  vignetteRgb,
+  vignetteStyle,
 } from './MushafBackground';
 export {
   BACKGROUND_FITS,
@@ -30,4 +35,5 @@ export {
   gradientSchema,
   KEN_BURNS,
   type KenBurns,
+  LEGACY_KEN_BURNS,
 } from './schema';

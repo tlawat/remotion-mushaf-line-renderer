@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {defaultHostAudio, hostAudioSchema} from '../../audio/host';
 import {audioSchema, defaultAudio} from '../../audio/schema';
 import {backgroundSchema, defaultBackground} from '../../background/schema';
 import {
@@ -35,7 +36,11 @@ import {
  */
 export const mushafRecitationSchema = z.object({
   /** A `public/` path (`mushaf-studio/fatiha/audio.mp3`) or an https URL. */
-  audioFile: z.string().describe('Audio: a path in public/ or a URL'),
+  audioFile: z
+    .string()
+    .describe(
+      "Audio: a path in public/ or a URL (when the path is missing, the catalogue clip its timings name streams instead; under hostAudio, the file of the template's track)",
+    ),
   /** A `public/` path to a `RecitationTimings` JSON (with or without the studio's `alignment` sidecar). */
   timingsFile: z.string().describe('Timings JSON in public/'),
   /** 0 keeps the file's range. A range of one surah's timings: timings across surahs (version 2) are used whole. */
@@ -64,18 +69,28 @@ export const mushafRecitationSchema = z.object({
   fonts: fontsSchema,
   data: dataSchema,
   /** `layout.background` is the page colour; `layout.backgroundImage` is kept for files saved before `background`. */
-  layout: layoutSchema,
+  layout: layoutSchema.describe(
+    'Frame and lines. background is the page colour: painted when background.kind is color, and on the title card, counter and end card',
+  ),
   background: backgroundSchema.describe(
-    'Behind the lines: a colour, a gradient, an image or a looping video, and a glow',
+    'Behind the lines: a colour, a gradient, an image or a looping video, a vignette and a slow zoom. background.color fills only behind an image, video or gradient',
   ),
   animation: animationSchema,
   highlight: highlightSchema,
-  memorize: memorizeSchema.describe('Memorisation: repeat each ayah, hide the words to come'),
+  memorize: memorizeSchema.describe(
+    'Memorisation: repeat each ayah, hide the words to come (no repeats under hostAudio)',
+  ),
   text: recitationTextSchema,
   overlay: overlaySchema.describe('Title card at the start and a label in a corner'),
   legend: legendSchema.describe('Legend of the tajweed colours (colour themes only)'),
   endCard: endCardSchema.describe('A closing card after the last ayah'),
-  audio: audioSchema.describe('The recitation’s loudness, fades and leading silence'),
+  audio: audioSchema.describe(
+    'The recitation’s loudness, fades and leading silence (does nothing under hostAudio: the template’s <Audio> owns them)',
+  ),
+  /** Optional: props saved before it existed read as off (`hostAudioOf()`). */
+  hostAudio: hostAudioSchema
+    .optional()
+    .describe('Follow an audio track of the template instead of playing audioFile (wins over the audio cleanup)'),
   review: reviewSchema,
   /** Filled by calculateMetadata; see `ResolvedRecitation`. */
   resolved: z.any().nullable().describe('Filled by calculateMetadata'),
@@ -87,7 +102,7 @@ export type MushafRecitationProps = z.infer<typeof mushafRecitationSchema>;
  * Defaults that work out of the box: Al-Fatihah (ayahs 2-7) by Abdul Hamid Ghraio from the
  * aligner's catalogue, the audio in the app's `public/` (downloaded by `bun run sample`; the
  * catalogue's clip streams until then) beside the timings committed there; the mushaf data from
- * the mirror the app ships; plain theme, a three-line window.
+ * the mirror the app ships; the Mushaf palette (gold-line rosettes on ivory), a three-line window.
  */
 export const defaultMushafRecitationProps: MushafRecitationProps = {
   audioFile: 'mushaf-studio/fatiha/audio.mp3',
@@ -97,7 +112,7 @@ export const defaultMushafRecitationProps: MushafRecitationProps = {
   slice: true,
   splits: [],
   header: 'none',
-  theme: 'plain',
+  theme: 'custom',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
   data: 'mirror',
@@ -111,6 +126,7 @@ export const defaultMushafRecitationProps: MushafRecitationProps = {
   legend: defaultLegend,
   endCard: defaultEndCard,
   audio: defaultAudio,
+  hostAudio: defaultHostAudio,
   review: defaultReview,
   resolved: null,
 };

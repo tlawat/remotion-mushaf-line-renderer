@@ -114,10 +114,12 @@ describe('<App>', () => {
     expect(Number(from.min)).toBeLessThanOrEqual(Number(from.value));
     expect(to.max).toBe('7');
 
-    // Step 2: the Night look.
-    fireEvent.click(screen.getByRole('button', {name: /^Night/}));
-    await waitFor(() => expect(screen.getByTestId('player').dataset.background).toBe('#101418'));
-    expect(screen.getByRole('button', {name: /^Night/}).getAttribute('aria-pressed')).toBe('true');
+    // Step 2: the Haram night look.
+    fireEvent.click(screen.getByRole('button', {name: /Haram night/}));
+    await waitFor(() => expect(screen.getByTestId('player').dataset.background).toBe('#121416'));
+    expect(screen.getByRole('button', {name: /Haram night/}).getAttribute('aria-pressed')).toBe('true');
+    // And the frame apart from it.
+    expect(screen.getByRole('button', {name: 'Landscape 16:9'}).getAttribute('aria-pressed')).toBe('true');
 
     // Step 3: the translation list.
     await waitFor(() => expect(screen.getByRole('option', {name: /Saheeh International/})).toBeTruthy());

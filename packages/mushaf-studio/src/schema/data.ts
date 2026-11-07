@@ -8,7 +8,9 @@ import {z} from 'zod';
  */
 export const dataSchema = z
   .enum(['cdn', 'mirror'])
-  .describe('Where the mushaf data comes from: QUL’s exports on Tarteel’s CDN, or the mirror in public/data/qpc-v4');
+  .describe(
+    'Mushaf data: mirror = the files in public/data/qpc-v4 (run `qul data` once; offline, reproducible), cdn = Tarteel’s CDN (no files)',
+  );
 
 export type DataSource = z.infer<typeof dataSchema>;
 

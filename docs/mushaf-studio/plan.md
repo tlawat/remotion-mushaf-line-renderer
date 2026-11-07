@@ -177,6 +177,16 @@ Met: the checks pass, the Studio opens on the sample, the panel picks, reviews, 
 - **The riwayah guard**: a confirmation before a non-Hafs recitation meets the Hafs page.
 - **A local sample**: `bun run sample`, a fallback to the clip, loudness kept in the timings.
 - **CI**: the web app build and the Studio smoke suite run on every push.
+- **Drop-in slots**: a recitation, an ayah text or a page inside a template of one's own, its props
+  under one key (`<MushafRecitationSlot>`, `resolveMushafRecitationSlot()`), the panel docked on
+  every frame; the app's `MushafInTemplate`. See [drop-in-and-reliability.md](drop-in-and-reliability.md).
+- **Panel save reliability**: saves built on the Studio's live props, one at a time, with Restore
+  when they are lost; reviewed timings never replaced; splits that no longer fit dropped in the
+  preview and refused in a render; drafts per composition.
+- **Explicit audio sources**: Source as one choice of four, a "Now:" line, no silent stream, and
+  `hostAudio` to follow a template's own track.
+- **Which option wins**: the schema descriptions of overlapping options say it, the colour fields
+  keep the Props sidebar's picker, and the panel greys out what the props make do nothing.
 
 ### Open
 
@@ -188,6 +198,11 @@ Met: the checks pass, the Studio opens on the sample, the panel picks, reviews, 
   the panel asks before it times one against it. Next step: find a Warsh and a Qalun print with a
   word-level line layout and page fonts, and add them as datasets the way the research note does
   for V1 and V2.
+- **Sidebar order and per-composition schemas.** The Props sidebar lists fields in schema order, so a
+  legacy field still comes before the option that replaced it (`translationFile` before
+  `translations`, `layout.backgroundImage` before `background`), and the page and the ayah text show
+  the word-by-word fields they ignore. Next step: reorder the fragments and give each composition
+  its own `.omit()`ed text and layout schemas, keeping saved props parseable.
 - **A server-side proxy for the aligner.** An optional sidecar that forwards to QUD with the user's
   Hugging Face token (quota), caches sessions, and keeps large files out of the browser. Next step:
   a small Bun server in `apps/mushaf-studio` that the QUD client's `api` option points at, which

@@ -1,6 +1,6 @@
 // What a timings file keeps of the recording's analysis (`alignment.audio`): the four measurements
 // the gain and the silence trim need, written when the panel saves new timings and read back by
-// `calculateMetadata()`, so a render that does not draw the glow needs no download to normalise.
+// `calculateMetadata()`, so a render needs no download to normalise.
 import type {AudioSummary, StudioTimings} from '../types';
 import type {AudioAnalysis} from './analyze';
 

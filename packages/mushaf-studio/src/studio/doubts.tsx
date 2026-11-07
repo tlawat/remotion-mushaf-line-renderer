@@ -66,27 +66,43 @@ export const doubtMarkers = (
 /**
  * The doubtful segments of the composition's alignment as empty `<Sequence>`s, shown in the
  * timeline only. Rendered by the panel in the Studio's preview only, next to (not inside) the
- * dock's portal; nothing when the user turned them off in the Review tab.
+ * dock's portal; nothing when the user turned them off in the Review tab or none is doubtful. With
+ * `from` (a slot, whose panel sits beside the recitation's `<Sequence>`) they are grouped in a
+ * `<Sequence>` of their own that starts there, `durationInFrames` long when given, so each lands
+ * on its words.
  */
-export const DoubtMarkers: React.FC<{readonly props: StudioCompositionProps}> = ({props}) => {
+export const DoubtMarkers: React.FC<{
+  readonly props: StudioCompositionProps;
+  readonly from?: number | undefined;
+  readonly durationInFrames?: number | undefined;
+}> = ({props, from, durationInFrames}) => {
   const {showDoubts} = useStudioState();
   const t = useT();
   const {fps} = useVideoConfig();
   const segments = resolvedOf(props)?.timings.alignment?.segments ?? [];
   if (!showDoubts || segments.length === 0) return null;
   const threshold = isAyahTextProps(props) ? DEFAULT_CONFIDENCE_THRESHOLD : props.review.confidenceThreshold;
+  const found = doubtMarkers(segments, threshold, fps, t);
+  if (found.length === 0) return null;
+  const markers = found.map((marker) => (
+    <Sequence
+      key={marker.segment}
+      from={marker.from}
+      durationInFrames={marker.durationInFrames}
+      name={marker.name}
+      layout="none"
+      showInTimeline
+    />
+  ));
+  if (from === undefined) return <>{markers}</>;
   return (
-    <>
-      {doubtMarkers(segments, threshold, fps, t).map((marker) => (
-        <Sequence
-          key={marker.segment}
-          from={marker.from}
-          durationInFrames={marker.durationInFrames}
-          name={marker.name}
-          layout="none"
-          showInTimeline
-        />
-      ))}
-    </>
+    <Sequence
+      from={from}
+      {...(durationInFrames !== undefined && durationInFrames > 0 ? {durationInFrames} : {})}
+      name="Mushaf doubts"
+      layout="none"
+    >
+      {markers}
+    </Sequence>
   );
 };

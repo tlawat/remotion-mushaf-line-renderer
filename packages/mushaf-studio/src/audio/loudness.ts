@@ -1,6 +1,6 @@
 // Measurements on decoded samples: integrated loudness after ITU-R BS.1770-4 (K-weighting, 400 ms
 // blocks every 100 ms, gated at -70 LUFS absolute and -10 LU relative), an oversampled true peak,
-// where the first sound is, and a level per video frame for the glow. Pure functions over
+// where the first sound is, and a level per video frame (nothing on screen follows it any more). Pure functions over
 // `Float32Array`s, one per channel, so they run the same under vitest as in the browser.
 
 /** Second-order section coefficients, normalised so that a0 is 1. */
@@ -186,7 +186,7 @@ export const frameCount = (sampleCount: number, sampleRate: number, fps: number)
 
 /**
  * The level of every video frame at `fps`, 0-1 to three decimals: the RMS of the mixed-down signal
- * over the frame's samples, relative to the loudest frame (1). Relative, so the glow pulses as much
+ * over the frame's samples, relative to the loudest frame (1). Relative, so it reads the same
  * for a quiet recording as for a loud one, before or after normalising. All 0 for silence. One
  * entry per `frameCount()`.
  */

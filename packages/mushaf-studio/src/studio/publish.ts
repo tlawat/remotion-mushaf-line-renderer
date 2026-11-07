@@ -12,11 +12,12 @@ import {reciterOf, resolvedTranslationsOf, type StudioCompositionProps, type Stu
 export const THUMBNAIL_COMPOSITION_ID = 'MushafThumbnail';
 
 /**
- * YouTube chapters of the composition: `resolved.timings` start at the video's 0, so no offset.
+ * YouTube chapters of the composition: `resolved.timings` start at the recitation's 0, which is
+ * `offsetSeconds` into the video (a slot's start in its template; 0 for a composition of its own).
  * `[]` when the passage is too short for YouTube (fewer than 3 chapters 10 s apart).
  */
-export const chaptersOf = (timings: StudioTimings): readonly string[] =>
-  chaptersFromTimings(timings, {offsetSeconds: 0});
+export const chaptersOf = (timings: StudioTimings, offsetSeconds = 0): readonly string[] =>
+  chaptersFromTimings(timings, {offsetSeconds});
 
 /** Where a translation came from, as the credits name it. */
 const sourceName = (source: string): string => (source === 'qul' ? 'QUL, qul.tarteel.ai' : source);
@@ -30,10 +31,11 @@ const surahNameOf = (timings: StudioTimings): string => {
 
 /**
  * The description of `youtubeDescription()` for the composition: the surah (or surahs) and range of
- * the timings, the overlay's reciter, the chapters, and the credits (the translations the composition
- * loaded, by their `meta.name`, with the first one's source).
+ * the timings, the overlay's reciter, the chapters (`offsetSeconds` into the video, as
+ * `chaptersOf()`), and the credits (the translations the composition loaded, by their `meta.name`,
+ * with the first one's source).
  */
-export const descriptionOf = (props: StudioCompositionProps, resolved: StudioResolved): string => {
+export const descriptionOf = (props: StudioCompositionProps, resolved: StudioResolved, offsetSeconds = 0): string => {
   const {timings} = resolved;
   const translations = resolvedTranslationsOf(resolved);
   const names = [...new Set(translations.map((translation) => translation.meta.name.trim()).filter(Boolean))];
@@ -44,30 +46,35 @@ export const descriptionOf = (props: StudioCompositionProps, resolved: StudioRes
     reciter: reciterOf(props),
     translationName: names.join(', '),
     translationSource: first ? sourceName(first.meta.source) : undefined,
-    chapters: chaptersOf(timings),
+    chapters: chaptersOf(timings, offsetSeconds),
   });
 };
 
-/** The props `<MushafThumbnail>` takes from the composition: the surah, the range timed, and the reciter as its title. */
+/**
+ * The props `<MushafThumbnail>` takes from the composition: the surah, the range timed, and the
+ * reciter as its title (no `title` when the composition names no reciter: the thumbnail keeps its own).
+ */
 export type ThumbnailPatch = {
   readonly surah: number;
   readonly fromAyah: number;
   readonly toAyah: number;
-  readonly title: string;
+  readonly title?: string;
 };
 
 /**
  * The thumbnail of the passage `timings` time: its lowest and highest ayah, titled with the overlay's
- * reciter. A thumbnail shows one surah: across surahs (version 2), the first one and its ayahs.
+ * reciter when there is one. A thumbnail shows one surah: across surahs (version 2), the first one
+ * and its ayahs.
  */
 export const thumbnailPatchOf = (props: StudioCompositionProps, timings: StudioTimings): ThumbnailPatch => {
   const surah = timings.version === 1 ? timings.surah : (timings.ayat[0]?.surah ?? 1);
   const ayahs = timings.ayat.filter((_, index) => surahOfAyah(timings, index) === surah).map((ayah) => ayah.ayah);
+  const title = reciterOf(props).trim();
   return {
     surah,
     fromAyah: ayahs.length === 0 ? 1 : Math.max(1, Math.min(...ayahs)),
     toAyah: ayahs.length === 0 ? 0 : Math.max(...ayahs),
-    title: reciterOf(props),
+    ...(title ? {title} : {}),
   };
 };
 

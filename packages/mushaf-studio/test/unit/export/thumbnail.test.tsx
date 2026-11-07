@@ -12,7 +12,15 @@ vi.mock('remotion', async (importOriginal) => ({
   ...remotion.module,
 }));
 
-const mocks = vi.hoisted(() => ({getMushafLines: vi.fn()}));
+const mocks = vi.hoisted(() => ({getMushafLines: vi.fn(), useStudioFonts: vi.fn()}));
+// The Studio's fonts are loaded as in every composition: the hook is watched, not run.
+vi.mock('../../../src/compositions/fonts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/compositions/fonts')>()),
+  useStudioFonts: () => {
+    mocks.useStudioFonts();
+    return {fontFamilies: [], ready: true};
+  },
+}));
 type LineProps = import('@tlawat/remotion-mushaf-line').MushafLineProps & {
   line: import('@tlawat/remotion-mushaf-line').MushafLineData;
 };
@@ -69,6 +77,7 @@ beforeEach(() => {
   remotion.state.width = THUMBNAIL_WIDTH;
   remotion.state.height = THUMBNAIL_HEIGHT;
   mocks.getMushafLines.mockReset();
+  mocks.useStudioFonts.mockReset();
   mocks.getMushafLines.mockResolvedValue([hero, syntheticLine(2, 4)]);
 });
 afterEach(() => {
@@ -94,7 +103,7 @@ describe('calculateMushafThumbnailMetadata', () => {
       fromAyah: 2,
       toAyah: 2,
       slice: true,
-      theme: 'normal',
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
       data: {words: '/static/data/qpc-v4/words.json.zip', layout: '/static/data/qpc-v4/layout.db.zip'},
     });
     expect(result).toMatchObject({width: 1280, height: 720, props: {resolved: {line: hero}}});
@@ -126,6 +135,12 @@ describe('thumbnailSubtitle', () => {
 });
 
 describe('<MushafThumbnail>', () => {
+  it('loads the Studio’s fonts (EB Garamond for the title), so the still is never taken in a fallback face', () => {
+    const c = mount(props());
+    expect(mocks.useStudioFonts).toHaveBeenCalled();
+    expect(c.querySelector<HTMLElement>('[data-mushaf-thumbnail]')!.style.fontFamily).toMatch(/^"EB Garamond"/);
+  });
+
   it('draws the framed surah name, the resolved line across the measure, and the subtitle', () => {
     const c = mount(props());
     const name = part(c, 'surah-name')!;
