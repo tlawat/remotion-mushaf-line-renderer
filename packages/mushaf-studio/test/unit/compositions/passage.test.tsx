@@ -42,15 +42,33 @@ vi.mock('../../../src/translations', () => ({
   loadTranslation: (...args: unknown[]) => mocks.loadTranslation(...args),
   ayahKeyOf: () => null,
   TranslationBlock: (props: {ayahKey: string | null}) => <div data-translation-block={props.ayahKey ?? ''} />,
-  TranslationStack: (props: {layers: readonly unknown[]; ayahKey: string | null}) => (
-    <div data-translation-stack={props.layers.length} data-translation-block={props.ayahKey ?? ''} />
+  TranslationStack: (props: {
+    layers: readonly unknown[];
+    ayahKey: string | null;
+    outgoing?: {ayahKey: string; opacity: number} | null;
+    textOpacity?: number;
+    opacity?: number;
+  }) => (
+    <div
+      data-translation-stack={props.layers.length}
+      data-translation-block={props.ayahKey ?? ''}
+      data-outgoing={props.outgoing ? `${props.outgoing.ayahKey}@${props.outgoing.opacity}` : ''}
+      data-text-opacity={props.textOpacity ?? 1}
+      data-opacity={props.opacity ?? 1}
+    />
   ),
   GlossStrip: () => null,
 }));
 
-const {MushafPassage, calculateMushafPassageMetadata, defaultMushafPassageProps, resolvePassage} = await import(
-  '../../../src/compositions/passage'
-);
+const {
+  MushafPassage,
+  calculateMushafPassageMetadata,
+  defaultMushafPassageProps,
+  passageAyahChanges,
+  passageTimeline,
+  resolvePassage,
+} = await import('../../../src/compositions/passage');
+const {dissolve, SINE} = await import('../../../src/schema');
 type MushafPassageProps = import('../../../src/compositions/passage').MushafPassageProps;
 type ResolvedPassage = import('../../../src/compositions/passage').ResolvedPassage;
 
@@ -117,7 +135,7 @@ describe('calculateMushafPassageMetadata', () => {
       theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
       data: expect.objectContaining({words: expect.stringContaining('data/qpc-v4/words.json.zip')}),
     });
-    expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 4 * 4 * 30 + 10});
+    expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 4 * 4 * 30 + 30});
     expect((metadata.props as MushafPassageProps).resolved).toEqual({
       lines: passage,
       translation: null,
@@ -168,7 +186,7 @@ describe('calculateMushafPassageMetadata', () => {
     const portrait = await calculateMushafPassageMetadata(
       metadataArgs({...defaultMushafPassageProps, layout: layout({aspect: '4:5'}), holdSeconds: 2}),
     );
-    expect(portrait).toMatchObject({width: 1080, height: 1350, durationInFrames: 4 * 2 * 30 + 10});
+    expect(portrait).toMatchObject({width: 1080, height: 1350, durationInFrames: 4 * 2 * 30 + 30});
   });
 });
 
@@ -179,7 +197,8 @@ describe('<MushafPassage>', () => {
     expect(c.querySelector('[data-panel]')).toBeNull();
     const seq = sequences(c);
     expect(seq).toHaveLength(1);
-    expect(seq[0]!.dataset).toMatchObject({from: '0', duration: '900'});
+    // From the first hold to the end of the lines' 1 s fade after the last one.
+    expect(seq[0]!.dataset).toMatchObject({from: '0', duration: String(4 * 120 + 30)});
     const w = c.querySelector<HTMLElement>('.mushaf-line-window-mock')!;
     expect(w.dataset).toMatchObject({lineCount: '4', visibleLines: '3'});
     expect(JSON.parse(w.dataset.steps!)).toEqual([0, 120, 240, 360]);
@@ -228,14 +247,90 @@ describe('<MushafPassage>', () => {
     const c = mount(props({layout: layout({visibleLines: 0})}));
     const seq = sequences(c);
     // At each hold start t0 (f120, f240, f360) a 20-frame dissolve: the outgoing line ends 10 frames
-    // after t0, the incoming one comes in from 6 frames after it; the last one leaves after its hold.
+    // after t0, the incoming one comes in from 6 frames after it; the last one fades over endFade
+    // (30 frames) after its hold.
     expect(seq.map((s) => Number(s.dataset.from))).toEqual([0, 126, 246, 366]);
-    expect(seq.map((s) => Number(s.dataset.from) + Number(s.dataset.duration))).toEqual([130, 250, 370, 490]);
+    expect(seq.map((s) => Number(s.dataset.from) + Number(s.dataset.duration))).toEqual([130, 250, 370, 510]);
     expect(
       Array.from(c.querySelectorAll<HTMLElement>('.mushaf-line-mock')).map(
         (l) => `${l.dataset.page}/${l.dataset.line}`,
       ),
     ).toEqual(['2/3', '2/4', '3/1', '3/2']);
+  });
+
+  it('appears over windowIn on SINE and fades over endFade, the window after the intro card, the first and last lines too', () => {
+    const intro = {...defaultMushafPassageProps.overlay, title: 'intro' as const, introSeconds: 2};
+    const box = mount(props({overlay: intro}));
+    // The window starts with the first hold, after the 2 s card, its steps from there.
+    expect(sequences(box)[0]!.dataset).toMatchObject({from: '60', duration: String(4 * 120 + 30)});
+    const w = box.querySelector<HTMLElement>('.mushaf-line-window-mock')!;
+    expect(JSON.parse(w.dataset.steps!)).toEqual([0, 120, 240, 360]);
+    // Slow: the fade is 42 frames; cut: none.
+    cleanup();
+    const slow = sequences(mount(props({animation: {...defaultMushafPassageProps.animation, tempo: 'slow'}})));
+    expect(slow[0]!.dataset.duration).toBe(String(4 * 120 + 42));
+    cleanup();
+    const cut = sequences(mount(props({animation: {...defaultMushafPassageProps.animation, lines: 'cut'}})));
+    expect(cut[0]!.dataset.duration).toBe(String(4 * 120));
+  });
+
+  it('dissolves the translation to the next ayah from the incoming line’s hold start, never before it', () => {
+    const translation = {kind: 'ayah' as const, meta, text: {'2:1': 'Alif', '2:2': 'That', '2:3': 'Who'}};
+    const at = (frame: number) => {
+      remotion.state.frame = frame;
+      const stack = mount(props({}, {translation})).querySelector<HTMLElement>('[data-translation-block]')!;
+      const data = {...stack.dataset};
+      cleanup();
+      return data;
+    };
+    // The lines start with 2:1, 2:2, 2:2 (p3l1 starts inside 2:2), 2:3: the translation changes at f120 and f360.
+    const changes = passageAyahChanges(
+      passage,
+      passageTimeline(passage, defaultMushafPassageProps, 30),
+      defaultMushafPassageProps.animation,
+      30,
+    );
+    expect(changes.map((change) => [change.key, change.start, change.duration])).toEqual([
+      ['2:1', Number.NEGATIVE_INFINITY, 0],
+      ['2:2', 120, 18],
+      ['2:3', 360, 18],
+    ]);
+    expect(at(119)).toMatchObject({translationBlock: '2:1', outgoing: '', textOpacity: '1'});
+    // f120: the outgoing line starts to leave, and so does 2:1's translation, by the 18-frame dissolve.
+    expect(at(120)).toMatchObject({translationBlock: '2:2', outgoing: '2:1@1', textOpacity: '0'});
+    const mid = dissolve(9, 18);
+    expect(at(129)).toMatchObject({outgoing: `2:1@${mid.out}`, textOpacity: String(mid.in)});
+    expect(at(138)).toMatchObject({translationBlock: '2:2', outgoing: '', textOpacity: '1'});
+    // Through the hold of p3l1 (also 2:2) nothing changes; 2:3 only from f360.
+    expect(at(359)).toMatchObject({translationBlock: '2:2', outgoing: ''});
+    expect(at(360)).toMatchObject({translationBlock: '2:3', outgoing: '2:2@1'});
+    // It comes in with the lines over windowIn on SINE, and goes with their fade.
+    expect(Number(at(0).opacity)).toBe(0);
+    expect(Number(at(12).opacity)).toBeCloseTo(SINE(0.5), 4);
+    expect(Number(at(495).opacity)).toBeCloseTo(1 - SINE(0.5), 4);
+  });
+
+  it('dissolves the first ayah’s translation in from nothing after the header lines', () => {
+    const header = [syntheticLine(2, 1), syntheticLine(2, 2)];
+    const lines = [...header, ...passage];
+    const changes = passageAyahChanges(
+      lines,
+      passageTimeline(lines, defaultMushafPassageProps, 30),
+      defaultMushafPassageProps.animation,
+      30,
+    );
+    expect(changes.map((change) => [change.key, change.start])).toEqual([
+      [null, Number.NEGATIVE_INFINITY],
+      ['2:1', 90],
+      ['2:2', 210],
+      ['2:3', 450],
+    ]);
+    remotion.state.frame = 95;
+    const stack = mount(props({}, {lines, translation: ayahText})).querySelector<HTMLElement>(
+      '[data-translation-block]',
+    )!;
+    expect(stack.dataset).toMatchObject({translationBlock: '2:1', outgoing: ''});
+    expect(Number(stack.dataset.textOpacity)).toBe(dissolve(5, 18).in);
   });
 
   it('translates the first ayah of the current line', () => {
@@ -272,7 +367,7 @@ describe('<MushafPassage>', () => {
       [186, 310],
       [306, 430],
       [426, 550],
-      [546, 670],
+      [546, 690],
     ]);
     expect(seq[0]!.dataset.sequence).toBe('p2 l1 (surah_name)');
   });
@@ -283,7 +378,7 @@ describe('<MushafPassage>', () => {
     const c = mount(props({overlay: both, toAyah: 0}));
     expect(c.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('2');
     // toAyah 0 is the end of the surah: Al-Baqarah has 286 ayahs.
-    expect(c.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Āyāt 1–286');
+    expect(c.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Ayat 1–286');
     expect(c.querySelector('[data-mushaf-overlay-part="reciter"]')!.textContent).toBe('Reader');
     expect(c.querySelector('[data-mushaf-overlay="corner"]')).toBeNull();
     cleanup();

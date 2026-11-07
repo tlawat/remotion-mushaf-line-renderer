@@ -20,7 +20,10 @@ vi.mock('../../../src/translations', () => ({
   GlossStrip: () => null,
 }));
 
-const {defaultMushafRecitationProps, resolveRecitation} = await import('../../../src/compositions/recitation');
+const {defaultMushafRecitationProps, introDelaySeconds, oneLinePlan, resolveRecitation, withIntroDelay} = await import(
+  '../../../src/compositions/recitation'
+);
+const {clipTimeline, scheduleForClips} = await import('../../../src/memorize');
 const {calculateMushafPassageMetadata, defaultMushafPassageProps, passageTimeline, resolvePassage} = await import(
   '../../../src/compositions/passage'
 );
@@ -193,6 +196,55 @@ describe('resolveRecitation with header', () => {
     expect(nonDecreasing(leadFrames(early.schedule, 0.4, 30))).toBe(true);
   });
 
+  it('gives the header its spacing after the intro card: the delay counts it, its slot is laid after the card', async () => {
+    const intro = {...defaultOverlay, title: 'both' as const, introSeconds: 3};
+    const props = recitation({header: 'name', overlay: intro});
+    // Ayah 1 at 0.5 s: the card (3 s), the lines' entrance (0.8 s), the header's 3 s, then the
+    // first line settled 0.4 s before its word: the recording starts 3 + 0.8 + 3 + 0.4 − 0.5 s later.
+    expect(introDelaySeconds(intro, props.animation, 0.5, 3)).toBe(6.7);
+    const resolved = withIntroDelay(
+      props,
+      await resolveRecitation(props, {fetch: fetchJson(fromAyah1(0.5)), staticFile}),
+    );
+    expect(resolved.introDelaySeconds).toBe(6.7);
+    // The header slot holds its whole spacing before the first ayah's line, and starts once the
+    // lines have come in after the card (3 + 0.8 + 0.4 s), not clamped against it.
+    expect(resolved.schedule.slice(0, 2)).toEqual([
+      {index: 0, start: 4.2, end: 7.2},
+      {index: 1, start: 7.2, end: resolved.schedule[1]!.end},
+    ]);
+    expect(nonDecreasing(resolved.schedule.map((s) => s.start))).toBe(true);
+    // One line at a time: the name line is in place from the card's end to well past its spacing
+    // less the dissolve, and the first ayah's line is settled before its first word (f216).
+    const clips = clipTimeline(resolved.timings, props.memorize);
+    const plans = oneLinePlan({
+      timeline: scheduleForClips(resolved.schedule, resolved.lines, clips, 1),
+      lines: resolved.lines,
+      timings: resolved.timings,
+      clips,
+      fps: 30,
+      leadInSeconds: 0.4,
+      motion: 'fade',
+      tempo: 'calm',
+      earliest: 90,
+      endSeconds: 40,
+    });
+    expect(plans[0]).toMatchObject({slot: 0, from: 90, first: true});
+    // In place at f114, it starts to leave at f184: 70 frames held, then the 20-frame dissolve.
+    const header = plans[0]!;
+    const ayah = plans[1]!;
+    expect(header.from + header.durationInFrames - header.exitFrames - (header.from + header.enterFrames)).toBe(70);
+    expect(ayah.from + ayah.enterFrames).toBeLessThanOrEqual(Math.round(7.2 * 30) - 12);
+    // Without the card the header keeps its 1.5 s before ayah 1, and nothing is delayed.
+    const plain = recitation({header: 'name'});
+    const undelayed = withIntroDelay(
+      plain,
+      await resolveRecitation(plain, {fetch: fetchJson(fromAyah1()), staticFile}),
+    );
+    expect(undelayed.introDelaySeconds).toBeUndefined();
+    expect(undelayed.schedule[0]).toEqual({index: 0, start: 2.5, end: 4});
+  });
+
   it('adds nothing when the recitation starts after ayah 1, or under none', async () => {
     const later = await resolveRecitation(recitation({header: 'name-basmalah', fromAyah: 2}), {
       fetch: fetchJson(fromAyah1()),
@@ -255,6 +307,7 @@ describe('resolvePassage with header', () => {
       compositionId: 'MushafPassage',
       isRendering: false,
     });
-    expect(metadata.durationInFrames).toBe(450 + 10);
+    // The holds, then the lines' 1 s fade.
+    expect(metadata.durationInFrames).toBe(450 + 30);
   });
 });

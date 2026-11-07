@@ -516,6 +516,12 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `theme`, `customTheme`, `fonts`, `data`, `layout`, `background`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above; no audio, so the background's glow stays at rest. |
 | `resolved`    |           | `null`     | Filled by `calculateMetadata()`.               |
 
+Every change of a passage runs at the incoming line's hold start, as nothing is heard to wait for:
+the lines (or the window) appear over 0.8 s, give way by the line dissolve, and fade over 1 s after
+the last hold (1.4 s slow, none under `cut`; the video grows by it, `passageEndFade()`). The
+translation and the corner number dissolve to the next ayah from the same frame
+(`passageAyahChanges()`), and come and go with the lines.
+
 ### `MushafAyahText`
 
 One ayah at a time as Unicode text in QUL's Uthmani Hafs font (the framing of reels and short
@@ -644,14 +650,15 @@ components are `<MushafTitleOverlay>`, `<MushafTitleCard>` and `<MushafCornerLab
 props and the frame). The intro card is drawn on the ground: frame 0 is the bare page, then the
 surah's name in its printed frame (`<MushafSurahName surah framed>`, with the composition's
 `fonts`), a gold hairline with a lozenge, the range in Amiri («الآيات ٢–٧», the first ayah
-rightmost) and in small caps ("Āyāt 2–7"), the reciter in italic and the translation's credit
+rightmost) and in small caps ("Ayat 2–7": EB Garamond sets the macron of a capital Ā beside its
+letter, so the small caps go without, `smallCapsLabel()`), the reciter in italic and the translation's credit
 ("Translation of the meanings · Saheeh International") come in from 0.2 s and go by
 `introSeconds`.
 
 **The intro card adds its time.** In `MushafRecitation`'s `calculateMetadata()`, the recording
 starts `resolved.introDelaySeconds` later: `introSeconds` + the card's entrance (0.8 s, 1.13 s
-slow) + `leadInSeconds`, less what the recording already has before its first word, never
-negative (`introDelaySeconds()`). The timings, the schedule and the clips move by it, the audio
+slow) + the header lines' spacing (when `header` puts any before ayah 1) + `leadInSeconds`, less
+what the recording already has before its first word, never negative (`introDelaySeconds()`). The timings, the schedule and the clips move by it, the audio
 starts there and the video grows by it; the lines come in after the card. A host that syncs to the
 video maps its time to the recording's with it: recording = video − `introDelaySeconds` +
 `audioOffsetSeconds`. Under `hostAudio` nothing is delayed (the template's track decides).
@@ -740,9 +747,14 @@ the template's track on the Studio's timeline (Source, **A track in this video**
 
 ### `legend` (`MushafRecitation`, `MushafPage`)
 
-The tajweed colours' legend (`<TajweedLegend>`) in a corner, on a card of the page colour, drawn
-only when the theme tells the rules apart (`themeHasTajweedColors()`: not under `plain`, `normal`
-or `black`).
+The tajweed colours' legend (`<TajweedLegend band>`) as one centred row in a band above or below
+the lines, no card behind it, drawn only when the theme tells the rules apart
+(`themeHasTajweedColors()`: not under `plain`, `normal` or `black`). The lines are fitted around
+the band (`legendBand()`), so it never covers them. Each entry is one unit that never breaks: it is
+measured as drawn (the English in small caps, letter-spaced, in `overlay.font`; the Arabic in
+Amiri), the entries wrap into the width inside the safe area, and when the widest one is wider
+than that (the long prolongation rule with both names at 9:16), the names are drawn smaller until
+it fits.
 
 | Field         | Type                                      | Default         | Description                               |
 | ------------- | ----------------------------------------- | --------------- | ----------------------------------------- |
@@ -776,7 +788,9 @@ get the name alone. The header lines carry no timed words: they are scheduled be
 line (`withHeaderSlots()`), `overlay.introSeconds` apart when the intro card is on and 1.5 s apart
 otherwise, never before 0, so the window's steps never decrease; one line at a time, they come in
 one after the other before the first ayah line, and a header line the recording leaves no room for
-is left out. In `MushafPassage` each holds that long, after the intro card. Under
+is left out. With the intro card on, the recording waits for them too (`introDelaySeconds()`), and
+their slots are laid after the card, so each holds its spacing. In `MushafPassage` each holds that
+long, after the intro card. Under
 `fonts: 'package'` the surah-name and `quran-common` fonts are read from
 `public/fonts/surah-names-v4/surah_names.woff2` and `public/fonts/quran-common/quran-common.woff2`
 (`bun run qul fonts 1` downloads them; they are not committed). The intro card (`overlay.title`

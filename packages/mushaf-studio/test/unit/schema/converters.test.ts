@@ -17,6 +17,7 @@ import {
   recitationDuration,
 } from '../../../src/compositions/recitation';
 import {registerMushafFonts} from '../../../src/fonts';
+import {audioClock, clipTimeline} from '../../../src/memorize';
 import * as schema from '../../../src/schema';
 import {
   activeWordStyleFrom,
@@ -26,6 +27,7 @@ import {
   defaultCustomTheme,
   defaultHighlight,
   defaultLayout,
+  defaultMemorize,
   defaultReview,
   defaultText,
   effectiveNeighbourOpacity,
@@ -374,6 +376,39 @@ describe('wordStyleFrom', () => {
     expect(offset(w4, ctx(30))).toEqual({opacity: 0.6});
   });
 
+  it('ink and marks under repeats: a new play eases from the previous play’s, never in one frame', () => {
+    // Ayah 1 (0-3 s) twice, half a second apart: play 2 from 3.5 s (f105), the recording back at 0 s.
+    const clips = clipTimeline(timings, {mode: 'repeat', repeat: 2, pauseSeconds: 0.5});
+    expect(clips[1]!.compositionFrom).toBe(3.5);
+    const repeated = {...base, memorize: {settings: {...defaultMemorize, mode: 'repeat' as const}, clips}};
+    const inkStyle = wordStyleFrom({...repeated, highlight: highlight({}), audioTime: audioClock(clips)});
+    const opacity = (frame: number) => Number(inkStyle(w2, ctx(frame))?.opacity ?? 1);
+    // 1:1:2 (heard at 1 s of each play) is at full ink at the end of play 1 and rests in play 2
+    // until its word: it goes back over rehide (12 frames) on SINE from the play's start.
+    expect(opacity(104)).toBe(1);
+    expect(opacity(105)).toBe(1);
+    expect(opacity(111)).toBeCloseTo(0.6 + 0.4 * (1 - SINE(0.5)), 4);
+    expect(opacity(117)).toBe(0.6);
+    expect(opacity(134)).toBe(0.6);
+    const largest = 0.4 * Math.max(...Array.from({length: 12}, (_, f) => SINE((f + 1) / 12) - SINE(f / 12)));
+    // (From f135 the word's own 6-frame fill takes it back to full ink.)
+    for (let frame = 96; frame <= 134; frame++) {
+      expect(Math.abs(opacity(frame) - opacity(frame - 1)), `f${frame}`).toBeLessThanOrEqual(largest + 1e-4);
+    }
+    // A wash the previous play ended on (1:1:2, the rosette named, held to its release) lets go over markOut.
+    const washStyled = wordStyleFrom({
+      ...repeated,
+      highlight: highlight({style: 'wash'}),
+      audioTime: audioClock(clips),
+      markers: markerIds([line]),
+    });
+    const washed = (frame: number) => washStyled(w2, ctx(frame)) !== undefined;
+    expect(washed(104)).toBe(true);
+    expect(washed(105)).toBe(true);
+    expect(washed(110)).toBe(true);
+    expect(washed(115)).toBe(false);
+  });
+
   it('ink: only the current line rests, by its distance from the centre slot, never compounding', () => {
     const style = wordStyleFrom({...base, highlight: highlight({})});
     expect(style(w3, ctx(45, {linePosition: 1}))).toBeUndefined();
@@ -546,7 +581,8 @@ describe('themeSelectionFrom / sizeForAspect / durations', () => {
     expect(recitationDuration({version: 1, surah: 1, ayat: [{ayah: 2, start: 0, end: 27.559}]}, 30)).toBe(857);
     expect(recitationDuration({version: 1, surah: 1, ayat: [{ayah: 2, start: 0, end: 0}]}, 30)).toBe(30);
     expect(exitTiming().getDurationInFrames({fps: 30})).toBe(10);
-    expect(passageDuration(5, 4, 30)).toBe(610);
-    expect(passageDuration(0, 4, 30)).toBe(10);
+    expect(passageDuration(5, 4, 30)).toBe(630);
+    expect(passageDuration(5, 4, 30, {lines: 'cut', tempo: 'calm'})).toBe(600);
+    expect(passageDuration(0, 4, 30)).toBe(30);
   });
 });

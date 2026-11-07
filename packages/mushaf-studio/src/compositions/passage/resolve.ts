@@ -1,12 +1,14 @@
-import {exitTiming, getMushafLines, type MushafLineData} from '@tlawat/remotion-mushaf-line';
+import {getMushafLines, type MushafLineData} from '@tlawat/remotion-mushaf-line';
 import type {CalculateMetadataFunction} from 'remotion';
 import {staticFile as remotionStaticFile} from 'remotion';
 import {MushafStudioError} from '../../errors';
 import {showsIntro} from '../../overlay';
-import {dataSourceFrom, migrateMushafProps, sizeForAspect, themeSelectionFrom} from '../../schema';
+import {type Animation, dataSourceFrom, migrateMushafProps, sizeForAspect, themeSelectionFrom} from '../../schema';
+import {tempoFrames} from '../../schema/tokens';
 import type {AyahTranslation} from '../../types';
 import {backgroundVideoSecondsFor, loadTranslationLayers, translationLayerSpecs} from '../extras';
-import {headerCount, headerSeconds, STUDIO_FPS, surahHeaderLines} from '../shared';
+import type {AyahChange} from '../recitation/transitions';
+import {firstAyahKey, headerCount, headerSeconds, STUDIO_FPS, surahHeaderLines} from '../shared';
 import {defaultMushafPassageProps, type MushafPassageProps} from './schema';
 
 /** What `calculateMetadata()` of `<MushafPassage>` resolves once per render from the content props. */
@@ -28,9 +30,24 @@ export type ResolvePassageOptions = {
   readonly signal?: AbortSignal | undefined;
 };
 
-/** Frames for a passage of ayah lines alone: every line holds `holdSeconds`, and the last one leaves after its hold. With header lines or an intro card, `passageTimeline()`'s `end` plus the exit. */
-export const passageDuration = (lineCount: number, holdSeconds: number, fps: number): number =>
-  Math.max(1, Math.round(lineCount * holdSeconds * fps) + exitTiming().getDurationInFrames({fps}));
+/**
+ * Frames the lines take to leave after the last hold: `endFade` (1 s, 1.4 s slow) on `SINE`, none
+ * under `cut`.
+ */
+export const passageEndFade = (animation: Pick<Animation, 'lines' | 'tempo'>, fps: number): number =>
+  animation.lines === 'cut' ? 0 : tempoFrames('endFade', animation.tempo, fps);
+
+/**
+ * Frames for a passage of ayah lines alone: every line holds `holdSeconds`, and the last one fades
+ * out after its hold (`passageEndFade()`, calm by default). With header lines or an intro card,
+ * `passageTimeline()`'s `end` plus the fade.
+ */
+export const passageDuration = (
+  lineCount: number,
+  holdSeconds: number,
+  fps: number,
+  animation: Pick<Animation, 'lines' | 'tempo'> = {lines: 'fade', tempo: 'calm'},
+): number => Math.max(1, Math.round(lineCount * holdSeconds * fps) + passageEndFade(animation, fps));
 
 /** Where each line of a passage is on screen, in frames: `from` and `durationInFrames` per line, and the frame the last line's hold ends. */
 export type PassageTimeline = {
@@ -62,6 +79,34 @@ export const passageTimeline = (
     at += hold;
   });
   return {starts, holds, end: at};
+};
+
+/**
+ * When the ayah of a passage's translation and corner label changes (render-design.md 5.2, 5.5):
+ * at the hold start of each line that starts with another ayah than the line before it (nothing
+ * is heard to wait for: the outgoing line gives way there too), by a `translationDissolve`
+ * staggered dissolve, never before the change before it is over. The first entry is the first
+ * line's ayah, from the start; a header line has no ayah (`null`), and the first ayah after it
+ * dissolves in from nothing. For `shownAyahAt()`; pure.
+ */
+export const passageAyahChanges = (
+  lines: readonly MushafLineData[],
+  timeline: Pick<PassageTimeline, 'starts'>,
+  animation: Pick<Animation, 'lines' | 'tempo'>,
+  fps: number,
+): readonly AyahChange[] => {
+  const duration = animation.lines === 'cut' ? 0 : tempoFrames('translationDissolve', animation.tempo, fps);
+  const changes: AyahChange[] = [];
+  lines.forEach((line, i) => {
+    const key = firstAyahKey(line);
+    const last = changes[changes.length - 1];
+    if (last === undefined) changes.push({key, start: Number.NEGATIVE_INFINITY, duration: 0});
+    else if (key !== last.key) {
+      const start = Math.max(timeline.starts[i] ?? 0, last.start + last.duration);
+      changes.push({key, start, duration});
+    }
+  });
+  return changes;
 };
 
 /**
@@ -109,7 +154,7 @@ export const resolvePassage = async (
   };
 };
 
-/** `calculateMetadata` for `<Composition id="MushafPassage">`: the props migrated (`migrateMushafProps()`), `resolved` (and a background video's length), width and height from the aspect, duration from the timeline (`passageTimeline()`). `abortSignal` reaches the fetches. */
+/** `calculateMetadata` for `<Composition id="MushafPassage">`: the props migrated (`migrateMushafProps()`), `resolved` (and a background video's length), width and height from the aspect, duration from the timeline (`passageTimeline()`) and the lines' fade (`passageEndFade()`). `abortSignal` reaches the fetches. */
 export const calculateMushafPassageMetadata: CalculateMetadataFunction<MushafPassageProps> = async ({
   props: saved,
   abortSignal,
@@ -126,7 +171,7 @@ export const calculateMushafPassageMetadata: CalculateMetadataFunction<MushafPas
     fps: STUDIO_FPS,
     durationInFrames: Math.max(
       1,
-      passageTimeline(resolved.lines, props, STUDIO_FPS).end + exitTiming().getDurationInFrames({fps: STUDIO_FPS}),
+      passageTimeline(resolved.lines, props, STUDIO_FPS).end + passageEndFade(props.animation, STUDIO_FPS),
     ),
   };
 };

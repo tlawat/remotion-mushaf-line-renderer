@@ -206,6 +206,6 @@ describe('<MushafAyahText> memorisation across surahs', () => {
     const resolved = await resolveAyahText(props, io());
     const root = render(<MushafAyahText {...props} resolved={resolved} />).container;
     const range = root.querySelector<HTMLElement>('[data-mushaf-overlay="intro"] [data-mushaf-overlay-part="range"]');
-    expect(range!.textContent).toBe('Āyāt 113:1–114:2');
+    expect(range!.textContent).toBe('Ayat 113:1–114:2');
   });
 });

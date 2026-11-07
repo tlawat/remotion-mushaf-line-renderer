@@ -33,6 +33,7 @@ const {
   MushafCornerLabel,
   MushafTitleOverlay,
   SURAH_NAMES,
+  smallCapsLabel,
   surahEnglishName,
 } = await import('../../../src/overlay');
 const {defaultOverlay, SINE} = await import('../../../src/schema');
@@ -107,6 +108,14 @@ describe('the card’s timeline', () => {
     expect(latinRangeText({surah: 1, ayah: 5}, {surah: 1, ayah: 5})).toBe('Āyah 5');
     expect(latinRangeText({surah: 113, ayah: 4}, {surah: 114, ayah: 2})).toBe('Āyāt 113:4–114:2');
   });
+
+  it('takes the marks off a label set in small caps, precomposed or not, and leaves the rest', () => {
+    expect(smallCapsLabel('Āyāt 2–7')).toBe('Ayat 2–7');
+    expect(smallCapsLabel('A\u0304yah 5')).toBe('Ayah 5');
+    expect(smallCapsLabel('Al-Fātiḥah · Āyāt 113:4–114:2')).toBe('Al-Fatihah · Ayat 113:4–114:2');
+    expect(smallCapsLabel('Al-Fatihah · 3')).toBe('Al-Fatihah · 3');
+    expect(smallCapsLabel('')).toBe('');
+  });
 });
 
 describe('introEndSeconds and introOpacity', () => {
@@ -143,7 +152,8 @@ describe('<MushafTitleOverlay>', () => {
     expect(part(c, 'rule')).not.toBeNull();
     expect(part(c, 'arabic-range')!.textContent).toBe('\u2067الآيات ٢–٧\u2069');
     expect(part(c, 'arabic-range')!.dir).toBe('rtl');
-    expect(part(c, 'range')!.textContent).toBe('Āyāt 2–7');
+    // Small caps without the macrons: the font sets a capital Ā's macron beside its letter.
+    expect(part(c, 'range')!.textContent).toBe('Ayat 2–7');
     expect(part(c, 'range')!.style.fontVariantCaps).toBe('all-small-caps');
     expect(corner(c)).toBeNull();
   });
@@ -154,7 +164,7 @@ describe('<MushafTitleOverlay>', () => {
       base({overlay: overlay({title: 'intro'}), surah: 113, fromAyah: 4, toSurah: 114, toAyah: 2, addsTime: true}),
     );
     expect(intro(c)!.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('113');
-    expect(part(c, 'range')!.textContent).toBe('Āyāt 113:4–114:2');
+    expect(part(c, 'range')!.textContent).toBe('Ayat 113:4–114:2');
     expect(part(c, 'arabic-range')!.textContent).toBe('\u2067الآيات ١١٣:٤–١١٤:٢\u2069');
   });
 

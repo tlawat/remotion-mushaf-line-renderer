@@ -42,6 +42,16 @@
   a band the lines are fitted around; memorisation reveals and hides words with a short fade, and
   the first-letters ghost is 0.14 (0.20 on a dark ground). Defaults: translation 36 px `#5a554c`,
   gloss 30 px `#6b6458`, overlay `#5a554c` with `cornerSize` 0 (follows the frame).
+- **Nothing pops, and every part keeps its time.** `MushafPassage` appears over 0.8 s, fades over
+  1 s after its last hold (the video grows by it), and dissolves its translation and corner number
+  at each line's hold start (`passageAyahChanges()`); its window no longer shows under the intro
+  card. With the intro card on, the surah's header lines before ayah 1 count in the intro delay
+  and keep their spacing after the card. Under repeats, a new play eases the line's ink back to
+  rest and lets the last mark go, and words a later play shows come in over 7 frames. The end hold
+  counts from the last word, not from a timed ayah-end rosette. The legend measures its entries as
+  drawn and draws its names smaller when one would leave the safe area (9:16 with both names). The
+  card's Latin range is "Ayat 2–7" (the font sets a capital Ā's macron beside it). The thumbnail
+  loads EB Garamond.
 
 First proof of concept of Mushaf Studio: Remotion Studio, extended with the package's features
 as a user interface. See [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md) for the

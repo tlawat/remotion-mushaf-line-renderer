@@ -147,7 +147,9 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const repeats = clips.reduce((most, clip) => Math.max(most, clip.repetition), 1);
   const toAudio = audioClock(clips);
   // The lines hold after the last word, then fade; the end card (if any) starts once they are gone.
-  const endSeconds = recitationEndSeconds(timings, clips);
+  // A rosette the timings time as a word of its own is not a word: the hold counts from the last word.
+  const markers = markerIds(lines);
+  const endSeconds = recitationEndSeconds(timings, clips, markers);
   const linesEnd = linesEndFrame(endSeconds, animation.tempo, fps);
   const cardFrames = endCardFrames(endCard, fps);
   const contentFrames = Math.max(1, durationInFrames - cardFrames);
@@ -167,7 +169,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const furniture = frameGeometry(width, height);
   const theme = themeSelectionFrom(props.theme, props.customTheme);
   const plainLineBox = blockGeometry(layout, {width, height}).lineHeight;
-  const reserve = legendReserve(legend, theme, {width, height, lineHeight: plainLineBox});
+  const labelFamily = studioFontFamily(overlay.font, 'label');
+  const reserve = legendReserve(legend, theme, {width, height, lineHeight: plainLineBox, fontFamily: labelFamily});
   // Interlinear glosses: every line slot grows by the label rows, and the line moves up into it.
   const glossRows =
     text.glossPosition === 'interlinear' ? interlinearRows(resolved.gloss, resolved.transliteration) : 0;
@@ -195,7 +198,6 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const starts = wordStarts(timings);
   // The word spans of the marks: the gloss strip changes at each, the interlinear labels follow them.
   // A rosette the timings time as a word of its own is never a span: the ayah's last word holds to the release.
-  const markers = markerIds(lines);
   const spans = useMemo(
     () => wordSpans(timings, {occurrence: highlight.occurrence, markers}),
     [timings, highlight.occurrence, markers],
@@ -511,7 +513,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       <LegendBand
         legend={legend}
         theme={theme}
-        fontFamily={studioFontFamily(overlay.font, 'label')}
+        fontFamily={labelFamily}
         color={layout.color}
         width={width}
         height={height}

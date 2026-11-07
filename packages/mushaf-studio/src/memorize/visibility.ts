@@ -89,11 +89,13 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 /**
  * The opacity memorisation gives a word on one frame, 0-1 (render-design.md 5.7): what
- * `wordVisibility()` decides, eased. A hidden word (or the `'first-letters'` ghost) comes in over
- * `reveal` (7 frames) on `SOFT` from its own start, never before it; a word that was shown at the
- * end of the previous play and is hidden in this one (`'blank-all'`, and every play after the
- * first of a blanking mode) goes back over `rehide` (12 frames) on `SINE` from the play's start.
- * 1 for a word shown. Pure.
+ * `wordVisibility()` decides, eased, so no word pops. A hidden word (or the `'first-letters'`
+ * ghost) comes in over `reveal` (7 frames) on `SOFT` from its own start, never before it. As a
+ * play starts, a word that was shown at the end of the previous play and is hidden in this one
+ * (`'blank-all'`, and every play after the first of a blanking mode) goes back over `rehide` (12
+ * frames) on `SINE`, and a word that was hidden then and is shown now (the plays after
+ * `revealAfterRepeats` show every word, the next ayah's included) comes in over `reveal` on `SOFT`,
+ * both from the play's start. 1 for a word shown. Pure.
  */
 export const memorizeOpacity = (input: MemorizeOpacityInput): number => {
   const {clips, seconds, start, now} = input;
@@ -103,21 +105,31 @@ export const memorizeOpacity = (input: MemorizeOpacityInput): number => {
     visibility === 'hidden' ? 0 : visibility === 'faint' ? ghost : 1;
   const visibility = wordVisibility({...input, clip});
   const level = levelOf(visibility);
-  if (level === 1) {
-    // Revealed at its own start: from what it showed just before.
-    const reveal = tempoSeconds('reveal');
-    if (start === undefined || now < start || now - start >= reveal) return 1;
-    const before = levelOf(wordVisibility({...input, now: start - 1e-6, active: false, clip}));
-    return before >= 1 ? 1 : round4(before + (1 - before) * SOFT(clamp01((now - start) / reveal)));
-  }
-  // Hidden again as a play starts: from what it showed at the end of the previous play.
+  // What the word showed at the end of the previous play, while this play is younger than `within`.
   const index = clip === null ? -1 : clips.indexOf(clip);
   const previous = index > 0 ? clips[index - 1] : undefined;
-  if (clip === null || previous === undefined) return level;
+  const since = clip === null ? Number.POSITIVE_INFINITY : seconds - clip.compositionFrom;
+  const wasAtPlayEnd = (within: number): number | null =>
+    clip === null || previous === undefined || since >= within
+      ? null
+      : levelOf(wordVisibility({...input, now: previous.audioTo, active: false, clip: previous}));
+  if (level === 1) {
+    const reveal = tempoSeconds('reveal');
+    // Revealed at its own start: from what it showed just before.
+    let shown = 1;
+    if (start !== undefined && now >= start && now - start < reveal) {
+      const before = levelOf(wordVisibility({...input, now: start - 1e-6, active: false, clip}));
+      if (before < 1) shown = before + (1 - before) * SOFT(clamp01((now - start) / reveal));
+    }
+    // Shown from this play's start although the previous play ended with it hidden: from that.
+    const was = wasAtPlayEnd(reveal);
+    if (was !== null && was < 1) shown = Math.min(shown, was + (1 - was) * SOFT(clamp01(since / reveal)));
+    return shown >= 1 ? 1 : round4(shown);
+  }
+  // Hidden again as a play starts: from what it showed at the end of the previous play.
   const rehide = tempoSeconds('rehide');
-  const since = seconds - clip.compositionFrom;
-  if (since >= rehide) return level;
-  const was = levelOf(wordVisibility({...input, now: previous.audioTo, active: false, clip: previous}));
+  const was = wasAtPlayEnd(rehide);
+  if (was === null) return level;
   return was <= level ? level : round4(level + (was - level) * (1 - SINE(clamp01(since / rehide))));
 };
 

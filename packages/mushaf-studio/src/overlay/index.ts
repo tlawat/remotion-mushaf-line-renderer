@@ -24,6 +24,7 @@ export {
   SMALL_CAPS,
   showsCorner,
   showsIntro,
+  smallCapsLabel,
   surahSpanName,
   translationCredit,
 } from './TitleOverlay';

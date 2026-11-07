@@ -9,6 +9,10 @@ export type TextFace = {
   readonly fontFamily: string;
   readonly fontWeight?: number | undefined;
   readonly fontStyle?: 'italic' | undefined;
+  /** Set in all small caps (`font-variant-caps: all-small-caps`), as the labels are. */
+  readonly smallCaps?: boolean | undefined;
+  /** CSS `letter-spacing` in em, added after every character as the browser adds it. */
+  readonly letterSpacing?: number | undefined;
 };
 
 /** Measures a string's advance in px at `size`, or `null` where nothing can measure (no canvas). */
@@ -16,6 +20,8 @@ type Measure = (text: string, size: number) => number;
 
 /** Average advance of a book serif's lowercase, in em: the estimate where no canvas can measure. */
 const ESTIMATED_ADVANCE = 0.5;
+/** Small caps as a share of the capitals, where the canvas cannot set them (no `fontVariantCaps`). */
+const SMALL_CAP_SHARE = 0.8;
 
 let context: OffscreenCanvasRenderingContext2D | null | undefined;
 
@@ -27,11 +33,19 @@ const canvasContext = (): OffscreenCanvasRenderingContext2D | null => {
 };
 
 const measureFor = (face: TextFace): Measure => {
+  // Letter-spacing follows every character, the last one included.
+  const spacing = (text: string, size: number): number => (face.letterSpacing ?? 0) * size * [...text].length;
   const ctx = canvasContext();
-  if (ctx === null) return (text, size) => text.length * ESTIMATED_ADVANCE * size;
+  if (ctx === null) return (text, size) => text.length * ESTIMATED_ADVANCE * size + spacing(text, size);
+  const smallCaps = face.smallCaps === true;
+  // Chromium's context sets the caps; a context without them measures small caps as smaller capitals.
+  const setsCaps = typeof (ctx as {fontVariantCaps?: unknown}).fontVariantCaps === 'string';
   return (text, size) => {
     ctx.font = `${face.fontStyle ?? 'normal'} ${face.fontWeight ?? 400} ${size}px ${face.fontFamily}`;
-    return ctx.measureText(text).width;
+    // Setting `font` puts the caps back to normal: set them after it, every time (the context is shared).
+    if (setsCaps) ctx.fontVariantCaps = smallCaps ? 'all-small-caps' : 'normal';
+    else if (smallCaps) return SMALL_CAP_SHARE * ctx.measureText(text.toUpperCase()).width + spacing(text, size);
+    return ctx.measureText(text).width + spacing(text, size);
   };
 };
 

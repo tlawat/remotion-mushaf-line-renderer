@@ -125,6 +125,14 @@ export const latinRangeText = (
   return from.ayah === to.ayah ? `Āyah ${from.ayah}` : `Āyāt ${from.ayah}–${to.ayah}`;
 };
 
+/**
+ * A Latin label as the small caps draw it: without the marks on its letters, `smallCapsLabel('Āyāt
+ * 2–7')` is "Ayat 2–7". Small caps set every letter as a capital, and EB Garamond (as Google Fonts
+ * serves it, at every weight) draws the macron of a capital Ā beside the letter rather than over
+ * it; the corner label's surah names carry no marks either.
+ */
+export const smallCapsLabel = (text: string): string => text.normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC');
+
 /** The translation's credit on the intro card (or, without one, in the end card's credits). */
 export const translationCredit = (name: string): string => `Translation of the meanings · ${name}`;
 
@@ -174,7 +182,7 @@ export type MushafTitleCardProps = {
  * The intro card (render-design.md 5.6), centred on the ground: the framed surah name
  * (`<MushafSurahName framed>`, 46 % of the measure at 16:9, 72 % at the other formats, centred at
  * 44 % of the height), a gold hairline with a lozenge `0.9 × lineBox` under it, the range in Amiri
- * («الآيات ٢–٧», the first ayah rightmost), the range again in small caps ("Āyāt 2–7"), the
+ * («الآيات ٢–٧», the first ayah rightmost), the range again in small caps ("Ayat 2–7", `smallCapsLabel()`), the
  * reciter in italic and the translation's credit. Its content comes in from 0.2 s over `cardIn`
  * and is gone at `endSeconds`. A passage across surahs is framed under its first surah's name and
  * names both ends. Pure in its props and the frame.
@@ -264,7 +272,7 @@ export const MushafTitleCard: React.FC<MushafTitleCardProps> = (props) => {
           {arabicRangeText(from, to)}
         </div>
         <div data-mushaf-overlay-part="range" style={{...SMALL_CAPS, fontSize: L, lineHeight: 1.4, opacity: 0.6}}>
-          {latinRangeText(from, to)}
+          {smallCapsLabel(latinRangeText(from, to))}
         </div>
         {reciter !== '' && (
           <div

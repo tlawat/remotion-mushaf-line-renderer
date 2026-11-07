@@ -176,7 +176,8 @@ describe('EndCard with glyph (render-design.md 5.9)', () => {
   it('sets the range and credits in small caps, the reciter in italic, on the ground', () => {
     clock.frame = 60;
     const c = designed();
-    expect(part(c, 'range')!.textContent).toBe('Al-Fatihah · Āyāt 1–7');
+    // Small caps without the macrons: the font sets a capital Ā's macron beside its letter.
+    expect(part(c, 'range')!.textContent).toBe('Al-Fatihah · Ayat 1–7');
     expect(part(c, 'range')!.style.fontVariantCaps).toBe('all-small-caps');
     expect(part(c, 'reciter')!.style.fontStyle).toBe('italic');
     const credits = part(c, 'credits')!;

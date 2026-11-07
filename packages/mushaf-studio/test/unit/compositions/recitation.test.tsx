@@ -691,7 +691,7 @@ describe('<MushafRecitation>', () => {
     const card = intro(30)!;
     expect(card.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('1');
     expect(card.querySelector('[data-mushaf-overlay-part="arabic-range"]')!.textContent).toBe('\u2067الآيات ٢–٧\u2069');
-    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Āyāt 2–7');
+    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Ayat 2–7');
     // No ground of its own: it is drawn on the page, and nothing is under it.
     expect(card.querySelector('[data-mushaf-overlay-part="backdrop"]')).toBeNull();
     expect(intro(89)).not.toBeNull();
@@ -792,7 +792,7 @@ describe('<MushafRecitation> across surahs', () => {
       '[data-mushaf-overlay="intro"]',
     )!;
     expect(card.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('113');
-    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Āyāt 113:4–114:2');
+    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Ayat 113:4–114:2');
     expect(card.querySelector('[data-mushaf-overlay-part="arabic-range"]')!.textContent).toBe(
       '\u2067الآيات ١١٣:٤–١١٤:٢\u2069',
     );

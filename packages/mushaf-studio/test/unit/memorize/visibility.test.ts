@@ -123,6 +123,40 @@ describe('memorizeOpacity', () => {
     expect(word(next + (0.901 - 0.331) + 7 / 30)).toBe(1);
   });
 
+  it('eases in the words a later play shows that the play before hid, from the play’s start, never popping', () => {
+    // blank-all, three plays, revealed after the first: play 2 of ayah 2 shows every word, the
+    // next ayah's too, which were hidden at the end of play 1.
+    const three = clipTimeline(timings, {mode: 'blank-all', repeat: 3, pauseSeconds: 0.5});
+    const playTwo = three[1]!;
+    const nextAyahWord = (timings as unknown as {ayat: {words: {start: number}[]}[]}).ayat[1]!.words[0]!.start;
+    const opacity = (frame: number): number => {
+      const seconds = playTwo.compositionFrom + frame / 30;
+      const clip = three.filter((c) => c.compositionFrom <= seconds + 1e-9).at(-1)!;
+      const now = clip.audioFrom + Math.min(seconds - clip.compositionFrom, clip.audioTo - clip.audioFrom);
+      return memorizeOpacity({
+        mode: 'blank-all',
+        revealAfterRepeats: 1,
+        start: nextAyahWord,
+        now,
+        seconds,
+        active: false,
+        clips: three,
+        script: 'glyph',
+      });
+    };
+    const frames = Array.from({length: 24}, (_, k) => opacity(k - 8));
+    // Hidden through play 1 and its pause, 0 as play 2 starts, in over 7 frames on SOFT, then shown.
+    expect(frames.slice(0, 9)).toEqual(Array(9).fill(0));
+    expect(opacity(3)).toBeCloseTo(SOFT(3 / 7), 4);
+    expect(opacity(7)).toBe(1);
+    // Never a step larger than the reveal's own largest.
+    const largest = Math.max(...Array.from({length: 7}, (_, f) => SOFT((f + 1) / 7) - SOFT(f / 7)));
+    for (let i = 1; i < frames.length; i++) {
+      expect(frames[i]! - frames[i - 1]!).toBeGreaterThanOrEqual(0);
+      expect(frames[i]! - frames[i - 1]!).toBeLessThanOrEqual(largest + 1e-4);
+    }
+  });
+
   it('reveals the first-letters ghost from 0.14 on a light ground, 0.20 on a dark one', () => {
     expect(ghostOpacity('#f8f3e6')).toBe(0.14);
     expect(ghostOpacity('#121416')).toBe(0.2);

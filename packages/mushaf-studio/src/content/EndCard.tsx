@@ -2,7 +2,7 @@ import {MushafSurahName} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {Sequence, useCurrentFrame, useVideoConfig} from 'remotion';
 import {surahEnglishName} from '../overlay/surah-names';
-import {ayahRangeText, latinRangeText, SMALL_CAPS} from '../overlay/TitleOverlay';
+import {ayahRangeText, latinRangeText, SMALL_CAPS, smallCapsLabel} from '../overlay/TitleOverlay';
 import type {FontProps} from '../schema/fonts';
 import {withAlpha} from '../schema/highlight';
 import {frameGeometry, SINE, SOFT} from '../schema/tokens';
@@ -212,7 +212,7 @@ const DesignedEndCard: React.FC<EndCardContentProps & {readonly glyph: EndCardTi
           data-mushaf-end-card-part="range"
           style={{...SMALL_CAPS, fontSize: L, fontWeight: fontWeight ?? 500, lineHeight: 1.4, opacity: 0.6}}
         >
-          {surahEnglishName(surah)} · {latinRangeText({surah, ayah: fromAyah}, {surah, ayah: toAyah})}
+          {surahEnglishName(surah)} · {smallCapsLabel(latinRangeText({surah, ayah: fromAyah}, {surah, ayah: toAyah}))}
         </div>
         {reciter?.trim() ? (
           <div

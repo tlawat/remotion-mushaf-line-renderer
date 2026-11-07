@@ -60,15 +60,23 @@ export const slotEnd = (slot: LineSchedule, next: LineSchedule, inputs: Boundary
 };
 
 /**
- * The second of the composition the last ayah ends at: where the end hold counts from. The last
- * clip's end when ayahs repeat.
+ * The second of the composition the last word ends at: where the end hold counts from. That is the
+ * timing `end` of the last ayah's last word, leaving out an ayah-end rosette the timings time as a
+ * word of its own (`markers`, `markerIds()`: it is not a word, see `wordSpans()`), and the last
+ * ayah's `end` when it has no word times. Moved onto the last clip when ayahs repeat.
  */
-export const recitationEndSeconds = (timings: RecitationTimings, clips: readonly MemorizeClip[]): number => {
+export const recitationEndSeconds = (
+  timings: RecitationTimings,
+  clips: readonly MemorizeClip[],
+  markers?: ReadonlySet<string>,
+): number => {
   const last = clips[clips.length - 1];
   const ayat = normalizeTimings(timings).ayat;
   const lastAyah = ayat[ayat.length - 1];
-  if (last === undefined || lastAyah === undefined) return lastAyah?.end ?? 0;
-  return last.compositionFrom + Math.max(0, lastAyah.end - last.audioFrom);
+  const words = (lastAyah?.words ?? []).filter((word) => markers === undefined || !markers.has(word.id));
+  const end = words[words.length - 1]?.end ?? lastAyah?.end ?? 0;
+  if (last === undefined || lastAyah === undefined) return end;
+  return last.compositionFrom + Math.max(0, Math.min(last.audioTo, end) - last.audioFrom);
 };
 
 /**
@@ -227,8 +235,11 @@ export const oneLinePlan = (options: LinePlanOptions): readonly LinePlan[] => {
   });
 };
 
-/** One change of the ayah on screen: to `key`, starting at frame `start`, `duration` frames of dissolve. */
-export type AyahChange = {readonly key: string; readonly start: number; readonly duration: number};
+/**
+ * One change of the ayah on screen: to `key`, starting at frame `start`, `duration` frames of
+ * dissolve. `key` is `null` for no ayah (a passage's header lines): the next ayah dissolves in from nothing.
+ */
+export type AyahChange = {readonly key: string | null; readonly start: number; readonly duration: number};
 
 export type AyahChangeOptions = Omit<BoundaryInputs, 'timeline' | 'lines'> & {
   readonly tempo: Tempo;
@@ -309,5 +320,9 @@ export const shownAyahAt = (changes: readonly AyahChange[], frame: number, durat
   const length = duration ?? current.duration;
   if (before === undefined || frame >= current.start + length) return {key: current.key, outgoing: null, opacity: 1};
   const sides: DissolveOpacities = dissolve(frame - current.start, length);
-  return {key: current.key, outgoing: {key: before.key, opacity: sides.out}, opacity: sides.in};
+  return {
+    key: current.key,
+    outgoing: before.key === null ? null : {key: before.key, opacity: sides.out},
+    opacity: current.key === null ? 1 : sides.in,
+  };
 };

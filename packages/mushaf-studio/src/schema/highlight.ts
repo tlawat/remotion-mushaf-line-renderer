@@ -11,7 +11,7 @@ import {
 import type * as React from 'react';
 import {interpolateColors} from 'remotion';
 import {themeHasTajweedColors} from '../content/tajweed';
-import type {MemorizeClip} from '../memorize/timeline';
+import {clipAt, type MemorizeClip} from '../memorize/timeline';
 import {memorizeOpacity} from '../memorize/visibility';
 import type {DoubtReason} from '../types';
 import {groundOf, legibleAccent, washAlpha, washColor} from './color';
@@ -30,7 +30,7 @@ import {
   wordStartIndex,
 } from './marks';
 import {migrateMushafProps} from './migrate';
-import type {Tempo} from './tokens';
+import {INOUT, SINE, type Tempo, tempoSeconds} from './tokens';
 import {type WashCap, washStyle} from './wash';
 
 /** Four decimals: enough for any alpha, free of float noise. */
@@ -270,6 +270,9 @@ const runCap = (word: MushafWord, line: MushafLineData): WashCap => {
  * - A line leaving the centre slot upward takes no tint or wash with it (they fade with its
  *   position); an incoming line's first word is marked at full strength while it scrolls in.
  * - Without per-word times `mode: 'word'` follows the ayahs. Memorisation's hiding wins over the marks.
+ * - Under repeats, nothing changes in one frame as a play starts and the recording goes back to
+ *   the ayah's start: the ink goes from the previous play's over `rehide` on `SINE`, and the mark
+ *   the previous play ended on lets go over `markOut`.
  * - In the Studio, with `review.showDoubtful`, a doubtful word gets a dotted underline in
  *   `doubtColor`. `text-decoration` is not pinned on a word (only on the row, where it is not
  *   inherited), so the underline paints without touching the line's metrics.
@@ -318,6 +321,35 @@ export const wordStyleFrom = (
     const start = startOf(word);
     return start === undefined ? 1 : rest + (1 - rest) * inkFill(start, now);
   };
+  /**
+   * Under repeats the recording's clock jumps back to the ayah's start as each play starts, so
+   * what it reads would change in one frame (the line's heard words back to resting ink, the last
+   * word's mark gone). From a play's start, the value at the end of the previous play goes over to
+   * this play's: `null` outside that change, else the previous play's value and how far it has gone (0-1).
+   */
+  const playChange = (seconds: number, read: (now: number) => number, frames: 'rehide' | 'markOut') => {
+    if (!memorize) return null;
+    const clip = clipAt(memorize.clips, seconds);
+    const index = clip === null ? -1 : memorize.clips.indexOf(clip);
+    const previous = index > 0 ? memorize.clips[index - 1] : undefined;
+    if (clip === null || previous === undefined) return null;
+    const since = seconds - clip.compositionFrom;
+    const length = tempoSeconds(frames, tempo);
+    if (since >= length) return null;
+    return {was: read(previous.audioTo), progress: clamp01(since / length)};
+  };
+  /** The ink of a word on the current line: from the previous play's over `rehide` on `SINE` as a play starts. */
+  const inkAt = (word: MushafWord, seconds: number, now: number): number => {
+    const value = inkOf(word, now);
+    const change = playChange(seconds, (t) => inkOf(word, t), 'rehide');
+    return change === null ? value : value + (change.was - value) * (1 - SINE(change.progress));
+  };
+  /** The emphasis of a tint or wash: a mark the previous play ended on lets go over `markOut` as the next play starts. */
+  const emphasisAt = (word: MushafWord, seconds: number, now: number): number => {
+    const value = emphasisOf(word, now);
+    const change = playChange(seconds, (t) => emphasisOf(word, t), 'markOut');
+    return change === null ? value : Math.max(value, change.was * (1 - INOUT(change.progress)));
+  };
   const marks = isStudio && review.showDoubtful;
   const doubtStyle: React.CSSProperties = {
     textDecoration: `underline dotted ${review.doubtColor}`,
@@ -330,12 +362,12 @@ export const wordStyleFrom = (
     const position = context.linePosition ?? 0;
     if (mode !== 'none') {
       if (style === 'ink') {
-        const opacity = round4(1 - (1 - inkOf(word, now)) * (1 - clamp01(Math.abs(position))));
+        const opacity = round4(1 - (1 - inkAt(word, seconds, now)) * (1 - clamp01(Math.abs(position))));
         if (opacity < 1) css = {opacity};
       } else {
         // A line on its way up and out of the centre slot lets its mark go as it leaves.
         const neighbour = position < 0 ? clamp01(1 + position) : 1;
-        const amount = round4(emphasisOf(word, now) * neighbour);
+        const amount = round4(emphasisAt(word, seconds, now) * neighbour);
         if (amount > 0) {
           if (style === 'wash') {
             css = washStyle({

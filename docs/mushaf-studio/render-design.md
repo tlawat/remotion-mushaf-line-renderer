@@ -1395,3 +1395,37 @@ Stage R2 (timing, intro, translation, labels, memorisation, legend, end card):
     (`audioOffsetFor()`, shared with `MushafPage` and `MushafAyahText`). With `fromAyah` set, the
     window's 0.8 s first appearance may then start at frame 0 and settle less than
     `leadInSeconds` before the first word: late, never early.
+
+Stage R2 review:
+
+24. **The card's Latin range reads "Ayat 2–7", without the macrons.** EB Garamond as Google Fonts
+    serves it (400 and 500 alike) sets the macron of a capital Ā beside the letter, not over it,
+    whether the capital is real or the font's small cap, precomposed or decomposed, letter-spaced
+    or not; only a lowercase ā is drawn right. Small caps set every letter as a capital, so the
+    range (on the intro card and on the end card's range line) is drawn through
+    `smallCapsLabel()`, which takes the marks off, as the corner label's names have none (19).
+    `latinRangeText()` still returns "Āyāt 2–7".
+25. **The legend's names are drawn smaller when an entry does not fit the safe area.** Each entry
+    stays one unbreakable unit (5.8), measured as drawn: the English in small caps on the canvas
+    (`fontVariantCaps`), with its 0.08 em letter-spacing, in `overlay.font`'s face; the Arabic in
+    Amiri. When the widest entry is wider than `width − 2 × safe` (the "Connected or separated
+    prolongation" rule with both names at 9:16), the band's type size is `floor(0.8 L × room /
+    widest)` rather than 0.8 L, so every row fits (`legendBand().rowWidths`).
+26. **With the intro card on, the header lines count in the intro delay** (5.6):
+    `introSeconds + cardIn + headers × headerSeconds + leadInSeconds − firstWord`, and their slots
+    are laid out again on the moved schedule (`withHeaderSlots()` before the first ayah's line),
+    so each holds its spacing after the card instead of being clamped against it.
+27. **The end hold counts from the last word's own end** (5.2), not from the last ayah's `end`: an
+    ayah-end rosette the timings time as a word (14) is left out (`recitationEndSeconds(timings,
+    clips, markers)`). Without word times, the ayah's end.
+28. **MushafPassage runs the whole of 5.2 and 5.5.** Its window (and its first and last line in
+    one-line mode) appears over `windowIn` on `SINE` at the first hold, after the intro card (the
+    window no longer starts under the card), and fades over `endFade` after the last hold; the
+    video grows by the fade (`passageEndFade()`, 0 under `cut`). The translation and the corner
+    number dissolve at each line's hold start (`passageAyahChanges()`, `translationDissolve` and
+    `labelChange`), the first ayah after header lines from nothing, and come and go with the lines.
+29. **Under repeats nothing changes in one frame as a play starts.** The recording's clock goes back
+    to the ayah's start, so the current line's ink goes from the previous play's over `rehide` on
+    `SINE`, the mark the previous play ended on lets go over `markOut`, and a word the previous
+    play ended with hidden that this play shows (the next ayah once `revealAfterRepeats` is over)
+    comes in over `reveal` on `SOFT` from the play's start (5.7).

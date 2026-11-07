@@ -244,56 +244,84 @@ export type LegendBandGeometry = {
   readonly edge: 'top' | 'bottom';
   /** px from that edge to the band: the safe area, or at 9:16 the platform band. */
   readonly inset: number;
-  /** px of the names: `0.8 L`. */
+  /** px of the names: `0.8 L`, or less when the widest entry would not fit in the safe area's width. */
   readonly fontSize: number;
   /** Rows the entries wrap to in the band's width. */
   readonly rows: number;
+  /** px each row takes, entries and the 1 em between them: each at most the safe area's width. */
+  readonly rowWidths: readonly number[];
   /** px of the band: `1.6 × fontSize` a row. */
   readonly height: number;
   /** px kept clear of the lines from that edge: the band, the inset beyond the safe area, and half a line box. */
   readonly reserve: number;
 };
 
+/** The legend's English names as `<TajweedLegend band>` sets them: small caps, 0.08 em apart. */
+const LEGEND_LETTER_SPACING = 0.08;
+
+/** What `legendBand()` measures a legend in: the frame, the lines' line box, and the Latin names' face. */
+export type LegendBandFrame = {
+  readonly width: number;
+  readonly height: number;
+  readonly lineHeight: number;
+  /** The English names' family (`studioFontFamily(overlay.font, 'label')`); default the `'auto'` label face. */
+  readonly fontFamily?: string | undefined;
+};
+
 /**
  * The band of the tajweed legend in a `width` × `height` frame (render-design.md 5.8), or `null`
  * when no legend is drawn (`legend.show` off, or a theme that paints every rule alike). Its entries
- * are measured in the label face (a canvas, after the font gate) and wrapped into the width inside
- * the safe area; the band is `1.6 × 0.8 L` a row, and the lines keep the band plus half a line box
+ * are measured as `<TajweedLegend band>` draws them (the English names in small caps, letter-spaced,
+ * in `fontFamily`; the Arabic in Amiri; on a canvas, after the font gate) and wrapped into the
+ * width inside the safe area. An entry is one unbreakable unit, so when the widest one is wider
+ * than that (the long prolongation rule with both names at 9:16), the names are drawn smaller until
+ * it fits. The band is `1.6 × fontSize` a row, and the lines keep the band plus half a line box
  * (`lineHeight`) clear of it.
  */
 export const legendBand = (
   legend: Pick<Legend, 'show' | 'position' | 'names'>,
   theme: MushafThemeSelection,
-  frame: {readonly width: number; readonly height: number; readonly lineHeight: number},
+  frame: LegendBandFrame,
 ): LegendBandGeometry | null => {
   if (!legend.show || !themeHasTajweedColors(theme)) return null;
   const geometry = frameGeometry(frame.width, frame.height);
-  const fontSize = Math.round(0.8 * geometry.label);
+  const labelSize = Math.round(0.8 * geometry.label);
   const edge = legend.position.startsWith('top') ? 'top' : 'bottom';
   const inset = edge === 'top' ? geometry.top : geometry.bottom;
   const room = frame.width - 2 * geometry.safe;
-  const latin = {fontFamily: studioFontFamily('auto', 'label'), fontWeight: 500};
+  const latin = {
+    fontFamily: frame.fontFamily ?? studioFontFamily('auto', 'label'),
+    fontWeight: 500,
+    smallCaps: true,
+    letterSpacing: LEGEND_LETTER_SPACING,
+  };
   const arabic = {fontFamily: ARABIC_LABEL_FAMILY};
-  let rows = 1;
-  let used = 0;
-  for (const item of tajweedLegend(theme)) {
-    // A swatch of 0.5 em, 0.4 em before each name; small caps measured as capitals at 80 %.
-    let entry = 0.5 * fontSize;
-    if (legend.names !== 'ar') entry += 0.4 * fontSize + 0.8 * textAdvance(item.english.toUpperCase(), latin, fontSize);
-    if (legend.names !== 'en') entry += 0.4 * fontSize + textAdvance(item.arabic, arabic, fontSize);
-    if (used === 0) used = entry;
-    else if (used + fontSize + entry <= room) used += fontSize + entry;
-    else {
-      rows += 1;
-      used = entry;
-    }
+  // Each entry at the label size: a swatch of 0.5 em, 0.4 em before each name.
+  const entries = tajweedLegend(theme).map((item) => {
+    let entry = 0.5 * labelSize;
+    if (legend.names !== 'ar') entry += 0.4 * labelSize + textAdvance(item.english, latin, labelSize);
+    if (legend.names !== 'en') entry += 0.4 * labelSize + textAdvance(item.arabic, arabic, labelSize);
+    return entry;
+  });
+  // An entry never breaks: the widest one sets the size when it would not fit at 0.8 L.
+  const widest = Math.max(0, ...entries);
+  const fontSize = widest > room ? Math.max(1, Math.floor((labelSize * room) / widest)) : labelSize;
+  const scale = fontSize / labelSize;
+  const rowWidths: number[] = [];
+  for (const entry of entries.map((width) => width * scale)) {
+    const used = rowWidths[rowWidths.length - 1];
+    if (used !== undefined && used + fontSize + entry <= room)
+      rowWidths[rowWidths.length - 1] = used + fontSize + entry;
+    else rowWidths.push(entry);
   }
+  const rows = Math.max(1, rowWidths.length);
   const height = Math.round(rows * 1.6 * fontSize);
   return {
     edge,
     inset,
     fontSize,
     rows,
+    rowWidths,
     height,
     reserve: inset - geometry.safe + height + Math.round(0.5 * frame.lineHeight),
   };
@@ -303,7 +331,7 @@ export const legendBand = (
 export const legendReserve = (
   legend: Pick<Legend, 'show' | 'position' | 'names'>,
   theme: MushafThemeSelection,
-  frame: {readonly width: number; readonly height: number; readonly lineHeight: number},
+  frame: LegendBandFrame,
 ): BlockReserve => {
   const band = legendBand(legend, theme, frame);
   if (band === null) return {top: 0, bottom: 0};
@@ -337,7 +365,7 @@ export const LegendBand: React.FC<LegendBandProps> = ({
   height,
   lineHeight,
 }) => {
-  const band = legendBand(legend, theme, {width, height, lineHeight});
+  const band = legendBand(legend, theme, {width, height, lineHeight, fontFamily});
   if (band === null) return null;
   const {safe} = frameGeometry(width, height);
   return (

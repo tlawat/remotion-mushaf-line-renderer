@@ -757,6 +757,31 @@ describe('tajweed legend', () => {
     ).toBe(wide.reserve);
   });
 
+  it('fits every row inside the safe area at 9:16 with both names, drawing the names smaller when an entry is too wide', () => {
+    const both = {...legend, names: 'both' as const};
+    const tall = legendBand(both, 'light', {width: 1080, height: 1920, lineHeight: 114})!;
+    const room = 1080 - 2 * 54;
+    expect(tall.rowWidths).toHaveLength(tall.rows);
+    for (const row of tall.rowWidths) expect(row).toBeLessThanOrEqual(room);
+    // The estimate (0.5 em a character, plus the names' 0.08 em letter-spacing) makes the
+    // "Connected or separated prolongation: 4 or 5 counts" entry about 1380 px at 0.8 L (30 px):
+    // it is drawn at floor(30 × 972 / 1380) px.
+    const english = 'Connected or separated prolongation: 4 or 5 counts';
+    const arabic = 'مد متصل أو منفصل ٤ أو ٥ حركات';
+    const widest = 30 * (0.5 + 0.4 + english.length * (0.5 + 0.08) + 0.4 + arabic.length * 0.5);
+    expect(tall.fontSize).toBe(Math.floor((30 * room) / widest));
+    expect(tall.fontSize).toBeLessThan(30);
+    expect(tall.height).toBe(Math.round(tall.rows * 1.6 * tall.fontSize));
+    // English names alone fit at 0.8 L: nothing is drawn smaller.
+    expect(legendBand({...both, names: 'en'}, 'light', {width: 1080, height: 1920, lineHeight: 114})!.fontSize).toBe(
+      30,
+    );
+    // At 16:9 every entry fits at 0.8 L as well.
+    const wide = legendBand(both, 'light', {width: 1920, height: 1080, lineHeight: 198})!;
+    expect(wide.fontSize).toBe(21);
+    for (const row of wide.rowWidths) expect(row).toBeLessThanOrEqual(1920 - 2 * 54);
+  });
+
   it('is drawn on the page as well', async () => {
     const pageProps: MushafPageProps = {...defaultMushafPageProps, timingsFile: 'surah2.json', theme: 'dark', legend};
     const page = await resolvePage(pageProps);
@@ -794,7 +819,7 @@ describe('end card', () => {
     const sequence = c.querySelector<HTMLElement>('[data-sequence="End card"]')!;
     expect(sequence.dataset).toMatchObject({from: '750', duration: '150'});
     const card = sequence.querySelector<HTMLElement>('[data-mushaf-end-card]')!;
-    expect(card.querySelector('[data-mushaf-end-card-part="range"]')!.textContent).toBe('Al-Fatihah · Āyāt 2–7');
+    expect(card.querySelector('[data-mushaf-end-card-part="range"]')!.textContent).toBe('Al-Fatihah · Ayat 2–7');
     // The framed surah name is the title, once.
     expect(card.querySelectorAll('[data-mushaf-end-card-part="title"]')).toHaveLength(1);
     expect(card.querySelector('[data-mushaf-end-card-part="reciter"]')!.textContent).toBe('Abdul Hamid Ghraio');

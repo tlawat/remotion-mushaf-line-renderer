@@ -142,6 +142,41 @@ describe('firstAppearance / linesEndFrame / linesPresence', () => {
     expect(recitationEndSeconds(timings, clipTimeline(timings, off))).toBe(27.559);
   });
 
+  it('counts the hold from the last word, not from a rosette the timings time as a word', () => {
+    // The Studio's bundled timings give the last ayah's rosette an entry of its own (1:7:10, 0.8 s):
+    // the ayah ends at 28.359 s, its last word at 27.559 s.
+    const last = timings.ayat[timings.ayat.length - 1]!;
+    const withRosette: RecitationTimingsV1 = {
+      ...timings,
+      ayat: [
+        ...timings.ayat.slice(0, -1),
+        {...last, end: 28.359, words: [...last.words!, {id: '1:7:10', start: 27.559, end: 28.359}]},
+      ],
+    };
+    const markers = new Set(['1:7:10']);
+    expect(recitationEndSeconds(withRosette, clipTimeline(withRosette, off), markers)).toBe(27.559);
+    // Unnamed, the rosette is the last word.
+    expect(recitationEndSeconds(withRosette, clipTimeline(withRosette, off))).toBe(28.359);
+    // So the lines are gone endHold + endFade after the last word: f827 + 45 + 30.
+    expect(linesEndFrame(recitationEndSeconds(withRosette, clipTimeline(withRosette, off), markers), 'calm', fps)).toBe(
+      902,
+    );
+    // Repeated: the last word on the last clip.
+    const repeat: Plays = {mode: 'repeat', repeat: 2, pauseSeconds: 0.5};
+    const clips = clipTimeline(withRosette, repeat);
+    const lastClip = clips[clips.length - 1]!;
+    expect(recitationEndSeconds(withRosette, clips, markers)).toBeCloseTo(
+      lastClip.compositionFrom + 27.559 - lastClip.audioFrom,
+      9,
+    );
+    // Without word times, the ayah's end.
+    const ayahsOnly: RecitationTimingsV1 = {
+      ...withRosette,
+      ayat: withRosette.ayat.map(({words: _words, ...ayah}) => ayah),
+    };
+    expect(recitationEndSeconds(ayahsOnly, clipTimeline(ayahsOnly, off), markers)).toBe(28.359);
+  });
+
   it('comes in with the lines and goes with their fade', () => {
     const at = (frame: number) => linesPresence(frame, {appear: 90, windowIn: 24, end: 902, endFade: 30});
     expect(at(89)).toBe(0);

@@ -2,11 +2,11 @@ import {enterTiming, normalizeTimings, type RecitationTimings} from '@tlawat/rem
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
 import {followsHostAudio} from '../../audio/host';
 import {showsIntro} from '../../overlay/TitleOverlay';
-import {type Animation, migrateMushafProps, type Overlay, sizeForAspect} from '../../schema';
+import {type Animation, markerIds, migrateMushafProps, type Overlay, sizeForAspect} from '../../schema';
 import {tempoSeconds} from '../../schema/tokens';
 import {isInStudio} from '../../studio/environment';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../extras';
-import {STUDIO_FPS} from '../shared';
+import {headerCount, headerSeconds, STUDIO_FPS, withHeaderSlots} from '../shared';
 import {
   delayRecitationStart,
   type ResolvedRecitationWithClips,
@@ -28,10 +28,12 @@ const roundTime = (seconds: number): number => Math.round(seconds * 1e6) / 1e6;
 
 /**
  * Seconds the recording starts later in the video so the intro card has its time (render-design.md
- * 5.6): with the card on (`title` `intro` or `both`), `introSeconds + cardIn + leadInSeconds −
- * firstWordSeconds`, never negative, `cardIn` at the tempo (0.8 s calm, 1.13 s slow). So the card
- * stays its whole `introSeconds`, and the lines come in after it, settled `leadInSeconds` before the
- * first word. 0 without the card.
+ * 5.6): with the card on (`title` `intro` or `both`), `introSeconds + cardIn + headerLeadSeconds +
+ * leadInSeconds − firstWordSeconds`, never negative, `cardIn` at the tempo (0.8 s calm, 1.13 s
+ * slow). So the card stays its whole `introSeconds`, the lines come in after it, the surah's header
+ * lines (when the recitation starts at ayah 1) hold their spacing (`headerLeadSeconds`: their count ×
+ * `headerSeconds()`), and the first ayah's line is settled `leadInSeconds` before its first word.
+ * 0 without the card.
  *
  * `introDelaySeconds({title: 'intro', introSeconds: 3}, {tempo: 'calm', leadInSeconds: 0.4}, 0.331)` is 3.869.
  */
@@ -39,12 +41,17 @@ export const introDelaySeconds = (
   overlay: Pick<Overlay, 'title' | 'introSeconds'>,
   animation: Pick<Animation, 'tempo' | 'leadInSeconds'>,
   firstWordSeconds: number,
+  headerLeadSeconds = 0,
 ): number =>
   showsIntro(overlay.title)
     ? Math.max(
         0,
         roundTime(
-          overlay.introSeconds + tempoSeconds('cardIn', animation.tempo) + animation.leadInSeconds - firstWordSeconds,
+          overlay.introSeconds +
+            tempoSeconds('cardIn', animation.tempo) +
+            headerLeadSeconds +
+            animation.leadInSeconds -
+            firstWordSeconds,
         ),
       )
     : 0;
@@ -55,33 +62,57 @@ export const firstWordSeconds = (timings: RecitationTimings): number => {
   return first?.words?.[0]?.start ?? first?.start ?? 0;
 };
 
+/** How many slots open the schedule on the surah's header lines (`headerCount()` of the lines, each with its slot). */
+const leadingHeaderSlots = (resolved: Pick<ResolvedRecitationWithClips, 'lines' | 'schedule'>): number => {
+  const headers = headerCount(resolved.lines);
+  let k = 0;
+  while (k < headers && resolved.schedule[k]?.index === k) k++;
+  return k;
+};
+
 /**
  * `resolved` with the intro card's time put before the recording (`delayRecitationStart()` by
  * `introDelaySeconds()`), once, after every skip of the recording's start: the timings, the
- * schedule and the clip timeline move later, and the audio starts there. Not under `hostAudio`:
- * the template's track decides when the recording is heard, so nothing can wait for the card.
+ * schedule and the clip timeline move later, and the audio starts there. The surah's header lines
+ * before ayah 1 count in the delay, and their slots are laid out again on the moved schedule
+ * (`withHeaderSlots()`, `headerSeconds()` apart before the first ayah's line), so each holds its
+ * spacing after the card rather than being squeezed against it. Not under `hostAudio`: the
+ * template's track decides when the recording is heard, so nothing can wait for the card.
  */
 export const withIntroDelay = (
   props: MushafRecitationProps,
   resolved: ResolvedRecitationWithClips,
-): ResolvedRecitationWithClips =>
-  followsHostAudio(props)
-    ? resolved
-    : delayRecitationStart(
-        resolved,
-        introDelaySeconds(props.overlay, props.animation, firstWordSeconds(resolved.timings)),
-        props.memorize,
-      );
+): ResolvedRecitationWithClips => {
+  if (followsHostAudio(props)) return resolved;
+  const headers = leadingHeaderSlots(resolved);
+  const spacing = headerSeconds(props.overlay);
+  const delay = introDelaySeconds(
+    props.overlay,
+    props.animation,
+    firstWordSeconds(resolved.timings),
+    headers * spacing,
+  );
+  const delayed = delayRecitationStart(resolved, delay, props.memorize);
+  if (headers === 0 || delay === 0) return delayed;
+  // The header slots were laid on the undelayed schedule, clamped at 0: lay them again before the first ayah's line.
+  const rest = delayed.schedule.slice(headers).map((slot) => ({...slot, index: slot.index - headers}));
+  return {...delayed, schedule: withHeaderSlots(rest, headers, spacing)};
+};
 
 /**
- * Frames of a recitation before its end card: the last ayah's end (the last clip's when ayahs
- * repeat), the end hold and the lines' fade (`linesEndFrame()`).
+ * Frames of a recitation before its end card: the last word's end (`recitationEndSeconds()`, an
+ * ayah-end rosette of `lines` left out; the last clip's when ayahs repeat), the end hold and the
+ * lines' fade (`linesEndFrame()`).
  */
 export const recitationContentFrames = (
-  resolved: Pick<ResolvedRecitationWithClips, 'timings' | 'clips'>,
+  resolved: Pick<ResolvedRecitationWithClips, 'timings' | 'clips' | 'lines'>,
   tempo: Animation['tempo'],
   fps: number,
-): number => Math.max(1, linesEndFrame(recitationEndSeconds(resolved.timings, resolved.clips), tempo, fps));
+): number =>
+  Math.max(
+    1,
+    linesEndFrame(recitationEndSeconds(resolved.timings, resolved.clips, markerIds(resolved.lines)), tempo, fps),
+  );
 
 /** Seconds the package's default entrance takes: a line starts to come in this long before it is in place. */
 export const enterSeconds = (fps: number): number => enterTiming().getDurationInFrames({fps}) / fps;
