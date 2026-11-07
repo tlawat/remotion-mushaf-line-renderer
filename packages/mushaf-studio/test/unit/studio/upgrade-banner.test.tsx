@@ -3,7 +3,7 @@
 // saved (read from the Studio's live props, not the migrated ones the composition renders), its
 // "What changes" list, and its two saves: the migrated props, or the migrated props with the Mushaf
 // look and the format's positions. In English and Arabic; nothing is written before a click.
-import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {cleanup, fireEvent, render, waitFor} from '@testing-library/react';
 import type * as React from 'react';
 import {Internals} from 'remotion';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
