@@ -38,7 +38,8 @@ const {
   slotDurationOf,
   slotErrorOf,
 } = await import('../../../src/slots');
-const {recitationDuration} = await import('../../../src/compositions/recitation');
+const {recitationContentFrames, recitationDuration} = await import('../../../src/compositions/recitation');
+type MemorizeClip = import('../../../src/memorize').MemorizeClip;
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/types').ResolvedRecitation;
 type ResolvedAyahText = import('../../../src/unicode/resolve').ResolvedAyahText;
@@ -145,10 +146,10 @@ describe('resolveMushafRecitationSlot', () => {
     const abortSignal = new AbortController().signal;
     const at30 = await resolveMushafRecitationSlot(props(), {fps: 30, abortSignal});
     const at60 = await resolveMushafRecitationSlot(props(), {fps: 60, abortSignal});
-    // The same 857 frames calculateMushafRecitationMetadata() gives at 30 fps.
-    expect(at30.durationInFrames).toBe(857);
-    const resolved = at60.props?.resolved as ResolvedRecitation;
-    expect(at60.durationInFrames).toBe(recitationDuration(resolved.timings, 60));
+    // The same 902 frames calculateMushafRecitationMetadata() gives at 30 fps: the last ayah, the hold and the fade.
+    expect(at30.durationInFrames).toBe(902);
+    const resolved = at60.props?.resolved as ResolvedRecitation & {clips: readonly MemorizeClip[]};
+    expect(at60.durationInFrames).toBe(recitationContentFrames(resolved, 'calm', 60));
     expect(at60.durationInFrames).toBeGreaterThan(1700);
     expect(resolved.durationInFrames).toBe(at60.durationInFrames);
     expect(resolved.lines).toHaveLength(6);

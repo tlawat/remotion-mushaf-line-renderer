@@ -3,6 +3,15 @@
 // components that paint a translation under the lines (one, or a stack of up to three).
 
 export {
+  lineCount,
+  measureWidth,
+  type TextFace,
+  TRANSLATION_MAX_LINES,
+  TRANSLATION_SHRINK,
+  textAdvance,
+  translationFitSize,
+} from './fit';
+export {
   GlossStrip,
   type GlossStripProps,
   type GlossStripState,
@@ -19,10 +28,11 @@ export {
   type QuranComOptions,
   type QuranComResource,
 } from './quran-com';
-export {TranslationBlock, type TranslationBlockProps} from './TranslationBlock';
+export {type OutgoingAyah, TranslationBlock, type TranslationBlockProps} from './TranslationBlock';
 export {
   MAX_TRANSLATION_LAYERS,
   type TranslationLayer,
   TranslationStack,
+  type TranslationStackLayout,
   type TranslationStackProps,
 } from './TranslationStack';

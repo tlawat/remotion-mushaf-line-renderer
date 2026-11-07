@@ -7,15 +7,15 @@ import {defaultOverlay, headerSchema, OVERLAY_CORNERS, OVERLAY_TITLES, overlaySc
 import {defaultMushafAyahTextProps, mushafAyahTextSchema} from '../../../src/unicode';
 
 describe('overlaySchema', () => {
-  it('defaults to no title, a three-second card, the label top right at 28 px', () => {
+  it('defaults to no title, a three-second card in the muted ink, the label top right at the frame’s size', () => {
     expect(defaultOverlay).toEqual({
       title: 'none',
       introSeconds: 3,
       reciter: '',
-      color: '#1b1b1b',
+      color: '#5a554c',
       font: 'auto',
       corner: 'top-right',
-      cornerSize: 28,
+      cornerSize: 0,
     });
     expect(overlaySchema.parse(defaultOverlay)).toEqual(defaultOverlay);
     expect(OVERLAY_TITLES).toEqual(['none', 'intro', 'corner', 'both']);
@@ -26,18 +26,23 @@ describe('overlaySchema', () => {
     for (const [key, field] of Object.entries(overlaySchema.shape)) {
       expect(field.description, key).toMatch(/\w/);
     }
+    // The card adds its time; the corner label's size follows the frame at 0.
+    expect(overlaySchema.shape.introSeconds.description).toMatch(/recitation starts after it/);
+    expect(overlaySchema.shape.cornerSize.description).toMatch(/0: auto/);
     expect(headerSchema.description).toMatch(/ayah 1/);
   });
 
-  it('bounds introSeconds to 2-6 and cornerSize to 12-60', () => {
+  it('bounds introSeconds to 2-6 and cornerSize to 0 (auto) to 60', () => {
     const at = (changes: object) => overlaySchema.safeParse({...defaultOverlay, ...changes}).success;
     expect(at({introSeconds: 2})).toBe(true);
     expect(at({introSeconds: 6})).toBe(true);
     expect(at({introSeconds: 1.5})).toBe(false);
     expect(at({introSeconds: 6.5})).toBe(false);
+    expect(at({cornerSize: 0})).toBe(true);
     expect(at({cornerSize: 12})).toBe(true);
     expect(at({cornerSize: 60})).toBe(true);
-    expect(at({cornerSize: 11})).toBe(false);
+    expect(at({cornerSize: -1})).toBe(false);
+    expect(at({cornerSize: 12.5})).toBe(false);
     expect(at({cornerSize: 61})).toBe(false);
     expect(at({title: 'banner'})).toBe(false);
     expect(at({corner: 'middle'})).toBe(false);

@@ -111,8 +111,9 @@ describe('scripts', () => {
     expect(fontFamilyForLanguage('zh')).toBe('Noto Sans SC');
     expect(fontFamilyForLanguage('ja')).toBe('Noto Sans JP');
     expect(fontFamilyForLanguage('ko-KR')).toBe('Noto Sans KR');
-    expect(fontFamilyForLanguage('en')).toBe('Noto Serif');
-    expect(SCRIPT_FONTS.latin.families).toEqual(['Noto Serif', 'Lora']);
+    // The book serif of the render design first: EB Garamond covers Latin, Cyrillic, Greek and Vietnamese.
+    expect(fontFamilyForLanguage('en')).toBe('EB Garamond');
+    expect(SCRIPT_FONTS.latin.families).toEqual(['EB Garamond', 'Noto Serif', 'Lora']);
     expect(SCRIPT_FONTS.arabic.families).toEqual(['Noto Naskh Arabic', 'Amiri']);
     expect(SCRIPT_FONTS.cjk.subsets).toBeUndefined();
     for (const [id, fonts] of Object.entries(SCRIPT_FONTS)) expect(fonts.script).toBe(id);
@@ -126,6 +127,17 @@ describe('googleFontsCssUrl', () => {
     expect(googleFontsCssUrl('Amiri', {text: 'مسب بسم'})).toBe(
       `https://fonts.googleapis.com/css2?family=Amiri:wght@400&display=block&text=${encodeURIComponent(' بسم')}`,
     );
+  });
+
+  it('asks for italics on the ital,wght axis', () => {
+    expect(googleFontsCssUrl('EB Garamond', {weights: [500, 400], italics: [400]})).toBe(
+      'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=block',
+    );
+    // No italics: the plain wght axis, as before.
+    expect(googleFontsCssUrl('Lora', {italics: []})).toBe(
+      'https://fonts.googleapis.com/css2?family=Lora:wght@400&display=block',
+    );
+    expect(() => googleFontsCssUrl('Lora', {italics: [450.5]})).toThrow(/not a font weight/);
   });
 
   it('refuses an empty family or a weight that is not one', () => {

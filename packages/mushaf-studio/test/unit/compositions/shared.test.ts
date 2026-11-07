@@ -104,9 +104,10 @@ describe('blockGeometry and the block styles', () => {
     });
     expect(linesBlockStyle(g, {...defaultLayout, offsetY: -50}).transform).toBe('translateY(-50px)');
     const below = translationBlockStyle(g, defaultLayout, defaultText, 1080);
-    expect(below).toEqual({position: 'absolute', left: 190, width: 1540, top: g.top + g.blockHeight + 24});
+    // 0.4 of a line box (198 px at 16:9) away from the lines, on either side.
+    expect(below).toEqual({position: 'absolute', left: 190, width: 1540, top: g.top + g.blockHeight + 79});
     const above = translationBlockStyle(g, defaultLayout, {...defaultText, translationPosition: 'above'}, 1080);
-    expect(above).toEqual({position: 'absolute', left: 190, width: 1540, bottom: 1080 - g.top + 24});
+    expect(above).toEqual({position: 'absolute', left: 190, width: 1540, bottom: 1080 - g.top + 79});
     expect(translationBlockStyle(g, defaultLayout, {...defaultText, translationOffsetY: 30}, 1080).transform).toBe(
       'translateY(30px)',
     );
@@ -114,7 +115,7 @@ describe('blockGeometry and the block styles', () => {
       position: 'absolute',
       left: 190,
       width: 1540,
-      bottom: 34,
+      bottom: 30,
     });
   });
 

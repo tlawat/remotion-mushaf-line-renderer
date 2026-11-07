@@ -15,10 +15,11 @@ import {volumeAt} from '../audio/volume';
 import {backgroundFor, groundFor} from '../background/compat';
 import {MushafBackground} from '../background/MushafBackground';
 import {endCardFrames} from '../compositions/extras';
+import {useStudioFonts} from '../compositions/fonts';
 import {
   CompositionAudio,
   CompositionEndCard,
-  CornerLegend,
+  LegendBand,
   readableLayers,
   StudioWarnings,
   translationsOf,
@@ -37,6 +38,7 @@ import {
   fontPropsFrom,
   inkTintFor,
   markerIds,
+  metalOf,
   studioFontFamily,
   themeSelectionFrom,
   washAlpha,
@@ -285,7 +287,7 @@ export const pageTranslationStyle = (
  * the line being recited marked with a faint band (or, without it, the words marked as `highlight`
  * says), the words outside the ayahs followed dimmed, and the page turning to the next one just
  * before its first word. Around it its `background`, the translations beside or
- * under the page (`text`, up to three stacked), the tajweed legend in a corner and an end card
+ * under the page (`text`, up to three stacked), the tajweed legend in its band and an end card
  * after the last ayah when asked; the audio normalised and faded as `audio` says. In the Studio, the
  * doubtful words are marked, the fonts and audio warnings shown, and the Mushaf panel docked.
  */
@@ -308,6 +310,8 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
   // The rosettes of every page: a rosette timed as a word of its own is never a span of its own.
   const markers = useMemo(() => markerIds(pages.flatMap((page) => page.lines)), [pages]);
   const ranges = rangesOf(resolved);
+  // The book serif and the Arabic labels: no frame is taken before they are in.
+  useStudioFonts();
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   // The frames before the end card: the audio fades out by their end, the last page stays to it.
   const cardFrames = endCardFrames(endCard, fps);
@@ -414,13 +418,14 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
           <TranslationStack layers={readableLayers(translationLayers, layout.color, ground)} ayahKey={ayahKey} />
         </div>
       )}
-      <CornerLegend
+      <LegendBand
         legend={legend}
         theme={theme}
         fontFamily={overlayFont}
         color={layout.color}
-        background={layout.background}
         width={width}
+        height={height}
+        lineHeight={geometry.lineHeight}
       />
       <CompositionEndCard
         endCard={endCard}
@@ -430,9 +435,14 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
         reciter=""
         from={contentFrames}
         durationInFrames={cardFrames}
-        fontFamily={overlayFont}
+        font={defaultOverlay.font}
         color={layout.color}
-        background={layout.background}
+        background={ground}
+        metal={metalOf({theme: props.theme, customTheme: props.customTheme, ground})}
+        measure={geometry.measure}
+        glyphSize={geometry.fontSize}
+        lineHeight={geometry.lineHeight}
+        fontProps={fontSetup.props}
         width={width}
         height={height}
       />

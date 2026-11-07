@@ -163,3 +163,35 @@ export const metalOf = (props: {
   if (props.theme === 'custom' && props.customTheme?.override.frame) return props.customTheme.frame;
   return isLightGround(props.ground) ? METAL.light : METAL.dark;
 };
+
+/** Where the furniture of a frame goes (labels, counter, legend, jadwal, cards' text), in px of the frame (3.3). */
+export type FrameGeometry = {
+  /** The safe area's inset: 5 % of the short side (54 at every format). */
+  readonly safe: number;
+  /** The label size `L = min(0.024 × height, 0.034 × width)`: 26 at 16:9, 37 at 9:16, 32 at 4:5. */
+  readonly label: number;
+  /** The scale of hairlines, `shortSide / 1080`. */
+  readonly unit: number;
+  /** The inset of the top furniture: the safe area, or at 9:16 the top 12 % the platform's buttons take (230). */
+  readonly top: number;
+  /** The inset of the bottom furniture: the safe area, or at 9:16 the bottom 18 % (346). */
+  readonly bottom: number;
+};
+
+/**
+ * The furniture geometry of a `width` × `height` frame: the 5 % safe area, the label size, the
+ * hairline unit, and at a vertical frame (taller than 3:2) the platform bands kept clear.
+ * `frameGeometry(1080, 1920)` is `{safe: 54, label: 37, unit: 1, top: 230, bottom: 346}`.
+ */
+export const frameGeometry = (width: number, height: number): FrameGeometry => {
+  const short = Math.min(width, height);
+  const safe = Math.round(0.05 * short);
+  const tall = height / width > 1.5;
+  return {
+    safe,
+    label: Math.round(Math.min(0.024 * height, 0.034 * width)),
+    unit: short / 1080,
+    top: tall ? Math.round(0.12 * height) : safe,
+    bottom: tall ? Math.round(0.18 * height) : safe,
+  };
+};

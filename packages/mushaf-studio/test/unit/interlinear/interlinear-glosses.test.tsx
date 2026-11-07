@@ -198,7 +198,7 @@ describe('<InterlinearGlosses>', () => {
     expect(label(container, '1:2:4')!.style.opacity).toBe('0');
     expect(label(container, '1:2:4')!.dataset.visibility).toBe('hidden');
     expect(label(container, '1:2:4')!.textContent).toBe('worlds');
-    expect(label(container, '1:2:2')!.style.opacity).toBe('0.12');
+    expect(label(container, '1:2:2')!.style.opacity).toBe('0.14');
     expect(label(container, '1:2:2')!.dataset.visibility).toBe('faint');
     // The active word is shown: its label at full ink in the highlight colour.
     expect(label(container, '1:2:1')!.style.opacity).toBe('1');

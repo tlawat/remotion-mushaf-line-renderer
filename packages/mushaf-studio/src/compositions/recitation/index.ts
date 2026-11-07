@@ -13,15 +13,20 @@ export {
 export {
   calculateMushafRecitationMetadata,
   enterSeconds,
+  firstWordSeconds,
+  introDelaySeconds,
   type ResolvedProps,
   type ResolvePropsOptions,
+  recitationContentFrames,
   recitationDuration,
   resolveRecitationProps,
+  withIntroDelay,
   withRecitationAudio,
 } from './calculate-metadata';
 export {MushafRecitation} from './MushafRecitation';
 export {
   audioOffsetFor,
+  delayRecitationStart,
   playableTimings,
   type ResolvedRecitationWithClips,
   type ResolveRecitationOptions,
@@ -34,3 +39,19 @@ export {
 } from './resolve';
 export type {MushafRecitationProps} from './schema';
 export {defaultMushafRecitationProps, mushafRecitationSchema} from './schema';
+export {
+  type AyahChange,
+  type AyahChangeOptions,
+  ayahChanges,
+  type BoundaryInputs,
+  firstAppearance,
+  type LinePlan,
+  type LinePlanOptions,
+  linesEndFrame,
+  linesPresence,
+  oneLinePlan,
+  recitationEndSeconds,
+  type ShownAyah,
+  shownAyahAt,
+  slotEnd,
+} from './transitions';

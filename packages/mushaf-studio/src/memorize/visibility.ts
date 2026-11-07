@@ -1,6 +1,8 @@
 import type * as React from 'react';
 import type {Memorize} from '../schema';
-import type {MemorizeClip} from './timeline';
+import {isLightGround} from '../schema/color';
+import {SINE, SOFT, tempoSeconds} from '../schema/tokens';
+import {clipAt, type MemorizeClip} from './timeline';
 
 /**
  * What a word shows under a memorisation mode: all of it, nothing (it keeps its place), a faint
@@ -8,8 +10,14 @@ import type {MemorizeClip} from './timeline';
  */
 export type WordVisibility = 'shown' | 'hidden' | 'faint' | 'first-letter';
 
-/** The opacity of a word under `'first-letters'` in a glyph font, where a word cannot be cut into letters. */
-export const FAINT_WORD_OPACITY = 0.12;
+/**
+ * The opacity of a word under `'first-letters'` in a glyph font, where a word cannot be cut into
+ * letters: the ghost on a light ground (`ghostOpacity()`; 0.20 on a dark one).
+ */
+export const FAINT_WORD_OPACITY = 0.14;
+
+/** The `'first-letters'` ghost on `ground`: 0.14 on a light ground, 0.20 on a dark one, where the same faintness reads less. */
+export const ghostOpacity = (ground: string): number => (isLightGround(ground) ? FAINT_WORD_OPACITY : 0.2);
 
 export type WordVisibilityInput = {
   readonly mode: Memorize['mode'];
@@ -67,3 +75,50 @@ export const visibilityStyle = (visibility: WordVisibility): React.CSSProperties
       return undefined;
   }
 };
+
+export type MemorizeOpacityInput = Omit<WordVisibilityInput, 'clip'> & {
+  /** Seconds of the composition: when a play starts. */
+  readonly seconds: number;
+  /** The clip timeline (`clipTimeline()`): the play being heard, and the one before it. */
+  readonly clips: readonly MemorizeClip[];
+  /** The ground (`groundOf()`): the ghost's strength. Default ivory. */
+  readonly ground?: string | undefined;
+};
+
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+
+/**
+ * The opacity memorisation gives a word on one frame, 0-1 (render-design.md 5.7): what
+ * `wordVisibility()` decides, eased. A hidden word (or the `'first-letters'` ghost) comes in over
+ * `reveal` (7 frames) on `SOFT` from its own start, never before it; a word that was shown at the
+ * end of the previous play and is hidden in this one (`'blank-all'`, and every play after the
+ * first of a blanking mode) goes back over `rehide` (12 frames) on `SINE` from the play's start.
+ * 1 for a word shown. Pure.
+ */
+export const memorizeOpacity = (input: MemorizeOpacityInput): number => {
+  const {clips, seconds, start, now} = input;
+  const ghost = ghostOpacity(input.ground ?? '#f8f3e6');
+  const clip = clipAt(clips, seconds);
+  const levelOf = (visibility: WordVisibility): number =>
+    visibility === 'hidden' ? 0 : visibility === 'faint' ? ghost : 1;
+  const visibility = wordVisibility({...input, clip});
+  const level = levelOf(visibility);
+  if (level === 1) {
+    // Revealed at its own start: from what it showed just before.
+    const reveal = tempoSeconds('reveal');
+    if (start === undefined || now < start || now - start >= reveal) return 1;
+    const before = levelOf(wordVisibility({...input, now: start - 1e-6, active: false, clip}));
+    return before >= 1 ? 1 : round4(before + (1 - before) * SOFT(clamp01((now - start) / reveal)));
+  }
+  // Hidden again as a play starts: from what it showed at the end of the previous play.
+  const index = clip === null ? -1 : clips.indexOf(clip);
+  const previous = index > 0 ? clips[index - 1] : undefined;
+  if (clip === null || previous === undefined) return level;
+  const rehide = tempoSeconds('rehide');
+  const since = seconds - clip.compositionFrom;
+  if (since >= rehide) return level;
+  const was = levelOf(wordVisibility({...input, now: previous.audioTo, active: false, clip: previous}));
+  return was <= level ? level : round4(level + (was - level) * (1 - SINE(clamp01(since / rehide))));
+};
+
+const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;

@@ -11,8 +11,8 @@ import {
 import type * as React from 'react';
 import {interpolateColors} from 'remotion';
 import {themeHasTajweedColors} from '../content/tajweed';
-import {clipAt, type MemorizeClip} from '../memorize/timeline';
-import {visibilityStyle, wordVisibility} from '../memorize/visibility';
+import type {MemorizeClip} from '../memorize/timeline';
+import {memorizeOpacity} from '../memorize/visibility';
 import type {DoubtReason} from '../types';
 import {groundOf, legibleAccent, washAlpha, washColor} from './color';
 import type {Highlight, Memorize, Review} from './index';
@@ -149,8 +149,8 @@ export type WordStyleOptions = {
    */
   readonly audioTime?: ((seconds: number) => number) | undefined;
   /**
-   * The memorisation mode and its clip timeline: a word the mode hides gets `opacity` 0 (0.12 for
-   * `'first-letters'`, see `wordVisibility()`), over the marks. Default: off.
+   * The memorisation mode and its clip timeline: a word the mode hides gets `opacity` 0 (the ghost for
+   * `'first-letters'`, see `memorizeOpacity()`), over the marks. Default: off.
    */
   readonly memorize?:
     | {
@@ -353,18 +353,19 @@ export const wordStyleFrom = (
       }
     }
     if (memorize) {
-      const hidden = visibilityStyle(
-        wordVisibility({
-          mode: memorize.settings.mode,
-          revealAfterRepeats: memorize.settings.revealAfterRepeats,
-          start: startOf(word),
-          now,
-          active: context.active,
-          clip: clipAt(memorize.clips, seconds),
-          script: 'glyph',
-        }),
-      );
-      if (hidden) css = {...css, ...hidden};
+      // Memorisation decides first: a word it hides (or ghosts) shows no more than that, its ink and marks included.
+      const shown = memorizeOpacity({
+        mode: memorize.settings.mode,
+        revealAfterRepeats: memorize.settings.revealAfterRepeats,
+        start: startOf(word),
+        now,
+        seconds,
+        active: context.active,
+        clips: memorize.clips,
+        script: 'glyph',
+        ground,
+      });
+      if (shown < 1) css = {...css, opacity: Math.min(Number(css?.opacity ?? 1), shown)};
     }
     if (marks && (doubtful[word.id]?.length ?? 0) > 0) css = {...css, ...doubtStyle};
     return css;

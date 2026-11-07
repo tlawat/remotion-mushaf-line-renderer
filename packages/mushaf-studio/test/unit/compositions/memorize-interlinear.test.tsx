@@ -203,12 +203,19 @@ describe('<MushafRecitation> memorisation', () => {
     });
     const sequence = second.closest<HTMLElement>('[data-sequence]')!;
     expect(sequence.dataset).toMatchObject({from: String(Math.round(3.891 * 30)), sequence: 'Ayah 2 (2/3)'});
-    expect(counter(c)!.textContent).toBe('2/3');
-    // The title label sits top right by default: the counter goes top left.
-    expect(counter(c)!.style.left).toBe('28px');
-    expect(counter(c)!.style.color).toBe('rgb(27, 27, 27)');
+    // 4 s, three frames into the second play: the counter dissolves from "1 / 3" over 12 frames.
+    expect(counter(c)!.querySelector('[data-mushaf-overlay-part="outgoing"]')!.textContent).toBe('1 / 3');
+    cleanup();
+    at(4.5);
+    const settled = mount(props({memorize: memorize({mode: 'repeat', ...three})}, {audioOffsetSeconds: 2}));
+    // Plain text in the label face, no pill, top left (the title label's corner is top right),
+    // inside the safe area, at 60 % of the label ink.
+    expect(counter(settled)!.textContent).toBe('2 / 3');
+    expect(counter(settled)!.style).toMatchObject({left: '54px', top: '54px', opacity: '0.6', background: ''});
+    expect(counter(settled)!.style.color).toBe('rgb(90, 85, 76)');
+    const c2 = settled;
     // Repeat hides nothing.
-    expect(hidesNothing(stylesOf(windowOf(c)))).toBe(true);
+    expect(hidesNothing(stylesOf(windowOf(c2)))).toBe(true);
   });
 
   it('restarts the highlight with each play, and scrolls the window by position', () => {
@@ -240,16 +247,22 @@ describe('<MushafRecitation> memorisation', () => {
   it('blank-all hides what earlier ayahs recited; first-letters is a faint outline in the printed lines', () => {
     const clips = clipTimeline(timings, {mode: 'blank-all', ...three});
     const ayah3 = clips.find((clip) => clip.ayah === 3)!;
+    // Ayah 2's words were shown at the end of its last play: they go back to hidden over 12 frames.
     at(ayah3.compositionFrom + 0.05);
+    const going = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'blank-all', ...three})}))));
+    expect(going['1:2:1']?.opacity).toBeGreaterThan(0.9);
+    cleanup();
+    at(ayah3.compositionFrom + 0.45);
     const blankAll = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'blank-all', ...three})}))));
     expect(blankAll['1:2:1']).toEqual({opacity: 0});
-    // Being recited: shown, its ink filling in.
-    expect(blankAll['1:3:1']?.opacity).toBeGreaterThan(0.6);
+    // Being recited: shown, its ink filled in.
+    expect(blankAll['1:3:1']).toBeNull();
     expect(blankAll['1:3:2']).toEqual({opacity: 0});
     cleanup();
     const firstLetters = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'first-letters', ...three})}))));
     expect(firstLetters['1:2:1']).toBeNull();
-    expect(firstLetters['1:3:2']).toEqual({opacity: 0.12});
+    // The ghost on the ivory page: 0.14.
+    expect(firstLetters['1:3:2']).toEqual({opacity: 0.14});
   });
 
   it('times the lines per clip when shown one at a time', () => {
@@ -359,8 +372,8 @@ describe('<MushafRecitation> interlinear glosses under a memorisation mode', () 
   it('first-letters leaves a faint label under a faint word', () => {
     at(1.5);
     const c = mountWithRows('first-letters');
-    expect(stylesOf(windowOf(c))['1:2:4']).toEqual({opacity: 0.12});
-    expect(label(c, '1:2:4').style.opacity).toBe('0.12');
+    expect(stylesOf(windowOf(c))['1:2:4']).toEqual({opacity: 0.14});
+    expect(label(c, '1:2:4').style.opacity).toBe('0.14');
     expect(label(c, '1:2:4').dataset.visibility).toBe('faint');
     expect(label(c, '1:2:1').style.opacity).toBe('0.7');
   });

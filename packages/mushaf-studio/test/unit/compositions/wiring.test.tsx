@@ -53,10 +53,9 @@ vi.mock('../../../src/studio', () => ({
 const {
   calculateMushafRecitationMetadata,
   defaultMushafRecitationProps,
-  enterSeconds,
   MushafRecitation,
   mushafRecitationSchema,
-  recitationDuration,
+  recitationContentFrames,
   skipRecitationStart,
 } = await import('../../../src/compositions/recitation');
 const {defaultMushafPassageProps, mushafPassageSchema} = await import('../../../src/compositions/passage');
@@ -74,10 +73,13 @@ const {backgroundFor, defaultBackground} = await import('../../../src/background
 const {clipTimeline} = await import('../../../src/memorize');
 const {MushafStudioError} = await import('../../../src/errors');
 const {FONTS_ATTRIBUTION} = await import('../../../src/export');
-const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, mixColors, textSchema} = await import(
+const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, mixColors, tempoSeconds, textSchema} = await import(
   '../../../src/schema'
 );
-const {planTranslationLayer} = await import('../../../src/compositions/parts');
+const {cappedTranslationSize, drawnTranslationLayers, legendBand, legendReserve, planTranslationLayer} = await import(
+  '../../../src/compositions/parts'
+);
+const {BOOK_SERIF_REQUEST, STUDIO_FONT_REQUESTS} = await import('../../../src/compositions/fonts');
 const {loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import('../../../src/compositions/extras');
 const {assertNoHostRepeats, defaultHostAudio, hostAudioOf, OWN_AUDIO_NAME} = await import('../../../src/audio');
 const {surah2Timings, syntheticMushafLines} = await import('../page/helpers');
@@ -370,8 +372,8 @@ describe('audio', () => {
   it('skips the leading silence, never past the first line’s entrance, and moves the timings by it', async () => {
     const props = recitationProps({timingsFile: 'late.json', audio: audio({trimSilence: true})});
     const resolved = await resolvedOf(props);
-    // The first word at 3.331 s: its line comes in leadInSeconds and the entrance before it.
-    const latest = 3.331 - props.animation.leadInSeconds - enterSeconds(30);
+    // The first word at 3.331 s: its line comes in leadInSeconds and the window's 0.8 s entrance before it.
+    const latest = 3.331 - props.animation.leadInSeconds - tempoSeconds('windowIn', 'calm');
     const trim = Math.round(Math.min(3.2 - 0.15, latest) * 1e6) / 1e6;
     expect(resolved.audio!.trimSeconds).toBe(trim);
     expect(resolved.audioOffsetSeconds).toBe(trim);
@@ -379,7 +381,7 @@ describe('audio', () => {
     expect(resolved.timings.ayat[0]!.words![0]!.start).toBeCloseTo(3.331 - trim, 6);
     expect(resolved.schedule[0]!.start).toBeCloseTo(3.331 - trim, 6);
     const metadata = await calculateMushafRecitationMetadata(metadataArgs(props));
-    expect(metadata.durationInFrames).toBe(recitationDuration(resolved.timings, 30));
+    expect(metadata.durationInFrames).toBe(recitationContentFrames(resolved, 'calm', 30));
     // The audio starts that much later in the file.
     mount(<MushafRecitation {...props} resolved={resolved} />);
     expect(remotion.audios[0]!.trimBefore).toBe(Math.round(trim * 30));
@@ -518,6 +520,24 @@ describe('audio', () => {
   });
 });
 
+describe('translation size', () => {
+  it('never draws a translation larger than half the Arabic', () => {
+    expect(cappedTranslationSize(36, 90)).toBe(36);
+    expect(cappedTranslationSize(60, 90)).toBe(45);
+    expect(cappedTranslationSize(36, 52)).toBe(26);
+    const layer = {
+      translation: {kind: 'ayah' as const, meta: meta('en'), text: {}},
+      fontFamily: 'serif',
+      fontSize: 36,
+      color: '#5a554c',
+      direction: 'ltr' as const,
+    };
+    const same = [layer];
+    expect(drawnTranslationLayers(same, {ink: '#1c1a16', ground: '#f8f3e6', glyphSize: 90})).toBe(same);
+    expect(drawnTranslationLayers(same, {ink: '#1c1a16', ground: '#f8f3e6', glyphSize: 52})[0]!.fontSize).toBe(26);
+  });
+});
+
 describe('stacked translations', () => {
   const layer = (file: string, font = 'auto') => ({file, font, fontSize: 36, color: '#333333'});
   const blocks = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>('.mushaf-translation'));
@@ -528,13 +548,16 @@ describe('stacked translations', () => {
     // Cut to the ayahs the composition can show.
     expect(Object.keys(resolved.translations![0]!.text)).toEqual(['1:2', '1:3', '1:4', '1:7']);
     expect(resolved.translation).toBe(resolved.translations![0]);
-    remotion.state.frame = 110; // 3.67 s: ayah 3
+    // 3.83 s: ayah 3, its translation settled (the change ran from 3.391 s, ayah 2's end, over 10 frames).
+    remotion.state.frame = 115;
     const [block, ...rest] = blocks(mount(<MushafRecitation {...props} resolved={resolved} />));
     expect(rest).toHaveLength(0);
     expect(block!.textContent).toBe('Merciful');
-    // `auto`: the web font of the file's language.
+    // `auto`: the web font of the file's language, EB Garamond 500 for English, centred.
     expect(props.text.translationFont).toBe('auto');
-    expect(block!.style.fontFamily).toBe('"Noto Serif", serif');
+    expect(block!.style.fontFamily).toBe('"EB Garamond", serif');
+    expect(block!.style.fontWeight).toBe('500');
+    expect(block!.style.textAlign).toBe('center');
     expect(block!.style.direction).toBe('rtl');
   });
 
@@ -550,7 +573,7 @@ describe('stacked translations', () => {
     const c = mount(<MushafRecitation {...props} resolved={resolved} />);
     const [en, ur, zh] = blocks(c);
     expect(c.querySelectorAll('[data-mushaf-rule]')).toHaveLength(2);
-    expect(en!.style.fontFamily).toBe('"Noto Serif", serif');
+    expect(en!.style.fontFamily).toBe('"EB Garamond", serif');
     expect(en!.style.direction).toBe('ltr');
     expect(ur!.style.fontFamily).toBe('"Noto Nastaliq Urdu", serif');
     expect(ur!.style.direction).toBe('rtl');
@@ -575,6 +598,16 @@ describe('stacked translations', () => {
       family: 'Noto Sans SC',
       text: '奉一切',
     });
+    // EB Garamond (English) shares the Studio's own request, 500 included: one load for both.
+    expect(planTranslationLayer(spec('auto'), translation('en', {'1:1': 'In'})).request).toBe(BOOK_SERIF_REQUEST);
+    expect(BOOK_SERIF_REQUEST).toEqual({
+      family: 'EB Garamond',
+      weights: [400, 500],
+      italics: [400],
+      subsets: ['latin', 'latin-ext', 'cyrillic', 'cyrillic-ext', 'greek', 'vietnamese'],
+    });
+    expect(STUDIO_FONT_REQUESTS[1]).toMatchObject({family: 'Amiri', weights: [400]});
+    expect(planTranslationLayer(spec('auto'), translation('en', {})).layer.fontWeight).toBe(500);
     // A family the scripts list is loaded the same way; any other is a CSS family as it is.
     expect(planTranslationLayer(spec('Amiri'), translation('en', {})).request).toMatchObject({family: 'Amiri'});
     expect(planTranslationLayer(spec('Georgia, serif'), translation('en', {})).request).toBeNull();
@@ -684,8 +717,14 @@ describe('tajweed legend', () => {
     expect(of({theme: 'light', legend: defaultLegend})).toBeNull();
     cleanup();
     const shown = of({theme: 'light'}) as HTMLElement;
-    expect(shown.style.top).toBe('38px');
-    expect(shown.style.left).toBe('38px');
+    // A band across the safe area (54 px in), with no card behind it.
+    expect(shown.style.top).toBe('54px');
+    expect(shown.style.left).toBe('54px');
+    expect(shown.style.right).toBe('54px');
+    expect(shown.style.background).toBe('');
+    // The lines are fitted under it: their block starts below the band and half a line box more.
+    const lines = shown.ownerDocument.querySelector<HTMLElement>('[data-mushaf-block="Mushaf lines"]')!;
+    expect(Number.parseFloat(lines.style.top)).toBeGreaterThan(54 + Number.parseFloat(shown.style.height));
     expect(shown.querySelectorAll('[data-rule]')).toHaveLength(7);
     expect(shown.querySelector('[data-mushaf-legend-part="arabic"]')).not.toBeNull();
     cleanup();
@@ -694,6 +733,28 @@ describe('tajweed legend', () => {
         '[data-mushaf-legend-part="arabic"]',
       ),
     ).toBeNull();
+  });
+
+  it('reserves its band: rows measured in the safe area’s width, 1.6 × 0.8 L each, and half a line box', () => {
+    const shown = {...legend, position: 'bottom-right' as const};
+    expect(legendBand(defaultLegend, 'light', {width: 1920, height: 1080, lineHeight: 198})).toBeNull();
+    expect(legendBand(shown, 'plain', {width: 1920, height: 1080, lineHeight: 198})).toBeNull();
+    const wide = legendBand(shown, 'light', {width: 1920, height: 1080, lineHeight: 198})!;
+    expect(wide).toMatchObject({edge: 'bottom', inset: 54, fontSize: 21});
+    expect(wide.height).toBe(Math.round(wide.rows * 1.6 * 21));
+    expect(wide.reserve).toBe(wide.height + 99);
+    expect(legendReserve(shown, 'light', {width: 1920, height: 1080, lineHeight: 198})).toEqual({
+      top: 0,
+      bottom: wide.reserve,
+    });
+    // At 9:16 the band sits above the bottom 18 %, and wraps to more rows in the narrower frame.
+    const tall = legendBand(shown, 'light', {width: 1080, height: 1920, lineHeight: 114})!;
+    expect(tall.inset).toBe(346);
+    expect(tall.rows).toBeGreaterThan(wide.rows);
+    expect(tall.reserve).toBe(346 - 54 + tall.height + 57);
+    expect(
+      legendReserve({...legend, position: 'top-left'}, 'light', {width: 1920, height: 1080, lineHeight: 198}).top,
+    ).toBe(wide.reserve);
   });
 
   it('is drawn on the page as well', async () => {
@@ -733,12 +794,22 @@ describe('end card', () => {
     const sequence = c.querySelector<HTMLElement>('[data-sequence="End card"]')!;
     expect(sequence.dataset).toMatchObject({from: '750', duration: '150'});
     const card = sequence.querySelector<HTMLElement>('[data-mushaf-end-card]')!;
-    expect(card.querySelector('[data-mushaf-end-card-part="range"]')!.textContent).toContain('1:2');
+    expect(card.querySelector('[data-mushaf-end-card-part="range"]')!.textContent).toBe('Al-Fatihah · Āyāt 2–7');
+    // The framed surah name is the title, once.
+    expect(card.querySelectorAll('[data-mushaf-end-card-part="title"]')).toHaveLength(1);
     expect(card.querySelector('[data-mushaf-end-card-part="reciter"]')!.textContent).toBe('Abdul Hamid Ghraio');
     const credits = Array.from(card.querySelector('[data-mushaf-end-card-part="credits"]')!.children).map(
       (line) => line.textContent,
     );
-    expect(credits).toEqual([FONTS_ATTRIBUTION, 'Translation: Saheeh International (quran.com)']);
+    // No intro card credited the translation: the end card does.
+    expect(credits).toEqual([FONTS_ATTRIBUTION, 'Translation of the meanings · Saheeh International']);
+    cleanup();
+    const introduced = {...props, overlay: {...props.overlay, title: 'intro' as const}};
+    const withCard = mount(<MushafRecitation {...introduced} resolved={resolved} />);
+    const once = Array.from(withCard.querySelector('[data-mushaf-end-card-part="credits"]')!.children).map(
+      (line) => line.textContent,
+    );
+    expect(once).toEqual([FONTS_ATTRIBUTION]);
   });
 
   it('reads the tafsir of the last ayah recited, or the surah’s introduction, in calculateMetadata', async () => {

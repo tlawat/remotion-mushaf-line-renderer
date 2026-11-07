@@ -5,12 +5,22 @@ import {backgroundFor, groundFor} from '../../background/compat';
 import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {MushafTitleOverlay} from '../../overlay';
-import {animationFrom, fontPropsFrom, readableInk, scrollTimingFrom} from '../../schema';
+import {
+  animationFrom,
+  dissolveShares,
+  fontPropsFrom,
+  frameGeometry,
+  metalOf,
+  readableInk,
+  tempoFrames,
+  windowScrollTiming,
+} from '../../schema';
 import {useInStudio} from '../../studio/environment';
 import {ayahCount} from '../../studio/surahs';
 import {TranslationStack} from '../../translations';
-import {readableLayers, StudioWarnings, translationsOf, useTranslationLayers} from '../parts';
-import {blockGeometry, firstAyahKey, linesBlockStyle, translationBlockStyle} from '../shared';
+import {useStudioFonts} from '../fonts';
+import {drawnTranslationLayers, StudioWarnings, translationsOf, useTranslationLayers} from '../parts';
+import {blockGeometry, firstAyahKey, linesBlockStyle, translationBlockStyle, translationLayoutFor} from '../shared';
 import {passageTimeline, type ResolvedPassage} from './resolve';
 import type {MushafPassageProps} from './schema';
 
@@ -35,6 +45,8 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
     );
   }
   const {lines} = resolved;
+  // The book serif and the Arabic labels: no frame is taken before they are in.
+  useStudioFonts();
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   // What the text sits on: a translation or label colour under 4.5:1 there gives way to a muted ink.
   const ground = groundFor(props.background, layout);
@@ -50,24 +62,37 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const exitFrames = exitTiming().getDurationInFrames({fps});
 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
-  const animationProps = animationFrom(animation, {fontSize});
+  // A line gives way to the next at the next one's hold start (nothing is heard to wait for), by
+  // the staggered dissolve: the outgoing line ends `out` frames after it, the incoming one comes in from `in`.
+  const cut = animation.lines === 'cut';
+  const dissolveFrames = cut ? 0 : tempoFrames('lineDissolve', animation.tempo, fps);
+  const shares = cut ? {out: 0, in: 0} : dissolveShares(dissolveFrames);
 
   let linesBlock: React.ReactNode;
   if (layout.visibleLines === 0) {
-    // Line i takes the box as line i-1 leaves: its exit runs over the last frames of its hold, and
-    // the last line gets its exit after its hold so it leaves on screen.
-    linesBlock = lines.map((line, i) => (
-      <Sequence
-        key={`${line.page}/${line.line}`}
-        from={starts[i]!}
-        durationInFrames={i === lines.length - 1 ? holds[i]! + exitFrames : holds[i]!}
-        premountFor={fps}
-        name={`p${line.page} l${line.line} (${line.words[0]?.id ?? line.type})`}
-      >
-        <MushafLine line={line} fontSize={fontSize} lineHeight={lineHeight} {...animationProps} {...fontSetup.props} />
-      </Sequence>
-    ));
+    linesBlock = lines.map((line, i) => {
+      const last = i === lines.length - 1;
+      const from = i === 0 ? starts[0]! : starts[i]! + shares.in;
+      const end = last ? starts[i]! + holds[i]! + exitFrames : starts[i + 1]! + shares.out;
+      const motion = animationFrom(animation, {
+        fontSize,
+        ...(i === 0 ? {} : {enterFrames: dissolveFrames - shares.in}),
+        exitFrames: last ? exitFrames : shares.out,
+      });
+      return (
+        <Sequence
+          key={`${line.page}/${line.line}`}
+          from={from}
+          durationInFrames={Math.max(1, end - from)}
+          premountFor={fps}
+          name={`p${line.page} l${line.line} (${line.words[0]?.id ?? line.type})`}
+        >
+          <MushafLine line={line} fontSize={fontSize} lineHeight={lineHeight} {...motion} {...fontSetup.props} />
+        </Sequence>
+      );
+    });
   } else {
+    // Each step starts at its line's hold (`anchor: 'start'`), one calm scroll long.
     linesBlock = (
       <Sequence
         from={0}
@@ -78,12 +103,13 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         <MushafLineWindow
           lines={lines}
           steps={starts}
-          scrollTiming={scrollTimingFrom(animation.tempo)}
+          anchor="start"
+          scrollTiming={windowScrollTiming(animation, fps)}
           visibleLines={slots}
           neighbourOpacity={layout.neighbourOpacity}
           fontSize={fontSize}
           lineHeight={lineHeight}
-          {...animationProps}
+          {...animationFrom(animation, {fontSize})}
           {...fontSetup.props}
         />
       </Sequence>
@@ -105,8 +131,10 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
       {showTranslation && (
         <div data-mushaf-block="Translation" style={translationBlockStyle(geometry, layout, text, height)}>
           <TranslationStack
-            layers={readableLayers(translationLayers, layout.color, ground)}
+            layers={drawnTranslationLayers(translationLayers, {ink: layout.color, ground, glyphSize: fontSize})}
             ayahKey={firstAyahKey(lines[current])}
+            layout={translationLayoutFor(geometry)}
+            ruleThickness={Math.max(1, frameGeometry(width, height).unit)}
           />
         </div>
       )}
@@ -117,10 +145,14 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         toAyah={props.toAyah === 0 ? Math.max(props.fromAyah, ayahCount(props.surah)) : props.toAyah}
         ayahKey={firstAyahKey(lines[current])}
         firstWordSeconds={null}
-        background={layout.background}
+        // The lines start after the card (`passageTimeline()`): it has its whole time on the ground.
+        addsTime
+        background={ground}
         fontSize={fontSize}
         lineHeight={lineHeight}
         width={geometry.measure}
+        metal={metalOf({theme: props.theme, customTheme: props.customTheme, ground})}
+        translationName={showTranslation ? (translationLayers[0]?.translation.meta.name ?? null) : null}
         fontProps={fontSetup.props}
       />
       {isStudio && <StudioWarnings warnings={[fontSetup.warning]} />}

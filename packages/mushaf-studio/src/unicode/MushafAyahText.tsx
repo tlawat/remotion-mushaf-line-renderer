@@ -15,6 +15,7 @@ import {volumeAt} from '../audio/volume';
 import {backgroundFor, groundFor} from '../background/compat';
 import {MushafBackground} from '../background/MushafBackground';
 import {endCardFrames} from '../compositions/extras';
+import {useStudioFonts} from '../compositions/fonts';
 import {
   CompositionAudio,
   CompositionEndCard,
@@ -41,16 +42,16 @@ import {
   type WordVisibility,
   wordVisibility,
 } from '../memorize';
-import {MushafTitleOverlay} from '../overlay';
+import {MushafTitleOverlay, showsCorner} from '../overlay';
 import {
   inkFill,
   legibleAccent,
   markerIds,
+  metalOf,
   readableInk,
   riseDistance,
   SINE,
   SOFT,
-  studioFontFamily,
   washAlpha,
   washColor,
   washStyle,
@@ -139,6 +140,8 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
     );
   }
   const {timings, ayahs} = resolved;
+  // The book serif and the Arabic labels: no frame is taken before they are in.
+  useStudioFonts();
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   const audioOffsetFrames = Math.round((resolved.audioOffsetSeconds ?? 0) * fps);
   // The frames before the end card: the audio fades out by their end, the last ayah stays to it.
@@ -330,7 +333,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         toAyah={span.to.ayah}
         ayahKey={ayahKeyOf(heard) ?? ayahAt(timings, now)}
         firstWordSeconds={timings.ayat[0]!.words?.[0]?.start ?? timings.ayat[0]!.start}
-        background={layout.background}
+        background={ground}
         // The surah name is set as a printed line would be across the measure, not at the Arabic text's size.
         fontSize={titleFontSize}
         lineHeight={lineHeightForFontSize(titleFontSize)}
@@ -341,7 +344,8 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         repeats={repeats}
         seconds={seconds}
         overlay={shownOverlay}
-        background={layout.background}
+        labelShown={showsCorner(overlay.title)}
+        tempo={animation.tempo}
       />
       <CompositionEndCard
         endCard={endCard}
@@ -351,9 +355,13 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         reciter={overlay.reciter}
         from={contentFrames}
         durationInFrames={cardFrames}
-        fontFamily={studioFontFamily(overlay.font, 'label')}
+        font={overlay.font}
         color={layout.color}
-        background={layout.background}
+        background={ground}
+        metal={metalOf({ground})}
+        measure={measure}
+        glyphSize={titleFontSize}
+        lineHeight={lineHeightForFontSize(titleFontSize)}
         width={width}
         height={height}
       />

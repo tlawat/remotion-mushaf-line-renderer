@@ -431,3 +431,26 @@ export const skipRecitationStart = (
     clips: clipTimeline(timings, memorize),
   };
 };
+
+/**
+ * A resolved recitation that starts `seconds` later in the video, for the intro card
+ * (`introDelaySeconds()`): the timings, the schedule and the clip timeline move that much later,
+ * and `introDelaySeconds` says by how much, so a host can map video time to recording time
+ * (`recording = video − introDelaySeconds + audioOffsetSeconds`). The same object for 0.
+ */
+export const delayRecitationStart = (
+  resolved: ResolvedRecitationWithClips,
+  seconds: number,
+  memorize: Pick<Memorize, 'mode' | 'repeat' | 'pauseSeconds'>,
+): ResolvedRecitationWithClips => {
+  if (seconds === 0) return resolved;
+  const timings = shiftTimings(resolved.timings, -seconds);
+  const later = (t: number): number => roundTime(t + seconds);
+  return {
+    ...resolved,
+    timings,
+    schedule: resolved.schedule.map((slot) => ({...slot, start: later(slot.start), end: later(slot.end)})),
+    clips: clipTimeline(timings, memorize),
+    introDelaySeconds: roundTime((resolved.introDelaySeconds ?? 0) + seconds),
+  };
+};

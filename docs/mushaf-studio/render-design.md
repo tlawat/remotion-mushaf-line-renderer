@@ -1359,3 +1359,39 @@ Stage R1 (tokens, timing model, highlight, migration, renderer):
     paint-only word style can do joins the tiles, so the seams stay until 13.2's phase-2 band (one
     shape per run on a line, drawn by the renderer behind the row) lands; the band geometry above
     stays as it is for it.
+
+Stage R2 (timing, intro, translation, labels, memorisation, legend, end card):
+
+16. **The intro delay is MushafRecitation's (and its slot's), and not under `hostAudio`.** There the
+    template's track decides when the recording is heard, so nothing can wait for the card; the
+    card then covers the start in the page colour, as below. `MushafPassage` already starts its
+    lines after the card (`passageTimeline()`), so its card is drawn on the bare ground too.
+    `MushafAyahText` and `MushafPage` keep the card over their start, covering the text in the page
+    colour (`introCoverOpacity()`), until it goes 0.3 s before the first word: their timing is
+    their stages' (5.11, 5.12). In the Studio, `audioOffsetOf()` takes `introDelaySeconds` back
+    off, so the Review tab and the waveform stay on the recording's clock.
+17. **A change waits for the one before it.** In one-line mode and for the ayah on screen, a
+    change that `boundaryStart()` would start before the previous change (or the first appearance)
+    is over starts when it is over: late, never early, and a line always reaches full ink. A header
+    line whose next change would start before its own entrance is over is left out (the existing
+    "squeezed out" rule, now measured on the dissolves).
+18. **The translation comes and goes with the lines.** It fades in with their first appearance
+    (`windowIn` on `SINE`) and out with their `endFade` (`linesPresence()`), so it is never on
+    screen under the intro card or after the lines.
+19. **The corner label's surah has no diacritics.** It reads "AL-FATIHAH · 3": the transliterations
+    are the panel's one table (`SURAH_NAMES`), which has none. The card's own Latin line is "Āyāt
+    2–7" as written.
+20. **The legend band's reserve at 9:16 also counts the platform band.** `0.5 × lineBox` plus the
+    band is subtracted from the frame, and at 9:16 the band sits above the bottom 18 %; subtracting
+    only the two would let the lines run under the band. The reserve is the band, the inset beyond
+    the safe area (292 px at 9:16, 0 elsewhere) and half a line box (`legendBand()`). `MushafPage`
+    draws the band but does not yet fit the page around it (5.11).
+21. **`endCard.seconds` is the card's whole length**, its 30-frame dissolve in and its last second
+    included, so the field keeps its meaning ("added to the video"). The card keeps the range in
+    small caps and the reciter in italic under the title.
+22. **The gloss is italic in the strip only.** The interlinear labels keep their upright face
+    until the interlinear stage, whose two-row wrap is measured in the face it draws.
+23. **The audio offset of a later first ayah still leaves room for the package's 0.5 s entrance**
+    (`audioOffsetFor()`, shared with `MushafPage` and `MushafAyahText`). With `fromAyah` set, the
+    window's 0.8 s first appearance may then start at frame 0 and settle less than
+    `leadInSeconds` before the first word: late, never early.

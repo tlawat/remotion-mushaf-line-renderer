@@ -266,7 +266,7 @@ describe('<MushafAyahText>', () => {
     remotion.state.frame = 120; // 4 s: ayah 3
     const c = mount({overlay: both, highlight: {mode: 'none'}});
     expect(c.querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
-    expect(c.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Fatihah · 1:3');
+    expect(c.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Fatihah · 3');
   });
 
   it('refuses to render without resolved, saying how to fill it', () => {

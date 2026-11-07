@@ -32,6 +32,7 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
       className="mushaf-line-window-mock"
       data-line-count={props.lines.length}
       data-steps={JSON.stringify(props.steps)}
+      data-anchor={props.anchor}
       data-visible-lines={props.visibleLines}
     />
   ),
@@ -223,11 +224,13 @@ describe('<MushafPassage>', () => {
     expect(mount(props({fonts: 'package'})).textContent).not.toContain('Mushaf Studio');
   });
 
-  it('shows one line at a time, each leaving as the next enters', () => {
+  it('shows one line at a time, each giving way to the next by the staggered dissolve at its hold', () => {
     const c = mount(props({layout: layout({visibleLines: 0})}));
     const seq = sequences(c);
-    expect(seq.map((s) => Number(s.dataset.from))).toEqual([0, 120, 240, 360]);
-    expect(seq.map((s) => Number(s.dataset.duration))).toEqual([120, 120, 120, 130]);
+    // At each hold start t0 (f120, f240, f360) a 20-frame dissolve: the outgoing line ends 10 frames
+    // after t0, the incoming one comes in from 6 frames after it; the last one leaves after its hold.
+    expect(seq.map((s) => Number(s.dataset.from))).toEqual([0, 126, 246, 366]);
+    expect(seq.map((s) => Number(s.dataset.from) + Number(s.dataset.duration))).toEqual([130, 250, 370, 490]);
     expect(
       Array.from(c.querySelectorAll<HTMLElement>('.mushaf-line-mock')).map(
         (l) => `${l.dataset.page}/${l.dataset.line}`,
@@ -256,27 +259,31 @@ describe('<MushafPassage>', () => {
     const content = {lines: [...header, ...passage]};
     const w = mount(props({}, content)).querySelector<HTMLElement>('.mushaf-line-window-mock')!;
     expect(w.dataset.lineCount).toBe('6');
+    // Each step starts at its line's hold (anchor start), one calm scroll long.
+    expect(w.dataset.anchor).toBe('start');
     expect(JSON.parse(w.dataset.steps!)).toEqual([0, 45, 90, 210, 330, 450]);
     cleanup();
     const intro = {...defaultMushafPassageProps.overlay, title: 'intro' as const, introSeconds: 2};
     const seq = sequences(mount(props({layout: layout({visibleLines: 0}), overlay: intro}, content)));
-    expect(seq.map((s) => [Number(s.dataset.from), Number(s.dataset.duration)])).toEqual([
-      [60, 60],
-      [120, 60],
-      [180, 120],
-      [300, 120],
-      [420, 120],
-      [540, 130],
+    // Each line's hold starts after the one before (the first after the 2 s card); the Sequences overlap by the dissolve.
+    expect(seq.map((s) => [Number(s.dataset.from), Number(s.dataset.from) + Number(s.dataset.duration)])).toEqual([
+      [60, 130],
+      [126, 190],
+      [186, 310],
+      [306, 430],
+      [426, 550],
+      [546, 670],
     ]);
     expect(seq[0]!.dataset.sequence).toBe('p2 l1 (surah_name)');
   });
 
   it('shows the intro card with the surah and the range, and the corner label with the current line’s ayah', () => {
     const both = {...defaultMushafPassageProps.overlay, title: 'both' as const, reciter: 'Reader'};
+    remotion.state.frame = 30;
     const c = mount(props({overlay: both, toAyah: 0}));
     expect(c.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('2');
     // toAyah 0 is the end of the surah: Al-Baqarah has 286 ayahs.
-    expect(c.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Al-Baqarah · 2:1–286 · ٢:١–٢٨٦');
+    expect(c.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Āyāt 1–286');
     expect(c.querySelector('[data-mushaf-overlay-part="reciter"]')!.textContent).toBe('Reader');
     expect(c.querySelector('[data-mushaf-overlay="corner"]')).toBeNull();
     cleanup();
@@ -284,7 +291,7 @@ describe('<MushafPassage>', () => {
     remotion.state.frame = 225;
     const later = mount(props({overlay: both}));
     expect(later.querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
-    expect(later.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Baqarah · 2:2 · Reader');
+    expect(later.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Baqarah · 2');
   });
 
   it('throws a clear error without resolved props', () => {

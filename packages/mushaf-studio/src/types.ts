@@ -251,6 +251,14 @@ export type ResolvedRecitation = ResolvedExtras & {
    */
   readonly audioOffsetSeconds: number;
   /**
+   * Seconds the recording starts later in the video for the intro card (`overlay.title` `intro` or
+   * `both`): its `introSeconds`, the card's entrance and the lead-in, less what the recording
+   * already has before its first word, never negative. Already added to `timings`; the audio starts
+   * there. A video second `v` is the recording's `v − introDelaySeconds + audioOffsetSeconds`.
+   * Absent (0) without the card, and in a `resolved` made before it.
+   */
+  readonly introDelaySeconds?: number | undefined;
+  /**
    * The passage's lines, splits applied, in reading order; the surah's header lines first when
    * `header` put them there, and, across surahs, each later surah's header lines before its ayah 1.
    */

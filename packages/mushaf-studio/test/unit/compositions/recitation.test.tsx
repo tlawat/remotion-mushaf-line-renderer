@@ -46,6 +46,9 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         ),
       ),
     );
+  // The length of an entrance or exit the composition gave, in frames.
+  const framesOf = (animation: LineProps['enter']) =>
+    animation !== undefined && 'timing' in animation ? animation.timing?.getDurationInFrames({fps: 30}) : undefined;
   const MushafLine = (props: LineProps) => {
     const frame = remotion.useLocalFrame();
     return (
@@ -58,6 +61,8 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         data-active-style={JSON.stringify(props.activeWordStyle ?? null)}
         data-word-styles={wordStyles(props, [props.line], frame)}
         data-enter={props.enter ? 'yes' : 'no'}
+        data-enter-frames={framesOf(props.enter)}
+        data-exit-frames={framesOf(props.exit)}
         data-font-fallback={props.fontFallback ? 'yes' : 'no'}
       />
     );
@@ -82,6 +87,8 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         data-word-styles={wordStyles(props, props.lines, frame, position)}
         data-ink-tint={props.inkTint ?? ''}
         data-enter={props.enter ? 'yes' : 'no'}
+        data-enter-frames={framesOf(props.enter)}
+        data-exit-frames={framesOf(props.exit)}
       />
     );
   };
@@ -100,8 +107,17 @@ vi.mock('../../../src/translations', async () => ({
   TranslationStack: (props: {
     layers: readonly {fontFamily: string; fontSize: number; direction: string; color: string}[];
     ayahKey: string | null;
+    outgoing?: {ayahKey: string | null; opacity: number} | null;
+    textOpacity?: number;
+    opacity?: number;
   }) => (
-    <div data-translation-stack={props.layers.length}>
+    <div
+      data-translation-stack={props.layers.length}
+      data-outgoing={props.outgoing?.ayahKey ?? ''}
+      data-outgoing-opacity={props.outgoing?.opacity}
+      data-text-opacity={props.textOpacity}
+      data-opacity={props.opacity}
+    >
       {props.layers.map((layer, i) => (
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: a layer is a position.
@@ -138,7 +154,7 @@ const {scheduleLines, scrollPosition} = await import('@tlawat/remotion-mushaf-li
 const {registerMushafFonts} = await import('../../../src/fonts');
 const {withHeaderSlots, withInnerHeaderSlots} = await import('../../../src/compositions/shared');
 const {clipTimeline} = await import('../../../src/memorize');
-const {defaultOverlay, scrollTimingFrom} = await import('../../../src/schema');
+const {defaultOverlay, dissolveShares, SINE, scrollTimingFrom} = await import('../../../src/schema');
 const {syntheticLine} = await import('../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/compositions/recitation').ResolvedRecitation;
@@ -244,7 +260,9 @@ describe('<MushafRecitation>', () => {
     });
     const seq = sequences(c);
     expect(seq).toHaveLength(1);
-    expect(seq[0]!.dataset).toMatchObject({from: '0', duration: '900', sequence: '6 lines, 3 at once'});
+    // The window appears at once (its first line is settled 0.4 s before 0.331 s, earlier than frame
+    // 0) and holds 45 frames after the last ayah's end (27.559 s, f827), then fades over 30.
+    expect(seq[0]!.dataset).toMatchObject({from: '0', duration: '902', sequence: '6 lines, 3 at once'});
     const w = windowOf(c)!;
     expect(w.dataset).toMatchObject({
       lineCount: '6',
@@ -253,13 +271,13 @@ describe('<MushafRecitation>', () => {
       scrollFrames: '24',
       enter: 'yes',
     });
-    // The first line rises into place to be settled 0.4 s before its first word (frame -2), so its
-    // scroll starts 24 frames before. Every later scroll starts where it does, never earlier: once
-    // the outgoing line's last word has been recited (E), or 0.4 s + 24 frames before the incoming
-    // line's first word if that is later. On this recitation the pauses are short: each starts at E.
+    // The first line is in the centre slot from the window's first frame (its step a whole scroll
+    // before it). Every later scroll starts where it does, never earlier: once the outgoing line's
+    // last word has been recited (E), or 0.4 s + 24 frames before the incoming line's first word if
+    // that is later. On this recitation the pauses are short: each starts at E.
     expect(w.dataset.anchor).toBe('start');
     const steps = JSON.parse(w.dataset.steps!) as number[];
-    expect(steps[0]).toBe(lead(0.331) - 24);
+    expect(steps[0]).toBe(-24);
     const ends = [3.391, 5.693, 8.615, 12.989, 16.106].map((end) => Math.ceil(end * 30));
     expect(steps.slice(1)).toEqual(ends);
     resolved().schedule.forEach((slot, j) => {
@@ -335,7 +353,7 @@ describe('<MushafRecitation>', () => {
     expect(c.querySelector<HTMLElement>('[data-audio]')?.dataset.trimBefore).toBe('79');
   });
 
-  it('shows one Sequence per slot when visibleLines is 0, each ending where the next begins', () => {
+  it('shows one Sequence per slot when visibleLines is 0, overlapping by the staggered dissolve after each last word', () => {
     const c = mount(props({layout: layout({visibleLines: 0})}));
     expect(windowOf(c)).toBeNull();
     const seq = sequences(c);
@@ -348,15 +366,64 @@ describe('<MushafRecitation>', () => {
       '1/7',
       '1/8',
     ]);
-    const starts = resolved().schedule.map((slot) => Math.max(0, lead(slot.start) - 15));
-    expect(seq.map((s) => Number(s.dataset.from))).toEqual(starts);
-    expect(seq.slice(0, 5).map((s) => Number(s.dataset.duration))).toEqual(
-      starts.slice(1).map((next, i) => next - starts[i]!),
-    );
-    expect(Number(seq[5]!.dataset.duration)).toBe(Math.round((27.559 + 1) * 30) - starts[5]!);
+    const froms = seq.map((s) => Number(s.dataset.from));
+    const ends = seq.map((s, i) => froms[i]! + Number(s.dataset.duration));
+    const mocks = lineMocks(c);
+    // The first line appears over windowIn (24 frames) from frame 0, the earliest it can.
+    expect(froms[0]).toBe(0);
+    expect(mocks[0]!.dataset.enterFrames).toBe('24');
+    // Each boundary: E the outgoing line's last word, F the incoming line's first, D = 20 frames
+    // compressed to F − E (never under 10), t0 = max(E, F − 0.4 s − D_eff).
+    const lastWordEnds = [3.391, 5.693, 8.615, 12.989, 16.106];
+    resolved()
+      .schedule.slice(1)
+      .forEach((slot, k) => {
+        const e = Math.ceil(lastWordEnds[k]! * 30);
+        const d = Math.min(20, Math.max(10, Math.round((slot.start - lastWordEnds[k]!) * 30)));
+        const t0 = Math.max(e, Math.round((slot.start - 0.4) * 30) - d);
+        const {out, in: incoming} = dissolveShares(d);
+        // Late, never early: the change starts once the outgoing line's last word has been recited.
+        expect(t0).toBeGreaterThanOrEqual(lastWordEnds[k]! * 30);
+        expect([k, ends[k]]).toEqual([k, t0 + out]);
+        expect([k, froms[k + 1]]).toEqual([k, t0 + incoming]);
+        expect(mocks[k]!.dataset.exitFrames).toBe(String(out));
+        expect(mocks[k + 1]!.dataset.enterFrames).toBe(String(d - incoming));
+        // The two Sequences overlap: the dissolve runs between them.
+        expect(froms[k + 1]).toBeLessThan(ends[k]!);
+      });
+    // The last line holds 45 frames after the last ayah's end (f827), then fades over 30.
+    expect(ends[5]).toBe(827 + 45 + 30);
+    expect(mocks[5]!.dataset.exitFrames).toBe('30');
     const lineBlock = block(c, 'Mushaf lines')!;
     expect(seq.every((s) => lineBlock.contains(s))).toBe(true);
     expect(lineMocks(c).every((l) => l.dataset.enter === 'yes')).toBe(true);
+  });
+
+  it('cuts between lines under lines: cut, at t0, and rises the incoming line under rise', () => {
+    const cut = sequences(
+      mount(
+        props({
+          layout: layout({visibleLines: 0}),
+          animation: {...defaultMushafRecitationProps.animation, lines: 'cut'},
+        }),
+      ),
+    );
+    const froms = cut.map((s) => Number(s.dataset.from));
+    cut.slice(0, 5).forEach((s, k) => {
+      expect(froms[k]! + Number(s.dataset.duration)).toBe(froms[k + 1]);
+    });
+    // 1:2:4 ends at 3.391 s: the cut is at f102, never before.
+    expect(froms[1]).toBe(102);
+    cleanup();
+    const rise = lineMocks(
+      mount(
+        props({
+          layout: layout({visibleLines: 0}),
+          animation: {...defaultMushafRecitationProps.animation, lines: 'rise'},
+        }),
+      ),
+    );
+    expect(rise.every((l) => l.dataset.enter === 'yes')).toBe(true);
   });
 
   it('keeps the steps from decreasing when a later line starts first under occurrence: last', () => {
@@ -368,21 +435,23 @@ describe('<MushafRecitation>', () => {
     expect(() => scrollPosition({frame: 0, fps: 30, steps: raw})).toThrow(/never decrease/);
     const content = {timings: repeated, schedule};
     const c = mount(props({highlight: highlight({occurrence: 'last'})}, content));
-    // The window starts its entrance 15 frames before the first slot is in place (frame 108); its steps are local.
-    expect(sequences(c)[0]!.dataset.from).toBe('93');
-    // The first scroll starts 24 frames before the first slot is in place; the later ones once the
+    // The window comes in over 24 frames to be settled when the first slot is (frame 108); its steps are local.
+    expect(sequences(c)[0]!.dataset.from).toBe('84');
+    // The first line is in place from the window's first frame; the later scrolls start once the
     // outgoing line is over (line 1's slot, collapsed to nothing, at 4.0 s: f120).
     const steps = JSON.parse(windowOf(c)!.dataset.steps!) as number[];
-    expect(steps).toEqual([108 - 24 - 93, 120 - 93, 171 - 93, 259 - 93, 390 - 93, 484 - 93]);
+    expect(steps).toEqual([-24, 120 - 84, 171 - 84, 259 - 84, 390 - 84, 484 - 84]);
     expect(steps.every((step, i) => i === 0 || step >= steps[i - 1]!)).toBe(true);
     expect(() => scrollPosition({frame: 0, fps: 30, steps})).not.toThrow();
     cleanup();
     const seq = sequences(mount(props({layout: layout({visibleLines: 0})}, content)));
-    expect(seq.map((s) => Number(s.dataset.from))).toEqual([93, 93, 157, 235, 368, 468]);
-    // The slot that collapsed to nothing still gets the frames its exit needs.
-    expect(Number(seq[0]!.dataset.duration)).toBe(11);
+    const froms = seq.map((s) => Number(s.dataset.from));
+    // Never a Sequence that starts before the one before it, and every one has frames of its own.
+    expect(froms.every((from, i) => i === 0 || from >= froms[i - 1]!)).toBe(true);
+    expect(seq.every((s) => Number(s.dataset.duration) > 0)).toBe(true);
+    expect(froms[0]).toBe(84);
     cleanup();
-    // The current slot follows the same frames: at 3.8 s line 1 and line 2 are both in place, so line 2 is current.
+    // The translation changes after ayah 2's end (3.391 s, f102), whichever line is on screen.
     remotion.state.frame = 114;
     expect(translationOf(mount(props({}, {...content, timings: ayahsOnly, translation: ayahText})))).toBe('1:3');
   });
@@ -427,12 +496,13 @@ describe('<MushafRecitation>', () => {
     // The next line sits in the slot below: full ink, only the window's neighbour opacity.
     expect(styles['1:3:1']).toBeNull();
     cleanup();
-    // One line at a time: the line of ayah 3 sits in a Sequence from frame 79, and at 4 s its
-    // local frame 41 still maps to 4 s of audio, where 1:3:1 (3.533) was heard and 1:3:2 (4.563) not.
+    // One line at a time: the line of ayah 3 sits in a Sequence from frame 105 (the dissolve after
+    // 1:2:4 starts at f102), and at 4 s its local frame 15 still maps to 4 s of audio, where 1:3:1
+    // (3.533) was heard and 1:3:2 (4.563) not.
     remotion.state.frame = 120;
     const perLine = lineMocks(mount(props({layout: layout({visibleLines: 0})})));
     const ayah3 = perLine.find((l) => l.dataset.line === '4')!;
-    expect(sequences(ayah3.ownerDocument.body)[1]!.dataset.from).toBe('79');
+    expect(sequences(ayah3.ownerDocument.body)[1]!.dataset.from).toBe('105');
     expect(stylesOf(ayah3)['1:3:1']).toBeNull();
     expect(stylesOf(ayah3)['1:3:2']).toEqual({opacity: 0.6});
     cleanup();
@@ -478,9 +548,9 @@ describe('<MushafRecitation>', () => {
     // Before the first word: the first ayah of the current line.
     expect(tb.dataset).toMatchObject({
       translationBlock: '1:2',
-      // `auto`: the web font of the translation's language.
-      font: '"Noto Serif", serif',
-      size: '40',
+      // `auto`: the web font of the translation's language, EB Garamond for English.
+      font: '"EB Garamond", serif',
+      size: '36',
     });
     cleanup();
     const above = block(
@@ -497,11 +567,28 @@ describe('<MushafRecitation>', () => {
     remotion.state.frame = 120; // 4 s: 1:3:1 (3.533)
     expect(translationOf(mount(props({}, {translation: ayahText})))).toBe('1:3');
     cleanup();
-    // With the highlight off, the word being heard still decides: 1:2:4 at 3.4 s (1:3:1 starts at 3.533).
-    remotion.state.frame = 102;
+    // It changes after ayah 2's last word, whatever the highlight: 1:2:4 ends at 3.391 s (f101.7), so
+    // f101 still shows ayah 2 alone, and from f102 the two dissolve over 10 frames (the pause to
+    // 1:3:1 at 3.533 s is short), the outgoing gone by f107.
+    remotion.state.frame = 101;
     expect(translationOf(mount(props({highlight: highlight({mode: 'none'})}, {translation: ayahText})))).toBe('1:2');
     cleanup();
-    // Without per-word times the ayah being heard decides, and before the first one the current line.
+    for (const [frame, outgoing] of [
+      [102, '1'],
+      [104, String(1 - SINE(2 / 5))],
+    ] as const) {
+      remotion.state.frame = frame;
+      const stack = block(mount(props({}, {translation: ayahText})), 'Translation')!.firstElementChild as HTMLElement;
+      expect(stack.dataset).toMatchObject({outgoing: '1:2', textOpacity: '0'});
+      expect(Number(stack.dataset.outgoingOpacity)).toBeCloseTo(Number(outgoing), 6);
+      cleanup();
+    }
+    remotion.state.frame = 112;
+    const settled = block(mount(props({}, {translation: ayahText})), 'Translation')!.firstElementChild as HTMLElement;
+    expect(settled.dataset).toMatchObject({outgoing: '', textOpacity: '1'});
+    cleanup();
+    remotion.state.frame = 90;
+    // Without per-word times the change follows the ayah's end (3.391 s), and before the first ayah it is the first.
     expect(translationOf(mount(props({}, {timings: ayahsOnly, translation: ayahText})))).toBe('1:2');
     cleanup();
     remotion.state.frame = 120;
@@ -588,33 +675,56 @@ describe('<MushafRecitation>', () => {
     expect(c.querySelector('[data-mushaf-overlay]')).toBeNull();
   });
 
-  it('shows the intro card until 0.3 s before the first word, with the surah and the range played', () => {
-    const p = props({overlay: overlay({title: 'intro', introSeconds: 5})}, {timings: later(3)});
-    remotion.state.frame = 0;
-    const c = mount(p);
-    const card = c.querySelector<HTMLElement>('[data-mushaf-overlay="intro"]')!;
+  it('shows the intro card for its whole introSeconds on the bare ground, the lines and the recording after it', () => {
+    // calculateMetadata put 3 s + 0.8 s + 0.4 s − 0.331 s = 3.869 s before the recording: the first word is at 4.2 s.
+    const p = props(
+      {overlay: overlay({title: 'intro', introSeconds: 3})},
+      {timings: later(3.869), introDelaySeconds: 3.869},
+    );
+    const intro = (frame: number) => {
+      cleanup();
+      remotion.state.frame = frame;
+      return mount(p).querySelector<HTMLElement>('[data-mushaf-overlay="intro"]');
+    };
+    // Frame 0 is the bare ground; the card comes in from 0.2 s.
+    expect(intro(0)).toBeNull();
+    const card = intro(30)!;
     expect(card.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('1');
-    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Al-Fatihah · 1:2–7 · ١:٢–٧');
-    cleanup();
-    // The first word is at 3.331 s: the card is gone at 3.031 s (frame 91), before introSeconds.
-    remotion.state.frame = 90;
-    expect(mount(p).querySelector('[data-mushaf-overlay="intro"]')).not.toBeNull();
-    cleanup();
-    remotion.state.frame = 91;
-    expect(mount(p).querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
+    expect(card.querySelector('[data-mushaf-overlay-part="arabic-range"]')!.textContent).toBe('\u2067الآيات ٢–٧\u2069');
+    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Āyāt 2–7');
+    // No ground of its own: it is drawn on the page, and nothing is under it.
+    expect(card.querySelector('[data-mushaf-overlay-part="backdrop"]')).toBeNull();
+    expect(intro(89)).not.toBeNull();
+    expect(intro(90)).toBeNull();
+    // The window comes in at introSeconds (f90), settled 0.4 s before the first word (f126).
+    expect(intro(90)).toBeNull();
+    const c = document.body;
+    const window = sequences(c).find((s) => s.dataset.sequence?.endsWith('at once'))!;
+    expect(window.dataset.from).toBe('90');
+    // The recording starts after the card: its <Audio> sits in a Sequence from the delay.
+    const recitation = sequences(c).find((s) => s.dataset.sequence === 'Recitation')!;
+    expect(recitation.dataset.from).toBe(String(Math.round(3.869 * 30)));
+    expect(recitation.querySelector('[data-audio]')).not.toBeNull();
   });
 
-  it('shows the corner label with the ayah of the word heard and the reciter', () => {
+  it('shows the corner label with the surah and the ayah on screen, the number changing after the ayah ends', () => {
     const p = props({overlay: overlay({title: 'corner', reciter: 'Abdul Hamid Ghraio'})});
-    remotion.state.frame = 30; // 1 s: 1:2:2
-    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe(
-      'Al-Fatihah · 1:2 · Abdul Hamid Ghraio',
-    );
-    cleanup();
-    remotion.state.frame = 120; // 4 s: ayah 3 (3.533-5.693)
-    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe(
-      'Al-Fatihah · 1:3 · Abdul Hamid Ghraio',
-    );
+    const corner = (frame: number) => {
+      cleanup();
+      remotion.state.frame = frame;
+      return mount(p).querySelector<HTMLElement>('[data-mushaf-overlay="corner"]');
+    };
+    // Without a card it comes in from 0.5 s over 24 frames, at 60 % of its ink; no reciter in it.
+    expect(corner(0)).toBeNull();
+    expect(corner(30)!.textContent).toBe('Al-Fatihah · 2');
+    expect(Number(corner(30)!.style.opacity)).toBeCloseTo(0.6 * SINE(15 / 24), 4);
+    expect(corner(60)!.style.opacity).toBe('0.6');
+    // The number dissolves over 12 frames from the translation's change (f102).
+    expect(corner(101)!.textContent).toBe('Al-Fatihah · 2');
+    const changing = corner(106)!;
+    expect(changing.querySelector('[data-mushaf-overlay-part="outgoing"]')!.textContent).toBe('2');
+    expect(changing.textContent).toBe('Al-Fatihah · 23');
+    expect(corner(120)!.textContent).toBe('Al-Fatihah · 3');
   });
 
   it('shows the header line first, in the window and one at a time, its step before the first ayah line', () => {
@@ -624,11 +734,12 @@ describe('<MushafRecitation>', () => {
     const content = {timings: moved, lines: withHeader, schedule};
     const w = windowOf(mount(props({}, content)))!;
     expect(w.dataset.lineCount).toBe('7');
-    const from = lead(3.331 - 1.5) - 15;
+    // The window comes in over 24 frames to be settled 0.4 s before the header's slot (1.831 s, f43).
+    const from = lead(1.831) - 24;
     expect(sequences(w.parentElement!.parentElement!)[0]!.dataset.from).toBe(String(from));
     const steps = JSON.parse(w.dataset.steps!) as number[];
     // The header has nothing to wait for: the first ayah line scrolls in to be settled 0.4 s before its word.
-    expect(steps.slice(0, 2)).toEqual([lead(1.831) - 24 - from, lead(3.331) - 24 - from]);
+    expect(steps.slice(0, 2)).toEqual([-24, lead(3.331) - 24 - from]);
     expect(steps.every((step, i) => i === 0 || step >= steps[i - 1]!)).toBe(true);
     cleanup();
     const c = mount(props({layout: layout({visibleLines: 0})}, content));
@@ -642,8 +753,10 @@ describe('<MushafRecitation>', () => {
       '1/8',
     ]);
     const seq = sequences(c);
-    expect(seq[0]!.dataset).toMatchObject({from: String(from), duration: String(lead(3.331) - 15 - from)});
+    // It gives way by a 20-frame dissolve settled 0.4 s before the first word: t0 = f88 − 20, out over 10.
+    expect(seq[0]!.dataset).toMatchObject({from: String(from), duration: String(68 + 10 - from)});
     expect(seq[0]!.dataset.sequence).toBe('p1 l1 (surah_name)');
+    expect(seq[1]!.dataset.from).toBe(String(68 + 6));
   });
 
   it('leaves out a header line squeezed out by a recitation that starts at once, one line at a time', () => {
@@ -674,21 +787,22 @@ describe('<MushafRecitation> across surahs', () => {
   };
 
   it('names both surahs in the intro card, and the surah heard in the corner label', () => {
-    remotion.state.frame = 0;
+    remotion.state.frame = 30;
     const card = mount(props({overlay: overlay({title: 'intro'})}, content)).querySelector<HTMLElement>(
       '[data-mushaf-overlay="intro"]',
     )!;
     expect(card.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('113');
-    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe(
-      'Al-Falaq – An-Nas · 113:4–114:2 · ١١٣:٤–١١٤:٢',
+    expect(card.querySelector('[data-mushaf-overlay-part="range"]')!.textContent).toBe('Āyāt 113:4–114:2');
+    expect(card.querySelector('[data-mushaf-overlay-part="arabic-range"]')!.textContent).toBe(
+      '\u2067الآيات ١١٣:٤–١١٤:٢\u2069',
     );
     cleanup();
     const p = props({overlay: overlay({title: 'corner'})}, content);
     remotion.state.frame = 150; // 5 s: 113:5
-    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Falaq · 113:5');
+    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Falaq · 5');
     cleanup();
     remotion.state.frame = 420; // 14 s: 114:1
-    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('An-Nas · 114:1');
+    expect(mount(p).querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('An-Nas · 1');
   });
 
   it('shows An-Nas’s header lines between the two surahs, one at a time', () => {

@@ -21,6 +21,27 @@
   a muted ink (`readableInk()`); the ground counts a `layout.backgroundImage` as the image it is
   (`groundFor()`). A rosette the timings time as a word holds the ayah's last word's mark to the
   release (`markerIds()`), and the gloss strip keeps its pace at any frame rate.
+- **Late, never early: the timing of the render design.** One line at a time, consecutive lines
+  overlap by the staggered dissolve after the outgoing line's last word (`oneLinePlan()`); the
+  window fades in over 0.8 s with its first line in place, and after the last word it holds 1.5 s
+  and fades over 1 s before the end card, which then dissolves in on the same ground. The
+  translation and the corner number change after the outgoing ayah's last word (`ayahChanges()`),
+  by a dissolve. `tempo: 'slow'` lengthens every change 1.4×. Durations change accordingly.
+- **The intro card adds its time.** With `overlay.title` `intro` or `both`, the recording starts
+  `resolved.introDelaySeconds` later (`introSeconds` + the card's entrance + the lead-in, less what
+  the recording already waits), the video grows by it, and the card has its whole `introSeconds`:
+  the bare ground at frame 0, the framed surah name, a gold hairline, the range in Amiri and in
+  small caps, the reciter, the translation's credit. A host that syncs to the video maps its time
+  with `introDelaySeconds`. Not under `hostAudio`, where the template's track decides.
+- **Fonts actually loaded**: `useStudioFonts()` loads EB Garamond 400, 400 italic and 500 and Amiri
+  400 behind the render's font gate; `'auto'` is EB Garamond for Latin translations (500), the
+  gloss (400 italic) and the labels. The translation is centred, at most half the Arabic, balanced
+  on at most two lines (0.85 of its size when it needs more, never cut), 0.4 of a line box from the
+  lines, its layers split by a short hairline. The corner label is "AL-FATIHAH · 3" in small caps
+  (no reciter); the repeat counter is plain "2 / 3" text; the tajweed legend is one centred row in
+  a band the lines are fitted around; memorisation reveals and hides words with a short fade, and
+  the first-letters ghost is 0.14 (0.20 on a dark ground). Defaults: translation 36 px `#5a554c`,
+  gloss 30 px `#6b6458`, overlay `#5a554c` with `cornerSize` 0 (follows the frame).
 
 First proof of concept of Mushaf Studio: Remotion Studio, extended with the package's features
 as a user interface. See [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md) for the

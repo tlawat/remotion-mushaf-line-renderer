@@ -110,7 +110,10 @@ describe('<MushafAyahText> memorisation', () => {
     const audios = Array.from(root.querySelectorAll<HTMLElement>('[data-audio]'));
     expect(audios).toHaveLength(18);
     expect(audios[1]!.dataset).toMatchObject({trimBefore: String(Math.round(0.331 * 30)), trimAfter: '102'});
-    expect(root.querySelector('[data-mushaf-overlay="repeat-counter"]')!.textContent).toBe('2/3');
+    // Three frames into the second play: the counter dissolves to "2 / 3" over 12 frames.
+    const counter = root.querySelector('[data-mushaf-overlay="repeat-counter"]')!;
+    expect(counter.querySelector('[data-mushaf-overlay-part="outgoing"]')!.textContent).toBe('1 / 3');
+    expect(counter.lastElementChild!.textContent).toBe('2 / 3');
     expect(root.querySelector('.mushaf-uword--active')!.getAttribute('data-location')).toBe('1:2:1');
     // Ayah 3 comes in before its first play, after ayah 2's three.
     const clips = clipTimeline(plain.timings, three);
@@ -203,6 +206,6 @@ describe('<MushafAyahText> memorisation across surahs', () => {
     const resolved = await resolveAyahText(props, io());
     const root = render(<MushafAyahText {...props} resolved={resolved} />).container;
     const range = root.querySelector<HTMLElement>('[data-mushaf-overlay="intro"] [data-mushaf-overlay-part="range"]');
-    expect(range!.textContent).toContain('Al-Falaq – An-Nas · 113:1–114:2');
+    expect(range!.textContent).toBe('Āyāt 113:1–114:2');
   });
 });

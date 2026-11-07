@@ -12,15 +12,29 @@ import {fatihaLines} from './helpers/fatiha-lines';
 const timings = fatiha as unknown as RecitationTimingsV1;
 const lines = fatihaLines();
 const fps = 30;
-const base = {lines, timings, fps, leadInSeconds: 0.4, scrollFrames: 24};
+const base = {lines, timings, fps, leadInSeconds: 0.4, scrollFrames: 24, appearFrame: 0};
 
 describe('windowScrollStarts', () => {
   it('starts each scroll at the end of the outgoing line, never while its last word is heard', () => {
     const clips = clipTimeline(timings, {mode: 'off', repeat: 1, pauseSeconds: 0});
     const steps = windowScrollStarts({...base, timeline: scheduleLines(lines, timings), clips});
-    // Line 1 rises into place by f-2 (0.4 s before 0.331 s); then each line waits for its ayah's end:
-    // 1:2:4 is recited to 3.391 s (f101.7), so the window moves from f102.
-    expect(steps).toEqual([-26, 102, 171, 259, 390, 484]);
+    // Line 1 is in the centre slot from the window's first frame (its step a whole scroll before
+    // it); then each line waits for its ayah's end: 1:2:4 is recited to 3.391 s (f101.7), so the
+    // window moves from f102.
+    expect(steps).toEqual([-24, 102, 171, 259, 390, 484]);
+  });
+
+  it('puts the first line in the centre slot from the frame the window appears, and nothing moves before the first step', () => {
+    const clips = clipTimeline(timings, {mode: 'off', repeat: 1, pauseSeconds: 0});
+    const timeline = scheduleLines(lines, timings);
+    for (const appearFrame of [0, 90]) {
+      const steps = windowScrollStarts({...base, timeline, clips, appearFrame});
+      expect(steps[0]).toBe(appearFrame - 24);
+      const timing = scrollTimingFrom('calm');
+      for (const frame of [appearFrame, appearFrame + 12, steps[1]!]) {
+        expect(scrollPosition({frame, fps, steps, timing, anchor: 'start'})).toBe(0);
+      }
+    }
   });
 
   it('waits for a long pause to end, settled leadInSeconds before the next word', () => {

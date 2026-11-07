@@ -19,14 +19,19 @@ import {
   type WebFontRequest,
 } from '../content/script-fonts';
 import {TajweedLegend} from '../content/TajweedLegend';
-import {themeHasTajweedColors} from '../content/tajweed';
+import {tajweedLegend, themeHasTajweedColors} from '../content/tajweed';
 import {attributionLines} from '../export/description';
+import {translationCredit} from '../overlay/TitleOverlay';
 import type {EndCardSettings, Legend} from '../schema';
 import {readableInk} from '../schema/color';
+import {ARABIC_LABEL_FAMILY, BOOK_SERIF, type FontProps, studioFontFamily, studioFontStyle} from '../schema/fonts';
+import {frameGeometry} from '../schema/tokens';
+import {textAdvance} from '../translations/fit';
 import type {TranslationLayer} from '../translations/TranslationStack';
 import type {AyahTranslation, ResolvedAudio, ResolvedEndCard, StudioTimings} from '../types';
 import {isAutoFont, type TranslationLayerSpec, type TranslationTextProps, translationLayerSpecs} from './extras';
-import {WARNING_STYLE} from './shared';
+import {BOOK_SERIF_REQUEST} from './fonts';
+import {type BlockReserve, WARNING_STYLE} from './shared';
 import {passageSpan, surahOfAyah} from './timings';
 
 // ---------------------------------------------------------------------------------------------
@@ -42,6 +47,9 @@ const scriptOfFamily = (family: string): ScriptId | null => {
 /** A web font family as a CSS `font-family`: quoted, then a generic family. */
 const withGeneric = (family: string): string =>
   `${JSON.stringify(family)}, ${/sans/i.test(family) ? 'sans-serif' : 'serif'}`;
+
+/** The weight every translation is set in (EB Garamond 500 for Latin scripts). */
+export const TRANSLATION_WEIGHT = 500;
 
 /** What the stack needs of one layer: its CSS family and direction, and the web font to load for it (if any). */
 export type PlannedLayer = {
@@ -66,14 +74,21 @@ export const planTranslationLayer = (spec: TranslationLayerSpec, translation: Ay
   if (script !== null) {
     const name = family.trim().replace(/^(['"])(.*)\1$/, '$2');
     const subsets = SCRIPT_FONTS[script].subsets;
+    // The book serif is the Studio's own request (useStudioFonts()), its 500 included: one load.
     request =
-      subsets === undefined ? {family: name, text: Object.values(translation.text).join('')} : {family: name, subsets};
+      name === BOOK_SERIF
+        ? BOOK_SERIF_REQUEST
+        : subsets === undefined
+          ? {family: name, text: Object.values(translation.text).join('')}
+          : {family: name, subsets};
   }
   return {
     layer: {
       translation,
       fontFamily: request === null ? family : withGeneric(request.family),
       fontSize: spec.fontSize,
+      // The design's weight: EB Garamond 500; a font without it takes its nearest.
+      fontWeight: TRANSLATION_WEIGHT,
       color: spec.color,
       direction,
     },
@@ -128,6 +143,25 @@ export const readableLayers = (
   layers.every((layer) => readableInk(layer.color, ink, ground) === layer.color)
     ? layers
     : layers.map((layer) => ({...layer, color: readableInk(layer.color, ink, ground)}));
+
+/** The size a translation is drawn at under lines of glyph size `glyphSize`: never more than half the Arabic. */
+export const cappedTranslationSize = (size: number, glyphSize: number): number =>
+  Math.min(size, Math.floor(0.5 * glyphSize));
+
+/**
+ * The layers as drawn under the lines: each colour readable on `ground` (`readableLayers()`) and
+ * each size capped at half the Arabic glyph (`cappedTranslationSize()`: 36 px stays 36 at 16:9, the
+ * cap is 26 at 9:16). The same array when nothing changes.
+ */
+export const drawnTranslationLayers = (
+  layers: readonly TranslationLayer[],
+  options: {readonly ink: string; readonly ground: string; readonly glyphSize: number},
+): readonly TranslationLayer[] => {
+  const readable = readableLayers(layers, options.ink, options.ground);
+  return readable.every((layer) => cappedTranslationSize(layer.fontSize, options.glyphSize) === layer.fontSize)
+    ? readable
+    : readable.map((layer) => ({...layer, fontSize: cappedTranslationSize(layer.fontSize, options.glyphSize)}));
+};
 
 /**
  * The translations of a `resolved`: its `translations`, or for one made before them, its single
@@ -204,51 +238,132 @@ export type WithPanelOption<P> = P & {
 
 const LEGEND_NAMES = {en: 'english', ar: 'arabic', both: 'both'} as const;
 
-/** The legend's corner, `inset` px from the edges. */
-const cornerStyle = (position: Legend['position'], inset: number): React.CSSProperties => ({
-  position: 'absolute',
-  ...(position.startsWith('top') ? {top: inset} : {bottom: inset}),
-  ...(position.endsWith('left') ? {left: inset} : {right: inset}),
-});
-
-export type CornerLegendProps = {
-  readonly legend: Legend;
-  readonly theme: MushafThemeSelection;
-  readonly fontFamily: string;
-  readonly color: string;
-  /** The page colour, behind the legend so it reads over the lines. */
-  readonly background: string;
-  /** The composition's width: the legend's size follows it. */
-  readonly width: number;
+/** Where a legend's band sits and how much of the frame it keeps from the lines. */
+export type LegendBandGeometry = {
+  /** `top` for `top-*` positions, `bottom` for `bottom-*`. */
+  readonly edge: 'top' | 'bottom';
+  /** px from that edge to the band: the safe area, or at 9:16 the platform band. */
+  readonly inset: number;
+  /** px of the names: `0.8 L`. */
+  readonly fontSize: number;
+  /** Rows the entries wrap to in the band's width. */
+  readonly rows: number;
+  /** px of the band: `1.6 × fontSize` a row. */
+  readonly height: number;
+  /** px kept clear of the lines from that edge: the band, the inset beyond the safe area, and half a line box. */
+  readonly reserve: number;
 };
 
 /**
- * The tajweed legend (`<TajweedLegend>`) in a corner, on a card of the page colour, sized to the
- * frame (a fortieth of its width per name). Nothing when `legend.show` is off or the theme paints
- * every rule alike (`themeHasTajweedColors()`).
+ * The band of the tajweed legend in a `width` × `height` frame (render-design.md 5.8), or `null`
+ * when no legend is drawn (`legend.show` off, or a theme that paints every rule alike). Its entries
+ * are measured in the label face (a canvas, after the font gate) and wrapped into the width inside
+ * the safe area; the band is `1.6 × 0.8 L` a row, and the lines keep the band plus half a line box
+ * (`lineHeight`) clear of it.
  */
-export const CornerLegend: React.FC<CornerLegendProps> = ({legend, theme, fontFamily, color, background, width}) => {
+export const legendBand = (
+  legend: Pick<Legend, 'show' | 'position' | 'names'>,
+  theme: MushafThemeSelection,
+  frame: {readonly width: number; readonly height: number; readonly lineHeight: number},
+): LegendBandGeometry | null => {
   if (!legend.show || !themeHasTajweedColors(theme)) return null;
-  const fontSize = Math.max(14, Math.round(width / 80));
+  const geometry = frameGeometry(frame.width, frame.height);
+  const fontSize = Math.round(0.8 * geometry.label);
+  const edge = legend.position.startsWith('top') ? 'top' : 'bottom';
+  const inset = edge === 'top' ? geometry.top : geometry.bottom;
+  const room = frame.width - 2 * geometry.safe;
+  const latin = {fontFamily: studioFontFamily('auto', 'label'), fontWeight: 500};
+  const arabic = {fontFamily: ARABIC_LABEL_FAMILY};
+  let rows = 1;
+  let used = 0;
+  for (const item of tajweedLegend(theme)) {
+    // A swatch of 0.5 em, 0.4 em before each name; small caps measured as capitals at 80 %.
+    let entry = 0.5 * fontSize;
+    if (legend.names !== 'ar') entry += 0.4 * fontSize + 0.8 * textAdvance(item.english.toUpperCase(), latin, fontSize);
+    if (legend.names !== 'en') entry += 0.4 * fontSize + textAdvance(item.arabic, arabic, fontSize);
+    if (used === 0) used = entry;
+    else if (used + fontSize + entry <= room) used += fontSize + entry;
+    else {
+      rows += 1;
+      used = entry;
+    }
+  }
+  const height = Math.round(rows * 1.6 * fontSize);
+  return {
+    edge,
+    inset,
+    fontSize,
+    rows,
+    height,
+    reserve: inset - geometry.safe + height + Math.round(0.5 * frame.lineHeight),
+  };
+};
+
+/** The bands `blockGeometry()` keeps clear of the lines for the legend (`legendBand()`): nothing without one. */
+export const legendReserve = (
+  legend: Pick<Legend, 'show' | 'position' | 'names'>,
+  theme: MushafThemeSelection,
+  frame: {readonly width: number; readonly height: number; readonly lineHeight: number},
+): BlockReserve => {
+  const band = legendBand(legend, theme, frame);
+  if (band === null) return {top: 0, bottom: 0};
+  return band.edge === 'top' ? {top: band.reserve, bottom: 0} : {top: 0, bottom: band.reserve};
+};
+
+export type LegendBandProps = {
+  readonly legend: Legend;
+  readonly theme: MushafThemeSelection;
+  /** The Latin names' family (`studioFontFamily(overlay.font, 'label')`); the Arabic names are in Amiri. */
+  readonly fontFamily: string;
+  /** The names' ink: drawn at 60 %, as every label. */
+  readonly color: string;
+  readonly width: number;
+  readonly height: number;
+  /** The lines' line box, for the gap `legendBand()` keeps. */
+  readonly lineHeight: number;
+};
+
+/**
+ * The tajweed legend (`<TajweedLegend band>`) as one centred row in its band above or below the
+ * lines (`legendBand()`), with no card behind it: the composition fits the lines around the band
+ * (`legendReserve()`), so it never covers the text. Nothing when no legend is drawn.
+ */
+export const LegendBand: React.FC<LegendBandProps> = ({
+  legend,
+  theme,
+  fontFamily,
+  color,
+  width,
+  height,
+  lineHeight,
+}) => {
+  const band = legendBand(legend, theme, {width, height, lineHeight});
+  if (band === null) return null;
+  const {safe} = frameGeometry(width, height);
   return (
     <div
       data-mushaf-block="Tajweed legend"
       style={{
-        ...cornerStyle(legend.position, Math.round(width * 0.02)),
-        padding: `${Math.round(fontSize * 0.5)}px ${Math.round(fontSize * 0.7)}px`,
-        borderRadius: Math.round(fontSize * 0.4),
-        background,
-        maxWidth: Math.round(width * 0.45),
+        position: 'absolute',
+        left: safe,
+        right: safe,
+        [band.edge]: band.inset,
+        height: band.height,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: 0.6,
       }}
     >
       <TajweedLegend
         theme={theme}
-        orientation={legend.orientation}
+        band
         names={LEGEND_NAMES[legend.names]}
         fontFamily={fontFamily}
-        arabicFontFamily={ARABIC_FAMILY}
-        fontSize={fontSize}
+        arabicFontFamily={ARABIC_LABEL_FAMILY}
+        fontSize={band.fontSize}
         color={color}
+        style={{fontWeight: 500}}
       />
     </div>
   );
@@ -257,21 +372,19 @@ export const CornerLegend: React.FC<CornerLegendProps> = ({legend, theme, fontFa
 // ---------------------------------------------------------------------------------------------
 // End card
 
-/** The Arabic texts of the cards (the surah's name, the rules' names): a Naskh where there is one. */
-const ARABIC_FAMILY = '"Amiri", "Noto Naskh Arabic", "Scheherazade New", serif';
-
 /**
  * The credits of a video, one line each (`attributionLines()`): the fonts, the QUD timings when the
- * sidecar says so, and every translation shown.
+ * sidecar says so, and every translation shown, as "Translation of the meanings · <name>", unless
+ * the intro card already credited it (`translationCredited`).
  */
 export const endCardCreditLines = (
   timings: StudioTimings,
   translations: readonly AyahTranslation[],
+  options: {readonly translationCredited?: boolean | undefined} = {},
 ): readonly string[] => {
-  if (translations.length === 0) return attributionLines({timings});
-  const lines = translations.flatMap((t) =>
-    attributionLines({timings, translationName: t.meta.name, translationSource: t.meta.source}),
-  );
+  const base = attributionLines({timings});
+  if (translations.length === 0 || options.translationCredited === true) return base;
+  const lines = [...base, ...translations.map((t) => translationCredit(t.meta.name))];
   return [...new Set(lines)];
 };
 
@@ -280,34 +393,52 @@ export type CompositionEndCardProps = {
   readonly content: ResolvedEndCard | undefined;
   readonly timings: StudioTimings;
   readonly translations: readonly AyahTranslation[];
+  /** The intro card credited the translation: the end card's credits leave it out. Default `false`. */
+  readonly translationCredited?: boolean | undefined;
   readonly reciter: string;
-  /** The frame the card starts at: the end of the recitation. */
+  /** The frame the card starts at: once the lines have faded. */
   readonly from: number;
   readonly durationInFrames: number;
-  readonly fontFamily: string;
+  /** `overlay.font`: `'auto'` (EB Garamond) or a CSS font family. */
+  readonly font: string;
   readonly color: string;
+  /** The ground the card is drawn on. */
   readonly background: string;
+  /** The gold of the title's hairline (`metalOf()`). */
+  readonly metal: string;
+  /** The lines' measure, type size and line box: the framed surah name is sized on them. */
+  readonly measure: number;
+  readonly glyphSize: number;
+  readonly lineHeight: number;
+  readonly fontProps?: FontProps | undefined;
   readonly width: number;
   readonly height: number;
 };
 
 /**
- * The composition's end card (`<EndCard>`) over the frames `calculateMetadata()` added: the surah,
- * the range recited, the reciter, the credits, and the tafsir of the last ayah or the surah's
- * introduction when `endCard.show` asks for them. Nothing for `'none'`. A recitation across surahs
- * ends on its last surah: the card names it and the ayahs of it recited (`<EndCard>` names one surah).
+ * The composition's end card (`<EndCard glyph>`) over the frames `calculateMetadata()` added after
+ * the lines' fade: the framed surah name and a gold hairline, the range recited, the reciter, the
+ * tafsir of the last ayah or the surah's introduction when `endCard.show` asks for them, and the
+ * credits. Nothing for `'none'`. A recitation across surahs ends on its last surah: the card names
+ * it and the ayahs of it recited (`<EndCard>` names one surah).
  */
 export const CompositionEndCard: React.FC<CompositionEndCardProps> = ({
   endCard,
   content,
   timings,
   translations,
+  translationCredited,
   reciter,
   from,
   durationInFrames,
-  fontFamily,
+  font,
   color,
   background,
+  metal,
+  measure,
+  glyphSize,
+  lineHeight,
+  fontProps,
   width,
   height,
 }) => {
@@ -318,6 +449,7 @@ export const CompositionEndCard: React.FC<CompositionEndCardProps> = ({
   const first = timings.ayat[firstIndex]!.ayah;
   const last = to.ayah;
   const tafsir = endCard.show === 'tafsir' ? (content?.tafsir ?? null) : null;
+  const face = studioFontStyle(font, 'label');
   return (
     <EndCard
       surah={to.surah}
@@ -326,12 +458,14 @@ export const CompositionEndCard: React.FC<CompositionEndCardProps> = ({
       reciter={reciter}
       from={from}
       durationInFrames={durationInFrames}
-      fontFamily={fontFamily}
-      arabicFontFamily={ARABIC_FAMILY}
+      fontFamily={face.fontFamily}
+      {...(face.fontWeight === undefined ? {} : {fontWeight: face.fontWeight})}
+      arabicFontFamily={ARABIC_LABEL_FAMILY}
       fontSize={Math.round(Math.min(width, height) * 0.06)}
       color={color}
       background={background}
-      creditLines={endCardCreditLines(timings, translations)}
+      glyph={{measure, glyphSize, lineHeight, metal, fontProps}}
+      creditLines={endCardCreditLines(timings, translations, {translationCredited})}
       tafsir={tafsir ? {tafsir, ayahKey: `${to.surah}:${last}`, maxLines: 8} : null}
       chapterInfo={endCard.show === 'chapter-info' ? (content?.chapterInfo ?? null) : null}
     />

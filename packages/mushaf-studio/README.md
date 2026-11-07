@@ -635,29 +635,41 @@ hidden word's gloss is hidden too (its place kept), a faint word's gloss is fain
 | `glossSize`            | 12–120 px                     | `34`          | Gloss size.                                                  |
 | `glossColor`           | colour                        | `'#6a6a6a'`   | Gloss colour.                                                |
 | `glossPosition`        | `'strip'`, `'interlinear'`, `'none'` | `'strip'` | `MushafRecitation` only: the gloss in a strip at the bottom, under each printed word (`<InterlinearGlosses>`, capped to 0.3 of the line's type size, shrunk to fit its word), or nowhere. |
-| `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Once it has a layer (even one with an empty `file`), `translationFile` and the `translation*` type fields above are ignored. Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: Noto Serif for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
+| `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Once it has a layer (even one with an empty `file`), `translationFile` and the `translation*` type fields above are ignored. Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: EB Garamond for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
 
 ### `overlay`
 
 A title over the video, in all three compositions (`overlaySchema`, `defaultOverlay`; the
 components are `<MushafTitleOverlay>`, `<MushafTitleCard>` and `<MushafCornerLabel>`, pure in their
-props and the frame). The intro card covers the frame in the page colour and shows the surah's name
-in its printed frame (`<MushafSurahName surah framed>`, with the composition's `fonts`), the range in
-Latin and Arabic-Indic digits ("Al-Fatihah · 1:2–7 · ١:٢–٧") and the reciter. Nothing is shifted for
-it: it stays `introSeconds`, fading out over its last half second, or goes 0.3 s before the first
-word when the recitation starts earlier. `MushafPassage`, with no audio to keep in step, starts its
-lines after it (`passageTimeline()`). The corner label reads "Al-Fatihah · 1:3 · Reciter": the surah
-and the ayah being heard (the translation block's key), and comes in as the card goes under `both`.
+props and the frame). The intro card is drawn on the ground: frame 0 is the bare page, then the
+surah's name in its printed frame (`<MushafSurahName surah framed>`, with the composition's
+`fonts`), a gold hairline with a lozenge, the range in Amiri («الآيات ٢–٧», the first ayah
+rightmost) and in small caps ("Āyāt 2–7"), the reciter in italic and the translation's credit
+("Translation of the meanings · Saheeh International") come in from 0.2 s and go by
+`introSeconds`.
+
+**The intro card adds its time.** In `MushafRecitation`'s `calculateMetadata()`, the recording
+starts `resolved.introDelaySeconds` later: `introSeconds` + the card's entrance (0.8 s, 1.13 s
+slow) + `leadInSeconds`, less what the recording already has before its first word, never
+negative (`introDelaySeconds()`). The timings, the schedule and the clips move by it, the audio
+starts there and the video grows by it; the lines come in after the card. A host that syncs to the
+video maps its time to the recording's with it: recording = video − `introDelaySeconds` +
+`audioOffsetSeconds`. Under `hostAudio` nothing is delayed (the template's track decides).
+`MushafPassage`, with no audio, starts its lines after the card (`passageTimeline()`);
+`MushafAyahText` and `MushafPage` keep the card over their start, covering the text in the page
+colour, until it goes 0.3 s before the first word. The corner label reads "AL-FATIHAH · 3" in small
+caps: the surah and the number of the ayah on screen, which changes by a short dissolve after the
+ayah's last word. It comes in 0.4 s after the card (0.5 s into the video without one).
 
 | Field          | Type                                                     | Default                         | Description                                               |
 | -------------- | -------------------------------------------------------- | ------------------------------- | --------------------------------------------------------- |
 | `title`        | `'none'`, `'intro'`, `'corner'`, `'both'`                | `'none'`                        | No title, the intro card, the corner label, or both. The intro card names the surah: with `header` on too, the name shows twice at the start. |
-| `introSeconds` | 1–8                                                      | `3`                             | Seconds the intro card stays.                             |
-| `reciter`      | string                                                   | `''`                            | The reciter's name, under the range and in the corner (empty: none). The panel does not fill it: type it in the Props sidebar. |
-| `color`        | colour                                                   | `'#1b1b1b'`                     | Colour of the title texts and the surah name.             |
-| `font`         | CSS font family                                          | `'Georgia, "Noto Serif", serif'` | Font of the title texts.                                 |
-| `corner`       | `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` | `'top-right'`             | Corner of the label.                                      |
-| `cornerSize`   | 12–60 px                                                 | `28`                            | Size of the label, and its distance from the edges.       |
+| `introSeconds` | 2–6                                                      | `3`                             | Seconds the intro card stays; the recitation starts after it. |
+| `reciter`      | string                                                   | `''`                            | The reciter's name, on the intro card (empty: none). The panel does not fill it: type it in the Props sidebar. |
+| `color`        | colour                                                   | `'#5a554c'`                     | Colour of the title texts and the surah name.             |
+| `font`         | `'auto'` or a CSS font family                            | `'auto'`                        | `'auto'`: EB Garamond small caps, Amiri for Arabic (loaded by `useStudioFonts()`). |
+| `corner`       | `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` | `'top-right'`             | Corner of the label, inside the safe area (at 9:16 clear of the platform's bands). |
+| `cornerSize`   | 0–60 px                                                  | `0`                             | Size of the label; 0 follows the frame (2.4 % of its height). |
 
 The transliterated names are `SURAH_NAMES` / `surahEnglishName()`.
 

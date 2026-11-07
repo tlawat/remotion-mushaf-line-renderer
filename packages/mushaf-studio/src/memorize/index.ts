@@ -21,6 +21,9 @@ export {
 } from './timeline';
 export {
   FAINT_WORD_OPACITY,
+  ghostOpacity,
+  type MemorizeOpacityInput,
+  memorizeOpacity,
   visibilityStyle,
   type WordVisibility,
   type WordVisibilityInput,

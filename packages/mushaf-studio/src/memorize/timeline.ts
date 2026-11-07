@@ -143,11 +143,11 @@ export const audioClock = (clips: readonly MemorizeClip[]): ((seconds: number) =
   isIdentityTimeline(clips) ? (seconds) => seconds : (seconds) => audioTimeAt(clips, seconds);
 
 /**
- * The repetition counter's text for `clip`: `"2/3"`; `null` when ayahs play once (or before the
+ * The repetition counter's text for `clip`: `"2 / 3"`; `null` when ayahs play once (or before the
  * first clip), where a counter would say nothing.
  */
 export const repeatCounterText = (clip: MemorizeClip | null, repeats: number): string | null =>
-  clip === null || repeats <= 1 ? null : `${clip.repetition}/${repeats}`;
+  clip === null || repeats <= 1 ? null : `${clip.repetition} / ${repeats}`;
 
 /**
  * A line schedule laid on the clip timeline, in seconds of the composition: the leading header

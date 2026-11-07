@@ -7,6 +7,7 @@ export * from './background';
 // Captions
 export * from './captions';
 // Compositions
+export {BOOK_SERIF_REQUEST, STUDIO_FONT_REQUESTS, useStudioFonts} from './compositions/fonts';
 export * from './compositions/passage';
 export * from './compositions/recitation';
 // Content

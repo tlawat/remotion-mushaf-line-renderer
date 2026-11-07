@@ -107,7 +107,7 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   highlight: defaultHighlight,
   memorize: defaultMemorize,
   // The shared default translation colour is a dark grey for a light page; this one reads on the dark page.
-  text: {...defaultText, translationColor: '#c9c1b2'},
+  text: {...defaultText, translationColor: '#b9b1a2', translationSize: 40},
   // The shared default title ink is the light page's; this one reads on the dark page.
   overlay: {...defaultOverlay, color: '#f4efe6'},
   endCard: defaultEndCard,

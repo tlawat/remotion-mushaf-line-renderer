@@ -73,11 +73,16 @@ export const isPageResolved = (resolved: StudioResolved): resolved is ResolvedPa
 export const isAyahTextResolved = (resolved: StudioResolved): resolved is ResolvedAyahText => 'ayahs' in resolved;
 
 /**
- * Seconds the composition skips of the recording, already taken off `resolved.timings`: a
- * its `audioOffsetSeconds` (an ayah text has one only when it skips a leading silence); else 0.
+ * Seconds of the recording before the composition's frame 0, already taken off `resolved.timings`:
+ * its `audioOffsetSeconds` (an ayah text has one only when it skips a leading silence), less the
+ * intro card's `introDelaySeconds` (the recording starts that much into the video); else 0. A
+ * composition second `t` is the recording's `t + audioOffsetOf(resolved)`.
  */
-export const audioOffsetOf = (resolved: StudioResolved | null): number =>
-  resolved !== null && 'audioOffsetSeconds' in resolved ? (resolved.audioOffsetSeconds ?? 0) : 0;
+export const audioOffsetOf = (resolved: StudioResolved | null): number => {
+  if (resolved === null || !('audioOffsetSeconds' in resolved)) return 0;
+  const delay = 'introDelaySeconds' in resolved ? (resolved.introDelaySeconds ?? 0) : 0;
+  return Math.round(((resolved.audioOffsetSeconds ?? 0) - delay) * 1e6) / 1e6;
+};
 
 /**
  * The ayah translations `calculateMetadata()` loaded, one per layer (`translations`), else the one

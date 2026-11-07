@@ -31,6 +31,7 @@ import {
   effectiveNeighbourOpacity,
   effectiveRestOpacity,
   fontPropsFrom,
+  frameGeometry,
   type Highlight,
   inkTintFor,
   markerIds,
@@ -39,11 +40,14 @@ import {
   SOFT,
   scrollTimingFrom,
   sizeForAspect,
+  studioFontFamily,
+  studioFontStyle,
   themeSelectionFrom,
   tintPath,
   type WashCap,
   washColor,
   washStyle,
+  windowScrollTiming,
   wordStyleFrom,
 } from '../../../src/schema';
 import {withAlpha} from '../../../src/schema/highlight';
@@ -100,6 +104,51 @@ describe('animationFrom', () => {
 
   it('has neither side for cut, so the result spreads into the component', () => {
     expect(animationFrom({lines: 'cut'})).toEqual({});
+    expect(animationFrom({lines: 'cut'}, {enterFrames: 14, exitFrames: 10})).toEqual({});
+  });
+
+  it('runs at the lengths of the boundary it is given, the first appearance on SINE', () => {
+    // A 20-frame line dissolve: the outgoing line over 10 frames, the incoming one over the last 14.
+    const line = animationFrom({lines: 'fade'}, {enterFrames: 14, exitFrames: 10});
+    expect([framesOf(asAnimation(line.enter)), framesOf(asAnimation(line.exit))]).toEqual([14, 10]);
+    expect(asAnimation(line.enter)?.timing?.getProgress({frame: 7, fps})).toBeCloseTo(SOFT(0.5), 6);
+    const first = animationFrom({lines: 'fade'}, {enterFrames: 24, enterEasing: SINE});
+    expect(asAnimation(first.enter)?.timing?.getProgress({frame: 12, fps})).toBeCloseTo(SINE(0.5), 6);
+    const rise = animationFrom({lines: 'rise'}, {fontSize: 52, enterFrames: 24, enterEasing: SINE});
+    expect(asAnimation(rise.enter)?.presentation.props).toEqual({distance: 6, easing: SINE});
+    expect(framesOf(asAnimation(rise.enter))).toBe(24);
+  });
+});
+
+describe('windowScrollTiming', () => {
+  it('is the calm scroll at the tempo, and a jump under cut', () => {
+    expect(windowScrollTiming({lines: 'fade', tempo: 'calm'}).getDurationInFrames({fps})).toBe(24);
+    expect(windowScrollTiming({lines: 'rise', tempo: 'slow'}).getDurationInFrames({fps})).toBe(34);
+    expect(windowScrollTiming({lines: 'fade', tempo: 'calm'}, 60).getDurationInFrames({fps: 60})).toBe(48);
+    const cut = windowScrollTiming({lines: 'cut', tempo: 'calm'});
+    expect(cut.getDurationInFrames({fps})).toBe(0);
+    expect(cut.getProgress({frame: 0, fps})).toBe(1);
+  });
+});
+
+describe('frameGeometry / studioFontStyle', () => {
+  it('gives the safe area, the label size, the hairline unit and the vertical frame’s bands', () => {
+    expect(frameGeometry(1920, 1080)).toEqual({safe: 54, label: 26, unit: 1, top: 54, bottom: 54});
+    expect(frameGeometry(1080, 1920)).toEqual({safe: 54, label: 37, unit: 1, top: 230, bottom: 346});
+    expect(frameGeometry(1080, 1080).label).toBe(26);
+    expect(frameGeometry(1080, 1350)).toMatchObject({label: 32, top: 54, bottom: 54});
+    expect(frameGeometry(3840, 2160)).toMatchObject({safe: 108, unit: 2});
+  });
+
+  it('sets auto in EB Garamond: 500 for translations and labels, 400 italic for the gloss', () => {
+    expect(studioFontStyle('auto', 'translation')).toEqual({
+      fontFamily: studioFontFamily('auto', 'translation'),
+      fontWeight: 500,
+    });
+    expect(studioFontStyle(' Auto ', 'label').fontWeight).toBe(500);
+    expect(studioFontStyle('auto', 'gloss')).toMatchObject({fontWeight: 400, fontStyle: 'italic'});
+    expect(studioFontStyle('auto', 'gloss').fontFamily).toMatch(/^"EB Garamond"/);
+    expect(studioFontStyle('Lora, serif', 'gloss')).toEqual({fontFamily: 'Lora, serif'});
   });
 });
 

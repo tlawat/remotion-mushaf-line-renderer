@@ -23,15 +23,19 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
 
 const {
   arabicIndicDigits,
+  arabicRangeText,
   ayahRangeText,
+  introCardOpacity,
+  introCoverOpacity,
   introEndSeconds,
   introOpacity,
+  latinRangeText,
   MushafCornerLabel,
   MushafTitleOverlay,
   SURAH_NAMES,
   surahEnglishName,
 } = await import('../../../src/overlay');
-const {defaultOverlay} = await import('../../../src/schema');
+const {defaultOverlay, SINE} = await import('../../../src/schema');
 type Overlay = import('../../../src/schema').Overlay;
 type OverlayProps = import('../../../src/overlay').MushafTitleOverlayProps;
 
@@ -78,6 +82,33 @@ describe('surah names and ranges', () => {
   });
 });
 
+describe('the card’s timeline', () => {
+  it('comes in over cardIn on SINE from 0.2 s, holds, and goes over cardOut ending at its end', () => {
+    // Frame 0 is the bare ground.
+    expect(introCardOpacity(0, 3)).toBe(0);
+    expect(introCardOpacity(0.2, 3)).toBe(0);
+    expect(introCardOpacity(0.6, 3)).toBeCloseTo(SINE(0.5), 4);
+    expect(introCardOpacity(1, 3)).toBe(1);
+    expect(introCardOpacity(2.3, 3)).toBe(1);
+    // cardOut is 21 frames (0.7 s) calm, 30 slow.
+    expect(introCardOpacity(2.65, 3)).toBeCloseTo(1 - SINE(0.5), 4);
+    expect(introCardOpacity(3, 3)).toBe(0);
+    expect(introCardOpacity(2.5, 3, 'slow')).toBeCloseTo(1 - SINE(0.5), 4);
+    // Over the lines, its ground covers them from frame 0 and goes with the content.
+    expect(introCoverOpacity(0, 3)).toBe(1);
+    expect(introCoverOpacity(2.65, 3)).toBeCloseTo(1 - SINE(0.5), 4);
+    expect(introCoverOpacity(3, 3)).toBe(0);
+  });
+
+  it('writes the range in Arabic, first ayah rightmost in an RTL isolate, and in Latin', () => {
+    expect(arabicRangeText({surah: 1, ayah: 2}, {surah: 1, ayah: 7})).toBe('\u2067الآيات ٢–٧\u2069');
+    expect(arabicRangeText({surah: 1, ayah: 5}, {surah: 1, ayah: 5})).toBe('\u2067الآية ٥\u2069');
+    expect(latinRangeText({surah: 1, ayah: 2}, {surah: 1, ayah: 7})).toBe('Āyāt 2–7');
+    expect(latinRangeText({surah: 1, ayah: 5}, {surah: 1, ayah: 5})).toBe('Āyah 5');
+    expect(latinRangeText({surah: 113, ayah: 4}, {surah: 114, ayah: 2})).toBe('Āyāt 113:4–114:2');
+  });
+});
+
 describe('introEndSeconds and introOpacity', () => {
   it('keeps the card introSeconds, or until 0.3 s before an earlier first word, never below 0', () => {
     expect(introEndSeconds(3, null)).toBe(3);
@@ -98,35 +129,46 @@ describe('introEndSeconds and introOpacity', () => {
 });
 
 describe('<MushafTitleOverlay>', () => {
-  it('shows the intro card at frame 0: the framed surah name, the range in both digits, over the page colour', () => {
-    const c = at(0, base({overlay: overlay({title: 'intro'})}));
+  it('shows the intro card from 0.2 s: the framed surah name, a hairline, the range in Arabic and in small caps', () => {
+    const p = base({overlay: overlay({title: 'intro'}), addsTime: true});
+    // Frame 0 is the bare ground.
+    expect(intro(at(0, p))).toBeNull();
+    cleanup();
+    const c = at(30, p);
     const card = intro(c)!;
-    expect(card).not.toBeNull();
-    expect(card.style.backgroundColor).toBe('rgb(251, 247, 238)');
-    expect(card.style.opacity).toBe('1');
+    // Drawn on the ground, with no ground of its own.
+    expect(part(c, 'backdrop')).toBeNull();
     const name = card.querySelector<HTMLElement>('[data-surah-name]')!;
     expect(name.dataset).toMatchObject({surahName: '1', framed: 'true'});
-    expect(part(c, 'range')!.textContent).toBe('Al-Fatihah · 1:2–7 · ١:٢–٧');
+    expect(part(c, 'rule')).not.toBeNull();
+    expect(part(c, 'arabic-range')!.textContent).toBe('\u2067الآيات ٢–٧\u2069');
+    expect(part(c, 'arabic-range')!.dir).toBe('rtl');
+    expect(part(c, 'range')!.textContent).toBe('Āyāt 2–7');
+    expect(part(c, 'range')!.style.fontVariantCaps).toBe('all-small-caps');
     expect(corner(c)).toBeNull();
   });
 
   it('names both ends of a passage across surahs, framed under the first surah’s name', () => {
-    const c = at(0, base({overlay: overlay({title: 'intro'}), surah: 113, fromAyah: 4, toSurah: 114, toAyah: 2}));
+    const c = at(
+      30,
+      base({overlay: overlay({title: 'intro'}), surah: 113, fromAyah: 4, toSurah: 114, toAyah: 2, addsTime: true}),
+    );
     expect(intro(c)!.querySelector<HTMLElement>('[data-surah-name]')!.dataset.surahName).toBe('113');
-    expect(part(c, 'range')!.textContent).toBe('Al-Falaq – An-Nas · 113:4–114:2 · ١١٣:٤–١١٤:٢');
+    expect(part(c, 'range')!.textContent).toBe('Āyāt 113:4–114:2');
+    expect(part(c, 'arabic-range')!.textContent).toBe('\u2067الآيات ١١٣:٤–١١٤:٢\u2069');
   });
 
   it('shows no card without a surah to name, the corner label at once with the surah heard', () => {
     const c = at(0, base({overlay: overlay({title: 'both'}), surah: undefined, ayahKey: '114:1'}));
     expect(intro(c)).toBeNull();
-    expect(corner(c)!.textContent).toBe('An-Nas · 114:1');
-    expect(corner(c)!.style.opacity).toBe('');
+    expect(corner(c)!.textContent).toBe('An-Nas · 1');
+    expect(corner(c)!.style.opacity).toBe('0.6');
     cleanup();
     expect(corner(at(0, base({overlay: overlay({title: 'corner'}), surah: undefined, ayahKey: null})))).toBeNull();
   });
 
-  it('is gone once introSeconds have passed', () => {
-    const p = base({overlay: overlay({title: 'intro', introSeconds: 3})});
+  it('is gone once introSeconds have passed when it adds its time', () => {
+    const p = base({overlay: overlay({title: 'intro', introSeconds: 3}), addsTime: true});
     expect(intro(at(89, p))).not.toBeNull();
     cleanup();
     expect(intro(at(90, p))).toBeNull();
@@ -134,52 +176,102 @@ describe('<MushafTitleOverlay>', () => {
     expect(at(300, p).innerHTML).toBe('');
   });
 
-  it('goes 0.3 s before a first word heard inside introSeconds', () => {
+  it('covers the lines in the ground and goes 0.3 s before an earlier first word when it does not add its time', () => {
     const p = base({overlay: overlay({title: 'intro', introSeconds: 3}), firstWordSeconds: 1.3});
+    const first = at(0, p);
+    expect(part(first, 'backdrop')!.style).toMatchObject({backgroundColor: 'rgb(251, 247, 238)', opacity: '1'});
+    cleanup();
     expect(intro(at(29, p))).not.toBeNull();
     cleanup();
     expect(intro(at(30, p))).toBeNull();
   });
 
-  it('shows the reciter line only when one is set, in the card and the corner', () => {
-    const none = at(0, base({overlay: overlay({title: 'intro'})}));
+  it('shows the reciter line on the card only when one is set, and the translation’s credit', () => {
+    const none = at(30, base({overlay: overlay({title: 'intro'}), addsTime: true}));
     expect(part(none, 'reciter')).toBeNull();
+    expect(part(none, 'translation')).toBeNull();
     cleanup();
-    const named = at(0, base({overlay: overlay({title: 'intro', reciter: 'Abdul Hamid Ghraio'})}));
-    expect(part(named, 'reciter')!.textContent).toBe('Abdul Hamid Ghraio');
-    cleanup();
-    expect(corner(at(0, base({overlay: overlay({title: 'corner', reciter: 'Abdul Hamid Ghraio'})})))!.textContent).toBe(
-      'Al-Fatihah · 1:3 · Abdul Hamid Ghraio',
+    const named = at(
+      30,
+      base({
+        overlay: overlay({title: 'intro', reciter: 'Abdul Hamid Ghraio'}),
+        addsTime: true,
+        translationName: 'Saheeh International',
+      }),
     );
+    expect(part(named, 'reciter')!.textContent).toBe('Abdul Hamid Ghraio');
+    expect(part(named, 'reciter')!.style.fontStyle).toBe('italic');
+    expect(part(named, 'translation')!.textContent).toBe('Translation of the meanings · Saheeh International');
+    cleanup();
+    // The corner label no longer carries the reciter.
+    expect(
+      corner(at(60, base({overlay: overlay({title: 'corner', reciter: 'Abdul Hamid Ghraio'})})))!.textContent,
+    ).toBe('Al-Fatihah · 3');
   });
 
   it('hands the font props to the surah name, in the overlay’s colour and font', () => {
     const c = at(
-      0,
-      base({overlay: overlay({title: 'intro', color: '#112233', font: 'Inter'}), fontProps: {fontSrc: 'cdn'}}),
+      30,
+      base({
+        overlay: overlay({title: 'intro', color: '#112233', font: 'Inter'}),
+        fontProps: {fontSrc: 'cdn'},
+        addsTime: true,
+      }),
     );
     expect(c.querySelector<HTMLElement>('[data-surah-name]')!.dataset.fontSrc).toBe('yes');
     expect(intro(c)!.style.color).toBe('rgb(17, 34, 51)');
     expect(intro(c)!.style.fontFamily).toBe('Inter');
   });
 
-  it('shows the corner label alone under corner, with the ayah key it is given, in its corner', () => {
-    const c = at(0, base({overlay: overlay({title: 'corner', corner: 'bottom-left', cornerSize: 30})}));
+  it('shows the corner label alone under corner, in its corner inside the safe area, at the frame’s label size by default', () => {
+    const c = at(60, base({overlay: overlay({title: 'corner', corner: 'bottom-left', cornerSize: 30})}));
     expect(intro(c)).toBeNull();
     const label = corner(c)!;
-    expect(label.textContent).toBe('Al-Fatihah · 1:3');
-    expect(label.style).toMatchObject({bottom: '30px', left: '30px', fontSize: '30px', textAlign: 'left'});
+    expect(label.textContent).toBe('Al-Fatihah · 3');
+    expect(label.style).toMatchObject({bottom: '54px', left: '54px', fontSize: '30px', textAlign: 'left'});
+    expect(label.style.fontVariantCaps).toBe('all-small-caps');
+    cleanup();
+    // cornerSize 0 follows the frame: 2.4 % of 1080 px.
+    expect(corner(at(60, base({overlay: overlay({title: 'corner'})})))!.style.fontSize).toBe('26px');
+    cleanup();
+    // At 9:16 it stays clear of the platform's bands.
+    remotion.state.width = 1080;
+    remotion.state.height = 1920;
+    expect(corner(at(60, base({overlay: overlay({title: 'corner'})})))!.style).toMatchObject({
+      top: '230px',
+      fontSize: '37px',
+    });
   });
 
-  it('brings the corner label in as the card goes under both', () => {
-    const p = base({overlay: overlay({title: 'both', introSeconds: 3})});
+  it('brings the corner label in from 0.4 s after the card under both, and halos it over an image', () => {
+    const p = base({overlay: overlay({title: 'both', introSeconds: 3}), addsTime: true});
     expect(corner(at(0, p))).toBeNull();
     cleanup();
-    expect(corner(at(82, p))!.style.opacity).not.toBe('');
+    expect(corner(at(102, p))).toBeNull();
     cleanup();
-    const after = corner(at(120, p))!;
-    expect(after.style.opacity).toBe('');
-    expect(after.textContent).toBe('Al-Fatihah · 1:3');
+    expect(Number(corner(at(114, p))!.style.opacity)).toBeCloseTo(0.6 * SINE(12 / 24), 4);
+    cleanup();
+    const after = corner(at(150, p))!;
+    expect(after.style.opacity).toBe('0.6');
+    expect(after.style.textShadow).toBe('');
+    expect(after.textContent).toBe('Al-Fatihah · 3');
+    cleanup();
+    expect(corner(at(150, {...p, overImage: true}))!.style.textShadow).toMatch(
+      /^0 0 0.6em rgba\(251, 247, 238, 0.5\)$/,
+    );
+  });
+
+  it('dissolves the number alone when the ayah changes', () => {
+    const p = base({
+      overlay: overlay({title: 'corner'}),
+      ayahKey: '1:4',
+      ayahChange: {outgoing: {key: '1:3', opacity: 0.4}, opacity: 0.3},
+    });
+    const label = corner(at(60, p))!;
+    expect(label.textContent).toBe('Al-Fatihah · 34');
+    const outgoing = label.querySelector<HTMLElement>('[data-mushaf-overlay-part="outgoing"]')!;
+    expect(outgoing.textContent).toBe('3');
+    expect(outgoing.style.opacity).toBe('0.4');
   });
 
   it('renders nothing under title none', () => {
@@ -189,20 +281,11 @@ describe('<MushafTitleOverlay>', () => {
 
 describe('<MushafCornerLabel>', () => {
   const label = (ayahKey: string | null, surah = 1) =>
-    render(
-      <MushafCornerLabel
-        surah={surah}
-        ayahKey={ayahKey}
-        reciter=""
-        color="#000"
-        font="serif"
-        corner="top-right"
-        size={28}
-      />,
-    ).container.firstElementChild as HTMLElement;
+    render(<MushafCornerLabel surah={surah} ayahKey={ayahKey} color="#000" font="serif" corner="top-right" size={28} />)
+      .container.firstElementChild as HTMLElement;
 
-  it('names the surah of the ayah key, else the surah it is given, and sits top right', () => {
-    expect(label('2:255').textContent).toBe('Al-Baqarah · 2:255');
+  it('names the surah of the ayah key and its ayah, else the surah it is given, and sits top right', () => {
+    expect(label('2:255').textContent).toBe('Al-Baqarah · 255');
     cleanup();
     const el = label(null, 36);
     expect(el.textContent).toBe('Ya-Sin');

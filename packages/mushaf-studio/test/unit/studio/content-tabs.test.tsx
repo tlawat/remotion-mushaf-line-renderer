@@ -175,7 +175,7 @@ describe('translation layers', () => {
     expect(written(0)).toEqual({filePath: file, contents: '{"translation":true}'});
     // The new layer takes the single translation's size and colour; `font: 'auto'` picks the script's font.
     expect(saved(0)).toEqual({
-      text: {translations: [{file, font: 'auto', fontSize: 40, color: '#4a4a4a'}], translationFile: file},
+      text: {translations: [{file, font: 'auto', fontSize: 36, color: '#5a554c'}], translationFile: file},
     });
     // The second one comes after it, whichever resource.
     await idle();
@@ -186,8 +186,8 @@ describe('translation layers', () => {
     expect(saved(1)).toEqual({
       text: {
         translations: [
-          {file, font: 'auto', fontSize: 40, color: '#4a4a4a'},
-          {file: second, font: 'auto', fontSize: 40, color: '#4a4a4a'},
+          {file, font: 'auto', fontSize: 36, color: '#5a554c'},
+          {file: second, font: 'auto', fontSize: 36, color: '#5a554c'},
         ],
         translationFile: file,
       },
@@ -299,6 +299,8 @@ describe('a page composition', () => {
     expect(hasLines(resolvedPage)).toBe(false);
     expect(isPageResolved(resolvedPage)).toBe(true);
     expect(audioOffsetOf({...resolvedPage, audioOffsetSeconds: 1.5})).toBe(1.5);
+    // The intro card's delay is taken back off: the recording starts that much into the video.
+    expect(audioOffsetOf({...resolvedPage, audioOffsetSeconds: 1.5, introDelaySeconds: 3.869} as never)).toBe(-2.369);
     // A new recording resets the range; a page has no splits to reset.
     expect(freshRecording(page())).toEqual({fromAyah: 0, toAyah: 0});
     expect(freshRecording(recitation())).toEqual({fromAyah: 0, toAyah: 0, splits: []});
@@ -332,7 +334,7 @@ describe('a page composition', () => {
     expect(saved(0)).toEqual({
       text: {
         translations: [
-          {file: 'mushaf-studio/mushafpage/translation-20-1-2-3.json', font: 'auto', fontSize: 40, color: '#4a4a4a'},
+          {file: 'mushaf-studio/mushafpage/translation-20-1-2-3.json', font: 'auto', fontSize: 36, color: '#5a554c'},
         ],
         translationFile: 'mushaf-studio/mushafpage/translation-20-1-2-3.json',
       },

@@ -16,7 +16,17 @@ vi.mock('remotion', async (importOriginal) => ({
   ),
 }));
 
-const {DEFAULT_TEXT_CREDIT, EndCard, endCardCreditLine, endCardOpacity} = await import('../../../src/content');
+vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tlawat/remotion-mushaf-line')>()),
+  MushafSurahName: (props: {surah: number; framed?: boolean; fontSize?: number}) => (
+    <span data-surah-name={props.surah} data-framed={String(props.framed)} data-font-size={props.fontSize} />
+  ),
+}));
+
+const {DEFAULT_TEXT_CREDIT, EndCard, endCardContentOpacity, endCardCreditLine, endCardOpacity} = await import(
+  '../../../src/content'
+);
+const {SINE, SOFT} = await import('../../../src/schema');
 type Tafsir = import('../../../src/content').Tafsir;
 type ChapterInfo = import('../../../src/content').ChapterInfo;
 
@@ -131,5 +141,50 @@ describe('EndCard', () => {
     // The tafsir card comes first.
     const cards = [...c.querySelectorAll('.mushaf-tafsir-card, .mushaf-chapter-card')].map((e) => e.className);
     expect(cards).toEqual(['mushaf-tafsir-card', 'mushaf-chapter-card']);
+  });
+});
+
+describe('EndCard with glyph (render-design.md 5.9)', () => {
+  const glyph = {measure: 900, glyphSize: 52, lineHeight: 114, metal: '#b8913a'};
+  const designed = (props: Partial<React.ComponentProps<typeof EndCard>> = {}) =>
+    card({glyph, durationInFrames: 150, reciter: 'Abdul Hamid Ghraio', creditLines: ['A', 'B'], ...props});
+
+  it('dissolves its content in over 30 frames on SOFT, holds, and goes to the ground over its last second', () => {
+    expect(endCardContentOpacity(0, 30, 150)).toBe(0);
+    expect(endCardContentOpacity(15, 30, 150)).toBeCloseTo(SOFT(0.5), 4);
+    expect(endCardContentOpacity(30, 30, 150)).toBe(1);
+    expect(endCardContentOpacity(119, 30, 150)).toBe(1);
+    expect(endCardContentOpacity(135, 30, 150)).toBeCloseTo(1 - SINE(0.5), 4);
+    expect(endCardContentOpacity(150, 30, 150)).toBe(0);
+    clock.frame = 15;
+    expect(part(designed(), 'content')!.style.opacity).toBe(String(Math.round(SOFT(0.5) * 10_000) / 10_000));
+  });
+
+  it('is titled once by the framed surah name at 30 % of the measure, with the hairline and its lozenge', () => {
+    clock.frame = 60;
+    const c = designed({chapterInfo: INFO});
+    const titles = c.querySelectorAll('[data-mushaf-end-card-part="title"]');
+    expect(titles).toHaveLength(1);
+    expect((titles[0] as HTMLElement).style.width).toBe('270px');
+    expect(c.querySelector<HTMLElement>('[data-surah-name]')!.dataset).toMatchObject({surahName: '1', framed: 'true'});
+    expect(part(c, 'rule')!.style.width).toBe('162px');
+    // The chapter card under it does not name the surah again.
+    expect(c.querySelector('[data-mushaf-card-part="names"]')).toBeNull();
+    expect(c.querySelector('[data-mushaf-card-part="translated"]')!.textContent).toBe('The Opener');
+  });
+
+  it('sets the range and credits in small caps, the reciter in italic, on the ground', () => {
+    clock.frame = 60;
+    const c = designed();
+    expect(part(c, 'range')!.textContent).toBe('Al-Fatihah · Āyāt 1–7');
+    expect(part(c, 'range')!.style.fontVariantCaps).toBe('all-small-caps');
+    expect(part(c, 'reciter')!.style.fontStyle).toBe('italic');
+    const credits = part(c, 'credits')!;
+    expect(credits.style.fontVariantCaps).toBe('all-small-caps');
+    // 0.75 L at 9:16 (L = 37 px).
+    expect(credits.style.fontSize).toBe('28px');
+    expect(credits.style.opacity).toBe('0.55');
+    expect([...credits.children].map((line) => line.textContent)).toEqual(['A', 'B']);
+    expect(part(c, 'ground')!.style.background).toBe('rgb(250, 245, 230)');
   });
 });
