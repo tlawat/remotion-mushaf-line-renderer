@@ -143,6 +143,16 @@ const strip = (from: number, to: number): DesignShot => ({kind: 'strip', from, t
 
 const noMark = {highlight: {mode: 'none'}} as const;
 
+/**
+ * A word mask's render: the look with no mark and memorisation's `blank-upcoming` over one play, so
+ * two of its frames differ by one whole word (every colour layer of it), shown in one and hidden in
+ * the other (scripts/design-check.ts, `MASK_FRAMES`).
+ */
+const maskOf = {highlight: {mode: 'none'}, memorize: {mode: 'blank-upcoming', repeat: 1}} as const;
+
+/** The mask frames: 1:2:3 hidden (f44) and shown (f56), 1:2:4 shown (f100). */
+const MASK_123_124 = [44, 56, 100] as const;
+
 /** The cases, in 12.2's order, each reference after the case it serves. */
 export const DESIGN_CASES: readonly DesignCase[] = [
   {
@@ -260,7 +270,7 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     shots: [still(56, 60, 63)],
     scale: 0.5,
     criteria:
-      '1:2:4 drawn #806321 (its inkiest pixel within ΔE2000 5); at f63 the previous word 1:2:3 still partly tinted',
+      '1:2:4 drawn #806321 (its inkiest pixel within ΔE2000 5); at f63 the previous word 1:2:3 still partly tinted; each word tinted whole, its rule-layer letters included (≤ 2 % of its ink left unmarked)',
   },
   {
     id: 'V7-ref',
@@ -274,6 +284,17 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     criteria: 'V7 without a mark: what V7 is compared with',
   },
   {
+    id: 'V7-mask',
+    composition: 'MushafRecitation',
+    look: 'learning',
+    format: 'landscape',
+    overrides: maskOf,
+    shots: [still(...MASK_123_124)],
+    scale: 0.5,
+    referenceOf: 'V7',
+    criteria: 'V7’s words one by one (no mark, blank-upcoming): where 1:2:3 and 1:2:4 are, every layer of them',
+  },
+  {
     id: 'V8',
     composition: 'MushafRecitation',
     look: 'tajweed',
@@ -281,7 +302,8 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     overrides: {highlight: {style: 'tint'}},
     shots: [still(60)],
     scale: 0.5,
-    criteria: 'No word recoloured; a wash behind 1:2:4; tajweed colours intact',
+    criteria:
+      'No word recoloured; a wash behind 1:2:4, covering all of it at full strength (≥ 99 % of its ink columns at 0.8 of the band) and no neighbour past its soft end; tajweed colours intact',
   },
   {
     id: 'V8-ref',
@@ -294,6 +316,17 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     referenceOf: 'V8',
     criteria: 'V8 without a mark',
   },
+  {
+    id: 'V8-mask',
+    composition: 'MushafRecitation',
+    look: 'tajweed',
+    format: 'landscape',
+    overrides: maskOf,
+    shots: [still(...MASK_123_124)],
+    scale: 0.5,
+    referenceOf: 'V8',
+    criteria: 'V8’s words one by one: where 1:2:3 and 1:2:4 are',
+  },
   // `black` paints its glyphs white, so it is a theme for a dark ground: Haram night's charcoal.
   {
     id: 'V9',
@@ -305,7 +338,7 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     shots: [still(56, 60, 63)],
     scale: 0.5,
     criteria:
-      '1:2:4 letters in #b19353-ish gold (the tint on charcoal); rosettes and other words untouched; the unmarked words legible on the ground',
+      '1:2:4 letters in #b19353-ish gold (the tint on charcoal); rosettes and other words untouched; the unmarked words legible on the ground; each word tinted whole (≤ 2 % of its ink left unmarked)',
   },
   {
     id: 'V9-ref',
@@ -317,6 +350,17 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     scale: 0.5,
     referenceOf: 'V9',
     criteria: 'V9 without a mark',
+  },
+  {
+    id: 'V9-mask',
+    composition: 'MushafRecitation',
+    look: 'haram-night',
+    format: 'landscape',
+    overrides: {theme: 'black', ...maskOf},
+    shots: [still(...MASK_123_124)],
+    scale: 0.5,
+    referenceOf: 'V9',
+    criteria: 'V9’s words one by one: where 1:2:3 and 1:2:4 are',
   },
   ...(['landscape', 'vertical'] as const).flatMap((format): DesignCase[] => {
     const suffix = format === 'landscape' ? '' : '-vertical';
@@ -352,7 +396,7 @@ export const DESIGN_CASES: readonly DesignCase[] = [
         shots: [still(SAMPLE_FRAMES.word123Washed)],
         scale: 1,
         criteria:
-          'A word wash on 1:2:3 (رَبِّ, its kasra the deepest mark of the line): the marks below the letters stay inside the band’s feather; the band never touches the next line',
+          'A word wash on 1:2:3 (رَبِّ, its kasra the deepest mark of the line): the marks below the letters stay inside the band’s feather; the band never touches the next line; it covers all of رَبِّ, its rā included, and no neighbour past its soft end',
       },
       {
         id: `V11${suffix}-ref`,
@@ -364,6 +408,17 @@ export const DESIGN_CASES: readonly DesignCase[] = [
         scale: 1,
         referenceOf: `V11${suffix}`,
         criteria: `V11${suffix} without a mark`,
+      },
+      {
+        id: `V11${suffix}-mask`,
+        composition: 'MushafRecitation',
+        look: 'haram-night',
+        format,
+        overrides: maskOf,
+        shots: [still(44, 56)],
+        scale: 1,
+        referenceOf: `V11${suffix}`,
+        criteria: `V11${suffix}’s 1:2:3 alone: shown at f56, hidden at f44`,
       },
     ];
   }),
@@ -510,7 +565,8 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     overrides: {highlight: {mode: 'word'}},
     shots: [still(60, 700), strip(96, 130)],
     scale: 0.5,
-    criteria: 'Wash per word, no lone word on the last line, word spacing 0.1 em; ayah dissolve without blank frame',
+    criteria:
+      'Wash per word, each ٱل word whole (its hamza-wasl alif inside its band), no lone word on the last line, word spacing 0.1 em; ayah dissolve without blank frame',
   },
   {
     id: 'V20-ref',
@@ -518,10 +574,21 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     look: 'haram-night',
     format: 'vertical',
     overrides: noMark,
-    shots: [still(60)],
+    shots: [still(60, 700)],
     scale: 0.5,
     referenceOf: 'V20',
     criteria: 'V20 without a mark',
+  },
+  {
+    id: 'V20-mask',
+    composition: 'MushafAyahText',
+    look: 'haram-night',
+    format: 'vertical',
+    overrides: maskOf,
+    shots: [still(...MASK_123_124, 677, 720)],
+    scale: 0.5,
+    referenceOf: 'V20',
+    criteria: 'V20’s words one by one: 1:2:3 and 1:2:4, and 1:7:9 (ٱلضَّآلِّينَ: hidden at f677, shown at f720)',
   },
 ];
 

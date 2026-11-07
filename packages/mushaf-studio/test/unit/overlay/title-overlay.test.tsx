@@ -28,6 +28,7 @@ const {
   introCardOpacity,
   introCoverOpacity,
   introEndSeconds,
+  introHandoffFrames,
   introOpacity,
   latinRangeText,
   MushafCornerLabel,
@@ -99,6 +100,24 @@ describe('the card’s timeline', () => {
     expect(introCoverOpacity(0, 3)).toBe(1);
     expect(introCoverOpacity(2.65, 3)).toBeCloseTo(1 - SINE(0.5), 4);
     expect(introCoverOpacity(3, 3)).toBe(0);
+  });
+
+  it('hands over to the lines from the first frame the card is under 0.25, never before', () => {
+    for (const [tempo, out] of [
+      ['calm', 21],
+      ['slow', 30],
+    ] as const) {
+      const handoff = introHandoffFrames(tempo, 30);
+      const at = (frame: number) => introCardOpacity(frame / 30, 3, tempo);
+      // At the hand-off the card is under 0.25; a frame earlier it is not.
+      expect(at(90 - handoff), tempo).toBeLessThan(0.25);
+      expect(at(89 - handoff), tempo).toBeGreaterThanOrEqual(0.25);
+      expect(handoff, tempo).toBeLessThan(out);
+    }
+    expect(introHandoffFrames('calm', 30)).toBe(7);
+    expect(introHandoffFrames('slow', 30)).toBe(10);
+    // A card too short to fade hands over at its end.
+    expect(introHandoffFrames('calm', 30, 0)).toBe(0);
   });
 
   it('writes the range in Arabic, first ayah rightmost in an RTL isolate, and in Latin', () => {
@@ -212,6 +231,8 @@ describe('<MushafTitleOverlay>', () => {
     expect(part(named, 'reciter')!.textContent).toBe('Abdul Hamid Ghraio');
     expect(part(named, 'reciter')!.style.fontStyle).toBe('italic');
     expect(part(named, 'translation')!.textContent).toBe('Translation of the meanings · Saheeh International');
+    // 0.8 L at 60 % of the ink, legible at 1080p.
+    expect(part(named, 'translation')!.style.opacity).toBe('0.6');
     cleanup();
     // The corner label no longer carries the reciter.
     expect(

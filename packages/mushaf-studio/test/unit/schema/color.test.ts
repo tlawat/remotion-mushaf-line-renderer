@@ -5,6 +5,7 @@ import {
   capChroma,
   contrast,
   defaultCustomTheme,
+  frameColorOf,
   GROUNDS,
   groundOf,
   isLightGround,
@@ -157,6 +158,14 @@ describe('groundOf / metalOf / GROUNDS', () => {
     expect(metalOf({theme: 'custom', customTheme: defaultCustomTheme, ground: IVORY})).toBe('#8c6c26');
     const noFrame = {...defaultCustomTheme, override: {...defaultCustomTheme.override, frame: false}};
     expect(metalOf({theme: 'custom', customTheme: noFrame, ground: CHARCOAL})).toBe(METAL.dark);
+  });
+
+  it('draws a surah name’s frame in the metal taken 30 % into the ground, lighter than the ink on a dark page', () => {
+    expect(frameColorOf('#d8b56a', CHARCOAL)).toBe('#9d8551');
+    expect(frameColorOf('#8c6c26', IVORY)).toBe('#ac9560');
+    // On charcoal the frame reads well under the ink (#f1eadb) it frames, and still clearly on the ground.
+    expect(contrast(frameColorOf('#d8b56a', CHARCOAL), CHARCOAL)).toBeGreaterThan(4.5);
+    expect(contrast(frameColorOf('#d8b56a', CHARCOAL), CHARCOAL)).toBeLessThan(contrast('#f1eadb', CHARCOAL) / 2);
   });
 
   it('pairs every ground with inks that read: 13:1 ink, 6.5:1 translation, 5:1 gloss', () => {

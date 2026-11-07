@@ -47,13 +47,17 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     wordStyle,
     wordClassName,
     inkTint,
+    wordBand,
+    bandShape,
     framed,
+    frameColor,
     fontSrc,
     fontFallback,
   } = props;
   if (slice !== undefined && slice !== null) assertSlice('<MushafLine slice>', slice);
   // It goes into a palette rule: checked like a theme colour, so it can never close the rule.
   if (inkTint !== undefined) assertCssColor('<MushafLine inkTint>', inkTint);
+  if (frameColor !== undefined) assertCssColor('<MushafLine frameColor>', frameColor);
   const common = {
     style,
     className,
@@ -68,7 +72,10 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     wordStyle,
     wordClassName,
     inkTint,
+    wordBand,
+    bandShape,
     framed,
+    frameColor,
     fontSrc,
     fontFallback,
   };

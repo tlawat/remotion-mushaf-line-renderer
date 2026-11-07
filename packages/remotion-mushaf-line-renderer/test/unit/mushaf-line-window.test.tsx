@@ -254,6 +254,40 @@ describe('<MushafLineWindow>', () => {
     expect(errors[0]?.message).toMatch(/inkTint> must be a CSS colour/);
   });
 
+  it('forwards frameColor to a surah header line, and refuses one that is not a colour', async () => {
+    const header = await getMushafLine({mushaf: 'qpc-v4', page: 1, line: 1});
+    expect(header.type).toBe('surah_name');
+    const {container} = render(<Window lines={[header, ...lines.slice(1)]} frameColor="#cfae63" />);
+    const frame = container.querySelector<HTMLElement>('.mushaf-glyph--frame')!;
+    expect(frame.style.color).toBe('rgb(207, 174, 99)');
+    const errors: Error[] = [];
+    render(
+      <Boundary onError={(e) => errors.push(e)}>
+        <Window frameColor="red;}" />
+      </Boundary>,
+    );
+    expect(errors[0]?.message).toMatch(/frameColor> must be a CSS colour/);
+  });
+
+  it('forwards wordBand and bandShape to every line, with each line its position', async () => {
+    const asked: number[] = [];
+    const {container} = render(
+      <Window
+        wordBand={(_w: unknown, ctx: WordContext) => {
+          asked.push(ctx.linePosition ?? Number.NaN);
+          return {color: 'rgba(0, 0, 0, 0.1)'};
+        }}
+        bandShape={{height: 1.35}}
+      />,
+    );
+    await waitFor(() => expect(container.querySelectorAll('.mushaf-line__band').length).toBeGreaterThan(1));
+    expect(new Set(asked).size).toBeGreaterThan(1);
+    // 1.35 em of the window's type size.
+    const band = container.querySelector<HTMLElement>('.mushaf-line__band')!;
+    const fontSize = Number.parseFloat(container.querySelector<HTMLElement>('.mushaf-line__row')!.style.fontSize);
+    expect(Number.parseFloat(band.style.height)).toBeCloseTo(1.35 * fontSize, 1);
+  });
+
   it("shows each line's own slice, so a line split by word bands takes two slots", async () => {
     // p2 l3 (wordIds 6-9) split at 8: once up to 7, once from 8.
     const split = lines[2]!;

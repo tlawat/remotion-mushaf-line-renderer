@@ -370,33 +370,38 @@ Which path paints it, decided per line by `tintPath(theme)`:
    `p1`, `p2`, or custom palettes built on them that keep the rules apart): the tint is **shown as a
    wash** (5.1.3) with the same `color`. The saved value is kept; the panel shows "Shown as a wash:
    a tint would repaint the tajweed colours" (section 10).
-3. **Any other fixed palette** (`black`, `p3`–`p5`, a custom palette whose ink is overridden): only
-   the theme's ink CPAL entries (`colorParts.ink`) are repainted, through the renderer's tint
-   palettes (section 8.4). `font-palette` is quantised to 5 steps: amount 0 (the row's palette),
+3. **Any other fixed palette** (`black`, `p3`–`p5`, a custom palette whose ink is overridden): every
+   CPAL entry that draws the word's letters (`colorParts.ink`, `silent` and `rules`; the rosette's
+   entries never) is repainted, through the renderer's tint palettes (section 8.4), so the whole word
+   turns, its heavy rā and madd letters included (visual review 1, V7 and V9). `font-palette` is quantised to 5 steps: amount 0 (the row's palette),
    0.25, 0.5, 0.75, 1, nearest to `e`.
 
 #### 5.1.3 `style: 'wash'`, Arabic label ظلّ
 
-A faint, soft-ended band behind the word, or behind the ayah's run of words on each line,
-painted as a paint-only `background` on the word spans (allowed by the `wordStyle` contract; the
-printed words abut with no gaps, `R:component/styles.ts:65`, so the bands join into one run with
-no seam).
+A faint, soft-ended band behind the word, or behind the ayah's run of words on each line, drawn
+by the line itself behind its row (the renderer's `wordBand`, section 8.6) from where each word's
+ink is, not from its advance box: one shape per run of touching words of one colour, measured once
+the line is fitted, so the band has no seam and covers a glyph that overhangs its advance (the
+hamza-wasl alif of every `ٱل` word, a final rā). Where two words' bands meet, the stronger shows,
+never their sum. (Visual review 1: bands painted on the word spans left the alif outside and showed
+hairline seams, V8, V10, V11, V20.)
 
 - **Colour** `C = rgba(color with chroma ≤ 0.09, washAlpha(ground) × e × f)` where `e` is `e(w, t)`
   in word mode and `E(a, t)` in ayah mode, and `f` is the neighbour factor (5.1.4). Hard cap 0.16.
 - **Vertical profile** (each word span is a 2.2 em line box): a band 1.55 em tall centred at 54 %
   of the box, feathered 0.22 em at top and bottom. It covers the letter bodies and vowel marks and
   keeps 0.32 em clear of the lines above and below.
-- **Ends**: the first and last word of a run on its line (the rightmost and leftmost in RTL; a lone
-  word in word mode is both) get a soft half-ellipse cap of width `c = min(0.35em, 50%)` on their
-  outer side, so the band is never a box.
+- **Ends**: the band is full over the run's ink and 0.05 em past it, then ends in a soft S-curve
+  0.3 em long, its box rounded (radius 0.3 em by half its height), so the band is never a box and
+  its soft end never lies on a letter.
 - **Ayah mode** includes the ayah-end rosette. A run that crosses a line break is one band per line.
 - **Motion**: in word mode the outgoing band fades out (`markOut`) while the incoming one fades in
   (`markIn`); the band never slides between words. It holds through pauses inside an ayah and lets
   go 0.25 s after the ayah ends (4.1).
 
-Exact CSS (S:schema/wash.ts, `washStyle({color, alpha, cap})`; `cap` is `'start' | 'end' | 'both'
-| 'none'`, where `start` is the right edge in RTL):
+`washStyle()` below stays for a band behind any other element (and `activeWordStyleFrom()`); the
+lines no longer paint it on their words. Exact CSS (S:schema/wash.ts, `washStyle({color, alpha,
+cap})`; `cap` is `'start' | 'end' | 'both' | 'none'`, where `start` is the right edge in RTL):
 
 ```ts
 const band = (C: string) =>
@@ -617,6 +622,8 @@ scripts keep their per-language fonts.
   in the translation ink at 0.3 opacity.
 - It changes at the ayah boundary by the staggered dissolve, `translationDissolve`, timed by 4.3
   with `E` = the outgoing ayah's last word end (not at the next ayah's first word).
+- Shown on its own, an ayah's translation drops a trailing continuation dash (Saheeh's "Lord of the
+  worlds -", whose sentence runs on into the next ayah): `shownAlone()`. Nothing else is touched.
 - The translation is credited once as "Translation of the meanings · <name>" on the intro card, or
   in the end card's credits when there is no intro card.
 
@@ -649,12 +656,16 @@ time to recording time. Memorise clips and header spacing read the shifted timin
 
 Timeline: frame 0 is the bare ground (never an empty-looking still: the ground is the page colour);
 the card's content fades in over `cardIn` on `SINE` from 0.2 s; holds; fades out over `cardOut`
-ending at `introSeconds`; the lines (or window) start their entrance at `introSeconds`.
+ending at `introSeconds`; the lines (or window) start their entrance from the first frame the card's
+content is under 0.25 on its way out (`introHandoffFrames()`: 7 frames before `introSeconds` calm,
+10 slow), so the hand-off is sequential and the frame never dips to bare paper between them (visual
+review 1, V15).
 
 Card layout (centred, on the ground):
 
 1. The framed surah name (`<MushafSurahName framed>`), 46 % of the measure wide at 16:9, 72 % at
-   the other formats, centred at 44 % of the height, in the theme's colours.
+   the other formats, centred at 44 % of the height: the name in the ink, the frame in
+   `frameColorOf(metal, ground)` (the metal 30 % into the ground).
 2. `0.9 × lineBox` below it: the hairline, `0.18 × measure` wide, 1.5 u px, metal at 0.7, with a
    7 u px lozenge (a filled square rotated 45°) at its centre.
 3. The Arabic range in Amiri at `1.1 L`, ink at 0.75, in an RTL isolate (`dir="rtl"`, wrapped in
@@ -665,7 +676,7 @@ Card layout (centred, on the ground):
    ink.
 5. When set: the reciter's name, EB Garamond italic at `0.95 L`, 55 % ink.
 6. When a translation is shown: "Translation of the meanings · Saheeh International" at `0.8 L`,
-   50 % ink.
+   60 % ink.
 
 **Corner label**: `AL-FĀTIḤAH · 3` (the surah's transliteration and the ayah being heard) in EB
 Garamond 500 all-small-caps, letter-spacing 0.08 em, tabular figures, size `cornerSize || L`, at
@@ -716,13 +727,14 @@ Fields unchanged. Rendering (`S:content/EndCard.tsx`):
 
 - On the same ground (no colour jump). It starts after the lines' `endFade`; its content dissolves
   in over 30 f on `SOFT`; it holds `seconds`; its last 1.0 s fades to the ground on `SINE`.
-- Title: the framed surah-name glyph at 30 % of the measure (replaces the system-font Arabic), then
+- Title: the framed surah-name glyph at 30 % of the measure (replaces the system-font Arabic), its
+  frame in `frameColorOf(metal, ground)` as on the intro card, then
   the hairline and lozenge as on the intro card. The title block appears once (fixes the doubled
   chapter-info title).
 - Body (tafsir or chapter info): EB Garamond 400 at `0.95 L`, 75 % ink, at most 62 ch per line,
   line-height 1.5, `text-wrap: pretty`.
 - Credits (`attributionLines()`, with "Translation of the meanings · …" when a translation was
-  shown and there was no intro card): small caps at `0.75 L`, 55 % ink.
+  shown and there was no intro card): small caps at `0.8 L`, 60 % ink.
 
 ### 5.10 `background`
 
@@ -897,7 +909,8 @@ its own band." AR: «ألوان التجويد كما هي على ورقٍ دا�
 
 | Group | Values |
 |---|---|
-| theme | `light` (customTheme untouched) |
+| theme | `custom` on base `light`: the tajweed colours untouched |
+| customTheme | base `light`; frame `#8c6c26`, accent `#efe3c4`, detail `#8c6c26`, background `#fbf7ee` (rosette parts only) |
 | layout | background `#fbf7ee`, color `#1c1a16`, neighbourOpacity 0.3, frame `none` |
 | animation | lines `fade`, tempo `calm` |
 | highlight | mode `word`, style `ink`, color `#b8913a`, restOpacity 0.7 |
@@ -1061,9 +1074,9 @@ for `windowEmphasisOpacity()` (`R:component/styles.ts:231`), signed.
 - `MushafLineCommonProps.inkTint?: string` (a CSS colour), forwarded by the window to every line.
 - When set and the theme's ink entries are a fixed palette colour (not `currentColor`), the line's
   existing palette layout effect (`use-palette-rule.ts`, before the ready gate) also registers four
-  `@font-palette-values` rules through `registerPalette()`: the row's palette with every
-  `colorParts.ink` entry (for custom themes: the entries the custom ink would override) set to
-  `mix(themeInk, inkTint, k)` for k = 0.25, 0.5, 0.75, 1.
+  `@font-palette-values` rules through `registerPalette()`: the row's palette with every entry that
+  draws letters (`colorParts.ink`, `silent` and `rules`) set to `mix(itsColour, inkTint, k)` for
+  k = 0.25, 0.5, 0.75, 1. The rosette's entries keep theirs.
 - `WordContext.inkPalette?: (amount: number) => string | undefined` returns the ident of the
   nearest step (`undefined` for an amount under 0.125, i.e. the row's own palette). It is
   `undefined` itself when `inkTint` is absent or the ink follows `currentColor` (the caller then
@@ -1071,6 +1084,20 @@ for `windowEmphasisOpacity()` (`R:component/styles.ts:231`), signed.
 - `fontPalette` joins the documented paint-only `wordStyle` properties (`color`, `opacity`,
   `filter`, `background`, `textShadow`). It is ignored on `kind: 'end'` words, which keep their
   marker palette.
+
+### 8.6 Word bands and the header frame's colour
+
+- `MushafLineCommonProps.wordBand?: (word, context) => {color} | undefined` (the colour's alpha is
+  the band's strength) and `bandShape?: {height, y, feather, pad, end}` (em; default 1.65, 0.55,
+  0.22, 0.05, 0.3), forwarded by the window. The line measures where each word's ink is once it is
+  fitted (the word's box from the layout, widened by its glyphs' overhang on a canvas,
+  `measureInkOverhang()`), in a layout effect behind the ready gate, and draws
+  `div.mushaf-line__bands > div.mushaf-line__band` under its row: one box per run of touching bands
+  of one colour, its horizontal profile the strongest band at each point (`bandBoxes()`), its top
+  and bottom feathered by a mask. `MushafAyahText` draws the same boxes per line of its block.
+- `frameColor?: string` on `<MushafLine>`, `<MushafLineWindow>` and `<MushafSurahName>`: the
+  colour of a surah name's ornamental frame, a glyph of its own; default the inherited colour. The
+  Studio passes `frameColorOf(metal, ground)` everywhere a framed name is drawn.
 
 ### 8.5 Docs (`packages/remotion-mushaf-line-renderer/README.md`)
 
@@ -1213,11 +1240,11 @@ only) samples pixels for the numeric criteria.
 | V4 | Mushaf + `visibleLines: 0`, strip | f96–f130 | Line 1 still fully visible at f102; dissolve after it; no frame with both lines > 0.2 (checker: mean ink of each line's bbox); no blank frame (max of the two ≥ 0.15) |
 | V5 | `rise`, one-line strip | as V4 | Incoming line rises ≤ 6 px at half scale (11 px full); outgoing line does not move |
 | V6 | Rosettes, Mushaf / Haram / Green, crop of an ayah end and the surah header, scale 1 | f60 | Rosette outline and numerals in gold line; petals vellum (or the ground on dark); no pink, no mint, no solid gold coin. If outline and fill are swapped, swap `frame`/`accent` in the looks (5.4) |
-| V7 | Learning (tint, plain path) | f60, f63 | 1:2:4 drawn `#806321` (checker: darkest pixel of its bbox within ΔE2000 5); at f63 previous word 1:2:3 still partly tinted (trail) |
-| V8 | Tint on theme `light` | f60 | No word recoloured; a wash behind 1:2:4; tajweed colours intact |
-| V9 | Tint on theme `black` (palette path) | f60 | 1:2:4 letters in `#b19353`-ish gold; rosettes and other words untouched |
+| V7 | Learning (tint, plain path) | f60, f63 | 1:2:4 drawn `#806321` (checker: darkest pixel of its bbox within ΔE2000 5); at f63 previous word 1:2:3 still partly tinted (trail); each word tinted whole: of its solid ink (read from the case's word mask, below), at most 2 % left in the unmarked ink, 1:2:3 at f56 and 1:2:4 at f63 |
+| V8 | Tint on theme `light` | f60 | No word recoloured; a wash behind 1:2:4, at 0.8 of its lift or more over 99 % of the word's ink columns, and at half its lift over at most 0.25 em of another word's ink on either side (the trail's side left to the trail); tajweed colours intact |
+| V9 | Tint on theme `black` (palette path) | f60 | 1:2:4 letters in `#b19353`-ish gold; rosettes and other words untouched; each word tinted whole, as V7 |
 | V10 | Haram night (ayah wash), 16:9 and 9:16 | f60 | One continuous band over all of ayah 2 on its line, rosette included; soft rounded ends; no visible seam between words (checker: band luminance varies < 1 % along its centre row); band clear of the lines above and below |
-| V11 | Wash on dense pages: MushafPassage p.48 (2:282) and p.106, word wash on a word with kasra/tanween, 16:9 and 9:16, scale 1 | any | Diacritics below the letters stay inside the band's feather; the band never touches the next line's marks. If it clips, raise the band to 1.65 em at 55 % |
+| V11 | Wash on dense pages: MushafPassage p.48 (2:282) and p.106, word wash on a word with kasra/tanween, 16:9 and 9:16, scale 1 | any | Diacritics below the letters stay inside the band's feather; the band never touches the next line's marks. If it clips, raise the band to 1.65 em at 55 %. The band covers the whole word, as V8 |
 | V12 | Madinah green | f60 | Jadwal double rule at the safe area in gold at 0.45; ayah 2 full, other ayat at 0.6 |
 | V13 | Tajweed, Recitation and Page | f60 | Legend as one centred row in a band under the lines; nothing overlapped; pastels not washed out (rest 0.7) |
 | V14 | Mushaf + translation (Saheeh), 16:9 and 9:16 | f60, f110 | Centred EB Garamond 500, 36 px at 16:9 and 26 px at 9:16; at most 2 lines; at f110 still the ayah 2 translation if ayah 2 is not finished, otherwise mid-dissolve |
@@ -1226,9 +1253,16 @@ only) samples pixels for the numeric criteria.
 | V17 | End (`endCard: credits`) | last word + 0.5 s, + 2 s, + 3 s | Lines held, then fading, then the credits card on the same ground; surah-name glyph title once |
 | V18 | MushafPage default, 16:9 | f60, a turn | Page 92 % of the height; band cross-fades between lines; turn is a dissolve after the page's last word; double rule, no corner dots |
 | V19 | Background image, light ink, vignette 0.2, slow zoom | f0, last frame | Image dimmed ≥ 0.45; vignette visible without banding; zoom ≤ 1.05 at the end |
-| V20 | AyahText, Haram night, word wash | f60, f700 | Wash per word, no lone word on the last line, word spacing 0.1 em; ayah dissolve without blank frame |
+| V20 | AyahText, Haram night, word wash | f60, f700 | Wash per word, each `ٱل` word whole (ٱلْعَـٰلَمِينَ at f60, ٱلضَّآلِّينَ at f700, as V8), no lone word on the last line, word spacing 0.1 em; ayah dissolve without blank frame |
 
 All cases are re-run for `tempo: 'slow'` on V3, V4 and V10 (durations × 1.4, same criteria).
+
+**Word masks** (added by visual review 1). The whole-word criteria of V7, V8, V9, V11 and V20 need
+to know where a word's ink is, every colour layer of it, which no measure of the marked frame can
+tell (a half-gilded word's commonest colour is the tint). Each of these cases has a `-mask` render:
+its look with no mark and `memorize: {mode: 'blank-upcoming', repeat: 1}`, so two of its frames
+differ by one whole word, shown in one and hidden in the other (1:2:3: f56 against f44; 1:2:4:
+f100 against f56; 1:7:9, ٱلضَّآلِّينَ: f720 against f677).
 
 ### 12.3 Review
 
@@ -1245,6 +1279,7 @@ changed by that review is changed here first.
 2. **Wash seams or clipping.** If V10 shows seams (side bearings) or V11 clipping, add a renderer
    `marks` element (one absolutely positioned band per line, measured once per line after fit,
    behind the row, behind the ready gate) as a phase-2 change; the band geometry above stays.
+   Done after visual review 1 as `wordBand` (8.6).
 3. **Tint palettes in headless Chromium.** If V9 fails or a 30 s clip renders more than 10 % slower,
    path 3 of 5.1.2 falls back to path 2 (shown as wash) and the panel note says so.
 4. **CPAL part mapping** (V6): fix the looks' `frame`/`accent` values, not the design.
@@ -1359,7 +1394,7 @@ Stage R1 (tokens, timing model, highlight, migration, renderer):
     line, `(57,50,37)` against `(39,36,30)`. Nothing a
     paint-only word style can do joins the tiles, so the seams stay until 13.2's phase-2 band (one
     shape per run on a line, drawn by the renderer behind the row) lands; the band geometry above
-    stays as it is for it.
+    stays as it is for it. (Resolved after visual review 1: 55.)
 
 Stage R2 (timing, intro, translation, labels, memorisation, legend, end card):
 
@@ -1577,7 +1612,8 @@ Stage R4 (documentation, the demo Root, the design stills):
     waits for them from Google Fonts and stops with `FONT_NETWORK` without a network (13.7); both
     READMEs say so. (c) The review of 12.3 against a physical mushaf is a person's to do.
     (d) The framed surah name of the header line (V6's header stills) is drawn in the ink, not the
-    metal: it is a one-colour glyph whose frame and name cannot be told apart by colour.
+    metal: it is a one-colour glyph whose frame and name cannot be told apart by colour. (Visual
+    review 1 found the frame a glyph of its own after all: 56.)
 51. **The design stills, round r5** (`bun run --cwd apps/mushaf-studio design`): 30 of 31 measured
     cases pass. V10 at 16:9 fails on its seams (lift 14.7-19.7 levels along the band: deviation 15,
     the phase-2 band of 13.2); V10 at 9:16 passes at f60 (the seams come and go with where the tiles
@@ -1604,3 +1640,63 @@ Stage R4 review:
     (9:16) inside the feather, on a row lifted 35-38 % of the band's strength, and the band still
     ends 51 and 29 px above the next line's marks. `MushafAyahText`'s 1.35 em at 55 % (5.12) is
     unchanged.
+
+Visual review 1 (the values changed in place above; 12.3 allows a value that fails on screen to change):
+
+54. **A tint repaints the whole word** (5.1.2 path 3, 8.4). Repainting only `colorParts.ink` left
+    the letters the palette draws as rule layers (the heavy rā of رَبِّ, the madd yāʾ of العالمين,
+    a silent alif) in plain ink beside a gold word, under `normal` (the Mushaf and Learning palettes)
+    and under `black` alike (V7, V9: 26 % of رَبِّ's ink unmarked). The tint palettes now mix every
+    entry that draws letters (`letterEntriesOf()`: ink, silent, rules); measured 0 % left.
+55. **The wash is drawn by the line from the ink** (5.1.3, 8.6), not as a background on each word's
+    box. A word's box is its advance, and KFGQPC's hamza-wasl alif and final rā overhang it, so the
+    soft caps lay on those letters and the band cut the article off every `ٱل` word (V8, V11, V20);
+    and tiles that meet leave hairline seams nothing on a word can join (deviation 15, V10). The
+    renderer's `wordBand` draws one box per run, from the word boxes widened by the glyphs' ink
+    overhang (`measureInkOverhang()`, a canvas), with the strongest band where two meet; the
+    Studio's `wordBandFrom()` gives it the same colour, strength, emphasis and neighbour factor as
+    before, and `MushafAyahText` draws the same boxes per line of its block. The ends are a soft
+    S-curve 0.3 em long past a 0.05 em pad beyond the ink, in a box rounded 0.3 em by half its height,
+    instead of the half-ellipse cap tiles with their 72 % stop: a tile is what made the seams. The
+    band's height and place stay (1.65 em at 55 %, deviation 53; 1.35 em at 55 % on the ayah text).
+    Deviation 15 is resolved: V10 measures 18.7-19.3 levels along its band (< 1 % of the range).
+    `washStyle()` stays exported, for a band behind any other element.
+56. **The surah name's frame is drawn in the metal taken 30 % into the ground** (`frameColorOf()`,
+    renderer `frameColor`), wherever a framed name is drawn: the header lines of the recitation,
+    the passage and the page, and the intro and end cards. The full ink frame (deviation 50 d) was the
+    heaviest object on the dark looks; the review offered the secondary ink, 0.6 opacity or the
+    metal. The metal alone was still the brightest thing in a Haram night frame (it is a dense
+    ornament, not a line), so it is mixed toward the ground: `#9d8551` on charcoal (5.2:1, against
+    the ink's 15.4:1), `#ac9560` on ivory. The name stays in the ink. `MushafThumbnail` keeps its
+    frame in the ink (no review case covers it).
+57. **The Tajweed look's rosettes are gold line** (6.2): `theme: 'custom'` on base `light`, with
+    only the rosette parts overridden (Mushaf's gold and vellum on the warm paper), so every tajweed
+    colour of `light` is kept and `themeHasTajweedColors()` still holds (the legend shows, a tint is
+    shown as a wash). The pink and mint fills of `light` are no reading aid and contradicted
+    principle 8. The `black` theme's white coin rosettes (V9) are the user's own theme choice and are
+    left as QUL paints them.
+58. **The lines come in as the intro card goes** (5.6): from the first frame the card's content is
+    under 0.25, 7 frames before `introSeconds` at the calm tempo (`introHandoffFrames()`), not at
+    `introSeconds`, so the 3-5 frames of bare paper between card and lines are gone (V15). The
+    intro delay and the duration are unchanged; the lines settle a little earlier. `MushafPassage`
+    keeps starting its first hold at `introSeconds`: its schedule is its holds, and no review case
+    showed a gap there.
+59. **The card's attribution and the end card's credits read at 60 %** (5.6 item 6, 5.9), the credits
+    also at 0.8 L, not 0.75 L at 55 % and 0.8 L at 50 %: small caps at those strengths were about
+    10 px tall at 1080p and hard to read (V15, V17).
+60. **A translation drops a trailing continuation dash** when its ayah is shown alone (5.5,
+    `shownAlone()`): Saheeh's ayah 2 ends "Lord of the worlds -" because the sentence runs on, which
+    looked unfinished on screen (V14).
+61. **The checker measures whole words.** Each whole-word case has a `-mask` render (12.2, word
+    masks). V7 and V9 add "tinted whole" (at most 2 % of the word's solid ink left unmarked: r5's
+    renders measure 26.2 % and 16.8 %, this round 0 %); V8, V11 and V20 add "the band covers all of
+    the word" (99 % of its ink columns at 0.8 of the band's lift: r5 measures 90.4-96.0 %, this
+    round 100 %) and "reaches no other word past its soft end" (at half the lift over at most
+    0.25 em of another word's ink on either side; the side of a trailing word still letting go is
+    left to its own band, which is meant to be there). The review's "no more than a few px of a
+    neighbour's" is read that way because the band's soft end lies past the ink by design. V20 adds
+    f700 (ٱلضَّآلِّينَ) and its reference. Round r6 (`bun run --cwd apps/mushaf-studio design`): 31
+    of 31 measured cases pass, V10 included (lift 18.7-19.3 levels along the band at 16:9 and 9:16).
+62. **Left as they are.** The 10-frame `Dmin` dissolve shows one frame of two ghosted lines (V4,
+    V14, V20, f110), within 4.3 and principle 4. Printed lines at 9:16 and MushafPage at 16:9 stay
+    small (the Format hint already points reels to the ayah text; the page is fitted as 5.11 says).

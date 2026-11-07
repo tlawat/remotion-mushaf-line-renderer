@@ -10,6 +10,7 @@ import {
   animationFrom,
   dissolveShares,
   fontPropsFrom,
+  frameColorOf,
   frameGeometry,
   metalOf,
   readableInk,
@@ -57,6 +58,8 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   // What the text sits on: a translation or label colour under 4.5:1 there gives way to a muted ink.
   const ground = groundFor(props.background, layout);
+  // The video's one metal: the jadwal, the cards' rules and the surah header's frame.
+  const metal = metalOf({theme: props.theme, customTheme: props.customTheme, ground});
   const {starts, end} = passageTimeline(lines, props, fps);
 
   const geometry = blockGeometry(layout, {width, height});
@@ -93,7 +96,14 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
           premountFor={fps}
           name={`p${line.page} l${line.line} (${line.words[0]?.id ?? line.type})`}
         >
-          <MushafLine line={line} fontSize={fontSize} lineHeight={lineHeight} {...motion} {...fontSetup.props} />
+          <MushafLine
+            line={line}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            frameColor={frameColorOf(metal, ground)}
+            {...motion}
+            {...fontSetup.props}
+          />
         </Sequence>
       );
     });
@@ -116,6 +126,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
           neighbourOpacity={layout.neighbourOpacity}
           fontSize={fontSize}
           lineHeight={lineHeight}
+          frameColor={frameColorOf(metal, ground)}
           {...animationFrom(animation, {fontSize, enterFrames: windowIn, exitFrames: endFade, enterEasing: SINE})}
           {...fontSetup.props}
         />
@@ -140,9 +151,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         }}
         layout={layout}
       />
-      {layout.frame === 'hairline' && (
-        <Jadwal metal={metalOf({theme: props.theme, customTheme: props.customTheme, ground})} ground={ground} />
-      )}
+      {layout.frame === 'hairline' && <Jadwal metal={metal} ground={ground} />}
       <div data-mushaf-block="Mushaf lines" style={linesBlockStyle(geometry, layout)}>
         {linesBlock}
       </div>
@@ -175,7 +184,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         fontSize={fontSize}
         lineHeight={lineHeight}
         width={geometry.measure}
-        metal={metalOf({theme: props.theme, customTheme: props.customTheme, ground})}
+        metal={metal}
         translationName={showTranslation ? (translationLayers[0]?.translation.meta.name ?? null) : null}
         fontProps={fontSetup.props}
       />

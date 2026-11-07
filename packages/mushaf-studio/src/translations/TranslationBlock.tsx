@@ -56,6 +56,14 @@ const langOf = (language: string): string | undefined =>
   language !== 'und' && LANG_TAG.test(language) ? language : undefined;
 
 /**
+ * An ayah's translation as it is shown on its own: without the dash some translations end an ayah
+ * with when its sentence runs on into the next (Saheeh International's "Lord of the worlds -"), which
+ * reads as unfinished when the ayah stands alone on screen. Nothing else is touched.
+ * `shownAlone('[All] praise is [due] to Allah, Lord of the worlds -')` drops the " -".
+ */
+export const shownAlone = (text: string): string => text.replace(/\s+[-\u2013\u2014]\s*$/u, '');
+
+/**
  * One ayah's translation as a block of text under (or above) the lines. Plain text only: the
  * loader has stripped the markup. With no ayah (`ayahKey` `null`, or a key the translation does not
  * have) the block stays, empty and one line tall, so the layout never jumps. With `fitWidth`, an
@@ -80,7 +88,10 @@ export const TranslationBlock: React.FC<TranslationBlockProps> = ({
   style,
   className,
 }) => {
-  const textOf = (key: string | null): string | undefined => (key === null ? undefined : translation.text[key]);
+  const textOf = (key: string | null): string | undefined => {
+    const value = key === null ? undefined : translation.text[key];
+    return value === undefined ? undefined : shownAlone(value);
+  };
   const text = textOf(ayahKey);
   const leading = lineHeight ?? TRANSLATION_LINE_HEIGHT;
   const face = {fontFamily, fontWeight};

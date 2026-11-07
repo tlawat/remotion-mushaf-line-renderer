@@ -28,7 +28,7 @@ export {
   type QuranComOptions,
   type QuranComResource,
 } from './quran-com';
-export {type OutgoingAyah, TranslationBlock, type TranslationBlockProps} from './TranslationBlock';
+export {type OutgoingAyah, shownAlone, TranslationBlock, type TranslationBlockProps} from './TranslationBlock';
 export {
   MAX_TRANSLATION_LAYERS,
   type TranslationLayer,

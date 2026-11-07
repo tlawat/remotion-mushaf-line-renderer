@@ -121,6 +121,30 @@ describe('the cases of 12.2', () => {
     expect(timings.ayat[1]?.start).toBe(3.5);
   });
 
+  it('gives every whole-word case a mask: its look with no mark, words hidden until recited, over one play', () => {
+    for (const id of ['V7', 'V8', 'V9', 'V11', 'V11-vertical', 'V20']) {
+      const mask = caseById(`${id}-mask`)!;
+      const own = caseById(id)!;
+      expect([mask.referenceOf, mask.look, mask.format, mask.composition], id).toEqual([
+        id,
+        own.look,
+        own.format,
+        own.composition,
+      ]);
+      const props = casePropsFor(mask as never) as {
+        highlight: {mode: string};
+        memorize: {mode: string; repeat: number};
+      };
+      expect([props.highlight.mode, props.memorize.mode, props.memorize.repeat], id).toEqual([
+        'none',
+        'blank-upcoming',
+        1,
+      ]);
+    }
+    // V9 is drawn in the black palette: so is its mask.
+    expect((casePropsFor(caseById('V9-mask') as never) as {theme: string}).theme).toBe('black');
+  });
+
   it('refuses a look that does not exist', () => {
     const bad = {...(caseById('V1') as never as object), look: 'karaoke-neon'};
     expect(() => casePropsFor(bad as never)).toThrow(/no look/);

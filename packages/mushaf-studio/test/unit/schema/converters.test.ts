@@ -30,6 +30,7 @@ import {
   defaultMemorize,
   defaultReview,
   defaultText,
+  drawsWordBand,
   effectiveNeighbourOpacity,
   effectiveRestOpacity,
   fontPropsFrom,
@@ -46,10 +47,10 @@ import {
   studioFontStyle,
   themeSelectionFrom,
   tintPath,
-  type WashCap,
   washColor,
   washStyle,
   windowScrollTiming,
+  wordBandFrom,
   wordStyleFrom,
 } from '../../../src/schema';
 import {withAlpha} from '../../../src/schema/highlight';
@@ -396,13 +397,13 @@ describe('wordStyleFrom', () => {
       expect(Math.abs(opacity(frame) - opacity(frame - 1)), `f${frame}`).toBeLessThanOrEqual(largest + 1e-4);
     }
     // A wash the previous play ended on (1:1:2, the rosette named, held to its release) lets go over markOut.
-    const washStyled = wordStyleFrom({
+    const washBand = wordBandFrom({
       ...repeated,
       highlight: highlight({style: 'wash'}),
       audioTime: audioClock(clips),
       markers: markerIds([line]),
     });
-    const washed = (frame: number) => washStyled(w2, ctx(frame)) !== undefined;
+    const washed = (frame: number) => washBand(w2, ctx(frame)) !== undefined;
     expect(washed(104)).toBe(true);
     expect(washed(105)).toBe(true);
     expect(washed(110)).toBe(true);
@@ -459,8 +460,12 @@ describe('wordStyleFrom', () => {
   });
 
   it('tint: a wash on tajweed colours, the line palettes on a fixed ink', () => {
-    const tajweed = wordStyleFrom({...base, theme: 'light', highlight: highlight({style: 'tint'})});
-    expect(tajweed(w2, ctx(45))).toEqual(washStyle({color: washColor(defaultHighlight.color, 0.1), cap: 'both'}));
+    const tajweed = {...base, theme: 'light' as const, highlight: highlight({style: 'tint'})};
+    // No letter recoloured: the line draws the wash behind the word instead.
+    expect(wordStyleFrom(tajweed)(w2, ctx(45))).toBeUndefined();
+    expect(wordBandFrom(tajweed)(w2, ctx(45))).toEqual({color: washColor(defaultHighlight.color, 0.1)});
+    expect(drawsWordBand(tajweed.highlight, 'light')).toBe(true);
+    expect(drawsWordBand(tajweed.highlight, 'black')).toBe(false);
     const black = wordStyleFrom({...base, theme: 'black', ground: '#121416', highlight: highlight({style: 'tint'})});
     const palette = (amount: number) => (amount < 0.125 ? undefined : `--tint-${Math.round(amount * 4)}`);
     expect(black(w2, ctx(45, {inkPalette: palette}))).toEqual({fontPalette: '--tint-4'});
@@ -468,45 +473,67 @@ describe('wordStyleFrom', () => {
     expect(black(w2, ctx(45))?.color).toBe('rgba(177, 147, 83, 1)');
   });
 
-  it('wash: a faint band behind the word, or the ayah run with round ends on its line, the rosette included', () => {
-    const word = wordStyleFrom({...base, highlight: highlight({style: 'wash'})});
-    expect(word(w2, ctx(45))).toEqual(washStyle({color: 'rgba(177, 147, 83, 0.1)', cap: 'both'}));
+  it('wash: a faint band behind the word, or behind every word of the ayah, the rosette included', () => {
+    const options = {...base, highlight: highlight({style: 'wash'})};
+    // The word carries no background: the line draws the band from where its ink is.
+    expect(wordStyleFrom(options)(w2, ctx(45))).toBeUndefined();
+    expect(drawsWordBand(options.highlight, 'plain')).toBe(true);
+    const word = wordBandFrom(options);
+    expect(word(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    expect(word(w1, ctx(45))).toBeUndefined();
     expect(word(w3, ctx(75))).toBeUndefined();
-    const ayah = wordStyleFrom({...base, highlight: highlight({mode: 'ayah', style: 'wash'})});
-    const band = (cap: WashCap) => washStyle({color: 'rgba(177, 147, 83, 0.1)', cap});
-    expect(ayah(w1, ctx(45))).toEqual(band('start'));
-    expect(ayah(w2, ctx(45))).toEqual(band('none'));
-    expect(ayah(w3, ctx(45))).toEqual(band('end'));
+    const ayah = wordBandFrom({...base, highlight: highlight({mode: 'ayah', style: 'wash'})});
+    const band = {color: 'rgba(177, 147, 83, 0.1)'};
+    // One colour for the whole run: the line joins them into one shape.
+    expect([w1, w2, w3].map((w) => ayah(w, ctx(45)))).toEqual([band, band, band]);
     expect(ayah(w4, ctx(45))).toBeUndefined();
     // On a dark ground the band is a little stronger.
-    const dark = wordStyleFrom({...base, ground: '#121416', highlight: highlight({style: 'wash'})});
-    expect(dark(w2, ctx(45))).toEqual(washStyle({color: 'rgba(177, 147, 83, 0.13)', cap: 'both'}));
+    const dark = wordBandFrom({...base, ground: '#121416', highlight: highlight({style: 'wash'})});
+    expect(dark(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.13)'});
+    // Ink and tint draw no band.
+    expect(wordBandFrom({...base, highlight: highlight({style: 'tint'})})(w2, ctx(45))).toBeUndefined();
+    expect(drawsWordBand(highlight({style: 'ink'}), 'plain')).toBe(false);
+    expect(drawsWordBand(highlight({mode: 'none', style: 'wash'}), 'plain')).toBe(false);
+  });
+
+  it('wash: a word memorisation hides takes its band with it', () => {
+    const clips = clipTimeline(timings, {mode: 'blank-upcoming', repeat: 1, pauseSeconds: 0});
+    const band = wordBandFrom({
+      ...base,
+      highlight: highlight({style: 'wash'}),
+      memorize: {settings: {...defaultMemorize, mode: 'blank-upcoming' as const}, clips},
+    });
+    // 1:1:2 is heard (shown) at 1.5 s and washed; 1:2:1 is still to come (hidden): no band.
+    expect(band(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    expect(band(w4, ctx(45))).toBeUndefined();
   });
 
   it('holds the last word of an ayah to the release when the timings time its rosette as a word', () => {
     // The rosette 1:1:3 has its own entry (2-3 s): told it is the marker, 1:1:2 keeps its band past 2 s.
-    const plain = wordStyleFrom({...base, highlight: highlight({style: 'wash'})});
+    const plain = wordBandFrom({...base, highlight: highlight({style: 'wash'})});
     expect(plain(w2, ctx(75))).toBeUndefined();
-    const held = wordStyleFrom({...base, highlight: highlight({style: 'wash'}), markers: markerIds([line])});
-    expect(held(w2, ctx(75))).toEqual(washStyle({color: 'rgba(177, 147, 83, 0.1)', cap: 'both'}));
+    const held = wordBandFrom({...base, highlight: highlight({style: 'wash'}), markers: markerIds([line])});
+    expect(held(w2, ctx(75))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
     // It lets go at the release, 3.25 s, over markOut.
     expect(held(w2, ctx(110))).toBeUndefined();
     expect(held(w3, ctx(75))).toBeUndefined();
   });
 
   it('carries no tint or wash on a line leaving the centre slot upward, full strength on one coming in', () => {
-    const style = wordStyleFrom({...base, highlight: highlight({style: 'wash'})});
-    expect(style(w2, ctx(45, {linePosition: -0.5}))).toEqual(
-      washStyle({color: 'rgba(177, 147, 83, 0.05)', cap: 'both'}),
-    );
+    const style = wordBandFrom({...base, highlight: highlight({style: 'wash'})});
+    expect(style(w2, ctx(45, {linePosition: -0.5}))).toEqual({color: 'rgba(177, 147, 83, 0.05)'});
     expect(style(w2, ctx(45, {linePosition: -1}))).toBeUndefined();
-    expect(style(w2, ctx(45, {linePosition: 0.6}))).toEqual(washStyle({color: 'rgba(177, 147, 83, 0.1)', cap: 'both'}));
+    expect(style(w2, ctx(45, {linePosition: 0.6}))).toEqual({color: 'rgba(177, 147, 83, 0.1)'});
+    const tint = wordStyleFrom({...base, highlight: highlight({style: 'tint'}), ink, ground: '#f8f3e6'});
+    expect(tint(w2, ctx(45, {linePosition: -1}))).toBeUndefined();
   });
 
   it('marks nothing under mode none', () => {
     for (const style of ['ink', 'tint', 'wash'] as const) {
       const off = wordStyleFrom({...base, highlight: highlight({mode: 'none', style})});
       expect([w1, w2, w3, w4].map((w) => off(w, ctx(45)))).toEqual([undefined, undefined, undefined, undefined]);
+      const noBand = wordBandFrom({...base, highlight: highlight({mode: 'none', style})});
+      expect([w1, w2, w3, w4].map((w) => noBand(w, ctx(45)))).toEqual([undefined, undefined, undefined, undefined]);
     }
   });
 

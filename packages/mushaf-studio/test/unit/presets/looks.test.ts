@@ -6,6 +6,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import type {z} from 'zod';
 import {defaultMushafPassageProps, mushafPassageSchema} from '../../../src/compositions/passage/schema';
 import {defaultMushafRecitationProps, mushafRecitationSchema} from '../../../src/compositions/recitation/schema';
+import {themeHasTajweedColors} from '../../../src/content/tajweed';
 import {
   applyFormat,
   applyLook,
@@ -25,6 +26,7 @@ import {
   type MushafLook,
   type MushafLookKind,
 } from '../../../src/presets';
+import {themeSelectionFrom} from '../../../src/schema';
 import {defaultMushafAyahTextProps, mushafAyahTextSchema} from '../../../src/unicode/schema';
 
 const COMPOSITIONS: Readonly<
@@ -83,7 +85,8 @@ describe('MUSHAF_LOOKS', () => {
       expect(['ink', 'tint', 'wash'], entry.id).toContain(highlight?.style);
       if (entry.patch.theme === 'custom')
         expect(entry.patch.customTheme, entry.id).toMatchObject({
-          base: 'normal',
+          // Tajweed keeps light's letters and rule colours under its gold-line rosettes.
+          base: entry.id === 'tajweed' ? 'light' : 'normal',
           override: {
             ink: false,
             silent: false,
@@ -110,6 +113,24 @@ describe('MUSHAF_LOOKS', () => {
     });
     // The other dark look marks in ink: its disc is the ground, as the design gives it.
     expect(look('madinah-green').patch.customTheme).toMatchObject({accent: '#163225', background: '#10241b'});
+  });
+
+  it('draws the Tajweed look’s rosettes in gold line, keeping every tajweed colour of light', () => {
+    const tajweed = look('tajweed');
+    expect(tajweed.patch.theme).toBe('custom');
+    expect(tajweed.patch.customTheme).toMatchObject({
+      base: 'light',
+      frame: '#8c6c26',
+      detail: '#8c6c26',
+      accent: '#efe3c4',
+      background: '#fbf7ee',
+    });
+    const props = applyLook(defaultMushafRecitationProps, tajweed);
+    const theme = themeSelectionFrom(props.theme, props.customTheme);
+    // Still a tajweed theme: the legend shows and a tint is shown as a wash.
+    expect(themeHasTajweedColors(theme)).toBe(true);
+    expect(theme).toMatchObject({base: 'light', colors: {frame: '#8c6c26', accent: '#efe3c4'}});
+    expect(Object.keys((theme as {colors: object}).colors)).not.toContain('rules');
   });
 
   it('is the defaults with the Mushaf look: applied to the recitation’s defaults it changes nothing', () => {

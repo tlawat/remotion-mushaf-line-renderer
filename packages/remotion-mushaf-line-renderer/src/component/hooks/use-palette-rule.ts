@@ -2,6 +2,7 @@ import {type RefObject, useState} from 'react';
 import {registerPalette} from '../../fonts/palette-store';
 import {CURRENT_COLOR} from '../../mushaf/colors';
 import type {PaletteEntry, ResolvedTheme} from '../../mushaf/themes';
+import type {MushafColorPart} from '../../types';
 import {useIsomorphicLayoutEffect} from './use-isomorphic-layout-effect';
 
 /** The four tint palettes of `inkTint`, from a quarter of the way to all of it. */
@@ -19,9 +20,19 @@ export type PaletteIdents = {
 export type PaletteRuleOptions = {
   /** `MushafLineCommonProps.inkTint`. */
   readonly inkTint?: string | undefined;
-  /** The CPAL entries that paint the letters (`colorParts.ink`). */
+  /** The CPAL entries that paint the letters (`letterEntriesOf(colorParts)`): the ones a tint repaints. */
   readonly inkEntries?: readonly number[] | undefined;
 };
+
+/**
+ * The CPAL entries that draw a word's letters: the ink, the silent letters and the tajweed rules
+ * (`colorParts.ink`, `silent` and `rules`), ascending. A tint repaints all of them, so a whole word
+ * turns the tint's colour: the rules' entries draw letters too (a heavy rā, a madd yāʾ), and on a
+ * theme that paints them in the ink, tinting the ink entry alone gilds half a word. The rosette's
+ * entries and the rings around the small letters keep theirs.
+ */
+export const letterEntriesOf = (parts: Readonly<Record<MushafColorPart, readonly number[]>>): readonly number[] =>
+  [...parts.ink, ...parts.silent, ...parts.rules].sort((a, b) => a - b);
 
 /**
  * The letters' colour in each of the V4 colour font's six CPAL palettes, for a tint on a palette
@@ -89,7 +100,7 @@ export const inkPaletteFor =
  * `'currentColor'` has to be resolved from the row's computed colour first (COLR glyphs ignore CSS
  * `color`, and Chromium drops `currentColor` inside `override-colors`), so both happen in a layout
  * effect: before the browser paints, with the row still hidden. With an `inkTint`, four more rules
- * mix the ink entries toward the tint in the same effect, from the colour the row's own rule gives
+ * mix the letters' entries (`inkEntries`) toward the tint in the same effect, from the colour the row's own rule gives
  * them: an ink that follows `currentColor` is already the row's computed colour there, which is why
  * a word's CSS `color` cannot tint it.
  */
@@ -132,7 +143,7 @@ export const usePaletteRule = (
   return idents;
 };
 
-/** Registers the four tint palettes, or returns `undefined` when there is no tint or no ink entry. */
+/** Registers the four tint palettes, or returns `undefined` when there is no tint or no letter entry. */
 const tintPalettes = (
   fontFamily: string,
   theme: ResolvedTheme,

@@ -1,6 +1,8 @@
-// The wash: a faint, soft-ended band painted behind a word, or behind an ayah's run of words on a
-// line. Paint-only background layers on the word's own span, so the printed words (which abut with
-// no gap) join into one band with no seam, and nothing about the line's metrics changes.
+// The wash as CSS on one element: a faint, soft-ended band painted as background layers of the
+// element's own box. The compositions no longer paint words with it: a word's box is its advance,
+// not its ink (an overhanging hamza-wasl alif fell outside it), and tiles that meet leave hairline
+// seams, so the lines draw the wash themselves from the ink (`wordBandFrom()` and the renderer's
+// `wordBand`). It stays for a band behind any other element, and for `activeWordStyleFrom()`.
 import type * as React from 'react';
 
 /** Which outer side of a word's band gets the soft round end: `start` is the right edge in RTL. */

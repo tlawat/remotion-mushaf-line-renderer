@@ -178,7 +178,10 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
     descriptionAr: 'ألوان التجويد كما هي على ورقٍ دافئ، والكلمات القادمة أخفّ، ودليل الألوان في شريطه.',
     applies: ['recitation', 'passage'],
     patch: {
-      theme: 'light',
+      // The tajweed colours of `light`, its letters untouched; only the rosettes are the gold line
+      // drawings of the other looks (they are no reading aid, and pink and mint fills are not gold line work).
+      theme: 'custom',
+      customTheme: {...rosettes('#8c6c26', '#efe3c4', '#fbf7ee'), base: 'light'},
       layout: {...SHARED.layout, background: '#fbf7ee', color: '#1c1a16', neighbourOpacity: 0.3, frame: 'none'},
       animation: {...SHARED.animation, tempo: 'calm'},
       highlight: {mode: 'word', style: 'ink', color: '#b8913a', restOpacity: 0.7},

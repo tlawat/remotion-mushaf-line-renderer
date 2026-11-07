@@ -96,11 +96,14 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
     className,
     name,
     framed,
+    frameColor,
     activeWordId,
     activeWordStyle,
     wordStyle,
     wordClassName,
     inkTint,
+    wordBand,
+    bandShape,
     fontSrc,
     fontFallback,
   } = props;
@@ -123,6 +126,7 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
     });
   }
   if (inkTint !== undefined) assertCssColor('<MushafLineWindow inkTint>', inkTint);
+  if (frameColor !== undefined) assertCssColor('<MushafLineWindow frameColor>', frameColor);
   const hasSteps = props.steps !== undefined;
   const hasPosition = props.position !== undefined;
   if (hasSteps === hasPosition) {
@@ -197,8 +201,11 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
           wordStyle,
           wordClassName,
           inkTint,
+          wordBand,
+          bandShape,
           linePosition: index - position,
           framed,
+          frameColor,
           fontSrc,
           fontFallback,
         })}

@@ -9,6 +9,7 @@ import {
   checkJadwal,
   checkTint,
   checkV2,
+  checkWholeTint,
   fitDissolve,
   fitEasing,
   formatReports,
@@ -18,9 +19,11 @@ import {
   lineBands,
   metalColumns,
   runChecks,
+  untintedShare,
   verdictOf,
+  washCoverage,
 } from './design-check';
-import {type Image, type Rgb, rgbOf, solidImage} from './design-image';
+import {type Image, type Rgb, rgbOf, solidImage, wordMask} from './design-image';
 
 const IVORY = rgbOf('#f8f3e6');
 const INK = rgbOf('#1c1a16');
@@ -305,5 +308,75 @@ describe('the other measures', () => {
     const large = paint(solidImage(100, 100, IVORY), 10, 10, 40, 40, INK);
     const all = {x0: 0, y0: 0, x1: 100, y1: 100};
     expect(Math.sqrt(inkArea(large, all, IVORY, INK) / inkArea(small, all, IVORY, INK))).toBeCloseTo(1.5, 5);
+  });
+});
+
+describe('whole words', () => {
+  const GOLD = rgbOf('#806321');
+  // A line of two words on ivory: the word at x 20-60 (a "rā" at 50-60 and its body at 20-48), its neighbour at 70-110.
+  const page = paint(
+    paint(paint(solidImage(120, 60, IVORY), 20, 20, 48, 30, INK), 50, 20, 60, 30, INK),
+    70,
+    20,
+    110,
+    30,
+    INK,
+  );
+  const hidden = paint(page, 20, 20, 60, 30, IVORY);
+  const rows = {x0: 0, y0: 10, x1: 120, y1: 40};
+
+  it('finds a word as what two frames differ by', () => {
+    const mask = wordMask(page, hidden, rows)!;
+    expect(mask.box).toEqual({x0: 20, y0: 20, x1: 60, y1: 30});
+    expect(mask.columns).toHaveLength(38);
+    expect(mask.has(49, 25)).toBe(false);
+    expect(mask.has(55, 25)).toBe(true);
+    expect(wordMask(page, page, rows)).toBeNull();
+  });
+
+  it('counts the ink a tint leaves unmarked: none for a whole word, the rā for a half-gilded one', () => {
+    const mask = wordMask(page, hidden, rows)!;
+    const whole = paint(paint(page, 20, 20, 48, 30, GOLD), 50, 20, 60, 30, GOLD);
+    expect(untintedShare(whole, page, mask, INK).share).toBe(0);
+    const half = paint(page, 20, 20, 48, 30, GOLD);
+    expect(untintedShare(half, page, mask, INK).share).toBeCloseTo(100 / 380, 4);
+    const images = (shot: Image): CaseImages => ({
+      ...noImages,
+      still: (id, frame) =>
+        id === 'V7' && frame === 56
+          ? shot
+          : id === 'V7-ref' && frame === 56
+            ? page
+            : id === 'V7-mask'
+              ? frame === 56
+                ? page
+                : frame === 44
+                  ? hidden
+                  : null
+              : null,
+    });
+    // At half scale the line box is 99 px: the synthetic line is the frame's only band of ink.
+    expect(checkWholeTint(images(whole), 'V7', '1:2:3', 56).pass).toBe(true);
+    expect(checkWholeTint(images(half), 'V7', '1:2:3', 56).pass).toBe(false);
+    expect(checkWholeTint({...noImages}, 'V7', '1:2:3', 56).pass).toBe(false);
+  });
+
+  it('measures a band over the word’s ink columns at full strength, and how far it reaches a neighbour', () => {
+    const mask = wordMask(page, hidden, rows)!;
+    const band = mix(IVORY, rgbOf('#b19353'), 0.5);
+    // Behind the letters only where the ground shows: the rows above and below them.
+    const washed = (x0: number, x1: number, color = band) =>
+      paint(paint(page, x0, 12, x1, 20, color), x0, 30, x1, 38, color);
+    const whole = washed(16, 64);
+    const coverage = washCoverage(whole, page, mask, rows, IVORY);
+    expect(coverage.covered).toBe(1);
+    expect(coverage.neighbour).toBe(0);
+    // A band that stops short of the rā leaves its columns out.
+    const short = washCoverage(washed(16, 48), page, mask, rows, IVORY);
+    expect(short.covered).toBeCloseTo(28 / 38, 4);
+    // One that runs into the neighbour counts its columns, on that side.
+    const long = washCoverage(washed(16, 80), page, mask, rows, IVORY);
+    expect(long.neighbour).toBe(10);
+    expect(washCoverage(washed(16, 80), page, mask, rows, IVORY, () => false, 'right').neighbour).toBe(0);
   });
 });

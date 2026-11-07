@@ -182,9 +182,9 @@ describe('EndCard with glyph (render-design.md 5.9)', () => {
     expect(part(c, 'reciter')!.style.fontStyle).toBe('italic');
     const credits = part(c, 'credits')!;
     expect(credits.style.fontVariantCaps).toBe('all-small-caps');
-    // 0.75 L at 9:16 (L = 37 px).
-    expect(credits.style.fontSize).toBe('28px');
-    expect(credits.style.opacity).toBe('0.55');
+    // 0.8 L at 9:16 (L = 37 px), at 60 % of the ink: legible, still out of the way.
+    expect(credits.style.fontSize).toBe('30px');
+    expect(credits.style.opacity).toBe('0.6');
     expect([...credits.children].map((line) => line.textContent)).toEqual(['A', 'B']);
     expect(part(c, 'ground')!.style.background).toBe('rgb(250, 245, 230)');
   });

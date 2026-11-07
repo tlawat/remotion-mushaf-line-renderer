@@ -1,11 +1,10 @@
 import {
   type AyahTiming,
-  type MushafLineData,
   type MushafThemeSelection,
   type MushafWord,
   normalizeTimings,
   type RecitationTimings,
-  sliceWords,
+  type WordBand,
   type WordContext,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
@@ -31,7 +30,7 @@ import {
 } from './marks';
 import {migrateMushafProps} from './migrate';
 import {INOUT, SINE, type Tempo, tempoSeconds} from './tokens';
-import {type WashCap, washStyle} from './wash';
+import {washStyle} from './wash';
 
 /** Four decimals: enough for any alpha, free of float noise. */
 const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
@@ -224,34 +223,6 @@ const timingIndex = (
   return index;
 };
 
-/** The words a line paints (its slice applied), by id, with their ayah: for the ends of an ayah's wash on the line. */
-const shownWordsCache = new WeakMap<MushafLineData, readonly MushafWord[]>();
-
-const shownWords = (line: MushafLineData): readonly MushafWord[] => {
-  let words = shownWordsCache.get(line);
-  if (words === undefined) {
-    words = sliceWords(line, line.slice ?? null);
-    shownWordsCache.set(line, words);
-  }
-  return words;
-};
-
-/**
- * Which outer ends of an ayah's run on its line a word carries: the first shown word of the ayah
- * (the rightmost in RTL) the `start`, the last the `end`, a word that is both `both`.
- */
-const runCap = (word: MushafWord, line: MushafLineData): WashCap => {
-  const words = shownWords(line);
-  const index = words.findIndex((other) => other.wordId === word.wordId);
-  if (index < 0) return 'both';
-  const key = ayahKey(word);
-  const before = words[index - 1];
-  const after = words[index + 1];
-  const first = before === undefined || ayahKey(before) !== key;
-  const last = after === undefined || ayahKey(after) !== key;
-  return first && last ? 'both' : first ? 'start' : last ? 'end' : 'none';
-};
-
 /**
  * The `wordStyle` of a line for the schema's highlight and review settings: a pure function of its
  * arguments and of the options captured here, so a frame always paints the same.
@@ -265,9 +236,9 @@ const runCap = (word: MushafWord, line: MushafLineData): WashCap => {
  *   its emphasis (`wordEmphasis()` / `ayahEmphasis()`), by the theme's `tintPath()`: CSS `color`,
  *   the line's `inkTint` palettes (`WordContext.inkPalette`), or a wash on a tajweed theme. The
  *   ayah-end rosette keeps its own palette.
- * - `wash`: a faint, soft-ended band behind the word, or behind the ayah's run of words on its line
- *   (the rosette included), at `washAlpha(ground)` times the emphasis.
- * - A line leaving the centre slot upward takes no tint or wash with it (they fade with its
+ * - `wash`: nothing here. The band is the line's own (`wordBandFrom()`, its `wordBand` prop), drawn
+ *   from where the ink is, so the word's style only carries memorisation and the doubt marks.
+ * - A line leaving the centre slot upward takes no tint with it (it fades with the line's
  *   position); an incoming line's first word is marked at full strength while it scrolls in.
  * - Without per-word times `mode: 'word'` follows the ayahs. Memorisation's hiding wins over the marks.
  * - Under repeats, nothing changes in one frame as a play starts and the recording goes back to
@@ -279,7 +250,28 @@ const runCap = (word: MushafWord, line: MushafLineData): WashCap => {
  */
 export const wordStyleFrom = (
   options: WordStyleOptions,
-): ((word: MushafWord, context: WordContext) => React.CSSProperties | undefined) => {
+): ((word: MushafWord, context: WordContext) => React.CSSProperties | undefined) => marksFrom(options).wordStyle;
+
+/**
+ * The `wordBand` of a line for the schema's highlight: the wash (`style: 'wash'`, or a tint shown as
+ * a wash on a tajweed theme) behind the word, or behind the ayah's run of words on its line (the
+ * rosette included), at `washAlpha(ground)` times the emphasis, in `washColor()`. The line draws it
+ * from where the ink is, one shape per run, so the band covers the whole word (an overhanging
+ * hamza-wasl alif included) and shows no seam between words. A line leaving the centre slot upward
+ * lets it go as it leaves; memorisation's hiding wins over it. Takes the options of `wordStyleFrom()`,
+ * and goes with it on the same line.
+ */
+export const wordBandFrom = (
+  options: WordStyleOptions,
+): ((word: MushafWord, context: WordContext) => WordBand | undefined) => marksFrom(options).wordBand;
+
+/** The two per-word functions of a line's marks, from one reading of the options. */
+const marksFrom = (
+  options: WordStyleOptions,
+): {
+  readonly wordStyle: (word: MushafWord, context: WordContext) => React.CSSProperties | undefined;
+  readonly wordBand: (word: MushafWord, context: WordContext) => WordBand | undefined;
+} => {
   const {highlight, review, doubtful, timingsIndex, timings, isStudio, sequenceFrom = 0} = options;
   const audioTime = options.audioTime ?? ((seconds: number) => seconds);
   const memorize = options.memorize?.settings.mode === 'off' ? undefined : options.memorize;
@@ -355,53 +347,62 @@ export const wordStyleFrom = (
     textDecoration: `underline dotted ${review.doubtColor}`,
     textDecorationThickness: DOUBT_THICKNESS,
   };
-  return (word, context) => {
-    let css: React.CSSProperties | undefined;
+  /** What memorisation lets a word show (1 without it): a word it hides (or ghosts) shows no more, its ink and marks included. */
+  const shownOf = (word: MushafWord, context: WordContext, seconds: number, now: number): number =>
+    memorize
+      ? memorizeOpacity({
+          mode: memorize.settings.mode,
+          revealAfterRepeats: memorize.settings.revealAfterRepeats,
+          start: startOf(word),
+          now,
+          seconds,
+          active: context.active,
+          clips: memorize.clips,
+          script: 'glyph',
+          ground,
+        })
+      : 1;
+  /** The tint or wash of a word: its emphasis, let go as a line leaves the centre slot upward. */
+  const markAmount = (word: MushafWord, context: WordContext, seconds: number, now: number): number => {
+    const position = context.linePosition ?? 0;
+    const neighbour = position < 0 ? clamp01(1 + position) : 1;
+    return round4(emphasisAt(word, seconds, now) * neighbour);
+  };
+  const clockOf = (context: WordContext): {seconds: number; now: number} => {
     const seconds = (context.frame + sequenceFrom) / context.fps;
-    const now = audioTime(seconds);
+    return {seconds, now: audioTime(seconds)};
+  };
+  const wordStyle = (word: MushafWord, context: WordContext): React.CSSProperties | undefined => {
+    let css: React.CSSProperties | undefined;
+    const {seconds, now} = clockOf(context);
     const position = context.linePosition ?? 0;
     if (mode !== 'none') {
       if (style === 'ink') {
         const opacity = round4(1 - (1 - inkAt(word, seconds, now)) * (1 - clamp01(Math.abs(position))));
         if (opacity < 1) css = {opacity};
-      } else {
-        // A line on its way up and out of the centre slot lets its mark go as it leaves.
-        const neighbour = position < 0 ? clamp01(1 + position) : 1;
-        const amount = round4(emphasisAt(word, seconds, now) * neighbour);
+      } else if (style === 'tint' && word.kind !== 'end') {
+        const amount = markAmount(word, context, seconds, now);
         if (amount > 0) {
-          if (style === 'wash') {
-            css = washStyle({
-              color: washColor(highlight.color, washStrength * amount),
-              cap: mode === 'ayah' ? runCap(word, context.line) : 'both',
-            });
-          } else if (word.kind !== 'end') {
-            const palette = path === 'palette' ? context.inkPalette : undefined;
-            css =
-              palette === undefined
-                ? {color: interpolateColors(amount, [0, 1], [ink, accent])}
-                : {fontPalette: palette(amount)};
-          }
+          const palette = path === 'palette' ? context.inkPalette : undefined;
+          css =
+            palette === undefined
+              ? {color: interpolateColors(amount, [0, 1], [ink, accent])}
+              : {fontPalette: palette(amount)};
         }
       }
     }
-    if (memorize) {
-      // Memorisation decides first: a word it hides (or ghosts) shows no more than that, its ink and marks included.
-      const shown = memorizeOpacity({
-        mode: memorize.settings.mode,
-        revealAfterRepeats: memorize.settings.revealAfterRepeats,
-        start: startOf(word),
-        now,
-        seconds,
-        active: context.active,
-        clips: memorize.clips,
-        script: 'glyph',
-        ground,
-      });
-      if (shown < 1) css = {...css, opacity: Math.min(Number(css?.opacity ?? 1), shown)};
-    }
+    const shown = shownOf(word, context, seconds, now);
+    if (shown < 1) css = {...css, opacity: Math.min(Number(css?.opacity ?? 1), shown)};
     if (marks && (doubtful[word.id]?.length ?? 0) > 0) css = {...css, ...doubtStyle};
     return css;
   };
+  const wordBand = (word: MushafWord, context: WordContext): WordBand | undefined => {
+    if (mode === 'none' || style !== 'wash') return undefined;
+    const {seconds, now} = clockOf(context);
+    const amount = round4(markAmount(word, context, seconds, now) * shownOf(word, context, seconds, now));
+    return amount > 0 ? {color: washColor(highlight.color, washStrength * amount)} : undefined;
+  };
+  return {wordStyle, wordBand};
 };
 
 /**
@@ -416,3 +417,11 @@ export const inkTintFor = (
   highlight.mode !== 'none' && highlight.style === 'tint' && tintPath(theme) === 'palette'
     ? legibleAccent(highlight.color, ground)
     : undefined;
+
+/**
+ * Whether the highlight paints a wash on this theme (`style: 'wash'`, or a tint shown as one on a
+ * tajweed theme): the lines then need `wordBand={wordBandFrom(...)}`, and measure where their ink is.
+ */
+export const drawsWordBand = (highlight: Pick<Highlight, 'mode' | 'style'>, theme: MushafThemeSelection): boolean =>
+  highlight.mode !== 'none' &&
+  (highlight.style === 'wash' || (highlight.style === 'tint' && tintPath(theme) === 'wash'));

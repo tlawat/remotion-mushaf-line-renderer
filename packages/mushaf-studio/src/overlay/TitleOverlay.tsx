@@ -4,7 +4,7 @@ import {useCurrentFrame, useVideoConfig} from 'remotion';
 import type {FontProps, Overlay} from '../schema';
 import {ARABIC_LABEL_FAMILY, studioFontStyle} from '../schema/fonts';
 import {withAlpha} from '../schema/highlight';
-import {frameGeometry, SINE, type Tempo, tempoFrames, tempoSeconds} from '../schema/tokens';
+import {frameColorOf, frameGeometry, SINE, type Tempo, tempoFrames, tempoSeconds} from '../schema/tokens';
 import {surahEnglishName} from './surah-names';
 
 const ARABIC_INDIC = '٠١٢٣٤٥٦٧٨٩';
@@ -89,6 +89,18 @@ export const introCardOpacity = (seconds: number, endSeconds: number, tempo: Tem
 };
 
 /**
+ * How many frames before the card's end the lines may start to come in: from the first frame its
+ * content is under 0.25 on its way out (`cardOut` on `SINE`), so the hand-off is sequential (the
+ * card under 0.25 before the lines start) and the frame never dips to bare paper between them.
+ * 7 at the calm tempo (21 frames out), 10 at the slow one (30); 0 for a card too short to fade.
+ */
+export const introHandoffFrames = (tempo: Tempo, fps: number, introSeconds = Number.POSITIVE_INFINITY): number => {
+  const out = Math.round(Math.min(tempoSeconds('cardOut', tempo), introSeconds) * fps);
+  for (let f = 0; f <= out; f++) if (1 - SINE(f / Math.max(1, out)) < 0.25) return out - f;
+  return 0;
+};
+
+/**
  * The opacity of a card's ground over the lines (a composition whose lines start under it): 1 from
  * frame 0, out with the content over `cardOut` ending at `endSeconds`.
  */
@@ -170,7 +182,7 @@ export type MushafTitleCardProps = {
   readonly fontSize: number;
   readonly lineHeight: number;
   readonly width: number;
-  /** The metal of the hairline and its lozenge (`metalOf()`). Default the light ground's gold. */
+  /** The metal of the hairline, its lozenge and the name's frame (`metalOf()`). Default the light ground's gold. */
   readonly metal?: string | undefined;
   /** The translation shown, credited on the card ("Translation of the meanings · …"); `null` for none. */
   readonly translationName?: string | null | undefined;
@@ -232,7 +244,14 @@ export const MushafTitleCard: React.FC<MushafTitleCardProps> = (props) => {
         }}
       >
         <div style={{width: nameWidth, height: nameBox}}>
-          <MushafSurahName surah={surah} framed fontSize={nameSize} lineHeight={nameBox} {...props.fontProps} />
+          <MushafSurahName
+            surah={surah}
+            framed
+            frameColor={frameColorOf(metal, background)}
+            fontSize={nameSize}
+            lineHeight={nameBox}
+            {...props.fontProps}
+          />
         </div>
         <div
           data-mushaf-overlay-part="rule"
@@ -296,7 +315,7 @@ export const MushafTitleCard: React.FC<MushafTitleCardProps> = (props) => {
               fontWeight: 400,
               fontSize: Math.round(0.8 * L),
               lineHeight: 1.4,
-              opacity: 0.5,
+              opacity: 0.6,
               marginTop: Math.round(0.4 * L),
             }}
           >

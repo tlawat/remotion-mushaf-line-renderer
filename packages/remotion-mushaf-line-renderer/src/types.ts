@@ -211,6 +211,29 @@ export type WordContext = {
   readonly inkPalette?: ((amount: number) => string | undefined) | undefined;
 };
 
+/** `wordBand`'s result: the band behind one word. */
+export type WordBand = {
+  /**
+   * The band's colour, its alpha the band's strength at its core: `#rgb[a]`, `#rrggbb[aa]`,
+   * `rgb()` or `rgba()`. Words whose bands share a colour are drawn as one shape.
+   */
+  readonly color: string;
+};
+
+/** The shape of the bands behind words (`bandShape`), in em of the line's type size. */
+export type MushafBandShape = {
+  /** How tall the band is. Default 1.65: the letters' bodies and their marks above and below. */
+  readonly height?: number;
+  /** Where it sits in the line box: 0 top, 1 bottom, as a CSS background position. Default 0.55. */
+  readonly y?: number;
+  /** How far its top and bottom fade. Default 0.22. */
+  readonly feather?: number;
+  /** How far it stays full past the ink on each side. Default 0.05. */
+  readonly pad?: number;
+  /** How long its soft end is, past `pad`. Default 0.3. */
+  readonly end?: number;
+};
+
 /**
  * Which words of a line to show: `{ayah}` for one ayah, `{fromAyah, toAyah}` for a range of ayahs,
  * or `{fromWordId, toWordId}` for a band of `MushafWord.wordId`s, inclusive  -  each range open-ended
@@ -422,12 +445,28 @@ export type MushafLineCommonProps = {
   /**
    * A CSS colour the line's ink can be repainted in, word by word, under any colour-font theme: the
    * line registers four palettes that mix the ink it paints toward it (a quarter, half, three
-   * quarters, all of the way), and `WordContext.inkPalette` names them for `wordStyle`. Only the
-   * ink entries change: the tajweed rules, the silent letters and the rosettes keep their colours.
+   * quarters, all of the way), and `WordContext.inkPalette` names them for `wordStyle`. Every entry
+   * that draws letters changes (the ink, the silent letters and the tajweed rules), so a whole word
+   * turns the tint; the rosettes keep their colours.
    * A word's CSS `color` cannot do this, even under `normal`: its palette holds the row's colour
    * resolved, not `currentColor`. Ignored by `plain` (the monochrome font), whose ink is CSS `color`.
    */
   readonly inkTint?: string;
+  /**
+   * A faint band behind a word, called for every word on every frame (same purity rule as
+   * `wordStyle`): `{color}` paints one, `undefined` none. The line draws the bands itself, behind its
+   * row, from where each word's ink actually is (measured once the line is fitted), not from the
+   * word's box: a glyph that overhangs its advance (KFGQPC's hamza-wasl alif, a final rā) stays
+   * inside its band. The bands of neighbouring words join into one shape with no seam, and where two
+   * meet the stronger one shows, never their sum. Its shape is `bandShape`.
+   *
+   * ```tsx
+   * wordBand={(word) => (word.ayah === 2 ? {color: 'rgba(177, 147, 83, 0.13)'} : undefined)}
+   * ```
+   */
+  readonly wordBand?: (word: MushafWord, context: WordContext) => WordBand | undefined;
+  /** The shape of the `wordBand` bands, in em of the line's type size. Default: see `MushafBandShape`. */
+  readonly bandShape?: MushafBandShape;
   /** Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline. */
   readonly name?: string;
   /**
@@ -435,6 +474,12 @@ export type MushafLineCommonProps = {
    * `quran-common` font). Default `true`; `false` sets the name alone. Ignored by other line types.
    */
   readonly framed?: boolean;
+  /**
+   * The CSS colour of the ornamental frame around a `surah_name` line's name, e.g. the page's gold
+   * so the frame reads as line work beside the name in ink. Default: the line's own colour, as the
+   * name. Ignored by other line types and by `framed: false`.
+   */
+  readonly frameColor?: string;
   /** Where the fonts come from; default `'cdn'` (QUL's CDN). See `MushafFontSrc`. */
   readonly fontSrc?: MushafFontSrc;
   /**
@@ -463,6 +508,8 @@ export type MushafSurahNameProps = MushafGlyphCommonProps & {
    * `false` sets the name alone.
    */
   readonly framed?: boolean;
+  /** The CSS colour of the frame (`framed`); default the inherited colour, as the name. */
+  readonly frameColor?: string;
 };
 
 export type MushafJuzNameProps = MushafGlyphCommonProps & {
@@ -523,11 +570,14 @@ export type MushafLineWindowCommonProps = Pick<
   | 'className'
   | 'name'
   | 'framed'
+  | 'frameColor'
   | 'activeWordId'
   | 'activeWordStyle'
   | 'wordStyle'
   | 'wordClassName'
   | 'inkTint'
+  | 'wordBand'
+  | 'bandShape'
   | 'fontSrc'
   | 'fontFallback'
 > & {

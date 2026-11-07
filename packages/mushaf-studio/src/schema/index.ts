@@ -57,6 +57,7 @@ export {
 } from './fonts';
 export {
   activeWordStyleFrom,
+  drawsWordBand,
   effectiveNeighbourOpacity,
   effectiveRestOpacity,
   inkTintFor,
@@ -64,6 +65,7 @@ export {
   tintPath,
   type WordStartIndex,
   type WordStyleOptions,
+  wordBandFrom,
   wordStyleFrom,
 } from './highlight';
 export {
@@ -111,6 +113,7 @@ export {
   dissolveShares,
   type FrameGeometry,
   type FrameGeometryOptions,
+  frameColorOf,
   frameGeometry,
   GROUNDS,
   type GroundTokens,

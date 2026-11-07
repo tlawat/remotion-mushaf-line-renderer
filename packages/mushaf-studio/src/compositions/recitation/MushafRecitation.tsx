@@ -28,11 +28,13 @@ import {
   scheduleForClips,
   scrollTargetPosition,
 } from '../../memorize';
-import {MushafTitleOverlay, showsCorner, showsIntro} from '../../overlay';
+import {introHandoffFrames, MushafTitleOverlay, showsCorner, showsIntro} from '../../overlay';
 import {
   animationFrom,
+  drawsWordBand,
   effectiveNeighbourOpacity,
   fontPropsFrom,
+  frameColorOf,
   frameGeometry,
   inkTintFor,
   legibleAccent,
@@ -43,7 +45,9 @@ import {
   studioFontStyle,
   tempoFrames,
   themeSelectionFrom,
+  type WordStyleOptions,
   windowScrollTiming,
+  wordBandFrom,
   wordEmphasis,
   wordSpanIndex,
   wordSpans,
@@ -195,6 +199,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
   const ground = groundFor(props.background, layout);
+  // The video's one metal: the rosettes, the jadwal, the cards' rules and the surah header's frame.
+  const metal = metalOf({theme: props.theme, customTheme: props.customTheme, ground});
   const painted = backgroundFor(props.background, layout).kind;
   const overImage = painted === 'image' || painted === 'video';
   // Translation, gloss and label colours as drawn: one under 4.5:1 on the ground gives way to a muted ink.
@@ -211,23 +217,30 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
     [timings, highlight.occurrence, markers],
   );
   const spanIndex = useMemo(() => wordSpanIndex(spans), [spans]);
-  const wordStyleFor = (sequenceFrom: number) =>
-    wordStyleFrom({
-      highlight,
-      review,
-      doubtful: resolved.doubtful,
-      timingsIndex: starts,
-      timings,
-      isStudio,
-      sequenceFrom,
-      audioTime: toAudio,
-      memorize: {settings: memorize, clips},
-      theme,
-      ink: layout.color,
-      ground,
-      tempo: animation.tempo,
-      markers,
-    });
+  const markOptions = (sequenceFrom: number): WordStyleOptions => ({
+    highlight,
+    review,
+    doubtful: resolved.doubtful,
+    timingsIndex: starts,
+    timings,
+    isStudio,
+    sequenceFrom,
+    audioTime: toAudio,
+    memorize: {settings: memorize, clips},
+    theme,
+    ink: layout.color,
+    ground,
+    tempo: animation.tempo,
+    markers,
+  });
+  // The word's style, and with a wash the band the line draws behind it from where its ink is.
+  const bands = drawsWordBand(highlight, theme);
+  const marksFor = (sequenceFrom: number) => {
+    const options = markOptions(sequenceFrom);
+    return bands
+      ? {wordStyle: wordStyleFrom(options), wordBand: wordBandFrom(options)}
+      : {wordStyle: wordStyleFrom(options)};
+  };
 
   // The ayah on screen changes after the outgoing ayah's last word, by a dissolve: the translation
   // over `translationDissolve`, the corner number over `labelChange` from the same frame.
@@ -246,10 +259,13 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const shown = shownAyahAt(changes, frame);
   const ayahKey = shown.key;
   const span = passageSpan(timings);
-  // The lines come in once the intro card has gone: it adds its time before the recording, except
-  // under hostAudio, where the template's track decides and the card covers the start instead.
+  // The lines come in as the intro card goes (from its last frames under 0.25, so the frame never
+  // dips to bare paper): it adds its time before the recording, except under hostAudio, where the
+  // template's track decides and the card covers the start instead.
   const cardAddsTime = showsIntro(overlay.title) && !followsHostAudio(props);
-  const earliest = cardAddsTime ? Math.round(overlay.introSeconds * fps) : 0;
+  const earliest = cardAddsTime
+    ? Math.round(overlay.introSeconds * fps) - introHandoffFrames(animation.tempo, fps, overlay.introSeconds)
+    : 0;
   const inputs = {
     timeline,
     lines,
@@ -305,7 +321,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
             line={line}
             fontSize={fontSize}
             lineHeight={lineHeight}
-            wordStyle={wordStyleFor(plan.from)}
+            {...marksFor(plan.from)}
+            frameColor={frameColorOf(metal, ground)}
             {...(lineShift ? {style: lineShift} : {})}
             {...activeProps}
             {...(plan.enterFrames > 0 ? {enter: motion.enter} : {})}
@@ -363,7 +380,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
           neighbourOpacity={effectiveNeighbourOpacity(layout.neighbourOpacity, highlight, theme)}
           fontSize={fontSize}
           lineHeight={lineHeight}
-          wordStyle={wordStyleFor(from)}
+          {...marksFor(from)}
+          frameColor={frameColorOf(metal, ground)}
           {...(lineShift ? {lineStyle: () => lineShift} : {})}
           {...activeProps}
           {...motion}
@@ -401,7 +419,6 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const showGloss = text.glossPosition === 'strip' && (resolved.gloss !== null || resolved.transliteration !== null);
   const glossFace = studioFontStyle(text.glossFont, 'gloss');
   const label = shownAyahAt(changes, frame, tempoFrames('labelChange', animation.tempo, fps));
-  const metal = metalOf({theme: props.theme, customTheme: props.customTheme, ground});
   // The translation is credited once: on the intro card, or in the end card's credits without one.
   const translationName = showTranslation ? (translationLayers[0]?.translation.meta.name ?? null) : null;
   const introCard = showsIntro(overlay.title);

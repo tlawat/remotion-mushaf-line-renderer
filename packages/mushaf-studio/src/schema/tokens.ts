@@ -3,7 +3,7 @@
 // composition, a test and a code user read the same numbers (docs/mushaf-studio/render-design.md,
 // section 3).
 import {CALM_EASINGS} from '@tlawat/remotion-mushaf-line';
-import {isLightGround} from './color';
+import {isLightGround, mixColors} from './color';
 
 /** A ground with its inks, as the looks use them. Contrasts are WCAG ratios on the ground. */
 export type GroundTokens = {
@@ -163,6 +163,15 @@ export const metalOf = (props: {
   if (props.theme === 'custom' && props.customTheme?.override.frame) return props.customTheme.frame;
   return isLightGround(props.ground) ? METAL.light : METAL.dark;
 };
+
+/**
+ * The colour of a surah name's ornamental frame (a header line, the cards' title): the metal taken
+ * 30 % of the way into the ground. The frame is a dense ornament, so in the full metal it is the
+ * heaviest thing in a dark frame and outweighs the Quran's text; a little into the ground it reads
+ * as gold line work around the name, which stays in the ink. `frameColorOf('#d8b56a', '#121416')`
+ * is `#9d8551`.
+ */
+export const frameColorOf = (metal: string, ground: string): string => mixColors(metal, ground, 0.3);
 
 /** Where the furniture of a frame goes (labels, counter, legend, jadwal, cards' text), in px of the frame (3.3). */
 export type FrameGeometry = {

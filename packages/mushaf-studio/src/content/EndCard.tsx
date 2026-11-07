@@ -5,7 +5,7 @@ import {surahEnglishName} from '../overlay/surah-names';
 import {ayahRangeText, latinRangeText, SMALL_CAPS, smallCapsLabel} from '../overlay/TitleOverlay';
 import type {FontProps} from '../schema/fonts';
 import {withAlpha} from '../schema/highlight';
-import {frameGeometry, SINE, SOFT} from '../schema/tokens';
+import {frameColorOf, frameGeometry, SINE, SOFT} from '../schema/tokens';
 import {SURAHS} from '../studio/surahs';
 import {ChapterInfoCard} from './ChapterInfoCard';
 import type {ChapterInfo} from './chapter-info';
@@ -71,7 +71,7 @@ export type EndCardTitleGlyph = {
   /** The lines' type size and line box: the framed name is set at 30 % of them. */
   readonly glyphSize: number;
   readonly lineHeight: number;
-  /** The gold of the hairline and its lozenge (`metalOf()`). */
+  /** The gold of the hairline, its lozenge and the name's frame (`metalOf()`). */
   readonly metal: string;
   /** The composition's `fontSrc` / `fontFallback`, for the surah-name font. */
   readonly fontProps?: FontProps | undefined;
@@ -183,7 +183,14 @@ const DesignedEndCard: React.FC<EndCardContentProps & {readonly glyph: EndCardTi
         }}
       >
         <div data-mushaf-end-card-part="title" style={{width: nameWidth, height: nameBox}}>
-          <MushafSurahName surah={surah} framed fontSize={nameSize} lineHeight={nameBox} {...glyph.fontProps} />
+          <MushafSurahName
+            surah={surah}
+            framed
+            frameColor={frameColorOf(glyph.metal, background)}
+            fontSize={nameSize}
+            lineHeight={nameBox}
+            {...glyph.fontProps}
+          />
         </div>
         <div
           data-mushaf-end-card-part="rule"
@@ -254,10 +261,11 @@ const DesignedEndCard: React.FC<EndCardContentProps & {readonly glyph: EndCardTi
           data-mushaf-end-card-part="credits"
           style={{
             ...SMALL_CAPS,
-            fontSize: Math.round(0.75 * L),
+            // 0.8 L at 60 %: small caps at the design's 0.75 L and 55 % read about 10 px tall at 1080p.
+            fontSize: Math.round(0.8 * L),
             fontWeight: fontWeight ?? 500,
             lineHeight: 1.5,
-            opacity: 0.55,
+            opacity: 0.6,
             marginTop: Math.round(1.2 * L),
           }}
         >

@@ -123,11 +123,23 @@ mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are re
   wide, each word a box as tall as its line for the wash.
 - The example template's frosted card is gone (the recitation sits in a plain block inside the safe
   area) and its slot follows the default mark.
+- **The surah name's ornamental frame is drawn in the video's gold**, taken 30 % into the ground
+  (`frameColorOf()`), on the header lines and both cards; the name stays in the ink.
+- **The Tajweed look's rosettes are gold line drawings** (a custom theme on `light` that keeps every
+  tajweed colour), not `light`'s pink and mint.
+- **The lines come in as the intro card goes** (`introHandoffFrames()`): no frames of bare paper
+  between them.
+- The intro card's attribution and the end card's credits are a little larger and stronger (0.8 L at
+  60 %), and a translation shown on its own drops a trailing continuation dash (`shownAlone()`).
 
 ### Fixed
 
 - **The mark on colour themes**: `highlight.color` did nothing on a colour theme; ink and wash now
-  work everywhere, and a tint repaints only the ink (or shows as a wash on the tajweed colours).
+  work everywhere, and a tint repaints the whole word's letters, never the rosettes (or shows as a
+  wash on the tajweed colours).
+- **The wash covers the whole word, with no seams**: it is drawn by the line from where the ink is
+  (`wordBandFrom()` on the renderer's `wordBand`), not as a background on each word's box, which
+  left the hamza-wasl alif of every `ٱل` word outside its band and hairline seams between words.
 - **Early changes**: lines, the window's scroll, the translation and the ayah text left up to 1.2 s
   before their last word ended; now nothing changes before the voice has finished it.
 - **The intro card cut to one frame** when the first word came early: the card now adds its time.

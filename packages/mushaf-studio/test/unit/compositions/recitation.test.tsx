@@ -86,6 +86,8 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         data-active-style={JSON.stringify(props.activeWordStyle ?? null)}
         data-word-styles={wordStyles(props, props.lines, frame, position)}
         data-ink-tint={props.inkTint ?? ''}
+        data-frame-color={props.frameColor ?? ''}
+        data-word-band={props.wordBand === undefined ? 'no' : 'yes'}
         data-enter={props.enter ? 'yes' : 'no'}
         data-enter-frames={framesOf(props.enter)}
         data-exit-frames={framesOf(props.exit)}
@@ -154,6 +156,7 @@ const {scheduleLines, scrollPosition} = await import('@tlawat/remotion-mushaf-li
 const {registerMushafFonts} = await import('../../../src/fonts');
 const {withHeaderSlots, withInnerHeaderSlots} = await import('../../../src/compositions/shared');
 const {clipTimeline} = await import('../../../src/memorize');
+const {introCardOpacity, introHandoffFrames} = await import('../../../src/overlay');
 const {defaultOverlay, dissolveShares, SINE, scrollTimingFrom} = await import('../../../src/schema');
 const {syntheticLine} = await import('../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
@@ -456,6 +459,20 @@ describe('<MushafRecitation>', () => {
     expect(translationOf(mount(props({}, {...content, timings: ayahsOnly, translation: ayahText})))).toBe('1:3');
   });
 
+  it('gives the lines a band to draw only under a wash, and the header frame in the metal toward the ground', () => {
+    const ink = windowOf(mount(props()))!;
+    expect(ink.dataset.wordBand).toBe('no');
+    // The default rosette gold, #8c6c26, 30 % into the ivory.
+    expect(ink.dataset.frameColor).toBe('#ac9560');
+    cleanup();
+    expect(windowOf(mount(props({highlight: highlight({style: 'wash'})})))!.dataset.wordBand).toBe('yes');
+    cleanup();
+    // A tint on a tajweed theme is shown as a wash: the band, and no letter repainted.
+    const tajweed = windowOf(mount(props({theme: 'light', highlight: highlight({style: 'tint'})})))!;
+    expect(tajweed.dataset.wordBand).toBe('yes');
+    expect(tajweed.dataset.inkTint).toBe('');
+  });
+
   it('names the word being recited, and marks it only through the word style, by frame', () => {
     expect(windowOf(mount(props()))!.dataset.activeWordId).toBe('');
     remotion.state.frame = 30; // 1 s: 1:2:2 (0.901-1.521)
@@ -675,7 +692,7 @@ describe('<MushafRecitation>', () => {
     expect(c.querySelector('[data-mushaf-overlay]')).toBeNull();
   });
 
-  it('shows the intro card for its whole introSeconds on the bare ground, the lines and the recording after it', () => {
+  it('shows the intro card for its whole introSeconds on the bare ground, the lines as it goes and the recording after it', () => {
     // calculateMetadata put 3 s + 0.8 s + 0.4 s − 0.331 s = 3.869 s before the recording: the first word is at 4.2 s.
     const p = props(
       {overlay: overlay({title: 'intro', introSeconds: 3})},
@@ -696,11 +713,15 @@ describe('<MushafRecitation>', () => {
     expect(card.querySelector('[data-mushaf-overlay-part="backdrop"]')).toBeNull();
     expect(intro(89)).not.toBeNull();
     expect(intro(90)).toBeNull();
-    // The window comes in at introSeconds (f90), settled 0.4 s before the first word (f126).
+    // The window comes in as the card goes: 7 frames before introSeconds (f90), from the first
+    // frame the card is under 0.25, so the frame never dips to bare paper between them.
+    expect(introCardOpacity(83 / 30, 3)).toBeLessThan(0.25);
+    expect(introCardOpacity(82 / 30, 3)).toBeGreaterThanOrEqual(0.25);
+    expect(introHandoffFrames('calm', 30)).toBe(7);
     expect(intro(90)).toBeNull();
     const c = document.body;
     const window = sequences(c).find((s) => s.dataset.sequence?.endsWith('at once'))!;
-    expect(window.dataset.from).toBe('90');
+    expect(window.dataset.from).toBe('83');
     // The recording starts after the card: its <Audio> sits in a Sequence from the delay.
     const recitation = sequences(c).find((s) => s.dataset.sequence === 'Recitation')!;
     expect(recitation.dataset.from).toBe(String(Math.round(3.869 * 30)));

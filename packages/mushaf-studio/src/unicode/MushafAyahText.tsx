@@ -56,7 +56,6 @@ import {
   SOFT,
   washAlpha,
   washColor,
-  washStyle,
   wordEmphasis,
   wordSpanIndex,
   wordSpans,
@@ -245,18 +244,25 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         Math.round((highlight.restOpacity + (1 - highlight.restOpacity) * inkFill(start, now)) * 10_000) / 10_000;
       return opacity < 1 ? {opacity} : undefined;
     }
-    const span = word.kind === 'end' ? undefined : spans.get(word.id);
-    const amount = span === undefined ? 0 : wordEmphasis(span, now);
-    if (amount <= 0) return undefined;
-    return highlight.style === 'tint'
-      ? {color: interpolateColors(amount, [0, 1], [layout.color, accent])}
-      : washStyle({
-          color: washColor(highlight.color, washAlpha(ground) * amount),
-          cap: 'both',
-          height: '1.35em',
-          y: '55%',
-        });
+    if (highlight.style !== 'tint') return undefined;
+    const amount = markAmount(word);
+    return amount > 0 ? {color: interpolateColors(amount, [0, 1], [layout.color, accent])} : undefined;
   };
+  /** The tint or wash of the word being recited: its emphasis, eased in and out (`wordEmphasis()`). */
+  const markAmount = (word: AyahWord): number => {
+    const span = word.kind === 'end' ? undefined : spans.get(word.id);
+    return span === undefined ? 0 : wordEmphasis(span, now);
+  };
+  // The wash is drawn behind the words from where their ink is (`<AyahText wordBand>`), at the
+  // wash's strength times the emphasis; a word memorisation hides takes its band with it.
+  const wordBandFor =
+    highlight.mode === 'word' && highlight.style === 'wash'
+      ? (ayah: ResolvedAyah) =>
+          (word: AyahWord): string | undefined => {
+            const amount = markAmount(word) * (visibilityOf(ayah, word) === 'shown' ? 1 : 0);
+            return amount > 0 ? washColor(highlight.color, washAlpha(ground) * amount) : undefined;
+          }
+      : undefined;
   const wordStyleFor = (ayah: ResolvedAyah): ((word: AyahWord) => React.CSSProperties | undefined) => {
     return (word) => {
       const style = markOf(ayah, word);
@@ -354,6 +360,8 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
                   words={ayah.words}
                   activeWordId={highlight.mode === 'word' ? activeWordId : null}
                   wordStyle={wordStyleFor(ayah)}
+                  wordBand={wordBandFor?.(ayah)}
+                  fontReady={font.ready}
                   wordText={wordTextFor?.(ayah)}
                   fontFamily={font.fontFamily}
                   fontSize={fontSize}

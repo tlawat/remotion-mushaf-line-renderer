@@ -13,6 +13,7 @@ export {
   introCardOpacity,
   introCoverOpacity,
   introEndSeconds,
+  introHandoffFrames,
   introOpacity,
   latinRangeText,
   MushafCornerLabel,

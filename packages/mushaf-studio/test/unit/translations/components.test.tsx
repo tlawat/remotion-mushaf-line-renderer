@@ -2,7 +2,13 @@
 import {cleanup, render} from '@testing-library/react';
 import {afterEach, describe, expect, it} from 'vitest';
 import {SOFT} from '../../../src/schema';
-import {GlossStrip, glossStripOpacities, glossStripState, TranslationBlock} from '../../../src/translations';
+import {
+  GlossStrip,
+  glossStripOpacities,
+  glossStripState,
+  shownAlone,
+  TranslationBlock,
+} from '../../../src/translations';
 import type {AyahTranslation, WordGloss} from '../../../src/types';
 
 afterEach(cleanup);
@@ -51,12 +57,24 @@ const strip = (props: Partial<React.ComponentProps<typeof GlossStrip>> = {}) =>
     />,
   ).container.firstElementChild as HTMLElement;
 
+describe('shownAlone', () => {
+  it('drops a trailing continuation dash, and nothing else', () => {
+    expect(shownAlone('Lord of the worlds -')).toBe('Lord of the worlds');
+    expect(shownAlone('Lord of the worlds \u2013 ')).toBe('Lord of the worlds');
+    expect(shownAlone('Lord of the worlds\u00a0\u2014')).toBe('Lord of the worlds');
+    expect(shownAlone('well-known')).toBe('well-known');
+    expect(shownAlone('a - b')).toBe('a - b');
+    expect(shownAlone('-')).toBe('-');
+  });
+});
+
 describe('TranslationBlock', () => {
   it("renders one div with the ayah's text and its style", () => {
     const el = block();
     expect(el.tagName).toBe('DIV');
     expect(el.children).toHaveLength(0);
-    expect(el.textContent).toBe('[All] praise is [due] to Allāh, Lord of the worlds -');
+    // The dash the translation ends the ayah with (its sentence runs on) is not shown on its own.
+    expect(el.textContent).toBe('[All] praise is [due] to Allāh, Lord of the worlds');
     expect(el.className).toBe('mushaf-translation');
     expect(el.dataset.ayahKey).toBe('1:2');
     expect(el.lang).toBe('en');

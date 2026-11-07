@@ -24,6 +24,7 @@ import {
   hexOf,
   type Image,
   inkBox,
+  inkColumnProfile,
   inkiestPixel,
   inkRowProfile,
   levelOf,
@@ -32,6 +33,8 @@ import {
   type Rect,
   type Rgb,
   rgbOf,
+  type WordMask,
+  wordMask,
 } from './design-image';
 
 /** One measured criterion: `pass` is `null` for what only an eye can judge. */
@@ -541,7 +544,195 @@ export const checkTint = (
       `differs over ${JSON.stringify(changed)}; 1:2:3 is x ${previous.x0}-${previous.x1}`,
     ),
   );
+  // The whole word, its rule-coloured letters included: 1:2:3 at full tint (f56), 1:2:4 at f63.
+  out.push(checkWholeTint(images, id, '1:2:3', 56), checkWholeTint(images, id, '1:2:4', 63));
   return out;
+};
+
+// ---------------------------------------------------------------------------------------------
+// Whole words: a mark covers exactly one whole word (principle 1)
+
+/**
+ * The frames of a case's `-mask` render (the case's look with no mark and memorisation's
+ * `blank-upcoming`) that differ by one word alone: the frame that shows it and the one before it is
+ * recited, which hides it. 1:2:3 is shown at f56 (its reveal is over) and hidden at f44; 1:2:4 is
+ * shown at f100 and hidden at f56; 1:7:9 (ٱلضَّآلِّينَ) shown at f720 and hidden at f677.
+ */
+export const MASK_FRAMES = {
+  '1:2:3': {shown: 56, hidden: 44},
+  '1:2:4': {shown: 100, hidden: 56},
+  '1:7:9': {shown: 720, hidden: 677},
+} as const;
+
+/** A word of the sample that a case reads through its mask (`MASK_FRAMES`). */
+export type MaskWord = keyof typeof MASK_FRAMES;
+
+/** The mask of `word` in the case's `-mask` render, inside `rows`; `null` when it is missing or nothing differs. */
+const maskFor = (images: CaseImages, id: string, word: MaskWord, rows: Rect): WordMask | null => {
+  const frames = MASK_FRAMES[word];
+  const shown = images.still(`${id}-mask`, frames.shown);
+  const hidden = images.still(`${id}-mask`, frames.hidden);
+  return shown === null || hidden === null ? null : wordMask(shown, hidden, rows);
+};
+
+/**
+ * How much of a word's solid ink a tint left in the unmarked ink: of the mask's pixels that are full
+ * ink in the reference (within `solid` of `ink`), the share the marked frame leaves unchanged (within
+ * `threshold`). 0 for a word tinted whole; a tint that skips the letters a palette draws as rule
+ * layers (a heavy rā, a madd yāʾ) leaves them, and their share, in the ink.
+ */
+export const untintedShare = (
+  shot: Image,
+  ref: Image,
+  mask: WordMask,
+  ink: Rgb,
+  solid = 40,
+  threshold = 6,
+): {readonly share: number; readonly solid: number; readonly untinted: number} => {
+  let total = 0;
+  let untinted = 0;
+  for (let y = mask.box.y0; y < mask.box.y1; y++) {
+    for (let x = mask.box.x0; x < mask.box.x1; x++) {
+      if (!mask.has(x, y)) continue;
+      const r = pixelAt(ref, x, y);
+      if (channelDistance(r, ink) > solid) continue;
+      total++;
+      if (channelDistance(pixelAt(shot, x, y), r) <= threshold) untinted++;
+    }
+  }
+  return {share: total === 0 ? Number.NaN : untinted / total, solid: total, untinted};
+};
+
+/** V7 and V9: the tint covers the whole word: at most 2 % of its solid ink left in the unmarked ink. */
+export const checkWholeTint = (images: CaseImages, id: string, word: MaskWord, frame: number): CheckResult => {
+  const name = `${word} tinted whole at f${frame} (≤ 2 % of its ink unmarked)`;
+  const shot = images.still(id, frame);
+  const ref = images.still(`${id}-ref`, frame);
+  if (shot === null || ref === null) return missing(name, `${id} and ${id}-ref f${frame}`);
+  const ground = groundColorOf(ref);
+  const g = scaled('landscape', 0.5);
+  const centre = centreBand(ref, ground, g.lineBox);
+  if (centre === null) return missing(name, 'no centre line');
+  const mask = maskFor(images, id, word, rowsRect(ref, centre));
+  if (mask === null) return missing(name, `${id}-mask f${MASK_FRAMES[word].shown} and f${MASK_FRAMES[word].hidden}`);
+  const ink = inkiestPixel(ref, mask.box, ground);
+  const {share, solid, untinted} = untintedShare(shot, ref, mask, ink);
+  return check(
+    name,
+    solid > 0 && share <= 0.02,
+    `${untinted} of the word's ${solid} solid ink pixels still ${hexOf(ink)} (${fixed(100 * share, 1)} %)`,
+  );
+};
+
+/** What a wash covers of one word, and of the ink around it (`washCoverage()`). */
+export type WashCoverage = {
+  /** The share of the word's ink columns the band lifts at 0.8 of its strength or more. */
+  readonly covered: number;
+  readonly columns: number;
+  /** The band's full lift (levels of the largest channel), the 90th percentile over the word's columns. */
+  readonly full: number;
+  /**
+   * Columns of other ink (not the word's, nor `exclude`d) the band lifts at half its strength or
+   * more, on the side where there are more of them (`skipSide` left out): how far it reaches into a
+   * neighbour.
+   */
+  readonly neighbour: number;
+};
+
+/**
+ * Where the band lifts the ground, column by column, in `rows`: the largest change over the
+ * reference among the pixels where the reference is the ground (between and around the letters).
+ * A word's column is covered when that is at least 0.8 of the band's full lift (its soft ends lie
+ * past the ink, so a band that ends on the word, as a cap on the word's own box did, fails); other
+ * ink is counted at half the lift, so a band that reaches into a neighbour shows.
+ */
+export const washCoverage = (
+  shot: Image,
+  ref: Image,
+  mask: WordMask,
+  rows: Rect,
+  ground: Rgb,
+  exclude: (x: number) => boolean = () => false,
+  skipSide: 'left' | 'right' | null = null,
+): WashCoverage => {
+  const liftAt = (x: number): number => {
+    let best = 0;
+    for (let y = rows.y0; y < rows.y1; y++) {
+      const r = pixelAt(ref, x, y);
+      if (channelDistance(r, ground) <= 3) best = Math.max(best, channelDistance(pixelAt(shot, x, y), r));
+    }
+    return best;
+  };
+  const wordLifts = mask.columns.map(liftAt);
+  const sorted = [...wordLifts].sort((a, b) => a - b);
+  const full = sorted[Math.floor(0.9 * (sorted.length - 1))] ?? 0;
+  const half = Math.max(2, 0.5 * full);
+  // Over the ink the band is at its full strength: its soft ends lie past the ink, never on it.
+  const strong = Math.max(2, 0.8 * full);
+  const covered = wordLifts.filter((lift) => lift >= strong).length;
+  const own = new Set(mask.columns);
+  const ink = inkColumnProfile(ref, rows, ground);
+  const middle = (mask.box.x0 + mask.box.x1) / 2;
+  const sides = {left: 0, right: 0};
+  ink.forEach((count, i) => {
+    const x = rows.x0 + i;
+    if (count === 0 || own.has(x) || exclude(x)) return;
+    const side = x < middle ? 'left' : 'right';
+    if (side !== skipSide && liftAt(x) >= half) sides[side]++;
+  });
+  return {
+    covered: mask.columns.length === 0 ? 0 : covered / mask.columns.length,
+    columns: mask.columns.length,
+    full,
+    neighbour: Math.max(sides.left, sides.right),
+  };
+};
+
+/**
+ * V8, V11 and V20: the band covers the whole word at full strength (99 % of its ink columns at 0.8
+ * of its lift or more, an overhanging hamza-wasl alif included) and reaches into no other word's ink beyond its
+ * soft end (on either side at most `0.25 em` of columns at half strength: the band is full 0.05 em
+ * past the ink and is at half 0.2 em past it). `trail` is the word before, still letting go, which
+ * is not a neighbour: its side is left to its own band.
+ */
+export const checkWholeWash = (
+  images: CaseImages,
+  id: string,
+  word: MaskWord,
+  frame: number,
+  options: {readonly ground: string; readonly em: number; readonly trail?: MaskWord; readonly rows?: Rect},
+): CheckResult[] => {
+  const name = `the band covers all of ${word} at f${frame}`;
+  const shot = images.still(id, frame);
+  const ref = images.still(`${id}-ref`, frame);
+  if (shot === null || ref === null) return [missing(name, `${id} and ${id}-ref f${frame}`)];
+  const ground = rgbOf(options.ground);
+  const band = diffBox(shot, ref, 1);
+  if (band === null) return [check(name, false, 'nothing differs from the reference')];
+  const rows = options.rows ?? {x0: 0, y0: band.y0, x1: ref.width, y1: band.y1};
+  const mask = maskFor(images, id, word, rows);
+  if (mask === null) {
+    return [missing(name, `${id}-mask f${MASK_FRAMES[word].shown} and f${MASK_FRAMES[word].hidden}`)];
+  }
+  const trail = options.trail === undefined ? null : maskFor(images, id, options.trail, rows);
+  const trailColumns = new Set(trail?.columns ?? []);
+  // The trail's own band lifts its side (and its soft end the word beyond it): that side is the trail's to judge.
+  const trailSide =
+    trail === null ? null : (trail.box.x0 + trail.box.x1) / 2 < (mask.box.x0 + mask.box.x1) / 2 ? 'left' : 'right';
+  const coverage = washCoverage(shot, ref, mask, rows, ground, (x) => trailColumns.has(x), trailSide);
+  const allowed = Math.round(0.25 * options.em);
+  return [
+    check(
+      `${name} (≥ 99 % of its ink columns at 0.8 of the band)`,
+      coverage.covered >= 0.99,
+      `${fixed(100 * coverage.covered, 1)} % of its ${coverage.columns} ink columns at 0.8 of the band's lift (${fixed(coverage.full, 1)} levels) or more`,
+    ),
+    check(
+      `the band of ${word} reaches no other word past its soft end (≤ ${allowed} px a side)`,
+      coverage.neighbour <= allowed,
+      `${coverage.neighbour} columns of other ink at half its lift`,
+    ),
+  ];
 };
 
 /** V8: a tint on a tajweed theme is drawn as a wash; the letters keep their colours. */
@@ -574,6 +765,7 @@ export const checkTintAsWash = (images: CaseImages): CheckResult[] => {
     ),
     check('no letter recoloured', recoloured === 0, `${recoloured} letter pixels changed`),
     look('tajweed colours intact', 'measured with the letters above'),
+    ...checkWholeWash(images, 'V8', '1:2:4', 60, {ground: INKS.paper.ground, em: g.glyph, trail: '1:2:3'}),
   ];
 };
 
@@ -732,6 +924,8 @@ export const checkWordWash = (
       below === undefined || band.y1 < below.start,
       `band to ${band.y1}, next line from ${below?.start ?? '-'}`,
     ),
+    // The whole of رَبِّ, its rā included, and nothing of لِلَّهِ or ٱلْعَـٰلَمِينَ past the band's soft end.
+    ...checkWholeWash(images, id, '1:2:3', frame, {ground: INKS.charcoal.ground, em: g.glyph}),
   ];
 };
 
@@ -1152,6 +1346,10 @@ export const checkAyahText = (images: CaseImages): CheckResult[] => {
       `${words.length} washed runs (the word and its trail) over ${band === null ? 0 : band.x1 - band.x0} of ${block === null ? 0 : block.x1 - block.x0} px`,
     ),
     ...dissolve,
+    // Each ٱل word whole, its hamza-wasl alif included: ٱلْعَـٰلَمِينَ at f60 (رَبِّ letting go beside
+    // it) and ٱلضَّآلِّينَ at f700. The ayah is set at 96 px, 48 at half scale.
+    ...checkWholeWash(images, 'V20', '1:2:4', 60, {ground: INKS.charcoal.ground, em: 48, trail: '1:2:3'}),
+    ...checkWholeWash(images, 'V20', '1:7:9', 700, {ground: INKS.charcoal.ground, em: 48}),
     look('no lone word on the last line, word spacing 0.1 em'),
   ];
 };

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {cleanup, render} from '@testing-library/react';
 import type * as React from 'react';
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {AyahText, type AyahWord} from '../../../src/unicode';
 
 afterEach(cleanup);
@@ -155,5 +155,65 @@ describe('<AyahText>', () => {
     const root = mount({wordText: (word) => (word.id === '1:3:1' ? word.text : undefined)});
     expect(spans(root).map((span) => span.children.length)).toEqual([0, 0, 0]);
     expect(root.querySelector('[data-mushaf-cue]')).toBeNull();
+  });
+});
+
+describe('<AyahText wordBand>', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** jsdom has no layout: each word 100 px wide, the first two on the block's first line, the rest on its second. */
+  const fakeLayout = () =>
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.classList.contains('mushaf-ayah-text')) {
+        return {
+          x: 0,
+          y: 0,
+          width: 600,
+          height: 400,
+          top: 0,
+          left: 0,
+          right: 600,
+          bottom: 400,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+      const index = WORDS.findIndex((word) => word.id === (this as HTMLElement).dataset.location);
+      const top = index < 2 ? 0 : 182;
+      const left = 400 - 100 * (index % 2);
+      return {
+        x: left,
+        y: top,
+        width: 100,
+        height: 182,
+        top,
+        left,
+        right: left + 100,
+        bottom: top + 182,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+
+  it('draws nothing without wordBand, or when it names no word', () => {
+    expect(mount({}).querySelector('[data-mushaf-word-band]')).toBeNull();
+    cleanup();
+    expect(mount({wordBand: () => undefined}).querySelector('[data-mushaf-word-band]')).toBeNull();
+  });
+
+  it('draws one band per line of the block, under the text, from where the words are', () => {
+    fakeLayout();
+    const root = mount({wordBand: () => 'rgba(177, 147, 83, 0.13)'});
+    const bands = [...root.querySelectorAll<HTMLElement>('[data-mushaf-word-band]')];
+    expect(bands).toHaveLength(2);
+    // Each line's layer sits at its line's top, a line box tall (96 × 1.9), behind the text.
+    expect(bands.map((band) => band.parentElement!.style.top)).toEqual(['0px', '182px']);
+    expect(bands[0]!.parentElement!.style.height).toBe('182.4px');
+    expect(bands[0]!.parentElement!.getAttribute('aria-hidden')).toBe('true');
+    // The two words of the first line (300-500 px) are one band, 0.35 em past each side.
+    expect(bands[0]!.style.left).toBe('266.4px');
+    expect(bands[0]!.style.width).toBe('267.2px');
+    // 1.35 em tall at 55 % of the line box.
+    expect(bands[0]!.style.height).toBe('129.6px');
+    // The text spans carry no band of their own.
+    expect(root.querySelector<HTMLElement>('.mushaf-uword')!.style.backgroundImage).toBe('');
   });
 });

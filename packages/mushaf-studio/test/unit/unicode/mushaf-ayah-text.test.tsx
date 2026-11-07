@@ -225,8 +225,15 @@ describe('<MushafAyahText>', () => {
   it('washes the word being recited, faintly', () => {
     at(5);
     const wash = mount({highlight: {style: 'wash', color: '#c8a45c'}});
-    expect(word(wash, '1:3:2').style.backgroundImage).toContain(washColor('#c8a45c', 0.13));
-    expect(word(wash, '1:3:1').style.backgroundImage).toBe('');
+    // Drawn behind the text from where the word's ink is, not as the word's own background.
+    expect(word(wash, '1:3:2').style.backgroundImage).toBe('');
+    const bands = [...wash.querySelectorAll<HTMLElement>('[data-mushaf-word-band]')];
+    expect(bands).toHaveLength(1);
+    const strength = /, ([\d.]+)\)$/.exec(washColor('#c8a45c', 0.13))![1];
+    expect(bands[0]!.style.backgroundImage).toContain(`, ${strength}) `);
+    // The block isolates the bands under its text.
+    expect(wash.querySelector<HTMLElement>('.mushaf-ayah-text')!.style.isolation).toBe('isolate');
+    expect(bands[0]!.parentElement!.style.zIndex).toBe('-1');
   });
 
   it('marks nothing under mode "ayah" (the ayah on screen is the one recited), nor under mode "none"', () => {

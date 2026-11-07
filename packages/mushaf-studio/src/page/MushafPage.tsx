@@ -5,6 +5,7 @@ import {
   type MushafThemeSelection,
   type MushafWord,
   type RecitedRange,
+  type WordBand,
   type WordContext,
   wordAt,
 } from '@tlawat/remotion-mushaf-line';
@@ -38,8 +39,10 @@ import {wordStarts} from '../lines';
 import {arabicIndicDigits} from '../overlay';
 import {
   defaultOverlay,
+  drawsWordBand,
   type FontProps,
   fontPropsFrom,
+  frameColorOf,
   inkTintFor,
   type Legend,
   markerIds,
@@ -48,6 +51,7 @@ import {
   themeSelectionFrom,
   washAlpha,
   washColor,
+  wordBandFrom,
   wordStyleFrom,
 } from '../schema';
 import {dissolve, dissolveShares, frameGeometry} from '../schema/tokens';
@@ -72,6 +76,7 @@ import {pageDimPresence, pageLineDim, pageLineEmphasis, pageTurns} from './turns
 export const OUTSIDE_OPACITY = 0.5;
 
 type WordStyle = (word: MushafWord, context: WordContext) => React.CSSProperties | undefined;
+type WordBandFn = (word: MushafWord, context: WordContext) => WordBand | undefined;
 
 /** `style` with the words outside the ranges dimmed to `OUTSIDE_OPACITY`: still there to read, not followed. */
 const dimmingOutside =
@@ -166,11 +171,13 @@ type PageLeafProps = {
   readonly presence: number;
   /** How much each printed line of this page is the current one (`pageLineEmphasis()`), by line number. */
   readonly emphasis: (line: number) => number;
-  /** The video's metal (`metalOf()`): the border's rules. */
+  /** The video's metal (`metalOf()`): the border's rules and the surah headers' frames. */
   readonly metal: string;
   /** The ranges followed (`rangesOf()`): one per surah recited. */
   readonly ranges: readonly RecitedRange[];
   readonly wordStyle: WordStyle;
+  /** The wash behind the words (`wordBandFrom()`), when the highlight paints one on the page. */
+  readonly wordBand?: WordBandFn | undefined;
   readonly activeProps: {readonly activeWordId: string | null; readonly inkTint?: string};
   readonly fontProps: FontProps;
 };
@@ -216,6 +223,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
   metal,
   ranges,
   wordStyle,
+  wordBand,
   activeProps,
   fontProps,
 }) => {
@@ -275,6 +283,8 @@ const PageLeaf: React.FC<PageLeafProps> = ({
                   fontSize={fontSize}
                   lineHeight={lineHeight}
                   wordStyle={opacity < 1 ? notCompounded(wordStyle, opacity) : wordStyle}
+                  {...(wordBand === undefined ? {} : {wordBand})}
+                  frameColor={frameColorOf(metal, ground)}
                   {...activeProps}
                   {...fontProps}
                 />
@@ -437,22 +447,21 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
     const incoming = into === undefined || into.duration === 0 ? 1 : dissolve(frame - into.start, into.duration).in;
     const outgoing = away === undefined || away.duration === 0 ? 1 : dissolve(frame - away.start, away.duration).out;
     const next = pages[i + 1];
-    const wordStyle = dimmingOutside(
-      wordStyleFrom({
-        highlight: marked,
-        review,
-        doubtful: resolved.doubtful,
-        timingsIndex: starts,
-        timings,
-        isStudio,
-        sequenceFrom: from,
-        theme,
-        ink: layout.color,
-        ground,
-        markers,
-      }),
-      ranges,
-    );
+    const markOptions = {
+      highlight: marked,
+      review,
+      doubtful: resolved.doubtful,
+      timingsIndex: starts,
+      timings,
+      isStudio,
+      sequenceFrom: from,
+      theme,
+      ink: layout.color,
+      ground,
+      markers,
+    };
+    const wordStyle = dimmingOutside(wordStyleFrom(markOptions), ranges);
+    const wordBand = drawsWordBand(marked, theme) ? wordBandFrom(markOptions) : undefined;
     const nextLine = next?.lines[0];
     return (
       <Sequence
@@ -474,6 +483,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
             metal={metal}
             ranges={ranges}
             wordStyle={wordStyle}
+            wordBand={wordBand}
             activeProps={activeProps}
             fontProps={fontSetup.props}
           />

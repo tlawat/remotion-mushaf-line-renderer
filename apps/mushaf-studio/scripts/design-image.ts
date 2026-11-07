@@ -430,6 +430,55 @@ export const diffColumnBands = (a: Image, b: Image, rect: Rect, threshold = 6, g
   return bandsOf(profile, {gap, origin: r.x0});
 };
 
+/** The pixels of one word, from two frames that differ by it alone: `has(x, y)`, its columns and its box. */
+export type WordMask = {
+  readonly has: (x: number, y: number) => boolean;
+  /** The columns with at least one of its pixels, ascending. */
+  readonly columns: readonly number[];
+  readonly box: Rect;
+  readonly size: number;
+};
+
+/**
+ * The pixels of `rect` where `shown` differs from `hidden` by more than `threshold` (largest
+ * channel): one word, when the two frames differ by that word alone (memorisation's
+ * `blank-upcoming` hides a word whole, every colour layer of it, until it is recited). Its solid
+ * ink and most of its edges; `null` when nothing differs.
+ */
+export const wordMask = (shown: Image, hidden: Image, rect: Rect, threshold = 40): WordMask | null => {
+  if (shown.width !== hidden.width || shown.height !== hidden.height) {
+    throw new DesignImageError('the images differ in size');
+  }
+  const r = clampRect(shown, rect);
+  const width = r.x1 - r.x0;
+  const bits = new Uint8Array(width * Math.max(0, r.y1 - r.y0));
+  const columns = new Set<number>();
+  let box: {x0: number; y0: number; x1: number; y1: number} | null = null;
+  let size = 0;
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      if (channelDistance(pixelAt(shown, x, y), pixelAt(hidden, x, y)) <= threshold) continue;
+      bits[(y - r.y0) * width + (x - r.x0)] = 1;
+      columns.add(x);
+      size++;
+      if (box === null) box = {x0: x, y0: y, x1: x + 1, y1: y + 1};
+      else {
+        box.x0 = Math.min(box.x0, x);
+        box.y0 = Math.min(box.y0, y);
+        box.x1 = Math.max(box.x1, x + 1);
+        box.y1 = Math.max(box.y1, y + 1);
+      }
+    }
+  }
+  if (box === null) return null;
+  return {
+    has: (x, y) => x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1 && bits[(y - r.y0) * width + (x - r.x0)] === 1,
+    columns: [...columns].sort((a, b) => a - b),
+    box,
+    size,
+  };
+};
+
 /** The largest channel difference of two images over `rect`. */
 export const maxDiffIn = (a: Image, b: Image, rect: Rect): number => {
   const r = clampRect(a, rect);

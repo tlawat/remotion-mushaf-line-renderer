@@ -496,7 +496,7 @@ translation files), `layout.visibleLines`, `animation.leadInSeconds` or where yo
 | **Mushaf** «مصحف» | `mushaf` | Recitation, ayah text, passage | Ivory `#f8f3e6`, warm ink `#1c1a16`, gold-line rosettes on vellum | Ink: the words still to come rest at 0.6 and fill in as they are heard |
 | **Haram night** «ليل الحرم» | `haram-night` | Recitation, ayah text, passage | Warm ivory `#f1eadb` on charcoal `#121416`, gold `#d8b56a`, a vignette | Wash: the ayah held in a faint gold band; slow tempo |
 | **Madinah green** «أخضر المدينة» | `madinah-green` | Recitation, ayah text, passage | Ivory on `#10241b`, gold `#cfae63`, the jadwal (a thin double rule) | Ink, by ayah |
-| **Tajweed** «تجويد» | `tajweed` | Recitation, passage | The tajweed colours untouched on warm paper `#fbf7ee`, the legend in its band | Ink, the words to come at 0.7 |
+| **Tajweed** «تجويد» | `tajweed` | Recitation, passage | The tajweed colours of `light` untouched on warm paper `#fbf7ee` (a custom theme on `light` whose rosettes are the gold line drawings of the other looks), the legend in its band | Ink, the words to come at 0.7 |
 | **Learning** «تعلّم» | `learning` | Recitation, passage | As Mushaf, the gloss under each word | Tint: each word turns antique gold (`#806321` on ivory) as it is recited |
 
 Mushaf is the default: `defaultMushafRecitationProps` equals the Mushaf look at 16:9, and applying
@@ -529,8 +529,8 @@ flicker. Without per-word times, `mode: 'word'` follows the ayah.
 | `style` | Arabic | What it does | Where |
 | --- | --- | --- | --- |
 | `ink` (default) | مداد | The words of the current line not yet heard rest at `restOpacity` and fill in to full ink as they are recited (over 6 frames); heard words stay full. In `mode: 'ayah'`, the ayah being recited is full and the others rest. | Every theme: it only changes opacity. |
-| `tint` | تذهيب | The word's (or ayah's) ink turns the accent. The accent is corrected so it reads at 5:1 on the page (`legibleAccent()`: `#b8913a` is drawn `#806321` on ivory) and its chroma is capped, so a neon yellow becomes antique gold. The ayah-end rosette keeps its colours. | `plain` paints CSS colour; the other colour themes repaint only their ink (`inkTint`). On a tajweed theme it is **shown as a wash**: a tint would repaint the tajweed colours, which are a reading aid. |
-| `wash` | ظلّ | A faint band with soft ends behind the word, or behind the ayah's run of words on each line (its rosette included): 0.10 of the accent on a light ground, 0.13 on a dark one, never user-set. | Every theme. |
+| `tint` | تذهيب | The whole word's (or ayah's) ink turns the accent, its silent letters and the letters a palette draws as tajweed rules included. The accent is corrected so it reads at 5:1 on the page (`legibleAccent()`: `#b8913a` is drawn `#806321` on ivory) and its chroma is capped, so a neon yellow becomes antique gold. The ayah-end rosette keeps its colours. | `plain` paints CSS colour; the other colour themes repaint the entries that draw letters (`inkTint`), never the rosettes. On a tajweed theme it is **shown as a wash**: a tint would repaint the tajweed colours, which are a reading aid. |
+| `wash` | ظلّ | A faint band with soft ends behind the word, or behind the ayah's run of words on each line (its rosette included): 0.10 of the accent on a light ground, 0.13 on a dark one, never user-set. The line draws it from where the ink is (the renderer's `wordBand`), so it covers the whole word, an overhanging hamza-wasl alif included, and an ayah's run is one band with no seam. | Every theme. |
 
 `restOpacity` (0.5–0.85, default 0.6) is the ink mark's rest, and is raised to 0.65 on a tajweed
 theme so the pastels never wash out. Dimming never compounds: the lines around the current one sit
@@ -713,7 +713,7 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `lineHeight`  | 1–2.5               | `1.9`                                | Line height in multiples of the size.                                       |
 | `layout`      | object              | `aspect: '9:16'`, `marginX: 90`, ink `#f1eadb` on charcoal `#121416` | As for `MushafRecitation`; `visibleLines` and `neighbourOpacity` do not apply. The ayah is a balanced block 78 % of the frame wide, its words 0.1 em apart. |
 | `animation`   | `{lines, tempo, leadInSeconds}` | fade, calm, 0.4 s         | How each ayah gives way to the next, after its last word (a 0.9 s dissolve, 1.27 s slow). |
-| `highlight`, `text` | objects       | as for `MushafRecitation`, `translationColor: '#b9b1a2'`, `translationSize: 40` | The word-by-word fields of `text` do not apply. A tint is always CSS colour and a wash is drawn on each word; `mode: 'ayah'` marks nothing (the ayah on screen is the ayah heard). The translation is centred under the ayah, at most half its size. |
+| `highlight`, `text` | objects       | as for `MushafRecitation`, `translationColor: '#b9b1a2'`, `translationSize: 40` | The word-by-word fields of `text` do not apply. A tint is always CSS colour and a wash is drawn behind each word from where its ink is; `mode: 'ayah'` marks nothing (the ayah on screen is the ayah heard). The translation is centred under the ayah, at most half its size. |
 | `memorize`    | object              | as for `MushafRecitation`            | See [`memorize`](#memorize-mushafrecitation-mushafayahtext); here `'first-letters'` shows each upcoming word's first letter. |
 | `overlay`     | object              | as for `MushafRecitation`, `color: '#f4efe6'` | The title card and corner label, in the dark page's ink.              |
 | `background`  | object              | as for `MushafRecitation`, `color: '#121416'` | Behind the ayah; see [`background`](#background).                     |
@@ -1220,7 +1220,7 @@ the same way:
 | `fontPropsFrom(...)`                           | `fontSrc` / `fontFallback` for `fonts` and the line's font set, from the registered fonts packages. |
 | `dataSourceFrom(data, staticFile)`             | The `data` option of `getMushafLines()`: the mirror's two files, or `undefined` for the CDN. |
 | `animationFrom(animation, {enterFrames, exitFrames, fontSize})`, `windowScrollTiming(animation)` | `enter` / `exit` of a line or a window at a boundary's lengths; the window's `scrollTiming` (`scrollTimingFrom()` is deprecated). |
-| `wordStyleFrom(...)`, `inkTintFor(...)`, `washStyle(...)`, `withAlpha(color, alpha)` | The mark as `wordStyle` (ink, tint or wash, with the line's position and the tint palettes); the line's `inkTint`; a wash's CSS; a colour at an opacity. `activeWordStyleFrom()` is deprecated: it migrates its argument and returns the mark at full strength. |
+| `wordStyleFrom(...)`, `wordBandFrom(...)`, `drawsWordBand(...)`, `inkTintFor(...)`, `washStyle(...)`, `withAlpha(color, alpha)` | The mark as `wordStyle` (ink or tint, with the line's position and the tint palettes); the wash as the line's `wordBand`, and whether the highlight draws one; the line's `inkTint`; a wash's CSS on one element; a colour at an opacity. `activeWordStyleFrom()` is deprecated: it migrates its argument and returns the mark at full strength. |
 | `sizeForAspect(aspect)`                        | `{width, height}` for `layout.aspect`.                                              |
 
 `resolveRecitation(props)` is `calculateMetadata()` without the size and duration, to fill
