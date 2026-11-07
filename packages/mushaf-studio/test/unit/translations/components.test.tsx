@@ -58,13 +58,24 @@ const strip = (props: Partial<React.ComponentProps<typeof GlossStrip>> = {}) =>
   ).container.firstElementChild as HTMLElement;
 
 describe('shownAlone', () => {
-  it('drops a trailing continuation dash, and nothing else', () => {
+  it('drops a trailing continuation dash', () => {
     expect(shownAlone('Lord of the worlds -')).toBe('Lord of the worlds');
     expect(shownAlone('Lord of the worlds \u2013 ')).toBe('Lord of the worlds');
     expect(shownAlone('Lord of the worlds\u00a0\u2014')).toBe('Lord of the worlds');
     expect(shownAlone('well-known')).toBe('well-known');
     expect(shownAlone('a - b')).toBe('a - b');
     expect(shownAlone('-')).toBe('-');
+  });
+
+  it('drops a trailing continuation comma or semicolon, Latin or Arabic, and nothing else', () => {
+    expect(shownAlone('The Entirely Merciful, the Especially Merciful,')).toBe(
+      'The Entirely Merciful, the Especially Merciful',
+    );
+    expect(shownAlone('Sovereign of the Day of Recompense; ')).toBe('Sovereign of the Day of Recompense');
+    expect(shownAlone('الرحمن الرحيم،')).toBe('الرحمن الرحيم');
+    expect(shownAlone('الرحمن الرحيم؛')).toBe('الرحمن الرحيم');
+    expect(shownAlone('a, b; c.')).toBe('a, b; c.');
+    expect(shownAlone(',')).toBe(',');
   });
 });
 

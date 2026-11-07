@@ -88,8 +88,11 @@ export const linesEndFrame = (endSeconds: number, tempo: Tempo, fps: number): nu
 
 /**
  * The frame the first line (or the window) starts to appear at: settled `leadInSeconds` before the
- * first slot's start after an entrance of `entranceFrames`, never before `earliest` (0, or the end
- * of the intro card).
+ * first slot's start after an entrance of `entranceFrames`, never before `earliest` (0, or the
+ * intro card's hand-off frame). With `handoff` (the intro card added its time before the
+ * recording), at `earliest` itself, wherever the first word is: the intro delay already holds the
+ * entrance, so the first word's own frame would land on the card's end, and the card's last frames
+ * would fade to bare paper before the lines show (render-design.md 5.6).
  */
 export const firstAppearance = (options: {
   readonly firstStart: number;
@@ -97,11 +100,15 @@ export const firstAppearance = (options: {
   readonly fps: number;
   readonly entranceFrames: number;
   readonly earliest: number;
+  /** The lines take over from the intro card at `earliest`. Default false. */
+  readonly handoff?: boolean;
 }): number =>
-  Math.max(
-    options.earliest,
-    Math.round((options.firstStart - options.leadInSeconds) * options.fps) - options.entranceFrames,
-  );
+  options.handoff === true
+    ? options.earliest
+    : Math.max(
+        options.earliest,
+        Math.round((options.firstStart - options.leadInSeconds) * options.fps) - options.entranceFrames,
+      );
 
 /**
  * How present the lines are at `frame`, 0-1, for what comes and goes with them (the translation):
@@ -144,8 +151,10 @@ export type LinePlan = {
 export type LinePlanOptions = BoundaryInputs & {
   readonly motion: LineMotion;
   readonly tempo: Tempo;
-  /** The earliest frame the first line may start to appear at: the end of the intro card, else 0. */
+  /** The earliest frame the first line may start to appear at: the intro card's hand-off frame, else 0. */
   readonly earliest: number;
+  /** The first line takes over from the intro card at `earliest` (`firstAppearance()`). Default false. */
+  readonly handoff?: boolean;
   /** `recitationEndSeconds()`: the last line holds `endHold` after it, then fades over `endFade`. */
   readonly endSeconds: number;
 };
@@ -190,6 +199,7 @@ export const oneLinePlan = (options: LinePlanOptions): readonly LinePlan[] => {
       fps,
       entranceFrames: windowIn,
       earliest: options.earliest,
+      handoff: options.handoff === true,
     });
 
   // A header line is left out when the change after it would start before its own entrance is over.

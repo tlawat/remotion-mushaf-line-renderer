@@ -127,10 +127,14 @@ mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are re
   (`frameColorOf()`), on the header lines and both cards; the name stays in the ink.
 - **The Tajweed look's rosettes are gold line drawings** (a custom theme on `light` that keeps every
   tajweed colour), not `light`'s pink and mint.
-- **The lines come in as the intro card goes** (`introHandoffFrames()`): no frames of bare paper
-  between them.
+- **The lines come in as the intro card goes**, from its first frame under half
+  (`introHandoffFrames()`: 10 frames before its end, 14 at the slow tempo), at that frame whatever
+  the first word (`firstAppearance()`'s `handoff`): no frames of bare paper between them.
+- **The ayah wash is feathered 0.3 em at its top and bottom** (`AYAH_WASH_SHAPE`), as long as its
+  ends, so it reads as light on the text; a word's band keeps 0.22 em.
 - The intro card's attribution and the end card's credits are a little larger and stronger (0.8 L at
-  60 %), and a translation shown on its own drops a trailing continuation dash (`shownAlone()`).
+  60 %), and a translation shown on its own drops a trailing continuation dash, comma or semicolon
+  (`shownAlone()`).
 
 ### Fixed
 

@@ -128,7 +128,7 @@ export {
   tempoFrames,
   tempoSeconds,
 } from './tokens';
-export {type WashCap, type WashStyleOptions, washStyle} from './wash';
+export {AYAH_WASH_SHAPE, type WashCap, type WashStyleOptions, washStyle} from './wash';
 
 /** The ten presets of the colour font plus `plain` (the monochrome font) and `custom` (see `customThemeSchema`). */
 export const THEME_NAMES = [

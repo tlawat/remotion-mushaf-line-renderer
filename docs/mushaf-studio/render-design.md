@@ -395,6 +395,9 @@ hairline seams, V8, V10, V11, V20.)
   0.3 em long, its box rounded (radius 0.3 em by half its height), so the band is never a box and
   its soft end never lies on a letter.
 - **Ayah mode** includes the ayah-end rosette. A run that crosses a line break is one band per line.
+  Its top and bottom are feathered 0.3 em, as long as its ends (`AYAH_WASH_SHAPE`, the lines'
+  `bandShape`), so a band the length of an ayah reads as light on the text, not a rounded slab
+  (visual review 2, V10). A word's band keeps 0.22 em.
 - **Motion**: in word mode the outgoing band fades out (`markOut`) while the incoming one fades in
   (`markIn`); the band never slides between words. It holds through pauses inside an ayah and lets
   go 0.25 s after the ayah ends (4.1).
@@ -622,8 +625,9 @@ scripts keep their per-language fonts.
   in the translation ink at 0.3 opacity.
 - It changes at the ayah boundary by the staggered dissolve, `translationDissolve`, timed by 4.3
   with `E` = the outgoing ayah's last word end (not at the next ayah's first word).
-- Shown on its own, an ayah's translation drops a trailing continuation dash (Saheeh's "Lord of the
-  worlds -", whose sentence runs on into the next ayah): `shownAlone()`. Nothing else is touched.
+- Shown on its own, an ayah's translation drops a trailing continuation dash, comma or semicolon
+  (Saheeh's "Lord of the worlds -" and "the Especially Merciful,", whose sentences run on into the
+  next ayah; the Arabic comma and semicolon too): `shownAlone()`. Nothing else is touched.
 - The translation is credited once as "Translation of the meanings · <name>" on the intro card, or
   in the end card's credits when there is no intro card.
 
@@ -657,9 +661,11 @@ time to recording time. Memorise clips and header spacing read the shifted timin
 Timeline: frame 0 is the bare ground (never an empty-looking still: the ground is the page colour);
 the card's content fades in over `cardIn` on `SINE` from 0.2 s; holds; fades out over `cardOut`
 ending at `introSeconds`; the lines (or window) start their entrance from the first frame the card's
-content is under 0.25 on its way out (`introHandoffFrames()`: 7 frames before `introSeconds` calm,
-10 slow), so the hand-off is sequential and the frame never dips to bare paper between them (visual
-review 1, V15).
+content is under half on its way out (`introHandoffFrames()`: 10 frames before `introSeconds` calm,
+14 slow), at that frame whatever the first word (`firstAppearance()`'s `handoff`): the card's fade
+carries the frame while the lines' `SINE` entrance gets going, so the two hold 0.22 or more of ink
+between them at every frame and are never both above 0.2, and the frame never dips to bare paper
+(visual reviews 1 and 2, V15).
 
 Card layout (centred, on the ground):
 
@@ -1248,7 +1254,7 @@ only) samples pixels for the numeric criteria.
 | V12 | Madinah green | f60 | Jadwal double rule at the safe area in gold at 0.45; ayah 2 full, other ayat at 0.6 |
 | V13 | Tajweed, Recitation and Page | f60 | Legend as one centred row in a band under the lines; nothing overlapped; pastels not washed out (rest 0.7) |
 | V14 | Mushaf + translation (Saheeh), 16:9 and 9:16 | f60, f110 | Centred EB Garamond 500, 36 px at 16:9 and 26 px at 9:16; at most 2 lines; at f110 still the ayah 2 translation if ayah 2 is not finished, otherwise mid-dissolve |
-| V15 | Intro card (`title: 'both'`, reciter, translation) | f0, f30, f90, first word frame | f0 bare ground; f30 cartouche, hairline with lozenge, «الآيات ٢–٧» with ٢ on the right, "Āyāt 2–7", reciter, attribution; at the first word the card is gone and the lines are settled; duration grew by `introDelaySeconds` |
+| V15 | Intro card (`title: 'both'`, reciter, translation) | f0, f30, f90, first word frame; strip f80–f100 | f0 bare ground; f30 cartouche, hairline with lozenge, «الآيات ٢–٧» with ٢ on the right, "Āyāt 2–7", reciter, attribution; over f80–f100 never bare paper (each frame fitted as shares of the card at f30 and the lines at the first word: card + lines ≥ 0.15) and never both above 0.2; at the first word the card is gone and the lines are settled; duration grew by `introDelaySeconds` |
 | V16 | Corner label and counter (`memorize: repeat`) | f150 | "AL-FĀTIḤAH · 2" small caps inside the safe area; "2 / 3" opposite, no pill |
 | V17 | End (`endCard: credits`) | last word + 0.5 s, + 2 s, + 3 s | Lines held, then fading, then the credits card on the same ground; surah-name glyph title once |
 | V18 | MushafPage default, 16:9 | f60, a turn | Page 92 % of the height; band cross-fades between lines; turn is a dissolve after the page's last word; double rule, no corner dots |
@@ -1680,7 +1686,7 @@ Visual review 1 (the values changed in place above; 12.3 allows a value that fai
     `introSeconds`, so the 3-5 frames of bare paper between card and lines are gone (V15). The
     intro delay and the duration are unchanged; the lines settle a little earlier. `MushafPassage`
     keeps starting its first hold at `introSeconds`: its schedule is its holds, and no review case
-    showed a gap there.
+    showed a gap there. (Visual review 2 found the gap still there, and why: deviation 63.)
 59. **The card's attribution and the end card's credits read at 60 %** (5.6 item 6, 5.9), the credits
     also at 0.8 L, not 0.75 L at 55 % and 0.8 L at 50 %: small caps at those strengths were about
     10 px tall at 1080p and hard to read (V15, V17).
@@ -1700,3 +1706,28 @@ Visual review 1 (the values changed in place above; 12.3 allows a value that fai
 62. **Left as they are.** The 10-frame `Dmin` dissolve shows one frame of two ghosted lines (V4,
     V14, V20, f110), within 4.3 and principle 4. Printed lines at 9:16 and MushafPage at 16:9 stay
     small (the Format hint already points reels to the ayah text; the page is fitted as 5.11 says).
+
+Visual review 2 (the values changed in place above; 12.3 allows a value that fails on screen to change):
+
+63. **The lines take over from the intro card at the hand-off frame itself, from the card's first
+    frame under half** (5.6, supersedes the timing of deviation 58). The review found f88-f92 under
+    4 % of either piece's ink and f90 bare paper (V15): the intro delay already holds `cardIn`,
+    which is `windowIn`, so `max(earliest, firstStart − leadIn − windowIn)` always landed on
+    `introSeconds` and the hand-off never applied (the unit test's fixture had kept the unshifted
+    schedule, so it could not see it). `firstAppearance()` gains `handoff`: with the card adding its
+    time, the window (and the first line in one-line mode) starts at `earliest`. Started at the
+    card's first frame under 0.25 (f83), the lines' `SINE` entrance is too slow to meet the card's
+    fade: card + lines dip to 0.115 (calm) and 0.057 (slow) of ink. From its first frame under half
+    (f80 calm, 10 frames before `introSeconds`; 14 slow) the least is 0.230 and 0.223, and the two
+    are never both above 0.11, so the hand-off stays sequential (principle 4). The duration and the
+    intro delay are unchanged. V15 adds a strip f80-f100 and the check "never bare paper" (each
+    frame as shares of the card at f30 and the lines at f126): round-3 measures 0.25 at its least
+    (f83: card 0.25, lines 0.05) and no frame with both above 0.2.
+64. **A translation shown alone also drops a trailing continuation comma or semicolon** (5.5,
+    `shownAlone()`; Latin and Arabic): Saheeh's ayah 3 ended "...the Especially Merciful," on
+    screen (V14).
+65. **The ayah wash's top and bottom are feathered 0.3 em** (5.1.3, `AYAH_WASH_SHAPE`), as long as
+    its ends, not 0.22 em: at 1080p the Haram night band still read a little as a soft rounded slab
+    (V10). Its height, place and strength are unchanged; V10 still measures lift 18.7-19.3 levels
+    along it at 16:9 and 9:16 and stays clear of the lines (rows 236-306 at half scale, the next line
+    at 333). The word wash keeps 0.22 em, so V11's kasra stays well inside its feather.

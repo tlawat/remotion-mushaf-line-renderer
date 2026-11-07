@@ -88,6 +88,7 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         data-ink-tint={props.inkTint ?? ''}
         data-frame-color={props.frameColor ?? ''}
         data-word-band={props.wordBand === undefined ? 'no' : 'yes'}
+        data-band-shape={JSON.stringify(props.bandShape ?? null)}
         data-enter={props.enter ? 'yes' : 'no'}
         data-enter-frames={framesOf(props.enter)}
         data-exit-frames={framesOf(props.exit)}
@@ -151,7 +152,8 @@ vi.mock('../../../src/studio', () => ({
   isInStudio: () => false,
 }));
 
-const {MushafRecitation, defaultMushafRecitationProps} = await import('../../../src/compositions/recitation');
+const {MushafRecitation, defaultMushafRecitationProps, firstWordSeconds, introDelaySeconds, linesPresence} =
+  await import('../../../src/compositions/recitation');
 const {scheduleLines, scrollPosition} = await import('@tlawat/remotion-mushaf-line');
 const {registerMushafFonts} = await import('../../../src/fonts');
 const {withHeaderSlots, withInnerHeaderSlots} = await import('../../../src/compositions/shared');
@@ -459,13 +461,20 @@ describe('<MushafRecitation>', () => {
     expect(translationOf(mount(props({}, {...content, timings: ayahsOnly, translation: ayahText})))).toBe('1:3');
   });
 
-  it('gives the lines a band to draw only under a wash, and the header frame in the metal toward the ground', () => {
+  it('gives the lines a band to draw only under a wash (an ayah one feathered longer), and the header frame in the metal toward the ground', () => {
     const ink = windowOf(mount(props()))!;
     expect(ink.dataset.wordBand).toBe('no');
     // The default rosette gold, #8c6c26, 30 % into the ivory.
     expect(ink.dataset.frameColor).toBe('#ac9560');
     cleanup();
-    expect(windowOf(mount(props({highlight: highlight({style: 'wash'})})))!.dataset.wordBand).toBe('yes');
+    const word = windowOf(mount(props({highlight: highlight({style: 'wash'})})))!;
+    expect(word.dataset.wordBand).toBe('yes');
+    // A word's band keeps the renderer's shape; an ayah's is feathered 0.3 em, as long as its ends.
+    expect(word.dataset.bandShape).toBe('null');
+    cleanup();
+    const ayah = windowOf(mount(props({highlight: highlight({mode: 'ayah', style: 'wash'})})))!;
+    expect(ayah.dataset.wordBand).toBe('yes');
+    expect(JSON.parse(ayah.dataset.bandShape!)).toEqual({feather: 0.3});
     cleanup();
     // A tint on a tajweed theme is shown as a wash: the band, and no letter repainted.
     const tajweed = windowOf(mount(props({theme: 'light', highlight: highlight({style: 'tint'})})))!;
@@ -693,10 +702,18 @@ describe('<MushafRecitation>', () => {
   });
 
   it('shows the intro card for its whole introSeconds on the bare ground, the lines as it goes and the recording after it', () => {
-    // calculateMetadata put 3 s + 0.8 s + 0.4 s − 0.331 s = 3.869 s before the recording: the first word is at 4.2 s.
+    // calculateMetadata put 3 s + 0.8 s + 0.4 s − 0.331 s = 3.869 s before the recording: the first
+    // word is at 4.2 s, and the schedule is the shifted timings', as on the bundled sample.
+    const delay = introDelaySeconds(
+      {title: 'intro', introSeconds: 3},
+      {tempo: 'calm', leadInSeconds: 0.4},
+      firstWordSeconds(timings),
+    );
+    expect(delay).toBe(3.869);
+    const shifted = later(delay);
     const p = props(
       {overlay: overlay({title: 'intro', introSeconds: 3})},
-      {timings: later(3.869), introDelaySeconds: 3.869},
+      {timings: shifted, schedule: scheduleLines(lines, shifted), introDelaySeconds: delay},
     );
     const intro = (frame: number) => {
       cleanup();
@@ -713,15 +730,21 @@ describe('<MushafRecitation>', () => {
     expect(card.querySelector('[data-mushaf-overlay-part="backdrop"]')).toBeNull();
     expect(intro(89)).not.toBeNull();
     expect(intro(90)).toBeNull();
-    // The window comes in as the card goes: 7 frames before introSeconds (f90), from the first
-    // frame the card is under 0.25, so the frame never dips to bare paper between them.
-    expect(introCardOpacity(83 / 30, 3)).toBeLessThan(0.25);
-    expect(introCardOpacity(82 / 30, 3)).toBeGreaterThanOrEqual(0.25);
-    expect(introHandoffFrames('calm', 30)).toBe(7);
+    // The window comes in as the card goes: 10 frames before introSeconds (f90), from the first
+    // frame the card is under half, so the frame never dips to bare paper between them.
+    expect(introCardOpacity(80 / 30, 3)).toBeLessThan(0.5);
+    expect(introCardOpacity(79 / 30, 3)).toBeGreaterThanOrEqual(0.5);
+    expect(introHandoffFrames('calm', 30)).toBe(10);
     expect(intro(90)).toBeNull();
     const c = document.body;
     const window = sequences(c).find((s) => s.dataset.sequence?.endsWith('at once'))!;
-    expect(window.dataset.from).toBe('83');
+    // At the hand-off itself, not at the first word's own frame (4.2 s − 0.4 s − 24 f = f90, the card's end).
+    expect(window.dataset.from).toBe('80');
+    // Never bare paper between them: the card's content and the lines together at 0.15 or more.
+    for (let f = 80; f <= 100; f++) {
+      const lines = linesPresence(f, {appear: 80, windowIn: 24, end: 10_000, endFade: 30});
+      expect(introCardOpacity(f / 30, 3) + lines, `f${f}`).toBeGreaterThanOrEqual(0.15);
+    }
     // The recording starts after the card: its <Audio> sits in a Sequence from the delay.
     const recitation = sequences(c).find((s) => s.dataset.sequence === 'Recitation')!;
     expect(recitation.dataset.from).toBe(String(Math.round(3.869 * 30)));

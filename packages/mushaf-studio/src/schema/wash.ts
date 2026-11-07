@@ -23,6 +23,14 @@ export type WashStyleOptions = {
   readonly y?: string | undefined;
 };
 
+/**
+ * The band of the ayah wash, as the lines' `bandShape`: the renderer's (1.65 em at 55 %) with a
+ * 0.3 em feather at its top and bottom, as long as its soft ends, so a band the length of an ayah
+ * reads as light on the text rather than a rounded slab (render-design.md 5.1.3). A word's band
+ * keeps the 0.22 em feather.
+ */
+export const AYAH_WASH_SHAPE = {feather: 0.3} as const;
+
 /** The feather at the band's top and bottom. */
 const FEATHER = '0.22em';
 /** The width of a round end: 0.35 em, never more than half the word. */

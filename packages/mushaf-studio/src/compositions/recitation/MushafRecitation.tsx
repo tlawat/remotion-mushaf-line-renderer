@@ -54,6 +54,7 @@ import {
   wordStyleFrom,
 } from '../../schema';
 import {SINE} from '../../schema/tokens';
+import {AYAH_WASH_SHAPE} from '../../schema/wash';
 import {MushafStudioPanel} from '../../studio';
 import {useInStudio} from '../../studio/environment';
 import {GlossStrip, glossStripState, TranslationStack} from '../../translations';
@@ -233,12 +234,14 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
     tempo: animation.tempo,
     markers,
   });
-  // The word's style, and with a wash the band the line draws behind it from where its ink is.
+  // The word's style, and with a wash the band the line draws behind it from where its ink is: over
+  // a whole ayah with a longer feather, so it reads as light on the text.
   const bands = drawsWordBand(highlight, theme);
+  const bandShape = highlight.mode === 'ayah' ? {bandShape: AYAH_WASH_SHAPE} : {};
   const marksFor = (sequenceFrom: number) => {
     const options = markOptions(sequenceFrom);
     return bands
-      ? {wordStyle: wordStyleFrom(options), wordBand: wordBandFrom(options)}
+      ? {wordStyle: wordStyleFrom(options), wordBand: wordBandFrom(options), ...bandShape}
       : {wordStyle: wordStyleFrom(options)};
   };
 
@@ -259,9 +262,9 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const shown = shownAyahAt(changes, frame);
   const ayahKey = shown.key;
   const span = passageSpan(timings);
-  // The lines come in as the intro card goes (from its last frames under 0.25, so the frame never
-  // dips to bare paper): it adds its time before the recording, except under hostAudio, where the
-  // template's track decides and the card covers the start instead.
+  // The lines come in as the intro card goes, from its first frame under half whatever the first
+  // word (so the frame never dips to bare paper): it adds its time before the recording, except
+  // under hostAudio, where the template's track decides and the card covers the start instead.
   const cardAddsTime = showsIntro(overlay.title) && !followsHostAudio(props);
   const earliest = cardAddsTime
     ? Math.round(overlay.introSeconds * fps) - introHandoffFrames(animation.tempo, fps, overlay.introSeconds)
@@ -286,6 +289,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
     fps,
     entranceFrames: windowIn,
     earliest,
+    handoff: cardAddsTime,
   });
   let linesBlock: React.ReactNode;
   if (layout.visibleLines === 0) {
@@ -296,6 +300,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       motion: animation.lines,
       tempo: animation.tempo,
       earliest,
+      handoff: cardAddsTime,
       endSeconds,
     });
     appear = plans[0]?.from ?? appear;

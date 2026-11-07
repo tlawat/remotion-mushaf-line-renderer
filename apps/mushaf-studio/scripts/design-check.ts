@@ -1145,7 +1145,42 @@ export const checkTranslation = (
   return out;
 };
 
-/** V15: the intro card on the bare ground, gone by the first word, and the video longer by the delay. */
+/**
+ * V15's hand-off: each frame of the strip f80-f100 fitted as the share of the full card (f30) and of
+ * the settled lines (the first word's frame), as a dissolve between them (`dissolveShares()`). The
+ * card and the lines never leave the page bare (`card + lines ≥ 0.15`), and are never both at
+ * reading strength (> 0.2).
+ */
+export const checkHandoff = (images: CaseImages, card: Image, lines: Image): CheckResult[] => {
+  const ground = rgbOf(INKS.ivory.ground);
+  const ink = rgbOf(INKS.ivory.ink);
+  const fits: {f: number; a: number; b: number}[] = [];
+  for (let f = 80; f <= 100; f++) {
+    const shot = images.strip('V15', f);
+    if (shot === null) return [missing('strip', `V15 f${f}`)];
+    const fit = dissolveShares(shot, card, lines, fullRect(shot), ground, ink);
+    fits.push({f, a: fit.a, b: fit.b});
+  }
+  const blank = fits.filter((x) => x.a + x.b < 0.15);
+  const both = fits.filter((x) => x.a > 0.2 && x.b > 0.2);
+  const series = fits.map((x) => `f${x.f} ${fixed(x.a)}/${fixed(x.b)}`).join(', ');
+  return [
+    check(
+      'never bare paper between card and lines (f80-f100, card + lines ≥ 0.15)',
+      blank.length === 0,
+      blank.length === 0
+        ? `least ${fixed(Math.min(...fits.map((x) => x.a + x.b)))}; ${series}`
+        : `bare at ${blank.map((x) => `f${x.f}`).join(' ')}; ${series}`,
+    ),
+    check(
+      'card and lines never both above 0.2',
+      both.length === 0,
+      both.length === 0 ? 'none' : `both at ${both.map((x) => `f${x.f}`).join(' ')}`,
+    ),
+  ];
+};
+
+/** V15: the intro card on the bare ground, handing over to the lines, gone by the first word, and the video longer by the delay. */
 export const checkIntro = (images: CaseImages): CheckResult[] => {
   const g = scaled('landscape', 0.5);
   const ground = rgbOf(INKS.ivory.ground);
@@ -1168,6 +1203,7 @@ export const checkIntro = (images: CaseImages): CheckResult[] => {
   return [
     check('f0 bare ground', bare <= 3, `largest difference from the ground ${bare}`),
     check('f30 the card', card !== null, `card ink ${JSON.stringify(card)}`),
+    ...checkHandoff(images, f30, first),
     check(
       'the lines settled at the first word (f126)',
       Math.abs(settled - 0.6) <= 0.05,

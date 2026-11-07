@@ -6,6 +6,7 @@ import {
   type CaseImages,
   CHECKS,
   checkAyahWash,
+  checkHandoff,
   checkJadwal,
   checkTint,
   checkV2,
@@ -138,6 +139,37 @@ const jadwalFrame = (lines: readonly {y0: number; y1: number; x0: number; x1: nu
   for (const line of lines) image = paint(image, line.x0, line.y0, line.x1, line.y1, line.color);
   return image;
 };
+
+describe('the hand-off from the intro card to the lines (V15)', () => {
+  const page = solidImage(120, 60, IVORY);
+  const card = paint(page, 20, 10, 100, 25, INK);
+  const lines = paint(page, 10, 35, 110, 45, over(0.6));
+  /** The strip f80-f100: the card out over f80-f88, the lines in from `linesFrom` over 8 frames. */
+  const strip = (linesFrom: number): CaseImages => ({
+    ...noImages,
+    strip: (id, frame) => {
+      if (id !== 'V15') return null;
+      const out = Math.min(1, Math.max(0, 1 - (frame - 80) / 8));
+      const into = Math.min(1, Math.max(0, (frame - linesFrom) / 8));
+      return paint(paint(page, 20, 10, 100, 25, over(out)), 10, 35, 110, 45, over(0.6 * into));
+    },
+  });
+
+  it('passes a hand-off that never leaves the page bare', () => {
+    expect(checkHandoff(strip(85), card, lines).map((c) => c.pass)).toEqual([true, true]);
+  });
+
+  it('fails the frames of bare paper between card and lines, and both at reading strength', () => {
+    const gap = checkHandoff(strip(90), card, lines);
+    expect(gap[0]?.pass).toBe(false);
+    expect(gap[0]?.detail).toMatch(/^bare at f87 f88 f89 f90 f91;/);
+    expect(checkHandoff(strip(80), card, lines)[1]?.pass).toBe(false);
+  });
+
+  it('fails a strip it does not have', () => {
+    expect(checkHandoff(noImages, card, lines)[0]?.pass).toBe(false);
+  });
+});
 
 describe('the checks that read lines inside a jadwal (V12)', () => {
   const f60 = jadwalFrame([

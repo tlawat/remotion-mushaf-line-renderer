@@ -56,12 +56,14 @@ const langOf = (language: string): string | undefined =>
   language !== 'und' && LANG_TAG.test(language) ? language : undefined;
 
 /**
- * An ayah's translation as it is shown on its own: without the dash some translations end an ayah
- * with when its sentence runs on into the next (Saheeh International's "Lord of the worlds -"), which
+ * An ayah's translation as it is shown on its own: without the dash, comma or semicolon some
+ * translations end an ayah with when its sentence runs on into the next (Saheeh International's
+ * "Lord of the worlds -" and "the Especially Merciful,"; the Arabic comma and semicolon too), which
  * reads as unfinished when the ayah stands alone on screen. Nothing else is touched.
  * `shownAlone('[All] praise is [due] to Allah, Lord of the worlds -')` drops the " -".
  */
-export const shownAlone = (text: string): string => text.replace(/\s+[-\u2013\u2014]\s*$/u, '');
+export const shownAlone = (text: string): string =>
+  text.replace(/\s+[-\u2013\u2014]\s*$/u, '').replace(/(\S)\s*[,;\u060c\u061b]\s*$/u, '$1');
 
 /**
  * One ayah's translation as a block of text under (or above) the lines. Plain text only: the

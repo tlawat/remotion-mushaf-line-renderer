@@ -37,7 +37,7 @@ const {
   smallCapsLabel,
   surahEnglishName,
 } = await import('../../../src/overlay');
-const {defaultOverlay, SINE} = await import('../../../src/schema');
+const {defaultOverlay, SINE, tempoFrames} = await import('../../../src/schema');
 type Overlay = import('../../../src/schema').Overlay;
 type OverlayProps = import('../../../src/overlay').MushafTitleOverlayProps;
 
@@ -102,20 +102,27 @@ describe('the card’s timeline', () => {
     expect(introCoverOpacity(3, 3)).toBe(0);
   });
 
-  it('hands over to the lines from the first frame the card is under 0.25, never before', () => {
+  it('hands over to the lines from the first frame the card is under half, never before', () => {
     for (const [tempo, out] of [
       ['calm', 21],
       ['slow', 30],
     ] as const) {
       const handoff = introHandoffFrames(tempo, 30);
       const at = (frame: number) => introCardOpacity(frame / 30, 3, tempo);
-      // At the hand-off the card is under 0.25; a frame earlier it is not.
-      expect(at(90 - handoff), tempo).toBeLessThan(0.25);
-      expect(at(89 - handoff), tempo).toBeGreaterThanOrEqual(0.25);
+      // At the hand-off the card is under half; a frame earlier it is not.
+      expect(at(90 - handoff), tempo).toBeLessThan(0.5);
+      expect(at(89 - handoff), tempo).toBeGreaterThanOrEqual(0.5);
       expect(handoff, tempo).toBeLessThan(out);
+      // The lines' entrance from there: never bare paper, never both at reading strength.
+      const windowIn = tempoFrames('windowIn', tempo, 30);
+      for (let f = 60; f <= 130; f++) {
+        const lines = SINE(Math.min(1, Math.max(0, (f - (90 - handoff)) / windowIn)));
+        expect(at(f) + lines, `${tempo} f${f}`).toBeGreaterThanOrEqual(0.2);
+        expect(Math.min(at(f), lines), `${tempo} f${f}`).toBeLessThanOrEqual(0.2);
+      }
     }
-    expect(introHandoffFrames('calm', 30)).toBe(7);
-    expect(introHandoffFrames('slow', 30)).toBe(10);
+    expect(introHandoffFrames('calm', 30)).toBe(10);
+    expect(introHandoffFrames('slow', 30)).toBe(14);
     // A card too short to fade hands over at its end.
     expect(introHandoffFrames('calm', 30, 0)).toBe(0);
   });

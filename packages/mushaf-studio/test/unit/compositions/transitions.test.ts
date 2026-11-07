@@ -120,6 +120,23 @@ describe('oneLinePlan', () => {
     expect(slow.at(-1)!.exitFrames).toBe(42);
   });
 
+  it('starts the first line at the intro card hand-off on the bundled sample after the intro delay', () => {
+    const shifted: RecitationTimingsV1 = {
+      ...timings,
+      ayat: timings.ayat.map((a) => ({
+        ...a,
+        start: a.start + 3.869,
+        end: a.end + 3.869,
+        words: a.words!.map((w) => ({...w, start: w.start + 3.869, end: w.end + 3.869})),
+      })),
+    };
+    const inputs = inputsOf(shifted, off);
+    const endSeconds = recitationEndSeconds(shifted, inputs.clips);
+    const plan = oneLinePlan({...inputs, motion: 'fade', tempo: 'calm', earliest: 80, handoff: true, endSeconds});
+    expect(plan[0]!.from).toBe(80);
+    expect(oneLinePlan({...inputs, motion: 'fade', tempo: 'calm', earliest: 80, endSeconds})[0]!.from).toBe(90);
+  });
+
   it('starts the first line after the intro card, never before', () => {
     const inputs = inputsOf(timings, off);
     const plan = oneLinePlan({...inputs, motion: 'fade', tempo: 'calm', earliest: 90, endSeconds: 27.559});
@@ -134,6 +151,16 @@ describe('firstAppearance / linesEndFrame / linesPresence', () => {
     expect(firstAppearance({firstStart: 4.2, leadInSeconds: 0.4, fps, entranceFrames: 24, earliest: 0})).toBe(90);
     expect(firstAppearance({firstStart: 0.331, leadInSeconds: 0.4, fps, entranceFrames: 24, earliest: 0})).toBe(0);
     expect(firstAppearance({firstStart: 9, leadInSeconds: 0.4, fps, entranceFrames: 24, earliest: 90})).toBe(234);
+  });
+
+  it('takes over from the intro card at its hand-off frame, wherever the first word is', () => {
+    // The bundled sample after the intro delay (3.869 s): its own frame would be f90, the card's end;
+    // the hand-off is f80 (`introHandoffFrames()` is 10 at the calm tempo).
+    const after = {leadInSeconds: 0.4, fps, entranceFrames: 24, earliest: 80, handoff: true};
+    expect(firstAppearance({...after, firstStart: 4.2, handoff: false})).toBe(90);
+    expect(firstAppearance({...after, firstStart: 4.2})).toBe(80);
+    // A recording that starts late (no delay): the lines still come in as the card goes.
+    expect(firstAppearance({...after, firstStart: 9})).toBe(80);
   });
 
   it('ends the lines endHold and endFade after the last word', () => {

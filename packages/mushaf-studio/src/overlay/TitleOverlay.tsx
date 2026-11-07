@@ -89,14 +89,17 @@ export const introCardOpacity = (seconds: number, endSeconds: number, tempo: Tem
 };
 
 /**
- * How many frames before the card's end the lines may start to come in: from the first frame its
- * content is under 0.25 on its way out (`cardOut` on `SINE`), so the hand-off is sequential (the
- * card under 0.25 before the lines start) and the frame never dips to bare paper between them.
- * 7 at the calm tempo (21 frames out), 10 at the slow one (30); 0 for a card too short to fade.
+ * How many frames before the card's end the lines start to come in: from the first frame its
+ * content is under half on its way out (`cardOut` on `SINE`). The lines' entrance (`windowIn` on
+ * `SINE`) is slow to start, so the card's fade carries the frame until they show: card and lines
+ * hold 0.22 or more of ink between them at every frame, and are never both above 0.2 (the
+ * sequential hand-off of render-design.md 5.6). At the card's first frame under 0.25 the two
+ * would dip to 0.06-0.12, and at its end to bare paper. 10 at the calm tempo (21 frames out), 14
+ * at the slow one (30); 0 for a card too short to fade.
  */
 export const introHandoffFrames = (tempo: Tempo, fps: number, introSeconds = Number.POSITIVE_INFINITY): number => {
   const out = Math.round(Math.min(tempoSeconds('cardOut', tempo), introSeconds) * fps);
-  for (let f = 0; f <= out; f++) if (1 - SINE(f / Math.max(1, out)) < 0.25) return out - f;
+  for (let f = 0; f <= out; f++) if (1 - SINE(f / Math.max(1, out)) < 0.5) return out - f;
   return 0;
 };
 

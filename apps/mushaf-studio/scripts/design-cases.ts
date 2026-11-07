@@ -493,11 +493,11 @@ export const DESIGN_CASES: readonly DesignCase[] = [
       overlay: {title: 'both', reciter: 'Abdul Hamid Ghraio'},
       text: {translationFile: ASSET_PATHS.translation},
     },
-    shots: [still(0, 30, 90, SAMPLE_FRAMES.introFirstWord)],
+    shots: [still(0, 30, 90, SAMPLE_FRAMES.introFirstWord), strip(80, 100)],
     scale: 0.5,
     assets: ['translation'],
     criteria:
-      'f0 bare ground; f30 cartouche, hairline with lozenge, «الآيات ٢–٧» with ٢ on the right, "Ayat 2–7", reciter, attribution; at the first word the card is gone and the lines are settled; duration grew by introDelaySeconds',
+      'f0 bare ground; f30 cartouche, hairline with lozenge, «الآيات ٢–٧» with ٢ on the right, "Ayat 2–7", reciter, attribution; f80-f100 never bare paper (card + lines ≥ 0.15); at the first word the card is gone and the lines are settled; duration grew by introDelaySeconds',
   },
   {
     id: 'V16',
