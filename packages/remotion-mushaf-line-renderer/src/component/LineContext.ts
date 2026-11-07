@@ -21,6 +21,10 @@ export type LineContextValue = {
   readonly wordClassName: MushafLineCommonProps['wordClassName'];
   /** The slice in effect: which words are painted. `null` paints them all. */
   readonly slice: ResolvedSlice;
+  /** `WordContext.linePosition`: the window's signed distance of this line from its centre slot, 0 alone. */
+  readonly linePosition: number;
+  /** `WordContext.inkPalette`, or `undefined` when the line has no tint palettes. */
+  readonly inkPalette: ((amount: number) => string | undefined) | undefined;
 };
 
 export const LineContext = React.createContext<LineContextValue | null>(null);

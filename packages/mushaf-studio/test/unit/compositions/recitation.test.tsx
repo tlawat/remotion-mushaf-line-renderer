@@ -22,18 +22,26 @@ type WindowProps = import('@tlawat/remotion-mushaf-line').MushafLineWindowProps;
 vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tlawat/remotion-mushaf-line')>();
   // Every word's style, by id, as the real line would ask for it on this frame.
+  // A line's `linePosition` is its signed distance from the window's centre slot (0 alone), as the real window gives it.
   const wordStyles = (
     props: Pick<LineProps, 'wordStyle' | 'activeWordId'>,
     lines: readonly LineData[],
     frame: number,
+    position = 0,
   ) =>
     JSON.stringify(
       Object.fromEntries(
-        lines.flatMap((line) =>
+        lines.flatMap((line, index) =>
           line.words.map((word) => [
             word.id,
-            props.wordStyle?.(word, {line, frame, fps: 30, active: word.id === props.activeWordId, inSlice: true}) ??
-              null,
+            props.wordStyle?.(word, {
+              line,
+              frame,
+              fps: 30,
+              active: word.id === props.activeWordId,
+              inSlice: true,
+              linePosition: lines.length === 1 ? 0 : index - position,
+            }) ?? null,
           ]),
         ),
       ),
@@ -56,6 +64,10 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
   };
   const MushafLineWindow = (props: WindowProps) => {
     const frame = remotion.useLocalFrame();
+    const position =
+      props.steps === undefined
+        ? (props.position as number)
+        : actual.scrollPosition({frame, fps: 30, steps: props.steps, timing: props.scrollTiming, anchor: props.anchor});
     return (
       <div
         className="mushaf-line-window-mock"
@@ -66,7 +78,8 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         data-scroll-frames={props.scrollTiming?.getDurationInFrames({fps: 30})}
         data-active-word-id={props.activeWordId ?? ''}
         data-active-style={JSON.stringify(props.activeWordStyle ?? null)}
-        data-word-styles={wordStyles(props, props.lines, frame)}
+        data-word-styles={wordStyles(props, props.lines, frame, position)}
+        data-ink-tint={props.inkTint ?? ''}
         data-enter={props.enter ? 'yes' : 'no'}
       />
     );
@@ -75,7 +88,10 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
   return {...actual, MushafLine, MushafLineWindow, MushafSurahName};
 });
 
-vi.mock('../../../src/translations', () => ({
+vi.mock('../../../src/translations', async () => ({
+  glossStripState: (
+    await vi.importActual<typeof import('../../../src/translations/GlossStrip')>('../../../src/translations/GlossStrip')
+  ).glossStripState,
   ayahKeyOf: (id: string | null) => (id ? id.split(':').slice(0, 2).join(':') : null),
   TranslationBlock: (props: {ayahKey: string | null; fontFamily: string; fontSize: number}) => (
     <div data-translation-block={props.ayahKey ?? ''} data-font={props.fontFamily} data-size={props.fontSize} />
@@ -162,6 +178,7 @@ const props = (
   ...changes,
   resolved: resolved(content),
 });
+const basicProps = props;
 const mount = (p: MushafRecitationProps) => render(<MushafRecitation {...p} />).container;
 const layout = (changes: Partial<MushafRecitationProps['layout']>) => ({
   ...defaultMushafRecitationProps.layout,
@@ -231,8 +248,8 @@ describe('<MushafRecitation>', () => {
     expect(w.dataset).toMatchObject({
       lineCount: '6',
       visibleLines: '3',
-      neighbourOpacity: '0.45',
-      scrollFrames: '15',
+      neighbourOpacity: '0.3',
+      scrollFrames: '24',
       enter: 'yes',
     });
     // Line j becomes current 0.4 s before its first word, in frames; the first one before frame 0.
@@ -241,15 +258,15 @@ describe('<MushafRecitation>', () => {
     expect(steps[0]).toBe(-2);
     const lineBlock = block(c, 'Mushaf lines')!;
     expect(lineBlock.contains(w)).toBe(true);
-    expect(lineBlock.style.left).toBe('120px');
-    expect(lineBlock.style.width).toBe('1680px');
+    expect(lineBlock.style.left).toBe('190px');
+    expect(lineBlock.style.width).toBe('1540px');
     const lineHeight = Number.parseInt(lineBlock.style.height, 10) / 3;
     expect(lineBlock.style.top).toBe(`${Math.round((1080 - 3 * lineHeight) / 2)}px`);
     expect(block(c, 'Translation')).toBeNull();
     expect(block(c, 'Gloss')).toBeNull();
     expect(c.querySelector('[data-panel]')).toBeNull();
     expect(c.querySelector('img')).toBeNull();
-    expect((c.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(251, 247, 238)');
+    expect((c.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(248, 243, 230)');
   });
 
   it('places the blocks between the margins, as plain absolute boxes, moved by the offsets only', () => {
@@ -258,8 +275,8 @@ describe('<MushafRecitation>', () => {
       const box = block(c, name)!;
       expect(box.tagName).toBe('DIV');
       expect(box.style.position).toBe('absolute');
-      expect(box.style.left).toBe('120px');
-      expect(box.style.width).toBe(`${1920 - 2 * 120}px`);
+      expect(box.style.left).toBe('190px');
+      expect(box.style.width).toBe(`${1920 - 2 * 190}px`);
       expect(box.style.transform).toBe('');
     }
     cleanup();
@@ -281,12 +298,12 @@ describe('<MushafRecitation>', () => {
     expect(block(narrow, 'Gloss')!.style.transform).toBe('');
   });
 
-  it('follows the layout: a public audio path, a background image, the vertical position, the scroll spring', () => {
+  it('follows the layout: a public audio path, a background image, the vertical position, the slow tempo', () => {
     const c = mount(
       props({
         audioFile: 'mushaf-studio/fatiha/audio.mp3',
         layout: layout({backgroundImage: 'bg.png', verticalAlign: 0, marginX: 0}),
-        animation: {...defaultMushafRecitationProps.animation, scroll: 'spring'},
+        animation: {...defaultMushafRecitationProps.animation, tempo: 'slow'},
       }),
     );
     expect(c.querySelector<HTMLElement>('[data-audio]')?.dataset.audio).toBe('/static/mushaf-studio/fatiha/audio.mp3');
@@ -294,7 +311,7 @@ describe('<MushafRecitation>', () => {
     const lineBlock = block(c, 'Mushaf lines')!;
     expect(lineBlock.style.top).toBe('0px');
     expect(lineBlock.style.width).toBe('1920px');
-    expect(windowOf(c)!.dataset.scrollFrames).not.toBe('15');
+    expect(windowOf(c)!.dataset.scrollFrames).toBe('34');
     expect(mount(props({audioFile: ''})).querySelector('[data-audio]')).toBeNull();
   });
 
@@ -353,57 +370,64 @@ describe('<MushafRecitation>', () => {
     expect(translationOf(mount(props({}, {...content, timings: ayahsOnly, translation: ayahText})))).toBe('1:3');
   });
 
-  it('marks the word being recited, by frame, in the way the highlight asks', () => {
+  it('names the word being recited, and marks it only through the word style, by frame', () => {
     expect(windowOf(mount(props()))!.dataset.activeWordId).toBe('');
     remotion.state.frame = 30; // 1 s: 1:2:2 (0.901-1.521)
     const word = windowOf(mount(props()))!;
     expect(word.dataset.activeWordId).toBe('1:2:2');
-    expect(JSON.parse(word.dataset.activeStyle!)).toEqual({color: '#c8a45c'});
+    expect(JSON.parse(word.dataset.activeStyle!)).toBeNull();
     expect(stylesOf(word)['1:2:1']).toBeNull();
     cleanup();
-    const ayah = windowOf(mount(props({highlight: highlight({mode: 'ayah', style: 'glow'})})))!;
-    expect(ayah.dataset.activeWordId).toBe('1:2:2');
-    expect(JSON.parse(ayah.dataset.activeStyle!)).toBeNull();
-    expect(stylesOf(ayah)['1:2:1']).toEqual({color: '#c8a45c', textShadow: '0 0 0.25em #c8a45c'});
-    expect(stylesOf(ayah)['1:3:1']).toBeNull();
+    // Under plain a tint is the word's CSS colour, eased into the accent read at 5:1 on the ivory page.
+    const tint = windowOf(mount(props({theme: 'plain', highlight: highlight({style: 'tint'})})))!;
+    expect(stylesOf(tint)['1:2:2']?.color).toMatch(/^rgba\(/);
+    expect(stylesOf(tint)['1:2:4']).toBeNull();
+    expect(tint.dataset.inkTint).toBe('');
+    cleanup();
+    // Under a colour-font theme the lines get the tint palettes, the default Mushaf palette included.
+    expect(windowOf(mount(props({highlight: highlight({style: 'tint'})})))!.dataset.inkTint).toBe('#806321');
+    cleanup();
+    expect(windowOf(mount(props({theme: 'black', highlight: highlight({style: 'tint'})})))!.dataset.inkTint).toBe(
+      '#806321',
+    );
     cleanup();
     const none = windowOf(mount(props({highlight: highlight({mode: 'none'})})))!;
     expect(none.dataset.activeWordId).toBe('');
-    expect(JSON.parse(none.dataset.activeStyle!)).toBeNull();
+    expect(Object.values(stylesOf(none)).every((style) => style === null)).toBe(true);
     cleanup();
     const perLine = lineMocks(mount(props({layout: layout({visibleLines: 0})})));
     expect(perLine.every((l) => l.dataset.activeWordId === '1:2:2')).toBe(true);
   });
 
-  it('dims the words still to come under dimUpcomingOnly, by the audio time of each line', () => {
-    remotion.state.frame = 30; // 1 s: 1:2:1 and 1:2:2 heard, 1:2:3 (1.521) not yet
-    const dim = highlight({dimOthers: 0.4, dimUpcomingOnly: true});
-    const styles = stylesOf(windowOf(mount(props({highlight: dim})))!);
+  it('rests the words still to come on the current line in ink, by the audio time of each line', () => {
+    remotion.state.frame = 40; // 1.33 s: 1:2:1 and 1:2:2 heard, 1:2:3 (1.521) not yet
+    const styles = stylesOf(windowOf(mount(props()))!);
     expect(styles['1:2:1']).toBeNull();
     expect(styles['1:2:2']).toBeNull();
-    expect(styles['1:2:3']).toEqual({opacity: 0.4});
-    expect(styles['1:3:1']).toEqual({opacity: 0.4});
-    // The ayah-end marker has no time of its own: upcoming until its ayah ends (3.391).
-    expect(styles['1:2:5']).toEqual({opacity: 0.4});
+    expect(styles['1:2:3']).toEqual({opacity: 0.6});
+    // The ayah-end marker rests until its own time (3.391).
+    expect(styles['1:2:5']).toEqual({opacity: 0.6});
+    // The next line sits in the slot below: full ink, only the window's neighbour opacity.
+    expect(styles['1:3:1']).toBeNull();
     cleanup();
     // One line at a time: the line of ayah 3 sits in a Sequence from frame 79, and at 4 s its
     // local frame 41 still maps to 4 s of audio, where 1:3:1 (3.533) was heard and 1:3:2 (4.563) not.
     remotion.state.frame = 120;
-    const perLine = lineMocks(mount(props({layout: layout({visibleLines: 0}), highlight: dim})));
+    const perLine = lineMocks(mount(props({layout: layout({visibleLines: 0})})));
     const ayah3 = perLine.find((l) => l.dataset.line === '4')!;
     expect(sequences(ayah3.ownerDocument.body)[1]!.dataset.from).toBe('79');
     expect(stylesOf(ayah3)['1:3:1']).toBeNull();
-    expect(stylesOf(ayah3)['1:3:2']).toEqual({opacity: 0.4});
+    expect(stylesOf(ayah3)['1:3:2']).toEqual({opacity: 0.6});
     cleanup();
-    // Without dimUpcomingOnly every word but the current one is dimmed, heard or not.
-    remotion.state.frame = 30;
-    const all = stylesOf(windowOf(mount(props({highlight: highlight({dimOthers: 0.4})})))!);
-    expect(all['1:2:1']).toEqual({opacity: 0.4});
-    expect(all['1:2:2']).toBeNull();
+    // Under ink the neighbours stay 0.2 under the resting words.
+    expect(windowOf(mount(props({layout: layout({neighbourOpacity: 0.5})})))!.dataset.neighbourOpacity).toBe('0.4');
   });
 
   it('underlines the doubtful words in the Studio preview only', () => {
     const doubtful = {'1:2:2': ['low-confidence' as const]};
+    // Nothing marked, so the underline is all there is to see.
+    const props = (changes: Partial<MushafRecitationProps> = {}, content: Partial<ResolvedRecitation> = {}) =>
+      basicProps({highlight: highlight({mode: 'none'}), ...changes}, content);
     expect(stylesOf(windowOf(mount(props({}, {doubtful})))!)['1:2:2']).toBeNull();
     cleanup();
     remotion.state.env.isStudio = true;
@@ -437,7 +461,8 @@ describe('<MushafRecitation>', () => {
     // Before the first word: the first ayah of the current line.
     expect(tb.dataset).toMatchObject({
       translationBlock: '1:2',
-      font: defaultMushafRecitationProps.text.translationFont,
+      // `auto`: the web font of the translation's language.
+      font: '"Noto Serif", serif',
       size: '40',
     });
     cleanup();

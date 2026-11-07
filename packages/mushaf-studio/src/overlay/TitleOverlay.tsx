@@ -2,6 +2,7 @@ import {MushafSurahName} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {useCurrentFrame, useVideoConfig} from 'remotion';
 import type {FontProps, Overlay} from '../schema';
+import {studioFontFamily} from '../schema/fonts';
 import {surahEnglishName} from './surah-names';
 
 const ARABIC_INDIC = '٠١٢٣٤٥٦٧٨٩';
@@ -255,7 +256,7 @@ export const MushafTitleOverlay: React.FC<MushafTitleOverlayProps> = (props) => 
           toSurah={props.toSurah}
           reciter={overlay.reciter}
           color={overlay.color}
-          font={overlay.font}
+          font={studioFontFamily(overlay.font, 'label')}
           background={props.background}
           endSeconds={endSeconds}
           fontSize={props.fontSize}
@@ -270,7 +271,7 @@ export const MushafTitleOverlay: React.FC<MushafTitleOverlayProps> = (props) => 
           ayahKey={props.ayahKey}
           reciter={overlay.reciter}
           color={overlay.color}
-          font={overlay.font}
+          font={studioFontFamily(overlay.font, 'label')}
           corner={overlay.corner}
           size={overlay.cornerSize}
           opacity={1 - cardOpacity}

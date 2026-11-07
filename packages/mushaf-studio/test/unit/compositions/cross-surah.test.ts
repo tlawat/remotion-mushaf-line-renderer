@@ -127,7 +127,10 @@ describe('resolveRecitation across surahs', () => {
     const resolved = await resolveRecitation(recitation({fromAyah: 2, toAyah: 3}), io());
     expect(mocks.getMushafLinesForRanges).toHaveBeenCalledTimes(1);
     expect(mocks.getMushafLinesForRanges.mock.calls[0]![0]).toEqual(FALAQ_NAS_RANGES);
-    expect(mocks.getMushafLinesForRanges.mock.calls[0]![1]).toMatchObject({theme: 'plain', slice: true});
+    expect(mocks.getMushafLinesForRanges.mock.calls[0]![1]).toMatchObject({
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
+      slice: true,
+    });
     // A recitation from 113:4 has no leading header: no page is asked for it.
     expect(mocks.getMushafLines).not.toHaveBeenCalled();
     expect(types(resolved.lines)).toEqual(['ayah', 'ayah', 'surah_name', 'basmallah', 'ayah', 'ayah']);

@@ -3,7 +3,7 @@ import type * as React from 'react';
 import {AbsoluteFill, Img, staticFile, useVideoConfig} from 'remotion';
 import {BACKGROUND_IMAGE_STYLE, fileUrl} from '../../compositions/shared';
 import {MushafStudioError} from '../../errors';
-import {fontPropsFrom} from '../../schema';
+import {fontPropsFrom, studioFontFamily} from '../../schema';
 import {type ResolvedThumbnail, thumbnailSubtitle} from './calculate-metadata';
 import type {MushafThumbnailProps} from './schema';
 
@@ -49,7 +49,7 @@ export const MushafThumbnail: React.FC<MushafThumbnailProps> = (props) => {
           alignItems: 'center',
           justifyContent: 'center',
           gap: Math.round(props.subtitleSize * 0.4),
-          fontFamily: props.font,
+          fontFamily: studioFontFamily(props.font, 'label'),
           textAlign: 'center',
         }}
       >

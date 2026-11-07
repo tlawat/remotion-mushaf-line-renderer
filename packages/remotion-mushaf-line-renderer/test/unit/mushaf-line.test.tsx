@@ -480,6 +480,110 @@ describe('<MushafLine>', () => {
     ).toBe('');
   });
 
+  it('registers four tint palettes for inkTint on a fixed-ink theme and names them through inkPalette', async () => {
+    const black = {
+      ...justified,
+      theme: 'black' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+    };
+    const seen: Array<((amount: number) => string | undefined) | undefined> = [];
+    const {container} = render(
+      <MushafLine
+        line={black}
+        inkTint="#b19353"
+        wordStyle={(word, ctx) => {
+          seen.push(ctx.inkPalette);
+          return {fontPalette: ctx.inkPalette?.(word.position === 1 ? 1 : 0.3) ?? 'none'};
+        }}
+      />,
+    );
+    await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
+    const palette = seen.at(-1)!;
+    expect(palette(0)).toBeUndefined();
+    expect(palette(0.12)).toBeUndefined();
+    const steps = [0.25, 0.5, 0.75, 1].map((amount) => palette(amount)!);
+    expect(new Set(steps).size).toBe(4);
+    expect(palette(0.3)).toBe(steps[0]);
+    expect(palette(0.9)).toBe(steps[3]);
+    const css = Array.from(document.querySelectorAll('style[data-mushaf-palettes]'))
+      .map((s) => s.textContent ?? '')
+      .join('');
+    const ruleOf = (ident: string) => css.split('\n').find((rule) => rule.includes(`${ident}{`)) ?? '';
+    // Only the ink entry (0) moves toward the tint; the other entries keep the theme's white.
+    expect(ruleOf(steps[3]!)).toContain('override-colors:0 #b19353,1 #ffffff');
+    expect(ruleOf(steps[1]!)).toContain('0 #d8c9a9');
+    const words = [...container.querySelectorAll<HTMLElement>('.mushaf-word')];
+    expect(words[0]!.style.getPropertyValue('font-palette')).toBe(steps[3]);
+    // The rosette keeps its marker palette whatever wordStyle asks.
+    const marker = container.querySelector<HTMLElement>('.mushaf-word--end')!;
+    expect(marker.style.getPropertyValue('font-palette')).not.toBe(steps[0]);
+    expect(marker.style.getPropertyValue('font-palette')).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-5-/);
+  });
+
+  it('tints an ink that follows currentColor from the row colour, as the row rule resolves it', async () => {
+    const normal = {
+      ...justified,
+      theme: 'normal' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+    };
+    let palette: ((amount: number) => string | undefined) | undefined;
+    const {container} = render(
+      <MushafLine
+        line={normal}
+        inkTint="#806321"
+        style={{color: 'rgb(28, 26, 22)'}}
+        wordStyle={(_w, ctx) => {
+          palette = ctx.inkPalette;
+          return undefined;
+        }}
+      />,
+    );
+    await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
+    expect(typeof palette).toBe('function');
+    const css = Array.from(document.querySelectorAll('style[data-mushaf-palettes]'))
+      .map((s) => s.textContent ?? '')
+      .join('');
+    // The row's rule holds the computed colour; the tints start from it.
+    expect(paletteRuleFor(rowOf(container))).toContain('0 rgb(28, 26, 22)');
+    expect(css.split('\n').find((rule) => rule.includes(`${palette!(1)}{`))).toContain('0 #806321');
+    expect(css.split('\n').find((rule) => rule.includes(`${palette!(0.5)}{`))).toContain('0 #4e3f1c');
+  });
+
+  it('gives no inkPalette under plain or without a tint, and refuses a bad inkTint', () => {
+    const seen: unknown[] = [];
+    for (const props of [{line: justified, inkTint: '#806321'}, {line: justified}]) {
+      render(
+        <MushafLine
+          {...props}
+          wordStyle={(_w, ctx) => {
+            seen.push(ctx.inkPalette);
+            return undefined;
+          }}
+        />,
+      );
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((palette) => palette === undefined)).toBe(true);
+    expect(() => render(<MushafLine line={justified} inkTint="red;}" />)).toThrow(/inkTint> must be a CSS colour/);
+  });
+
+  it('tells wordStyle the line position: 0 for a lone line', () => {
+    const positions: unknown[] = [];
+    render(
+      <MushafLine
+        line={justified}
+        wordStyle={(_w, ctx) => {
+          positions.push(ctx.linePosition);
+          return undefined;
+        }}
+      />,
+    );
+    expect(positions.length).toBeGreaterThan(0);
+    expect(new Set(positions)).toEqual(new Set([0]));
+  });
+
   it('styles and marks individual words through the per-word hooks', () => {
     const {container} = render(
       <MushafLine

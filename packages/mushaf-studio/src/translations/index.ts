@@ -2,7 +2,13 @@
 // (parse.ts), the open quran.com v4 API (quran-com.ts), the file loader (load.ts) and the two
 // components that paint a translation under the lines (one, or a stack of up to three).
 
-export {GlossStrip, type GlossStripProps} from './GlossStrip';
+export {
+  GlossStrip,
+  type GlossStripProps,
+  type GlossStripState,
+  glossStripOpacities,
+  glossStripState,
+} from './GlossStrip';
 export {loadTranslation} from './load';
 export {ayahKeyOf, parseTranslationFile, serialiseTranslation, stripFootnotes} from './parse';
 export {

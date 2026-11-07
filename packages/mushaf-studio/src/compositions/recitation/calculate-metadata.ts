@@ -2,12 +2,12 @@ import {enterTiming, type RecitationTimings} from '@tlawat/remotion-mushaf-line'
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
 import {followsHostAudio} from '../../audio/host';
 import {isIdentityTimeline, timelineDuration} from '../../memorize/timeline';
-import {sizeForAspect} from '../../schema';
+import {migrateMushafProps, sizeForAspect} from '../../schema';
 import {isInStudio} from '../../studio/environment';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../extras';
 import {STUDIO_FPS} from '../shared';
 import {type ResolvedRecitationWithClips, resolveRecitation, skipRecitationStart} from './resolve';
-import type {MushafRecitationProps} from './schema';
+import {defaultMushafRecitationProps, type MushafRecitationProps} from './schema';
 
 // The frame rate lives in `../shared`; it stays importable from here for the modules that found it here.
 export {STUDIO_FPS};
@@ -35,7 +35,6 @@ export const withRecitationAudio = async (
   const {audio, warning, src} = await resolveAudioCleanup({
     audioFile: props.audioFile,
     audio: props.audio,
-    background: props.background,
     offsetSeconds: resolved.audioOffsetSeconds,
     latestSeconds: (schedule[0]?.start ?? 0) - props.animation.leadInSeconds - enterSeconds(options.fps),
     endSeconds: timings.ayat[timings.ayat.length - 1]!.end,
@@ -76,17 +75,20 @@ export type ResolvePropsOptions = {
 export type ResolvedProps<P> = {readonly props: P; readonly durationInFrames: number};
 
 /**
- * `resolved` of `<MushafRecitation>` and its length at `fps`: the content, the audio's analysis
+ * `resolved` of `<MushafRecitation>` and its length at `fps`, the props migrated first
+ * (`migrateMushafProps()`): the content, the audio's analysis
  * when `audio` or the background's glow needs it, a background video's length; the duration from
  * the timings (moved `audioOffsetSeconds` earlier), or from the clip timeline when `memorize`
  * repeats the ayahs, plus the end card's seconds. No size: `calculateMetadata()` adds it, a slot's
  * box decides it.
  */
 export const resolveRecitationProps = async (
-  props: MushafRecitationProps,
+  saved: MushafRecitationProps,
   options: ResolvePropsOptions,
 ): Promise<ResolvedProps<MushafRecitationProps>> => {
   const {fps, signal} = options;
+  // First: props saved by an earlier Mushaf Studio (or sent by a host) render the current design.
+  const props = migrateMushafProps<MushafRecitationProps>(saved, {defaults: defaultMushafRecitationProps});
   const content = await resolveRecitation(props, {signal, lenientSplits: options.lenientSplits});
   const [resolved, backgroundVideoSeconds] = await Promise.all([
     withRecitationAudio(props, content, {fps, signal}),
@@ -120,5 +122,5 @@ export const calculateMushafRecitationMetadata: CalculateMetadataFunction<Mushaf
     signal: abortSignal,
     lenientSplits: previewsLeniently(isRendering),
   });
-  return {...resolved, ...sizeForAspect(props.layout.aspect), fps: STUDIO_FPS};
+  return {...resolved, ...sizeForAspect(resolved.props.layout.aspect), fps: STUDIO_FPS};
 };

@@ -52,7 +52,10 @@ export const LOOK_POSITION_FIELDS = [
 ] as const;
 
 /**
- * The looks the panel offers. Each is a whole design rather than a single setting, and sets only
+ * The looks the panel offers. Their marks and motion are the ones `migrateMushafProps()` gives the
+ * values they set before the render design (a glow or a colour became a tint, a marker a wash,
+ * dimming the words to come the ink mark), until the five looks of the design replace them.
+ * Each is a whole design rather than a single setting, and sets only
  * what that design needs: a look that changes the frame leaves the colours alone, and the reverse,
  * and none moves what the user positioned (`LOOK_POSITION_FIELDS`).
  * A field a composition does not have (`theme` on `<MushafAyahText>`, `highlight` on
@@ -62,13 +65,13 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
   {
     id: 'classic',
     name: 'Classic page',
-    description: 'Ink on a cream page, the current word in gold, three lines on screen.',
+    description: 'Ink on a cream page, the current word tinted gold, three lines on screen.',
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
       theme: 'plain',
       layout: {visibleLines: 3, neighbourOpacity: 0.45, background: '#fbf7ee', color: '#1b1b1b', backgroundImage: ''},
-      animation: {enter: 'slide-fade', exit: 'slide-fade'},
-      highlight: {mode: 'word', style: 'color', color: '#c8a45c', dimOthers: 1, dimUpcomingOnly: false},
+      animation: {lines: 'rise'},
+      highlight: {mode: 'word', style: 'tint', color: '#c8a45c', restOpacity: 0.6},
       text: {translationColor: '#4a4a4a', glossColor: '#6a6a6a'},
     },
   },
@@ -80,19 +83,19 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
     patch: {
       theme: 'light',
       layout: {background: '#ffffff', color: '#1b1b1b', backgroundImage: ''},
-      highlight: {mode: 'word', style: 'none', dimOthers: 0.4, dimUpcomingOnly: true},
+      highlight: {mode: 'word', style: 'ink', restOpacity: 0.5},
       text: {translationColor: '#4a4a4a', glossColor: '#6a6a6a'},
     },
   },
   {
     id: 'night',
     name: 'Night',
-    description: 'The dark tajweed theme on a deep blue-black page, the current word glowing.',
+    description: 'The dark tajweed theme on a deep blue-black page, a faint gold wash on the current word.',
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
       theme: 'dark',
       layout: {background: '#101418', color: '#e8e2d6', backgroundImage: ''},
-      highlight: {mode: 'word', style: 'glow', color: '#f2c66d', dimOthers: 1},
+      highlight: {mode: 'word', style: 'tint', color: '#f2c66d', restOpacity: 0.6},
       text: {translationColor: '#b8b2a6', glossColor: '#8e98a3'},
     },
   },
@@ -111,19 +114,19 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
         override: {ink: false, silent: false, rules: false, frame: true, accent: true, detail: true, background: false},
       },
       layout: {background: '#000000', color: '#f5efe0', backgroundImage: ''},
-      highlight: {mode: 'word', style: 'color', color: '#d4af37', dimOthers: 1},
+      highlight: {mode: 'word', style: 'tint', color: '#d4af37', restOpacity: 0.6},
       text: {translationColor: '#d9c58f', glossColor: '#a89a74'},
     },
   },
   {
     id: 'sepia',
     name: 'Sepia',
-    description: 'The sepia tajweed theme on an old-paper page, a soft marker behind the current word.',
+    description: 'The sepia tajweed theme on an old-paper page, a faint wash behind the current word.',
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
       theme: 'sepia',
       layout: {background: '#f3e6cc', color: '#3b2a1a', backgroundImage: ''},
-      highlight: {mode: 'word', style: 'marker', color: '#c8964a', dimOthers: 1},
+      highlight: {mode: 'word', style: 'wash', color: '#c8964a', restOpacity: 0.6},
       text: {translationColor: '#5a4632', glossColor: '#7a6650'},
     },
   },
@@ -134,7 +137,7 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
       layout: {aspect: '9:16', visibleLines: 0},
-      animation: {enter: 'fade', exit: 'fade'},
+      animation: {lines: 'fade'},
       text: {translationPosition: 'below', translationSize: 44},
     },
   },
@@ -151,21 +154,21 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
   {
     id: 'karaoke',
     name: 'Karaoke',
-    description: 'A bright marker that walks word by word, the other words dimmed.',
+    description: 'A faint gold wash behind each word as it is recited.',
     applies: ['recitation', 'ayah-text'],
     patch: {
-      highlight: {mode: 'word', style: 'marker', color: '#ffd166', dimOthers: 0.35, dimUpcomingOnly: false},
-      animation: {enter: 'fade', exit: 'fade'},
+      highlight: {mode: 'word', style: 'wash', color: '#b8913a', restOpacity: 0.6},
+      animation: {lines: 'fade'},
     },
   },
   {
     id: 'study',
     name: 'Study',
-    description: 'For learning: the translation below, a readable gloss strip, the current word in teal.',
+    description: 'For learning: the translation below, a readable gloss strip, the current word tinted teal.',
     applies: ['recitation', 'passage'],
     patch: {
-      layout: {visibleLines: 3, neighbourOpacity: 0.6},
-      highlight: {mode: 'word', style: 'color', color: '#1f7a8c', dimOthers: 1},
+      layout: {visibleLines: 3, neighbourOpacity: 0.5},
+      highlight: {mode: 'word', style: 'tint', color: '#1f7a8c', restOpacity: 0.6},
       text: {
         translationPosition: 'below',
         translationSize: 36,

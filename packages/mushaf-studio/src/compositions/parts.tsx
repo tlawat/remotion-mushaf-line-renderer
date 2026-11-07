@@ -7,7 +7,7 @@ import type * as React from 'react';
 import {Audio, useRemotionEnvironment} from 'remotion';
 import {OWN_AUDIO_NAME} from '../audio/host';
 import type {AudioSettings} from '../audio/schema';
-import {levelAt, type VolumeCurve} from '../audio/volume';
+import type {VolumeCurve} from '../audio/volume';
 import {EndCard} from '../content/EndCard';
 import {
   directionOfLanguage,
@@ -183,16 +183,6 @@ export type WithPanelOption<P> = P & {
    */
   readonly panel?: boolean | undefined;
 };
-
-/**
- * The glow's level at `audioSeconds` of the recording's clock (`audioClock()`): `levelAt()` of the
- * levels, read at the fps they were measured at (`levelsFps`, else the composition's `fps`), 0
- * without them.
- */
-export const glowLevelAt = (analysis: ResolvedAudio | undefined, audioSeconds: number, fps: number): number =>
-  analysis === undefined || analysis.levels.length === 0
-    ? 0
-    : levelAt(analysis.levels, audioSeconds * (analysis.levelsFps ?? fps));
 
 // ---------------------------------------------------------------------------------------------
 // Tajweed legend

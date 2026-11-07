@@ -19,7 +19,6 @@ import {
   CompositionAudio,
   CompositionEndCard,
   CornerLegend,
-  glowLevelAt,
   StudioWarnings,
   translationsOf,
   useTranslationLayers,
@@ -32,11 +31,15 @@ import {MushafStudioError} from '../errors';
 import {wordStarts} from '../lines';
 import {arabicIndicDigits} from '../overlay';
 import {
-  activeWordStyleFrom,
   defaultOverlay,
   type FontProps,
   fontPropsFrom,
+  groundOf,
+  inkTintFor,
+  studioFontFamily,
   themeSelectionFrom,
+  washAlpha,
+  washColor,
   wordStyleFrom,
 } from '../schema';
 import {MushafStudioPanel} from '../studio';
@@ -73,23 +76,11 @@ const progress = (frame: number, at: number, frames: number): number =>
       });
 
 /**
- * A page's style while it turns in (`incoming`, 0 → 1) and out (`outgoing`, 0 → 1). `slide` moves
- * the leaf the way a right-to-left book turns: the next page comes in from the left while the one
- * read goes out to the right. `cut` turns nothing (its pages never overlap).
+ * A page's style while it turns in (`incoming`, 0 → 1) and out (`outgoing`, 0 → 1): `fade`
+ * dissolves one into the other; `cut` turns nothing (its pages never overlap).
  */
-export const turnStyle = (
-  turn: PageView['turn'],
-  incoming: number,
-  outgoing: number,
-  width: number,
-): React.CSSProperties => {
-  if (turn === 'fade') return {opacity: incoming * (1 - outgoing)};
-  if (turn === 'slide') {
-    const x = Math.round((incoming - 1 + outgoing) * width);
-    return x === 0 ? {} : {transform: `translateX(${x}px)`};
-  }
-  return {};
-};
+export const turnStyle = (turn: PageView['turn'], incoming: number, outgoing: number): React.CSSProperties =>
+  turn === 'fade' ? {opacity: incoming * (1 - outgoing)} : {};
 
 /** Starts loading a page's font from the same sources its lines will use, so the turn to it never waits. */
 const PreloadPageFont: React.FC<{readonly line: MushafLineData; readonly fontProps: FontProps}> = ({
@@ -112,46 +103,38 @@ type PageLeafProps = {
   readonly slot: PageSlot;
   readonly geometry: PageGeometry;
   readonly pageView: PageView;
-  readonly background: string;
+  /** What the page sits on (`groundOf()`): the band's strength depends on it. */
+  readonly ground: string;
   readonly current: PageLineSlot | null;
   /** The ranges followed (`rangesOf()`): one per surah recited. */
   readonly ranges: readonly RecitedRange[];
   readonly wordStyle: WordStyle;
-  readonly activeProps: {readonly activeWordId: string | null; readonly activeWordStyle?: React.CSSProperties};
+  readonly activeProps: {readonly activeWordId: string | null; readonly inkTint?: string};
   readonly fontProps: FontProps;
 };
 
-/** The current line's mark, in its slot behind the line: a band a little wider than the measure, or a rule under it. */
-const LineMark: React.FC<{readonly pageView: PageView; readonly geometry: PageGeometry}> = ({pageView, geometry}) => {
-  const {fontSize, lineHeight, padX} = geometry;
-  const color = pageView.lineHighlightColor;
-  if (pageView.lineHighlight === 'band') {
-    const inset = Math.round(padX / 2);
-    return (
-      <div
-        data-line-highlight="band"
-        style={{
-          position: 'absolute',
-          left: -inset,
-          right: -inset,
-          top: 0,
-          bottom: 0,
-          background: color,
-          borderRadius: Math.round(0.3 * fontSize),
-        }}
-      />
-    );
-  }
+/**
+ * The current line's band, in its slot behind the line, a little wider than the measure: the band's
+ * colour with its chroma capped, at the wash's faint strength on the ground (`washColor()`).
+ */
+const LineMark: React.FC<{readonly pageView: PageView; readonly geometry: PageGeometry; readonly ground: string}> = ({
+  pageView,
+  geometry,
+  ground,
+}) => {
+  const {fontSize, padX} = geometry;
+  const inset = Math.round(padX / 2);
   return (
     <div
-      data-line-highlight="underline"
+      data-line-highlight="band"
       style={{
         position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: Math.round(0.12 * lineHeight),
-        height: Math.max(2, Math.round(0.08 * fontSize)),
-        background: color,
+        left: -inset,
+        right: -inset,
+        top: 0,
+        bottom: 0,
+        background: washColor(pageView.lineHighlightColor, washAlpha(ground)),
+        borderRadius: Math.round(0.3 * fontSize),
       }}
     />
   );
@@ -162,7 +145,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
   slot,
   geometry,
   pageView,
-  background,
+  ground,
   current,
   ranges,
   wordStyle,
@@ -182,7 +165,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
         height: geometry.height,
       }}
     >
-      {pageView.frame !== 'none' && <PageFrame frame={pageView.frame} geometry={geometry} background={background} />}
+      {pageView.frame !== 'none' && <PageFrame frame={pageView.frame} geometry={geometry} />}
       <div
         style={{
           position: 'absolute',
@@ -210,7 +193,9 @@ const PageLeaf: React.FC<PageLeafProps> = ({
                 ...(opacity === 1 ? {} : {opacity}),
               }}
             >
-              {isCurrent && pageView.lineHighlight !== 'none' && <LineMark pageView={pageView} geometry={geometry} />}
+              {isCurrent && pageView.lineHighlight === 'band' && (
+                <LineMark pageView={pageView} geometry={geometry} ground={ground} />
+              )}
               {/* Positioned after the mark, so the line paints over it. */}
               <div style={{position: 'relative'}}>
                 <MushafLine
@@ -296,9 +281,9 @@ export const pageTranslationStyle = (
 /**
  * The whole printed page of the KFGQPC V4 mushaf while a recitation plays, as a reader follows it
  * in print: every line of the page in its place (the surah headers and basmalah lines included),
- * the line being recited marked with a band or a rule, the word being heard highlighted, the words
- * outside the ayahs followed dimmed, and the page turning to the next one just before its first
- * word. Around it its `background` (the glow following the recitation), the translations beside or
+ * the line being recited marked with a faint band (or, without it, the words marked as `highlight`
+ * says), the words outside the ayahs followed dimmed, and the page turning to the next one just
+ * before its first word. Around it its `background`, the translations beside or
  * under the page (`text`, up to three stacked), the tajweed legend in a corner and an end card
  * after the last ayah when asked; the audio normalised and faded as `audio` says. In the Studio, the
  * doubtful words are marked, the fonts and audio warnings shown, and the Mushaf panel docked.
@@ -328,8 +313,12 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
   const now = frame / fps;
   const heard = wordAt(timings, now);
   const activeWordId = highlight.mode === 'none' ? null : heard;
-  const activeWordStyle = highlight.mode === 'word' ? activeWordStyleFrom(highlight) : undefined;
-  const activeProps = activeWordStyle ? {activeWordId, activeWordStyle} : {activeWordId};
+  const theme = themeSelectionFrom(props.theme, props.customTheme);
+  const ground = groundOf(layout, props.background.kind);
+  // With the band on, the band is the page's one mark: the words carry none of their own.
+  const marked = pageView.lineHighlight === 'band' ? {...highlight, mode: 'none' as const} : highlight;
+  const inkTint = inkTintFor(marked, theme, ground);
+  const activeProps = inkTint === undefined ? {activeWordId} : {activeWordId, inkTint};
   const current = pageLineAt(resolved.lines, now);
   const geometry = pageGeometry(layout, {width, height});
   const firstLine = pages[0]?.lines[0];
@@ -347,14 +336,16 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
     const outgoing = nextFrom === null ? 0 : progress(frame, nextFrom, turnFrames);
     const wordStyle = dimmingOutside(
       wordStyleFrom({
-        highlight,
+        highlight: marked,
         review,
         doubtful: resolved.doubtful,
         timingsIndex: starts,
         timings,
-        activeWordId,
         isStudio,
         sequenceFrom: from,
+        theme,
+        ink: layout.color,
+        ground,
       }),
       ranges,
     );
@@ -367,12 +358,12 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
         premountFor={turnFrames + fps}
         name={`Page ${slot.page}`}
       >
-        <AbsoluteFill style={turnStyle(pageView.turn, incoming, outgoing, width)}>
+        <AbsoluteFill style={turnStyle(pageView.turn, incoming, outgoing)}>
           <PageLeaf
             slot={slot}
             geometry={geometry}
             pageView={pageView}
-            background={layout.background}
+            ground={ground}
             current={current}
             ranges={ranges}
             wordStyle={wordStyle}
@@ -392,8 +383,8 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
       : pageTranslationPlace(text.translationPosition, geometry, height, translationSize);
   const opening = passageSpan(timings).from;
   const ayahKey = ayahKeyOf(heard) ?? ayahAt(timings, now) ?? `${opening.surah}:${opening.ayah}`;
-  // The page has no title overlay: its cards take the overlay's default serif.
-  const overlayFont = defaultOverlay.font;
+  // The page has no title overlay: its cards take the overlay's default font.
+  const overlayFont = studioFontFamily(defaultOverlay.font, 'label');
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color, overflow: 'hidden'}}>
       <MushafBackground
@@ -401,7 +392,6 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
-        audioLevel={glowLevelAt(resolved.audio, now, fps)}
       />
       {ownAudio && (
         <CompositionAudio
@@ -422,7 +412,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
       )}
       <CornerLegend
         legend={legend}
-        theme={themeSelectionFrom(props.theme, props.customTheme)}
+        theme={theme}
         fontFamily={overlayFont}
         color={layout.color}
         background={layout.background}

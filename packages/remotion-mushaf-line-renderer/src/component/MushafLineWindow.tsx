@@ -4,6 +4,7 @@ import {Sequence, useCurrentFrame, useVideoConfig} from 'remotion';
 import {getEnterState, getExitState, normaliseAnimation} from '../animation/animation-state';
 import {scrollPosition} from '../animation/scroll-position';
 import {describeValue, MushafError} from '../errors';
+import {assertCssColor} from '../mushaf/colors';
 import {assertLineData} from '../resolve/validate-line-data';
 import type {LineWindowContext, MushafLineWindowProps} from '../types';
 import {useCanvasGuard} from './hooks/use-canvas-guard';
@@ -99,6 +100,7 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    inkTint,
     fontSrc,
     fontFallback,
   } = props;
@@ -120,6 +122,7 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
       neighbourOpacity,
     });
   }
+  if (inkTint !== undefined) assertCssColor('<MushafLineWindow inkTint>', inkTint);
   const hasSteps = props.steps !== undefined;
   const hasPosition = props.position !== undefined;
   if (hasSteps === hasPosition) {
@@ -193,6 +196,8 @@ export const MushafLineWindow: React.FC<MushafLineWindowProps> = (props) => {
           activeWordStyle,
           wordStyle,
           wordClassName,
+          inkTint,
+          linePosition: index - position,
           framed,
           fontSrc,
           fontFallback,

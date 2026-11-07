@@ -26,6 +26,7 @@ const {fade} = await import('@remotion/transitions/fade');
 const {linearTiming} = await import('@remotion/transitions');
 type MushafLineData = import('../../src/types').MushafLineData;
 type LineWindowContext = import('../../src/types').LineWindowContext;
+type WordContext = import('../../src/types').WordContext;
 type MushafLineWindowProps = import('../../src/types').MushafLineWindowProps;
 
 class Boundary extends React.Component<
@@ -208,6 +209,49 @@ describe('<MushafLineWindow>', () => {
     expect(active).toHaveLength(1);
     expect(active[0]!.dataset.location).toBe(wordId);
     expect(active[0]!.style.color).toBe('red');
+  });
+
+  it("tells wordStyle each line's signed distance from the centre slot", () => {
+    const seen = new Map<string, number | undefined>();
+    remotion.state.frame = 25; // half way from line 0 to line 1
+    render(
+      <Window
+        wordStyle={(word: MushafLineData['words'][number], ctx: WordContext) => {
+          seen.set(word.id, ctx.linePosition);
+          return undefined;
+        }}
+      />,
+    );
+    const positionOf = (line: number) => seen.get(lines[line]!.words[0]!.id);
+    expect([0, 1, 2, 3].map(positionOf)).toEqual([-0.5, 0.5, 1.5, 2.5]);
+  });
+
+  it('forwards inkTint to every line and refuses one that is not a colour', () => {
+    const tajweed = lines.map((line) => ({
+      ...line,
+      theme: 'black' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: `mushaf-qpc-v4-tajweed-p${line.page}`,
+    }));
+    const palettes: unknown[] = [];
+    render(
+      <Window
+        lines={tajweed}
+        inkTint="#b19353"
+        wordStyle={(_w: unknown, ctx: WordContext) => {
+          palettes.push(ctx.inkPalette);
+          return undefined;
+        }}
+      />,
+    );
+    expect(palettes.some((palette) => typeof palette === 'function')).toBe(true);
+    const errors: Error[] = [];
+    render(
+      <Boundary onError={(e) => errors.push(e)}>
+        <Window inkTint="red;}" />
+      </Boundary>,
+    );
+    expect(errors[0]?.message).toMatch(/inkTint> must be a CSS colour/);
   });
 
   it("shows each line's own slice, so a line split by word bands takes two slots", async () => {

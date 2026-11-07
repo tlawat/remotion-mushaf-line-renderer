@@ -113,7 +113,7 @@ describe('calculateMushafPassageMetadata', () => {
       fromAyah: 1,
       toAyah: 4,
       slice: true,
-      theme: 'normal',
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
       data: expect.objectContaining({words: expect.stringContaining('data/qpc-v4/words.json.zip')}),
     });
     expect(metadata).toMatchObject({width: 1920, height: 1080, fps: 30, durationInFrames: 4 * 4 * 30 + 10});
@@ -192,8 +192,8 @@ describe('<MushafPassage>', () => {
       const box = block(c, name)!;
       expect(box.tagName).toBe('DIV');
       expect(box.style.position).toBe('absolute');
-      expect(box.style.left).toBe('120px');
-      expect(box.style.width).toBe(`${1920 - 2 * 120}px`);
+      expect(box.style.left).toBe('190px');
+      expect(box.style.width).toBe(`${1920 - 2 * 190}px`);
       expect(box.style.transform).toBe('');
     }
     cleanup();

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// The background under jsdom with `remotion` mocked: the style of each kind and fit, the Ken Burns
-// transform over the composition, the dim layer, the glow and its opacity from the audio level, and
-// the video's loop.
+// The background under jsdom with `remotion` mocked: the style of each kind and fit, the slow zoom
+// over the composition, the dim layer, no glow (nothing follows the audio), and the video's loop.
 import {cleanup, render} from '@testing-library/react';
 import type * as React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -34,9 +33,6 @@ const {
   backgroundBaseStyle,
   backgroundSchema,
   defaultBackground,
-  GLOW_REST,
-  glowOpacity,
-  glowStyle,
   kenBurnsTransform,
   MushafBackground,
   mediaBoxStyle,
@@ -61,8 +57,12 @@ describe('backgroundSchema', () => {
     for (const [name, field] of Object.entries(backgroundSchema.shape)) expect(field.description, name).toBeTruthy();
     expect(backgroundSchema.safeParse(background({blur: 41})).success).toBe(false);
     expect(backgroundSchema.safeParse(background({dim: 1.1})).success).toBe(false);
-    expect(backgroundSchema.safeParse(background({kenBurnsScale: 1.31})).success).toBe(false);
+    expect(backgroundSchema.safeParse(background({kenBurnsScale: 1.06})).success).toBe(false);
     expect(backgroundSchema.safeParse(background({kenBurnsScale: 0.9})).success).toBe(false);
+    expect(backgroundSchema.safeParse(background({vignette: 0.42})).success).toBe(false);
+    // The removed values are refused: migrateMushafProps() maps them.
+    expect(backgroundSchema.safeParse({...defaultBackground, kenBurns: 'pan-left'}).success).toBe(false);
+    expect('glow' in backgroundSchema.shape).toBe(false);
   });
 });
 
@@ -72,7 +72,7 @@ describe('backgroundBaseStyle / showsMedia / mediaStyle', () => {
     expect(backgroundBaseStyle(background({kind: 'image', color: '#123456'}))).toEqual({backgroundColor: '#123456'});
     expect(
       backgroundBaseStyle(background({kind: 'gradient', gradient: {from: '#000000', to: '#ffffff', angle: 135}})),
-    ).toEqual({backgroundColor: '#fbf7ee', backgroundImage: 'linear-gradient(135deg, #000000, #ffffff)'});
+    ).toEqual({backgroundColor: '#f8f3e6', backgroundImage: 'linear-gradient(135deg, #000000, #ffffff)'});
   });
 
   it('shows media for an image or a video with a src only', () => {
@@ -114,20 +114,10 @@ describe('kenBurnsTransform', () => {
     expect(kenBurnsTransform('slow-zoom', 1.2, 300, 301)).toBe('scale(1.2)');
   });
 
-  it('pans across the margin the scale gives, edge to edge', () => {
-    // At 1.2 the picture overhangs by 0.2 / 2.4 of its width on each side: 8.3333%.
-    expect(kenBurnsTransform('pan-left', 1.2, 0, 301)).toBe('scale(1.2) translateX(8.3333%)');
-    expect(kenBurnsTransform('pan-left', 1.2, 150, 301)).toBe('scale(1.2) translateX(0%)');
-    expect(kenBurnsTransform('pan-left', 1.2, 300, 301)).toBe('scale(1.2) translateX(-8.3333%)');
-    expect(kenBurnsTransform('pan-right', 1.2, 0, 301)).toBe('scale(1.2) translateX(-8.3333%)');
-    expect(kenBurnsTransform('pan-right', 1.2, 300, 301)).toBe('scale(1.2) translateX(8.3333%)');
-  });
-
   it('clamps outside the composition, holds still for one frame, and is nothing for none', () => {
     expect(kenBurnsTransform('slow-zoom', 1.2, -5, 301)).toBe('scale(1)');
     expect(kenBurnsTransform('slow-zoom', 1.2, 400, 301)).toBe('scale(1.2)');
     expect(kenBurnsTransform('slow-zoom', 1.2, 0, 1)).toBe('scale(1)');
-    expect(kenBurnsTransform('pan-left', 1, 150, 301)).toBe('scale(1) translateX(0%)');
     expect(kenBurnsTransform('none', 1.2, 150, 301)).toBeUndefined();
   });
 
@@ -135,29 +125,6 @@ describe('kenBurnsTransform', () => {
     expect(mediaBoxStyle(background({kenBurns: 'slow-zoom', kenBurnsScale: 1.3}), 300, 301).transform).toBe(
       'scale(1.3)',
     );
-  });
-});
-
-describe('glowOpacity / glowStyle', () => {
-  it('rises from the resting share of the strength at silence to the strength at the loudest', () => {
-    expect(glowOpacity(0, 0.8)).toBe(0.28); // GLOW_REST × 0.8
-    expect(glowOpacity(0.5, 0.8)).toBe(0.54);
-    expect(glowOpacity(1, 0.8)).toBe(0.8);
-  });
-
-  it('clamps the level and the strength, and reads a non-number as silence', () => {
-    expect(glowOpacity(2, 0.8)).toBe(0.8);
-    expect(glowOpacity(-1, 0.8)).toBe(glowOpacity(0, 0.8));
-    expect(glowOpacity(Number.NaN, 1)).toBe(GLOW_REST);
-    expect(glowOpacity(1, 0)).toBe(0);
-  });
-
-  it('centres the ellipse where the lines are and swells with the level', () => {
-    const style = glowStyle({color: '#c8a45c', strength: 1}, 1, 0.3);
-    expect(style.backgroundImage).toBe('radial-gradient(ellipse 60% 40% at 50% 30%, #c8a45c, transparent 70%)');
-    expect(style.opacity).toBe(1);
-    expect(style.transform).toBe('scale(1.08)');
-    expect(glowStyle({color: '#c8a45c', strength: 1}, 0).transform).toBe('scale(1)');
   });
 });
 
@@ -216,12 +183,8 @@ describe('<MushafBackground>', () => {
     expect(part(c, 'dim')!.style.backgroundColor).toBe('rgb(0, 0, 0)');
   });
 
-  it('shows the glow when enabled, its opacity from the audio level', () => {
-    const glow = {enabled: true, color: '#c8a45c', strength: 0.8};
-    expect(part(at(0, {background: background({glow})}), 'glow')!.style.opacity).toBe('0.28');
-    cleanup();
-    expect(part(at(0, {background: background({glow}), audioLevel: 1}), 'glow')!.style.opacity).toBe('0.8');
-    cleanup();
-    expect(part(at(0, {background: background({glow: {...glow, strength: 0}})}), 'glow')).toBeNull();
+  it('draws no glow, even for props that still carry one', () => {
+    const legacy = {...background(), glow: {enabled: true, color: '#c8a45c', strength: 0.8}} as Background;
+    expect(part(at(0, {background: legacy}), 'glow')).toBeNull();
   });
 });

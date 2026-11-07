@@ -3,11 +3,11 @@ import type {CalculateMetadataFunction} from 'remotion';
 import {staticFile as remotionStaticFile} from 'remotion';
 import {MushafStudioError} from '../../errors';
 import {showsIntro} from '../../overlay';
-import {dataSourceFrom, sizeForAspect, themeSelectionFrom} from '../../schema';
+import {dataSourceFrom, migrateMushafProps, sizeForAspect, themeSelectionFrom} from '../../schema';
 import type {AyahTranslation} from '../../types';
 import {backgroundVideoSecondsFor, loadTranslationLayers, translationLayerSpecs} from '../extras';
 import {headerCount, headerSeconds, STUDIO_FPS, surahHeaderLines} from '../shared';
-import type {MushafPassageProps} from './schema';
+import {defaultMushafPassageProps, type MushafPassageProps} from './schema';
 
 /** What `calculateMetadata()` of `<MushafPassage>` resolves once per render from the content props. */
 export type ResolvedPassage = {
@@ -109,11 +109,13 @@ export const resolvePassage = async (
   };
 };
 
-/** `calculateMetadata` for `<Composition id="MushafPassage">`: `resolved` (and a background video's length), width and height from the aspect, duration from the timeline (`passageTimeline()`). `abortSignal` reaches the fetches. */
+/** `calculateMetadata` for `<Composition id="MushafPassage">`: the props migrated (`migrateMushafProps()`), `resolved` (and a background video's length), width and height from the aspect, duration from the timeline (`passageTimeline()`). `abortSignal` reaches the fetches. */
 export const calculateMushafPassageMetadata: CalculateMetadataFunction<MushafPassageProps> = async ({
-  props,
+  props: saved,
   abortSignal,
 }) => {
+  // First: props saved by an earlier Mushaf Studio (or sent by a host) render the current design.
+  const props = migrateMushafProps<MushafPassageProps>(saved, {defaults: defaultMushafPassageProps});
   const [resolved, backgroundVideoSeconds] = await Promise.all([
     resolvePassage(props, {signal: abortSignal}),
     backgroundVideoSecondsFor(props.background, remotionStaticFile),

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Breaking: one quiet mark, and saved props migrated** (docs/mushaf-studio/render-design.md).
+  `highlight.style` is `ink` (the default: the words still to come rest at `restOpacity` and fill
+  in as heard), `tint` (the word's ink eases into the accent, read at 5:1 on the page) or `wash` (a
+  faint, soft-ended band). Each eases in and out, and none of them dims a neighbour line twice.
+  `dimOthers` and `dimUpcomingOnly` are gone. `animation` is `{lines: fade | rise | cut, tempo:
+  calm | slow, leadInSeconds}`. `background` loses `glow` and the pans and gains `vignette` (its
+  drawing comes later). `layout` gains `frame`. `pageView` keeps a band, a simple frame and a fade.
+  New projects start from the Mushaf palette: ivory, warm ink, gold-line rosettes on vellum.
+  `migrateMushafProps()` runs first in every `calculateMetadata()` and slot resolver, so props saved
+  before render the new design. `describeMushafMigration()` lists what changes and
+  `mushafPropsNeedMigration()` says whether anything does. The colour, timing and motion tokens
+  (`legibleAccent()`, `washColor()`, `wordSpans()`, `boundaryStart()`, `dissolve()`,
+  `tempoFrames()`, ...) are exported.
+
 First proof of concept of Mushaf Studio: Remotion Studio, extended with the package's features
 as a user interface. See [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md) for the
 design and the roadmap.

@@ -70,18 +70,14 @@ const {
 } = await import('../../../src/unicode');
 const {calculateMushafPageMetadata, defaultMushafPageProps, MushafPage, mushafPageSchema, resolvePage, skipPageStart} =
   await import('../../../src/page');
-const {backgroundFor, defaultBackground, glowOpacity} = await import('../../../src/background');
+const {backgroundFor, defaultBackground} = await import('../../../src/background');
 const {clipTimeline} = await import('../../../src/memorize');
 const {MushafStudioError} = await import('../../../src/errors');
 const {FONTS_ATTRIBUTION} = await import('../../../src/export');
 const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, textSchema} = await import('../../../src/schema');
 const {planTranslationLayer} = await import('../../../src/compositions/parts');
-const {levelsWindow, loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import(
-  '../../../src/compositions/extras'
-);
-const {assertNoHostRepeats, defaultHostAudio, hostAudioOf, levelAt, OWN_AUDIO_NAME} = await import(
-  '../../../src/audio'
-);
+const {loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import('../../../src/compositions/extras');
+const {assertNoHostRepeats, defaultHostAudio, hostAudioOf, OWN_AUDIO_NAME} = await import('../../../src/audio');
 const {surah2Timings, syntheticMushafLines} = await import('../page/helpers');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitationWithClips = import('../../../src/compositions/recitation').ResolvedRecitationWithClips;
@@ -266,14 +262,20 @@ describe('background', () => {
     expect(backgroundFor(gradient, layout)).toBe(gradient);
   });
 
-  it('paints the background in every composition, the glow following the recitation’s level', async () => {
-    const props = recitationProps({background: background({glow: {enabled: true, color: '#c8a45c', strength: 0.8}})});
-    const resolved = await resolvedOf(props);
-    expect(resolved.audio!.levels.length).toBeGreaterThan(0);
+  it('paints the background in every composition, and no glow: a saved one becomes a vignette', async () => {
+    const saved = {
+      ...recitationProps(),
+      background: {...defaultBackground, glow: {enabled: true, color: '#c8a45c', strength: 0.8}},
+    } as unknown as MushafRecitationProps;
+    const metadata = await calculateMushafRecitationMetadata(metadataArgs(saved));
+    const props = metadata.props as MushafRecitationProps;
+    expect(props.background).not.toHaveProperty('glow');
+    expect(props.background.vignette).toBe(0.15);
+    const resolved = props.resolved as ResolvedRecitationWithClips;
+    expect(resolved.audio!.levels).toEqual([]);
     remotion.state.frame = 13;
     const c = mount(<MushafRecitation {...props} resolved={resolved} />);
-    const glow = c.querySelector<HTMLElement>('[data-mushaf-background-part="glow"]')!;
-    expect(Number(glow.style.opacity)).toBe(glowOpacity(levelAt(resolved.audio!.levels, 13), 0.8));
+    expect(c.querySelector('[data-mushaf-background-part="glow"]')).toBeNull();
     cleanup();
     // The layout's image of a saved file is still painted.
     const image = mount(
@@ -284,7 +286,7 @@ describe('background', () => {
 });
 
 describe('audio', () => {
-  it('analyses the recording in calculateMetadata and keeps its gain, and its levels when the glow is on', async () => {
+  it('analyses the recording in calculateMetadata and keeps its gain, never its levels', async () => {
     const resolved = await resolvedOf(recitationProps());
     expect(mocks.analyzeAudio).toHaveBeenCalledWith(
       'https://studio.test/audio.mp3',
@@ -292,13 +294,6 @@ describe('audio', () => {
     );
     expect(resolved.audio).toEqual({gain: 1.7825, trimSeconds: 0, levels: []});
     expect(resolved.audioWarning).toBeNull();
-    const glowing = await resolvedOf(
-      recitationProps({background: background({glow: {enabled: true, color: '#fff', strength: 0.5}})}),
-    );
-    const levels = glowing.audio!.levels;
-    // One level per frame to the last ayah's end plus a second, three decimals.
-    expect(levels).toHaveLength(Math.ceil((27.559 + 1) * 30));
-    expect(levels.slice(0, 3)).toEqual([0, 0.111, 0.222]);
   });
 
   it('does not analyse when nothing uses the analysis', async () => {
@@ -390,13 +385,14 @@ describe('audio', () => {
 
   it('moves a page and an ayah text by the trim too', async () => {
     const page = await resolvePage({...defaultMushafPageProps, timingsFile: 'surah2.json'});
-    const moved = skipPageStart(page, 0.3, 0.6);
+    const turn = defaultMushafPageProps.pageView.turnSeconds;
+    const moved = skipPageStart(page, 0.3, turn);
     expect(moved.audioOffsetSeconds).toBe(page.audioOffsetSeconds + 0.3);
     expect(moved.timings.ayat[0]!.start).toBeCloseTo(0.2, 6);
     expect(moved.lines[0]!.start).toBeCloseTo(page.lines[0]!.start - 0.3, 6);
     expect(moved.pages.map((p) => p.page)).toEqual(page.pages.map((p) => p.page));
     expect(moved.pages[1]!.start).toBeCloseTo(page.pages[1]!.start - 0.3, 6);
-    expect(skipPageStart(page, 0, 0.6)).toBe(page);
+    expect(skipPageStart(page, 0, turn)).toBe(page);
     const ayahs = await resolveAyahText({
       ...defaultMushafAyahTextProps,
       timingsFile: 'late.json',
@@ -534,7 +530,9 @@ describe('stacked translations', () => {
     const [block, ...rest] = blocks(mount(<MushafRecitation {...props} resolved={resolved} />));
     expect(rest).toHaveLength(0);
     expect(block!.textContent).toBe('Merciful');
-    expect(block!.style.fontFamily).toBe(props.text.translationFont);
+    // `auto`: the web font of the file's language.
+    expect(props.text.translationFont).toBe('auto');
+    expect(block!.style.fontFamily).toBe('"Noto Serif", serif');
     expect(block!.style.direction).toBe('rtl');
   });
 
@@ -807,21 +805,10 @@ describe('hostAudio: the template plays the audio', () => {
     expect(resolved.audioWarning).toBeNull();
   });
 
-  it('pads the glow’s levels with silence for a track that starts after the recitation', async () => {
-    const glow = background({glow: {enabled: true, color: '#fff', strength: 0.5}});
-    const resolved = await resolvedOf(recitationProps({hostAudio: host(-2), background: glow}));
-    // The file itself is analysed, from 2 s before it starts: 60 silent frames, then its own levels.
-    expect(mocks.analyzeAudio).toHaveBeenCalledWith(
-      'https://studio.test/audio.mp3',
-      expect.objectContaining({fps: 30}),
-    );
-    const levels = resolved.audio!.levels;
-    expect(levels.slice(0, 60)).toEqual(new Array(60).fill(0));
-    expect(levels.slice(60, 63)).toEqual([0, 0.111, 0.222]);
-    expect(levels).toHaveLength(Math.ceil((27.559 + 2 + 1) * 30));
-    expect(levelsWindow([0.5, 1], -1, 3)).toEqual([0, 0.5, 1]);
-    expect(levelsWindow([0.5, 1, 0.25], 1, 5)).toEqual([1, 0.25]);
-    expect(levelsWindow([0.5], -4, 2)).toEqual([0, 0]);
+  it('measures nothing for a track the template plays: no gain, no trim, no levels', async () => {
+    const resolved = await resolvedOf(recitationProps({hostAudio: host(-2)}));
+    expect(mocks.analyzeAudio).not.toHaveBeenCalled();
+    expect(resolved.audio).toEqual({gain: 1, trimSeconds: 0, levels: []});
   });
 
   it('refuses memorisation repeats, which cannot replay a track the template plays straight through', async () => {

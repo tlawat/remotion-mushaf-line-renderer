@@ -1,15 +1,15 @@
 import {
   enterTiming,
   exitTiming,
+  fadeRiseStyle,
   fontSizeForWidth,
   lineHeightForFontSize,
-  revealRtlStyle,
-  slideFadeStyle,
   wordAt,
   wordTiming,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
-import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {useMemo} from 'react';
+import {AbsoluteFill, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {followsHostAudio} from '../audio/host';
 import {volumeAt} from '../audio/volume';
 import {backgroundFor} from '../background/compat';
@@ -18,7 +18,6 @@ import {endCardFrames} from '../compositions/extras';
 import {
   CompositionAudio,
   CompositionEndCard,
-  glowLevelAt,
   StudioWarnings,
   translationsOf,
   useTranslationLayers,
@@ -42,7 +41,21 @@ import {
   wordVisibility,
 } from '../memorize';
 import {MushafTitleOverlay} from '../overlay';
-import {activeWordStyleFrom} from '../schema';
+import {
+  groundOf,
+  inkFill,
+  legibleAccent,
+  riseDistance,
+  SINE,
+  SOFT,
+  studioFontFamily,
+  washAlpha,
+  washColor,
+  washStyle,
+  wordEmphasis,
+  wordSpanIndex,
+  wordSpans,
+} from '../schema';
 import {MushafStudioPanel} from '../studio';
 import {useInStudio} from '../studio/environment';
 import {ayahKeyOf, TranslationStack} from '../translations';
@@ -52,62 +65,49 @@ import type {ResolvedAyah, ResolvedAyahText} from './resolve';
 import type {AyahAnimation, MushafAyahTextProps} from './schema';
 import type {AyahWord} from './text';
 
-/** `slideFade()`'s travel for one line, as a share of its line box, and how much of it an exit takes. */
-const SLIDE_SHARE = 0.28;
-const EXIT_DISTANCE_SCALE = 0.6;
-
 const entranceStyle = (
-  entrance: Exclude<AyahAnimation['enter'], 'none'>,
+  lines: Exclude<AyahAnimation['lines'], 'cut'>,
   direction: 'entering' | 'exiting',
   progress: number,
-  lineBox: number,
+  fontSize: number,
 ): React.CSSProperties => {
-  switch (entrance) {
-    case 'fade':
-      return {opacity: direction === 'entering' ? progress : 1 - progress};
-    case 'reveal-rtl':
-      return revealRtlStyle(progress, direction);
-    case 'slide-fade': {
-      // slideFadeStyle() moves by a share of the box it animates; an ayah block can be many lines
-      // tall, so the travel is one line box's worth in px, the opacity the package's own.
-      const travel = lineBox * SLIDE_SHARE;
-      const offset = direction === 'entering' ? (1 - progress) * travel : -progress * travel * EXIT_DISTANCE_SCALE;
-      return {opacity: slideFadeStyle(progress, direction).opacity, transform: `translateY(${offset.toFixed(4)}px)`};
-    }
-  }
+  // The exiting ayah only fades (on SINE), whichever motion: a leaving text does not move.
+  if (direction === 'exiting') return {opacity: 1 - SINE(progress)};
+  if (lines === 'rise') return fadeRiseStyle(progress, 'entering', {distance: riseDistance(fontSize)});
+  return {opacity: SOFT(progress)};
 };
 
 /**
  * The style of an ayah `frame` frames into its Sequence of `durationInFrames`: the entrance over the
  * first `enterTiming()` frames, the exit over the last `exitTiming()` frames (the exit wins where a
- * short Sequence has them overlap), on the package's curves and presentations. `lineBox` is one line
- * of the Arabic text in px. A pure function of its arguments.
+ * short Sequence has them overlap), on the calm curves: a fade, or with `'rise'` a rise of
+ * `riseDistance(fontSize)` px; `'cut'` neither. A pure function of its arguments.
  */
 export const ayahPresentationStyle = (
-  animation: Pick<AyahAnimation, 'enter' | 'exit'>,
+  animation: Pick<AyahAnimation, 'lines'>,
   frame: number,
   durationInFrames: number,
   fps: number,
-  lineBox: number,
+  fontSize: number,
 ): React.CSSProperties => {
-  const exit = exitTiming();
+  if (animation.lines === 'cut') return {};
+  const linear = (input: number) => input;
+  const exit = exitTiming({easing: linear});
   const exitFrom = durationInFrames - exit.getDurationInFrames({fps});
-  if (animation.exit !== 'none' && frame >= exitFrom) {
-    return entranceStyle(animation.exit, 'exiting', exit.getProgress({frame: frame - exitFrom, fps}), lineBox);
+  if (frame >= exitFrom) {
+    return entranceStyle(animation.lines, 'exiting', exit.getProgress({frame: frame - exitFrom, fps}), fontSize);
   }
-  if (animation.enter !== 'none') {
-    return entranceStyle(animation.enter, 'entering', enterTiming().getProgress({frame, fps}), lineBox);
-  }
-  return {};
+  return entranceStyle(animation.lines, 'entering', enterTiming({easing: linear}).getProgress({frame, fps}), fontSize);
 };
 
 /**
  * One ayah at a time as Unicode text in QUL's Uthmani Hafs font, following the audio: the framing
  * of reels and short clips, where `<MushafRecitation>` shows the printed page lines. Each timed
  * ayah is a Sequence from `leadInSeconds` before its first word to where the next one comes in,
- * centred at `layout.verticalAlign`, with the current word (or ayah) highlighted, the others dimmed
- * as `highlight` says, and its translation under it, with the title card and corner label of
- * `overlay` when asked, over its `background` (the glow following the recitation), the audio
+ * centred at `layout.verticalAlign`, the recitation marked as `highlight` says (the words still to
+ * come resting lighter, a tint or a wash on the word; the ayah on screen is the ayah being recited,
+ * so `mode: 'ayah'` marks nothing), and its translation under it, with the title card and corner
+ * label of `overlay` when asked, over its `background`, the audio
  * normalised and faded as `audio` says, and an end card after the last ayah when asked. The same
  * timings and translation files as the recitation (up to three translations, stacked); in the Studio
  * the Mushaf panel is docked over it, as over `<MushafRecitation>`.
@@ -153,16 +153,20 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
   const clip = clipAt(clips, seconds);
   const heard = wordAt(timings, now);
   const activeWordId = highlight.mode === 'none' ? null : heard;
-  const activeAyah = highlight.mode === 'ayah' ? ayahKeyOf(activeWordId) : null;
-  const highlightStyle = activeWordStyleFrom(highlight);
-  const dims = highlight.mode !== 'none' && highlight.dimOthers < 1;
+  // No theme here: a tint is always the text's CSS colour, read at 5:1 on the page.
+  const ground = groundOf(layout, props.background.kind);
+  const accent = legibleAccent(highlight.color, ground);
+  const spans = useMemo(
+    () => wordSpanIndex(wordSpans(timings, {occurrence: highlight.occurrence})),
+    [timings, highlight.occurrence],
+  );
   const measure = width - 2 * layout.marginX;
-  const lineBox = fontSize * lineHeight;
   const titleFontSize = fontSizeForWidth(measure);
   const showTranslation = translationLayers.length > 0 && text.translationPosition !== 'none';
 
-  // A pure function of the frame: the ayah of the current word is painted whole under `mode: 'ayah'`;
-  // the other words are dimmed, or only those not heard yet (the marker counts as heard at the ayah's end).
+  // A pure function of the frame. Under `mode: 'word'` the words still to come rest at
+  // `restOpacity` and fill in as heard (the marker counts as heard at the ayah's end), or the word
+  // being recited eases into the tint or its wash and back out; `mode: 'ayah'` marks nothing.
   const startOf = (ayah: ResolvedAyah, word: AyahWord): number | undefined =>
     wordTiming(timings, word.id)?.start ?? (word.kind === 'end' ? ayah.end : undefined);
   const visibilityOf = (ayah: ResolvedAyah, word: AyahWord): WordVisibility =>
@@ -175,16 +179,30 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
       clip,
       script: 'unicode',
     });
+  const markOf = (ayah: ResolvedAyah, word: AyahWord): React.CSSProperties | undefined => {
+    if (highlight.mode !== 'word') return undefined;
+    if (highlight.style === 'ink') {
+      const start = startOf(ayah, word);
+      if (start === undefined) return undefined;
+      const opacity =
+        Math.round((highlight.restOpacity + (1 - highlight.restOpacity) * inkFill(start, now)) * 10_000) / 10_000;
+      return opacity < 1 ? {opacity} : undefined;
+    }
+    const span = word.kind === 'end' ? undefined : spans.get(word.id);
+    const amount = span === undefined ? 0 : wordEmphasis(span, now);
+    if (amount <= 0) return undefined;
+    return highlight.style === 'tint'
+      ? {color: interpolateColors(amount, [0, 1], [layout.color, accent])}
+      : washStyle({
+          color: washColor(highlight.color, washAlpha(ground) * amount),
+          cap: 'both',
+          height: '1.35em',
+          y: '55%',
+        });
+  };
   const wordStyleFor = (ayah: ResolvedAyah): ((word: AyahWord) => React.CSSProperties | undefined) => {
-    const inActiveAyah = activeAyah === `${ayah.surah}:${ayah.ayah}`;
     return (word) => {
-      let style: React.CSSProperties | undefined = inActiveAyah && highlightStyle ? {...highlightStyle} : undefined;
-      if (dims && !inActiveAyah && word.id !== activeWordId) {
-        const start = startOf(ayah, word);
-        if (!highlight.dimUpcomingOnly || (start !== undefined && start > now)) {
-          style = {...style, opacity: highlight.dimOthers};
-        }
-      }
+      const style = markOf(ayah, word);
       const hidden = visibilityStyle(visibilityOf(ayah, word));
       return hidden ? {...style, ...hidden} : style;
     };
@@ -213,8 +231,6 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
-        audioLevel={glowLevelAt(resolved.audio, now, fps)}
-        glowY={layout.verticalAlign}
       />
       {ownAudio && identity && (
         <CompositionAudio
@@ -274,14 +290,13 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: Math.round(text.translationSize * 0.6),
-                  ...ayahPresentationStyle(animation, frame - from, duration, fps, lineBox),
+                  ...ayahPresentationStyle(animation, frame - from, duration, fps, fontSize),
                 }}
               >
                 {text.translationPosition === 'above' && block}
                 <AyahText
                   words={ayah.words}
                   activeWordId={highlight.mode === 'word' ? activeWordId : null}
-                  highlightStyle={highlightStyle}
                   wordStyle={wordStyleFor(ayah)}
                   wordText={wordTextFor?.(ayah)}
                   fontFamily={font.fontFamily}
@@ -327,7 +342,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         reciter={overlay.reciter}
         from={contentFrames}
         durationInFrames={cardFrames}
-        fontFamily={overlay.font}
+        fontFamily={studioFontFamily(overlay.font, 'label')}
         color={layout.color}
         background={layout.background}
         width={width}

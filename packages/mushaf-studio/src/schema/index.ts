@@ -9,12 +9,94 @@
 import {zColor} from '@remotion/zod-types';
 import type {MushafThemeSelection} from '@tlawat/remotion-mushaf-line';
 import {z} from 'zod';
+import {TEMPOS} from './tokens';
 
 // The converters, one file per concern; the fragments stay here because they are the contract.
-export {animationFrom, type LineAnimationProps, scrollTimingFrom} from './animation';
+export {animationFrom, type LineAnimationProps, riseDistance, scrollTimingFrom} from './animation';
+export {
+  ACCENT_CHROMA,
+  ACCENT_CONTRAST,
+  capChroma,
+  contrast,
+  fromOklch,
+  groundOf,
+  isLightGround,
+  legibleAccent,
+  mixColors,
+  type Oklch,
+  parseColor,
+  type Rgba,
+  readableInk,
+  relativeLuminance,
+  TEXT_CONTRAST,
+  toHex,
+  toOklch,
+  WASH_ALPHA_CAP,
+  washAlpha,
+  washColor,
+} from './color';
 export {type DataSource, dataSchema, dataSourceFrom, MIRROR_FILES} from './data';
-export {type FontProps, type FontSetup, fontPropsFrom} from './fonts';
-export {activeWordStyleFrom, type WordStartIndex, type WordStyleOptions, wordStyleFrom} from './highlight';
+export {type FontProps, type FontSetup, fontPropsFrom, type StudioFontRole, studioFontFamily} from './fonts';
+export {
+  activeWordStyleFrom,
+  effectiveNeighbourOpacity,
+  effectiveRestOpacity,
+  inkTintFor,
+  type TintPath,
+  tintPath,
+  type WordStartIndex,
+  type WordStyleOptions,
+  wordStyleFrom,
+} from './highlight';
+export {
+  type AyahSpan,
+  ayahEmphasis,
+  ayahSpanIndex,
+  ayahSpans,
+  type Boundary,
+  type BoundaryKind,
+  type BoundaryOptions,
+  boundaryStart,
+  hasWordTimes,
+  inkFill,
+  MIN_SPAN_FRAMES,
+  type OutgoingEndOptions,
+  outgoingEnd,
+  RELEASE_SECONDS,
+  type WordSpan,
+  type WordSpanOptions,
+  wordEmphasis,
+  wordSpanIndex,
+  wordSpans,
+  wordStartIndex,
+} from './marks';
+export {
+  describeMushafMigration,
+  type MigrateOptions,
+  type MigrationNote,
+  migrateMushafProps,
+  mushafPropsNeedMigration,
+} from './migrate';
+export {
+  ACCENT_GOLD,
+  ARRIVE,
+  type DissolveOpacities,
+  DURATIONS,
+  type DurationToken,
+  dissolve,
+  GROUNDS,
+  type GroundTokens,
+  INOUT,
+  METAL,
+  metalOf,
+  SINE,
+  SOFT,
+  TEMPOS,
+  type Tempo,
+  tempoFrames,
+  tempoSeconds,
+} from './tokens';
+export {type WashCap, type WashStyleOptions, washStyle} from './wash';
 
 /** The ten presets of the colour font plus `plain` (the monochrome font) and `custom` (see `customThemeSchema`). */
 export const THEME_NAMES = [
@@ -80,6 +162,9 @@ export const fontsSchema = z
 
 export const ASPECTS = ['16:9', '9:16', '1:1', '4:5'] as const;
 
+/** The border of the frame: none, or a thin gold double rule inside the safe area (the jadwal of a printed page). */
+export const LAYOUT_FRAMES = ['none', 'hairline'] as const;
+
 /**
  * The frame and the lines in it. `background` is the page colour: the `'color'` kind of the
  * `background` group paints it (`background.color` only fills behind an image, a video or a
@@ -90,13 +175,27 @@ export const layoutSchema = z.object({
   aspect: z.enum(ASPECTS).describe('Frame shape: 16:9 landscape, 9:16 reels, 1:1 square, 4:5 portrait'),
   /** 0 shows one line at a time, replaced in place; 1-7 shows a window of that many line slots. */
   visibleLines: z.number().int().min(0).max(7).describe('Lines on screen at once (0: one line, replaced in place)'),
-  neighbourOpacity: z.number().min(0).max(1).step(0.05).describe('Opacity of the lines around the current one'),
+  neighbourOpacity: z
+    .number()
+    .min(0.15)
+    .max(0.5)
+    .step(0.05)
+    .describe('Opacity of the lines around the current one (under ink, kept 0.2 below restOpacity)'),
   /** px, at the composition's width. */
-  marginX: z.number().int().min(0).max(400).step(10).describe('Side margins in px'),
+  marginX: z
+    .number()
+    .int()
+    .min(0)
+    .max(400)
+    .step(10)
+    .describe('Side margins in px (about 10 % of the width reads best at 16:9)'),
   /** Page colour: painted when `background.kind` is `color`; the title card, counter and end card use it always. */
   background: zColor(),
   /** Ink colour: the plain theme's, and every part a theme paints in `currentColor`. */
   color: zColor(),
+  frame: z
+    .enum(LAYOUT_FRAMES)
+    .describe('A thin gold double rule inside the safe area, as on a printed page (none: no border)'),
   /** A `public/` path of an image behind everything, or empty for none: superseded by `background.src`. */
   backgroundImage: z
     .string()
@@ -109,35 +208,69 @@ export const layoutSchema = z.object({
   offsetY: z.number().int().min(-800).max(800).step(10).describe('Move the lines up (negative) or down, in px'),
 });
 
+/** How a line or an ayah gives way to the next: a dissolve, a dissolve with a slight rise, or a cut. */
+export const LINE_MOTIONS = ['fade', 'rise', 'cut'] as const;
+/** @deprecated The `enter` / `exit` values saved before this design; `migrateMushafProps()` maps them to `lines`. */
 export const ENTRANCES = ['slide-fade', 'fade', 'reveal-rtl', 'none'] as const;
 
+/**
+ * How lines give way (the panel's "Motion"): always after the outgoing line's last word, by a
+ * staggered dissolve (`dissolve()`), with a rise of at most 0.12 em, or by a cut (the reduce-motion
+ * path; the marks still ease). `tempo: 'slow'` lengthens every change of line, ayah, page and card
+ * 1.4×; the word marks keep their pace, in sync with the voice.
+ */
 export const animationSchema = z.object({
-  enter: z.enum(ENTRANCES).describe('How a line comes in'),
-  exit: z.enum(ENTRANCES).describe('How a line goes out'),
-  /** Seconds a line is in place before its first word is heard. */
-  leadInSeconds: z.number().min(0).max(3).step(0.1).describe('Seconds a line is on screen before its first word'),
-  scroll: z.enum(['ease', 'spring']).describe('Curve of the window’s scroll between lines'),
-});
-
-export const HIGHLIGHT_STYLES = ['color', 'glow', 'marker', 'none'] as const;
-
-export const highlightSchema = z.object({
-  mode: z.enum(['word', 'ayah', 'none']).describe('What follows the recitation: the word, the whole ayah, or nothing'),
-  style: z
-    .enum(HIGHLIGHT_STYLES)
-    .describe('How the current word is marked: ink colour, a glow, a marker behind it (ignored when mode is none)'),
-  /** Colour of the mark. */
-  color: zColor(),
-  /** Opacity of the words that are not current: 1 for no dimming. Memorisation's hiding is applied over it. */
-  dimOthers: z
+  lines: z
+    .enum(LINE_MOTIONS)
+    .describe(
+      'How a line or ayah gives way to the next, always after its last word: a dissolve, a dissolve with a slight rise, or a cut',
+    ),
+  tempo: z.enum(TEMPOS).describe('Pace of every change: calm, or slow (1.4× longer). The word mark keeps its pace'),
+  /** Seconds the incoming line waits, settled, before its first word, when the pause allows it. */
+  leadInSeconds: z
     .number()
     .min(0)
-    .max(1)
+    .max(2)
+    .step(0.1)
+    .describe('Longest a new line waits, settled, before its first word (it never comes before the last line ends)'),
+});
+
+/** One mark at a time: ink (the words still to come rest lighter), tint (the word's ink in the accent), or wash (a faint band). */
+export const HIGHLIGHT_STYLES = ['ink', 'tint', 'wash'] as const;
+/** The `style` values saved before this design; `migrateMushafProps()` maps them. */
+export const LEGACY_HIGHLIGHT_STYLES = ['color', 'glow', 'marker', 'none'] as const;
+
+/**
+ * What follows the recitation and how it is marked: exactly one device, eased in and out, never a
+ * box, a halo or two marks together. `ink` dims only what is still to come on the current line and
+ * fills it in as it is heard; `tint` turns the word's (or ayah's) ink into the accent, read at 5:1 on
+ * the page (`legibleAccent()`); `wash` paints a faint, soft-ended band behind it. On a theme with
+ * tajweed colours a tint is shown as a wash, so the rules' colours are never repainted.
+ */
+export const highlightSchema = z.object({
+  mode: z
+    .enum(['word', 'ayah', 'none'])
+    .describe(
+      'What follows the recitation: each word, the whole ayah, or nothing. Word falls back to ayah when the timings have no word times',
+    ),
+  style: z
+    .enum(HIGHLIGHT_STYLES)
+    .describe(
+      'One mark: ink (text still to come rests lighter), tint (the ink turns the accent; a wash on tajweed themes) or wash (a faint band behind). Ignored when mode is none',
+    ),
+  /**
+   * The accent of tint and wash. A tint is darkened or lightened until it reads at 5:1 on the page
+   * (`legibleAccent()`), and its chroma is capped so a bright colour becomes antique gold; a wash
+   * paints it at a fixed faint strength. Ignored by ink.
+   */
+  color: zColor(),
+  restOpacity: z
+    .number()
+    .min(0.5)
+    .max(0.85)
     .step(0.05)
-    .describe('Opacity of the other words (1: none; ignored when mode is none; a word memorize hides stays hidden)'),
-  /** Dim only the words not yet recited; the ones already heard stay at full opacity. */
-  dimUpcomingOnly: z.boolean().describe('Dim only the words still to come (with dimOthers under 1)'),
-  /** Which recitation of a repeated word moves the highlight. */
+    .describe('Ink only: opacity of the words not yet marked on the current line (at least 0.65 on tajweed themes)'),
+  /** Which recitation of a repeated word moves the mark. */
   occurrence: z.enum(['first', 'last']).describe('For a repeated word: follow its first or its last recitation'),
 });
 
@@ -185,7 +318,11 @@ export const textSchema = z.object({
   translationPosition: z
     .enum(['below', 'above', 'none'])
     .describe('Where the ayah translation goes (none hides it; its files are still read)'),
-  translationFont: z.string().describe('Single translation: CSS font family (ignored once translations has a layer)'),
+  translationFont: z
+    .string()
+    .describe(
+      'Single translation: “auto” (EB Garamond for Latin scripts, the language’s own font otherwise) or a CSS font family (ignored once translations has a layer)',
+    ),
   translationSize: z
     .number()
     .int()
@@ -215,7 +352,9 @@ export const textSchema = z.object({
     .describe(
       'MushafRecitation only: word-by-word transliteration in public/ (empty: none; glossPosition none hides it)',
     ),
-  glossFont: z.string().describe('MushafRecitation only: CSS font family of the gloss'),
+  glossFont: z
+    .string()
+    .describe('MushafRecitation only: “auto” (EB Garamond italic) or a CSS font family of the gloss'),
   glossSize: z.number().int().min(12).max(120).describe('MushafRecitation only: gloss size in px'),
   /** The gloss's colour (`<MushafRecitation>` only). */
   glossColor: zColor(),
@@ -255,7 +394,7 @@ export const memorizeSchema = z.object({
   mode: z
     .enum(MEMORIZE_MODES)
     .describe(
-      'Memorisation: off, first letters of the words to come (a faint outline on printed lines), blank the words to come, blank all but the recited, or repeat only. Its hiding wins over highlight.dimOthers',
+      'Memorisation: off, first letters of the words to come (a faint outline on printed lines), blank the words to come, blank all but the recited, or repeat only. Its hiding wins over highlight.restOpacity',
     ),
   repeat: z.number().int().min(1).max(10).describe('Plays of each ayah before the next (every mode but off)'),
   pauseSeconds: z.number().min(0).max(5).step(0.1).describe('Seconds of silence between two plays of an ayah'),
@@ -290,12 +429,14 @@ export const overlaySchema = z.object({
       'Title: none, an intro card, a corner label, or both. The intro card shows the surah name: with header on, it is shown twice',
     ),
   /** The card fades out 0.3 s before the first word when the recitation starts earlier than this. */
-  introSeconds: z.number().min(1).max(8).step(0.5).describe('Seconds the intro card stays'),
+  introSeconds: z.number().min(2).max(6).step(0.5).describe('Seconds the intro card stays'),
   /** Free text: the Mushaf panel does not fill it. */
   reciter: z.string().describe('Reciter’s name, under the title and in the corner (empty: none)'),
   /** Colour of the title texts. */
   color: zColor(),
-  font: z.string().describe('CSS font family of the title texts'),
+  font: z
+    .string()
+    .describe('“auto”: EB Garamond small caps, Amiri for Arabic; or a CSS font family for the title texts'),
   corner: z.enum(OVERLAY_CORNERS).describe('Corner of the label'),
   /** px, at the composition's width. */
   cornerSize: z.number().int().min(12).max(60).describe('Size of the corner label in px'),
@@ -363,6 +504,9 @@ export type CustomTheme = z.infer<typeof customThemeSchema>;
 export type Fonts = z.infer<typeof fontsSchema>;
 export type Layout = z.infer<typeof layoutSchema>;
 export type Animation = z.infer<typeof animationSchema>;
+export type LineMotion = (typeof LINE_MOTIONS)[number];
+export type LayoutFrame = (typeof LAYOUT_FRAMES)[number];
+export type HighlightStyle = (typeof HIGHLIGHT_STYLES)[number];
 export type Highlight = z.infer<typeof highlightSchema>;
 export type Text = z.infer<typeof textSchema>;
 export type Review = z.infer<typeof reviewSchema>;
@@ -378,57 +522,60 @@ export type LegendNames = (typeof LEGEND_NAMES)[number];
 export type EndCardKind = (typeof END_CARD_KINDS)[number];
 export type EndCardSettings = z.infer<typeof endCardSchema>;
 
+/**
+ * The Mushaf look's palette: the ink follows `layout.color`, and every rosette is a gold line
+ * drawing (`frame`, `detail`) on vellum (`accent`) around a disc of the ground (`background`):
+ * never a solid coin, never the pink and mint fills of `normal`.
+ */
 export const defaultCustomTheme: CustomTheme = {
   base: 'normal',
-  ink: '#1b1b1b',
-  silent: '#8a8a8a',
+  ink: '#1c1a16',
+  silent: '#8a8478',
   rules: '#1b6f3f',
-  frame: '#1b1b1b',
-  accent: '#c8a45c',
-  detail: '#c8a45c',
-  background: 'transparent',
-  override: {ink: false, silent: false, rules: false, frame: false, accent: true, detail: true, background: false},
+  frame: '#8c6c26',
+  accent: '#efe3c4',
+  detail: '#8c6c26',
+  background: '#f8f3e6',
+  override: {ink: false, silent: false, rules: false, frame: true, accent: true, detail: true, background: true},
 };
 
+/** Ivory page, warm black ink, three lines with their neighbours at 0.3, the side margins of 16:9, no border. */
 export const defaultLayout: Layout = {
   aspect: '16:9',
   visibleLines: 3,
-  neighbourOpacity: 0.45,
-  marginX: 120,
-  background: '#fbf7ee',
-  color: '#1b1b1b',
+  neighbourOpacity: 0.3,
+  marginX: 190,
+  background: '#f8f3e6',
+  color: '#1c1a16',
   backgroundImage: '',
   verticalAlign: 0.5,
   offsetY: 0,
+  frame: 'none',
 };
 
-export const defaultAnimation: Animation = {
-  enter: 'slide-fade',
-  exit: 'slide-fade',
-  leadInSeconds: 0.4,
-  scroll: 'ease',
-};
+/** Calm dissolves, a new line settled 0.4 s before its first word when the pause allows it. */
+export const defaultAnimation: Animation = {lines: 'fade', tempo: 'calm', leadInSeconds: 0.4};
 
+/** Each word followed in ink: the words still to come on the current line rest at 0.6 and fill in as they are heard. */
 export const defaultHighlight: Highlight = {
   mode: 'word',
-  style: 'color',
-  color: '#c8a45c',
-  dimOthers: 1,
-  dimUpcomingOnly: false,
+  style: 'ink',
+  color: '#b8913a',
+  restOpacity: 0.6,
   occurrence: 'first',
 };
 
 export const defaultText: Text = {
   translationFile: '',
   translationPosition: 'below',
-  translationFont: 'Georgia, "Noto Serif", serif',
+  translationFont: AUTO_FONT,
   translationSize: 40,
   translationColor: '#4a4a4a',
   translationDirection: 'ltr',
   translationOffsetY: 0,
   glossFile: '',
   transliterationFile: '',
-  glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
+  glossFont: AUTO_FONT,
   glossSize: 34,
   glossColor: '#6a6a6a',
   translations: [],
@@ -440,13 +587,13 @@ export const defaultRecitationText: RecitationText = {...defaultText, glossPosit
 /** Off; when a mode is picked: three plays of each ayah, half a second apart, the text revealed from the second. */
 export const defaultMemorize: Memorize = {mode: 'off', repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1};
 
-/** No title; when one is turned on: a three-second card, dark ink in the translation's serif, the label top right. */
+/** No title; when one is turned on: a three-second card, dark ink in the label font, the label top right. */
 export const defaultOverlay: Overlay = {
   title: 'none',
   introSeconds: 3,
   reciter: '',
   color: '#1b1b1b',
-  font: 'Georgia, "Noto Serif", serif',
+  font: AUTO_FONT,
   corner: 'top-right',
   cornerSize: 28,
 };

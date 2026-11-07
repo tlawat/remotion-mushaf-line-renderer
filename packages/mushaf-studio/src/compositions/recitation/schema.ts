@@ -102,7 +102,7 @@ export type MushafRecitationProps = z.infer<typeof mushafRecitationSchema>;
  * Defaults that work out of the box: Al-Fatihah (ayahs 2-7) by Abdul Hamid Ghraio from the
  * aligner's catalogue, the audio in the app's `public/` (downloaded by `bun run sample`; the
  * catalogue's clip streams until then) beside the timings committed there; the mushaf data from
- * the mirror the app ships; plain theme, a three-line window.
+ * the mirror the app ships; the Mushaf palette (gold-line rosettes on ivory), a three-line window.
  */
 export const defaultMushafRecitationProps: MushafRecitationProps = {
   audioFile: 'mushaf-studio/fatiha/audio.mp3',
@@ -112,7 +112,7 @@ export const defaultMushafRecitationProps: MushafRecitationProps = {
   slice: true,
   splits: [],
   header: 'none',
-  theme: 'plain',
+  theme: 'custom',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
   data: 'mirror',

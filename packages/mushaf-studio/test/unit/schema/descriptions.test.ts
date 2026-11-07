@@ -114,12 +114,18 @@ describe('the descriptions of overlapping options', () => {
     expect(overlaySchema.shape.title.description).toMatch(/with header on, it is shown twice/);
   });
 
-  it('say that memorisation wins over the dimming, and what mode none turns off', () => {
-    expect(highlightSchema.shape.dimOthers.description).toMatch(/ignored when mode is none.*memorize hides/);
-    expect(highlightSchema.shape.style.description).toMatch(/ignored when mode is none/);
-    expect(memorizeSchema.shape.mode.description).toMatch(/wins over highlight\.dimOthers/);
+  it('say that memorisation wins over the rest opacity, what mode none turns off, and that the band wins on the page', () => {
+    expect(highlightSchema.shape.style.description).toMatch(/Ignored when mode is none/);
+    expect(highlightSchema.shape.style.description).toMatch(/a wash on tajweed themes/);
+    expect(highlightSchema.shape.restOpacity.description).toMatch(/^Ink only:.*at least 0\.65 on tajweed themes/);
+    expect(highlightSchema.shape.mode.description).toMatch(
+      /Word falls back to ayah when the timings have no word times/,
+    );
+    expect(memorizeSchema.shape.mode.description).toMatch(/wins over highlight\.restOpacity/);
     expect(memorizeSchema.shape.mode.description).toMatch(/faint outline on printed lines/);
-    expect(pageViewSchema.shape.dimOtherLines.description).toMatch(/on top of highlight\.dimOthers/);
+    expect(pageViewSchema.shape.lineHighlight.description).toMatch(/wins over highlight\.style on the page/);
+    expect(pageViewSchema.shape.dimOtherLines.description).toMatch(/at least 0\.5/);
+    expect(layoutSchema.shape.neighbourOpacity.description).toMatch(/under ink, kept 0\.2 below restOpacity/);
     expect(mushafRecitationSchema.shape.memorize.description).toMatch(/no repeats under hostAudio/);
   });
 
@@ -182,9 +188,12 @@ describe('the descriptions of overlapping options', () => {
     expect(custom({base: 'light', override: {...defaultCustomTheme.override, rules: true}})).toBe(false);
   });
 
-  it('say what the data source, the glow and the custom theme need', () => {
+  it('say what the data source and the custom theme need, and that the glow is gone', () => {
     expect(dataSchema.description).toMatch(/mirror = the files in public\/data\/qpc-v4/);
+    // Deprecated, kept exported for the next breaking release, and no longer in the background group.
     expect(glowSchema.shape.enabled.description).toMatch(/analyses the whole recording/);
+    expect('glow' in backgroundSchema.shape).toBe(false);
+    expect(backgroundSchema.shape.kenBurnsScale.description).toMatch(/at most 1\.05/);
     expect(themeNameSchema.description).toMatch(/custom: the customTheme palette/);
   });
 });

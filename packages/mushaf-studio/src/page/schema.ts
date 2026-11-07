@@ -1,4 +1,3 @@
-import {zColor} from '@remotion/zod-types';
 import {z} from 'zod';
 import {defaultHostAudio, hostAudioSchema} from '../audio/host';
 import {audioSchema, defaultAudio} from '../audio/schema';
@@ -22,38 +21,16 @@ import {
   textSchema,
   themeNameSchema,
 } from '../schema';
+import {defaultPageView, pageViewSchema} from './view';
 
-/** How the page shows the line being recited: nothing, a soft band behind it, or a rule under it. */
-export const LINE_HIGHLIGHTS = ['none', 'band', 'underline'] as const;
-/** The page's border: none, a thin double rule, or a double rule with corner ornaments. */
-export const PAGE_FRAMES = ['none', 'simple', 'ornate'] as const;
-/** How one page gives way to the next: at once, a cross-fade, or a slide the way a mushaf's leaf turns. */
-export const PAGE_TURNS = ['cut', 'fade', 'slide'] as const;
-
-/** What the page itself looks like and how it turns; the lines' highlight is `highlight`'s. */
-export const pageViewSchema = z.object({
-  lineHighlight: z
-    .enum(LINE_HIGHLIGHTS)
-    .describe('How the line being recited is marked: a band behind it, a rule under it'),
-  /** Colour of the band or the rule. */
-  lineHighlightColor: zColor(),
-  /** Opacity of the lines that are not being recited: 1 for no dimming. */
-  dimOtherLines: z
-    .number()
-    .min(0)
-    .max(1)
-    .step(0.05)
-    .describe('Opacity of the other lines (1: none), on top of highlight.dimOthers'),
-  frame: z.enum(PAGE_FRAMES).describe('Page border: a thin double rule, or one with corner ornaments'),
-  /** In Arabic-Indic digits, under the page. */
-  pageNumber: z.boolean().describe('Show the page number under the page'),
-  /** `slide` moves the leaf the way a right-to-left book turns: the next page comes in from the left. */
-  turn: z.enum(PAGE_TURNS).describe('How the page changes: at once, a fade, or a slide like a turning leaf'),
-  /** The next page is in place this long before its first word is heard. */
-  turnSeconds: z.number().min(0.2).max(2).step(0.1).describe('Seconds a page turn takes'),
-});
-
-export type PageView = z.infer<typeof pageViewSchema>;
+export {
+  defaultPageView,
+  LINE_HIGHLIGHTS,
+  PAGE_FRAMES,
+  PAGE_TURNS,
+  type PageView,
+  pageViewSchema,
+} from './view';
 
 /** Where the page's translations go: beside the page (the gutter left of it), under it, or wherever there is more room. */
 export const PAGE_TRANSLATION_POSITIONS = ['auto', 'beside', 'below', 'none'] as const;
@@ -137,21 +114,10 @@ export const mushafPageSchema = z.object({
 
 export type MushafPageProps = z.infer<typeof mushafPageSchema>;
 
-/** A soft gold band behind the current line, a thin double rule, the page number, and a leaf-like slide. */
-export const defaultPageView: PageView = {
-  lineHighlight: 'band',
-  lineHighlightColor: 'rgba(200,164,92,0.18)',
-  dimOtherLines: 1,
-  frame: 'simple',
-  pageNumber: true,
-  turn: 'slide',
-  turnSeconds: 0.6,
-};
-
 /**
  * Defaults that work out of the box: the same Al-Fatihah sample as `<MushafRecitation>` (ayahs 2-7
  * by Abdul Hamid Ghraio from the aligner's catalogue, the audio in the app's `public/` beside the
- * timings committed there), the mushaf data from the app's mirror, the plain theme,
+ * timings committed there), the mushaf data from the app's mirror, the Mushaf palette,
  * a 16:9 frame with page 1 centred in it.
  */
 export const defaultMushafPageProps: MushafPageProps = {
@@ -159,7 +125,7 @@ export const defaultMushafPageProps: MushafPageProps = {
   timingsFile: 'mushaf-studio/fatiha/timings.json',
   fromAyah: 0,
   toAyah: 0,
-  theme: 'plain',
+  theme: 'custom',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
   data: 'mirror',

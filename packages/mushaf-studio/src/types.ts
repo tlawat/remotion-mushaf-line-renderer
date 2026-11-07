@@ -184,7 +184,7 @@ export type ResolvedAudio = {
   /**
    * The recording's level per frame (0-1, three decimals) from where the composition starts in it,
    * on the recording's clock (`audioClock()`), to the last ayah's end plus a second. Filled for the
-   * background's glow only; `[]` otherwise.
+   * glow the background no longer has, so `[]`: kept so a `resolved` saved before reads the same.
    */
   readonly levels: readonly number[];
   /**

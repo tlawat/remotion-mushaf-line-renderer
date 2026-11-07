@@ -192,6 +192,23 @@ export type WordContext = {
   readonly active: boolean;
   /** `false` for the words a `slice` hides; `true` for every word when no slice is in effect. */
   readonly inSlice: boolean;
+  /**
+   * The signed distance of the word's line from the window's centre slot, `index − position`: 0 in
+   * the centre, −1 one slot above, +0.4 on its way in from below. The same number the window dims
+   * its lines by (`windowLineOpacity()`), signed. A lone `<MushafLine>` gives 0.
+   */
+  readonly linePosition?: number;
+  /**
+   * The `font-palette` that repaints the line's ink in `inkTint`, by how much of it (0-1): the
+   * nearest of four steps (0.25, 0.5, 0.75, 1), `undefined` under 0.125 (the row's own palette).
+   * Itself `undefined` when the line has no `inkTint`, or is set in the monochrome font (`plain`),
+   * whose ink is CSS `color`: set `color` there.
+   *
+   * ```ts
+   * wordStyle={(word, ctx) => (word.id === current ? {fontPalette: ctx.inkPalette?.(1)} : undefined)}
+   * ```
+   */
+  readonly inkPalette?: ((amount: number) => string | undefined) | undefined;
 };
 
 /**
@@ -393,13 +410,24 @@ export type MushafLineCommonProps = {
    * Per-word style, called for every word on every frame. Must be a pure function of its arguments
    * so renders stay deterministic.
    *
-   * Paint-only: `color`, `opacity`, `filter`, `background`, `textShadow` are safe. Anything that
-   * changes glyph metrics (font size/family/weight, letter spacing, padding, margins, borders,
-   * display) breaks the printed line breaks and is ignored by the layout's pinned row style.
+   * Paint-only: `color`, `opacity`, `filter`, `background`, `textShadow` and `fontPalette` are safe
+   * (`fontPalette` is ignored on the ayah-end rosette, `kind: 'end'`, which keeps its marker
+   * palette). Anything that changes glyph metrics (font size/family/weight, letter spacing,
+   * padding, margins, borders, display) breaks the printed line breaks and is ignored by the
+   * layout's pinned row style.
    */
   readonly wordStyle?: (word: MushafWord, context: WordContext) => React.CSSProperties | undefined;
   /** Per-word class name, appended to `mushaf-word mushaf-word--<kind>`. Same purity rule. */
   readonly wordClassName?: (word: MushafWord, context: WordContext) => string | undefined;
+  /**
+   * A CSS colour the line's ink can be repainted in, word by word, under any colour-font theme: the
+   * line registers four palettes that mix the ink it paints toward it (a quarter, half, three
+   * quarters, all of the way), and `WordContext.inkPalette` names them for `wordStyle`. Only the
+   * ink entries change: the tajweed rules, the silent letters and the rosettes keep their colours.
+   * A word's CSS `color` cannot do this, even under `normal`: its palette holds the row's colour
+   * resolved, not `currentColor`. Ignored by `plain` (the monochrome font), whose ink is CSS `color`.
+   */
+  readonly inkTint?: string;
   /** Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline. */
   readonly name?: string;
   /**
@@ -499,6 +527,7 @@ export type MushafLineWindowCommonProps = Pick<
   | 'activeWordStyle'
   | 'wordStyle'
   | 'wordClassName'
+  | 'inkTint'
   | 'fontSrc'
   | 'fontFallback'
 > & {

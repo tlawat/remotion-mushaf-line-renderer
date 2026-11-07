@@ -123,6 +123,24 @@ describe('resolveMushafRecitationSlot', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('migrates props saved before the render design first, and gives them back migrated', async () => {
+    const saved = {
+      ...props({timingsFile: ''}),
+      highlight: {mode: 'word', style: 'marker', color: '#ffd166', dimOthers: 0.35, dimUpcomingOnly: false},
+    } as unknown as MushafRecitationProps;
+    const empty = await resolveMushafRecitationSlot(saved, {fps: 30});
+    expect(empty.props?.highlight).toEqual({
+      mode: 'word',
+      style: 'wash',
+      color: '#b8913a',
+      restOpacity: 0.6,
+      occurrence: 'first',
+    });
+    const resolved = await resolveMushafRecitationSlot({...saved, timingsFile: props().timingsFile}, {fps: 30});
+    expect(resolved.props?.highlight.style).toBe('wash');
+    expect(resolved.error).toBeNull();
+  });
+
   it("resolves at the template's fps, with the length in resolved.durationInFrames and no size", async () => {
     const abortSignal = new AbortController().signal;
     const at30 = await resolveMushafRecitationSlot(props(), {fps: 30, abortSignal});

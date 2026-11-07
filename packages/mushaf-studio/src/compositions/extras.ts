@@ -122,16 +122,14 @@ export const isAutoFont = (font: string): boolean => font.trim().toLowerCase() =
 /** No analysis: the audio plays as it is. */
 export const NO_AUDIO_ANALYSIS: ResolvedAudio = {gain: 1, trimSeconds: 0, levels: []};
 
-/** Whether the background's glow is drawn, so the levels are worth measuring. */
-export const glowIsOn = (background: Pick<Background, 'glow'>): boolean =>
-  background.glow.enabled && background.glow.strength > 0;
-
-/** Whether `calculateMetadata()` has to analyse the recording: there is one, and something uses the analysis. */
+/**
+ * Whether `calculateMetadata()` has to analyse the recording: there is one, and the loudness
+ * (`normalize`) or the leading silence (`trimSilence`) is used. Nothing on screen follows the level.
+ */
 export const needsAudioAnalysis = (
   audioFile: string,
   audio: Pick<AudioSettings, 'normalize' | 'trimSilence'>,
-  background: Pick<Background, 'glow'>,
-): boolean => audioFile !== '' && (audio.normalize || audio.trimSilence || glowIsOn(background));
+): boolean => audioFile !== '' && (audio.normalize || audio.trimSilence);
 
 /** The default sample's recording in `public/`: what the compositions' `audioFile` is out of the box. */
 export const SAMPLE_AUDIO_FILE = 'mushaf-studio/fatiha/audio.mp3';
@@ -227,7 +225,6 @@ export const resolveAudioSource = async (options: AudioSourceOptions): Promise<A
 export type AudioCleanupOptions = {
   readonly audioFile: string;
   readonly audio: AudioSettings;
-  readonly background: Pick<Background, 'glow'>;
   /** Seconds of the recording the composition already skips (`audioOffsetSeconds`). */
   readonly offsetSeconds: number;
   /**
@@ -235,22 +232,21 @@ export type AudioCleanupOptions = {
    * where the first line (or ayah) starts to come in, so it still enters before its first word.
    */
   readonly latestSeconds: number;
-  /** The last ayah's end on the composition's clock before the trim: the levels are kept to it plus a second. */
+  /** The last ayah's end on the composition's clock before the trim. */
   readonly endSeconds: number;
   readonly fps: number;
   readonly staticFile: (path: string) => string;
   readonly signal?: AbortSignal | undefined;
   /**
-   * The timings file's sidecar (`timings.alignment`): its `audio` summary stands in for the analysis
-   * when the glow is off, and its catalogue clip plays when `audioFile` is missing (`resolveAudioSource()`).
+   * The timings file's sidecar (`timings.alignment`): its `audio` summary stands in for the analysis,
+   * and its catalogue clip plays when `audioFile` is missing (`resolveAudioSource()`).
    */
   readonly sidecar?: Pick<AlignmentSidecar, 'recitation' | 'audio'> | undefined;
   /** For the probe of `audioFile`; `globalThis.fetch` by default. */
   readonly fetch?: typeof fetch | undefined;
   /**
    * The template plays the audio (`hostAudio.enabled`): no gain, no trim, no catalogue clip in place
-   * of a missing `audioFile` (the template's track is what plays); only the glow's levels are
-   * measured, of `audioFile` itself, from `offsetSeconds`, which may be negative.
+   * of a missing `audioFile` (the template's track is what plays), so nothing is measured.
    */
   readonly hostAudio?: boolean | undefined;
 };
@@ -269,34 +265,19 @@ const joinWarnings = (...warnings: readonly (string | null)[]): string | null =>
   return present.length === 0 ? null : present.join(' ');
 };
 
-const round3 = (value: number): number => Math.round(value * 1000) / 1000;
-
-/**
- * Up to `count` levels of `levels` from frame `from`, rounded to three decimals, as `slice()` would
- * give them, except that a frame before the recording (a negative `from`: the template's track
- * starts after the composition) is silent, 0, where `slice()` would count from the end.
- * `levelsWindow([0.5, 1], -1, 3)` is `[0, 0.5, 1]`.
- */
-export const levelsWindow = (levels: readonly number[], from: number, count: number): readonly number[] => {
-  const silent = Math.min(count, Math.max(0, -from));
-  const start = Math.max(0, from);
-  return [...new Array<number>(silent).fill(0), ...levels.slice(start, start + count - silent).map(round3)];
-};
-
 /**
  * Finds where the recording plays from (`resolveAudioSource()`: the timings' catalogue clip when
  * `audioFile` is missing from `public/`), analyses it when something needs it
  * (`needsAudioAnalysis()`) and says what to do with it: the gain that brings it to
- * `audio.targetLufs` (`gainFor()`, under `normalize`), the seconds of leading silence to skip
- * (`silenceTrimSeconds()`, under `trimSilence`, never past `latestSeconds`) and, for the glow, one
- * level per frame of `fps` from the composition's new start (three decimals; `levelsFps` records
- * the fps). With the glow off, the sidecar's `audio` summary (written when the panel saved the timings) stands in for the analysis,
- * so nothing is downloaded. Under `hostAudio` only the glow's levels are measured (see the option). An analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a
+ * `audio.targetLufs` (`gainFor()`, under `normalize`) and the seconds of leading silence to skip
+ * (`silenceTrimSeconds()`, under `trimSilence`, never past `latestSeconds`). The sidecar's `audio`
+ * summary (written when the panel saved the timings) stands in for the analysis, so nothing is
+ * downloaded. Under `hostAudio` nothing is measured (see the option). An analysis that fails with `AUDIO_ANALYSIS_FAILED` (no Web Audio, a
  * file the browser cannot fetch or decode) is not an error: the audio plays as it is, and `warning`
  * says why. Any other failure (an abort) passes through.
  */
 export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise<AudioCleanup> => {
-  const {background, fps} = options;
+  const {fps} = options;
   const host = options.hostAudio === true;
   // Under hostAudio the template's <Audio> owns the loudness and the start: nothing to normalise or trim.
   const audio = host ? {...options.audio, normalize: false, trimSilence: false} : options.audio;
@@ -306,8 +287,8 @@ export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise
     warning: joinWarnings(source.warning, warning),
     src: source.src,
   });
-  if (!needsAudioAnalysis(options.audioFile, audio, background)) return cleanup(NO_AUDIO_ANALYSIS, null);
-  const summary = glowIsOn(background) ? null : audioSummaryFrom(options.sidecar?.audio);
+  if (!needsAudioAnalysis(options.audioFile, audio)) return cleanup(NO_AUDIO_ANALYSIS, null);
+  const summary = audioSummaryFrom(options.sidecar?.audio);
   let analysis: Pick<AudioAnalysis, 'lufs' | 'peak' | 'firstSoundSeconds' | 'levels'>;
   if (summary !== null) {
     analysis = {...summary, levels: []};
@@ -331,11 +312,7 @@ export const resolveAudioCleanup = async (options: AudioCleanupOptions): Promise
         latestSeconds: options.offsetSeconds + Math.max(0, options.latestSeconds),
       })
     : 0;
-  if (!glowIsOn(background)) return cleanup({gain, trimSeconds, levels: []}, null);
-  const from = Math.round((options.offsetSeconds + trimSeconds) * fps);
-  const count = Math.max(0, Math.ceil((options.endSeconds - trimSeconds + 1) * fps));
-  // A slice from a negative frame would count from the end of the recording: the frames before it are silent.
-  return cleanup({gain, trimSeconds, levels: levelsWindow(analysis.levels, from, count), levelsFps: fps}, null);
+  return cleanup({gain, trimSeconds, levels: []}, null);
 };
 
 // ---------------------------------------------------------------------------------------------

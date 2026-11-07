@@ -3,6 +3,7 @@ import {defaultHostAudio, hostAudioSchema} from '../audio/host';
 import {audioSchema, defaultAudio} from '../audio/schema';
 import {backgroundSchema, defaultBackground} from '../background/schema';
 import {
+  animationSchema,
   defaultAnimation,
   defaultEndCard,
   defaultHighlight,
@@ -10,7 +11,6 @@ import {
   defaultMemorize,
   defaultOverlay,
   defaultText,
-  ENTRANCES,
   endCardSchema,
   highlightSchema,
   layoutSchema,
@@ -20,13 +20,8 @@ import {
 } from '../schema';
 import {UNICODE_FONT_IDS} from './font';
 
-/** How an ayah comes in and goes out: `animationSchema`'s vocabulary, without the window's scroll. */
-export const ayahAnimationSchema = z.object({
-  enter: z.enum(ENTRANCES).describe('How an ayah comes in'),
-  exit: z.enum(ENTRANCES).describe('How an ayah goes out'),
-  /** Seconds before its first word is heard at which an ayah starts to come in. */
-  leadInSeconds: z.number().min(0).max(3).step(0.1).describe('Seconds an ayah is on screen before its first word'),
-});
+/** How one ayah gives way to the next: `animationSchema` itself (the same three fields). */
+export const ayahAnimationSchema = animationSchema;
 
 /**
  * The props of `<MushafAyahText>`: one ayah at a time as Unicode text, for reels and short clips.
@@ -93,8 +88,8 @@ export type AyahAnimation = z.infer<typeof ayahAnimationSchema>;
 /**
  * Defaults that work out of the box: the same Al-Fatihah sample as `<MushafRecitation>` (ayahs 2-7
  * by Abdul Hamid Ghraio from the aligner's catalogue, the audio in the app's `public/` beside the
- * timings committed there) with its Uthmani text beside them; a 9:16 reel, light
- * text on a dark page, the current word in gold.
+ * timings committed there) with its Uthmani text beside them; a 9:16 reel, warm ivory
+ * text on charcoal, the words still to come resting lighter.
  */
 export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   audioFile: 'mushaf-studio/fatiha/audio.mp3',
@@ -105,15 +100,11 @@ export const defaultMushafAyahTextProps: MushafAyahTextProps = {
   font: 'uthmani-hafs',
   fontSize: 96,
   lineHeight: 1.9,
-  layout: {...defaultLayout, aspect: '9:16', background: '#101418', color: '#f4efe6'},
+  layout: {...defaultLayout, aspect: '9:16', marginX: 90, background: '#121416', color: '#f1eadb'},
   // The colour behind an image or a video: the dark page's.
-  background: {...defaultBackground, color: '#101418'},
-  animation: {
-    enter: defaultAnimation.enter,
-    exit: defaultAnimation.exit,
-    leadInSeconds: defaultAnimation.leadInSeconds,
-  },
-  highlight: {...defaultHighlight, color: '#c8a45c'},
+  background: {...defaultBackground, color: '#121416'},
+  animation: defaultAnimation,
+  highlight: defaultHighlight,
   memorize: defaultMemorize,
   // The shared default translation colour is a dark grey for a light page; this one reads on the dark page.
   text: {...defaultText, translationColor: '#c9c1b2'},

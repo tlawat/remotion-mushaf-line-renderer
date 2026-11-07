@@ -9,6 +9,7 @@ vi.mock('remotion', async (importOriginal) => ({
 
 const {MushafStudioError} = await import('../../../src/errors');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation');
+const {SOFT} = await import('../../../src/schema');
 const {QUL_FONTS} = await import('../../../src/fonts');
 const {
   ayahPresentationStyle,
@@ -186,8 +187,14 @@ describe('the schema and its defaults', () => {
     expect(mushafAyahTextSchema.parse(defaultMushafAyahTextProps)).toEqual(defaultMushafAyahTextProps);
     expect(defaultMushafAyahTextProps.audioFile).toBe(defaultMushafRecitationProps.audioFile);
     expect(defaultMushafAyahTextProps.timingsFile).toBe(defaultMushafRecitationProps.timingsFile);
-    expect(defaultMushafAyahTextProps.layout).toMatchObject({aspect: '9:16', background: '#101418', color: '#f4efe6'});
-    expect(defaultMushafAyahTextProps.highlight.color).toBe('#c8a45c');
+    expect(defaultMushafAyahTextProps.layout).toMatchObject({
+      aspect: '9:16',
+      marginX: 90,
+      background: '#121416',
+      color: '#f1eadb',
+    });
+    expect(defaultMushafAyahTextProps.highlight).toEqual(defaultMushafRecitationProps.highlight);
+    expect(defaultMushafAyahTextProps.animation).toEqual(defaultMushafRecitationProps.animation);
     expect(defaultMushafAyahTextProps).toMatchObject({font: 'uthmani-hafs', fontSize: 96, lineHeight: 1.9});
   });
 
@@ -217,26 +224,27 @@ describe('the schema and its defaults', () => {
 
 describe('ayahPresentationStyle', () => {
   const fps = 30;
-  const slide = {enter: 'slide-fade', exit: 'slide-fade'} as const;
+  const slide = {lines: 'rise'} as const;
 
-  it('slides and fades in over the entrance, rests, then leaves over the exit', () => {
-    const first = ayahPresentationStyle(slide, 0, 120, fps, 100);
+  it('rises 0.12 em (at most 12 px) and fades in over the entrance, rests, then only fades over the exit', () => {
+    const first = ayahPresentationStyle(slide, 0, 120, fps, 96);
     expect(first.opacity).toBe(0);
-    expect(first.transform).toBe('translateY(28.0000px)');
-    expect(ayahPresentationStyle(slide, 60, 120, fps, 100)).toEqual({opacity: 1, transform: 'translateY(0.0000px)'});
-    const leaving = ayahPresentationStyle(slide, 119, 120, fps, 100);
+    expect(first.transform).toBe('translateY(12.0000px)');
+    expect(ayahPresentationStyle(slide, 0, 120, fps, 50).transform).toBe('translateY(6.0000px)');
+    expect(ayahPresentationStyle(slide, 60, 120, fps, 96)).toEqual({opacity: 1, transform: 'translateY(0.0000px)'});
+    const leaving = ayahPresentationStyle(slide, 119, 120, fps, 96);
     expect(leaving.opacity).toBeLessThan(0.2);
-    expect(leaving.transform).toMatch(/^translateY\(-1[0-9]\.\d{4}px\)$/);
+    // A leaving ayah does not move.
+    expect(leaving.transform).toBeUndefined();
   });
 
-  it('fades, reveals right to left, or does nothing', () => {
-    expect(ayahPresentationStyle({enter: 'fade', exit: 'fade'}, 0, 120, fps, 100)).toEqual({opacity: 0});
-    expect(ayahPresentationStyle({enter: 'fade', exit: 'fade'}, 60, 120, fps, 100)).toEqual({opacity: 1});
-    expect(ayahPresentationStyle({enter: 'reveal-rtl', exit: 'none'}, 0, 120, fps, 100).clipPath).toBe(
-      'inset(-100% 0 -100% 100.0000%)',
-    );
-    expect(ayahPresentationStyle({enter: 'none', exit: 'none'}, 0, 120, fps, 100)).toEqual({});
-    expect(ayahPresentationStyle({enter: 'none', exit: 'fade'}, 0, 120, fps, 100)).toEqual({});
+  it('fades on the calm curves, or cuts', () => {
+    expect(ayahPresentationStyle({lines: 'fade'}, 0, 120, fps, 96)).toEqual({opacity: 0});
+    expect(ayahPresentationStyle({lines: 'fade'}, 60, 120, fps, 96)).toEqual({opacity: 1});
+    // Half way through the 15-frame entrance: SOFT(0.5).
+    expect(ayahPresentationStyle({lines: 'fade'}, 7.5, 120, fps, 96).opacity).toBeCloseTo(SOFT(0.5), 6);
+    expect(ayahPresentationStyle({lines: 'cut'}, 0, 120, fps, 96)).toEqual({});
+    expect(ayahPresentationStyle({lines: 'cut'}, 119, 120, fps, 96)).toEqual({});
   });
 
   it('is a pure function of the frame', () => {

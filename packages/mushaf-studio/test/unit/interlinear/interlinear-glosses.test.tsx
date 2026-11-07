@@ -200,8 +200,8 @@ describe('<InterlinearGlosses>', () => {
     expect(label(container, '1:2:4')!.textContent).toBe('worlds');
     expect(label(container, '1:2:2')!.style.opacity).toBe('0.12');
     expect(label(container, '1:2:2')!.dataset.visibility).toBe('faint');
-    // The active word is shown: its label keeps the highlight colour and no opacity.
-    expect(label(container, '1:2:1')!.style.opacity).toBe('');
+    // The active word is shown: its label at full ink in the highlight colour.
+    expect(label(container, '1:2:1')!.style.opacity).toBe('1');
     expect(label(container, '1:2:1')!.dataset.visibility).toBeUndefined();
     expect(label(container, '1:2:1')!.style.color).toBe('rgb(200, 164, 92)');
     // Paint only: the same boxes, the same fitted size, and the render released.

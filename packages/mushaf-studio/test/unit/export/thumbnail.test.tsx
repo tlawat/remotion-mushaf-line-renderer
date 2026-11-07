@@ -94,7 +94,7 @@ describe('calculateMushafThumbnailMetadata', () => {
       fromAyah: 2,
       toAyah: 2,
       slice: true,
-      theme: 'normal',
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
       data: {words: '/static/data/qpc-v4/words.json.zip', layout: '/static/data/qpc-v4/layout.db.zip'},
     });
     expect(result).toMatchObject({width: 1280, height: 720, props: {resolved: {line: hero}}});

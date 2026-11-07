@@ -53,3 +53,24 @@ export const fontPropsFrom = (
   }
   return {props: {fontFallback: pkg}, warning: null};
 };
+
+/** What a text the Studio sets around the lines is: a translation, a gloss, or a label (titles, counter, legend, cards). */
+export type StudioFontRole = 'translation' | 'gloss' | 'label';
+
+/**
+ * The CSS `font-family` of `'auto'` for a role: EB Garamond (the design's book serif), then the
+ * serifs a machine is likely to have, so a render without the web font still sets a serif.
+ */
+const AUTO_FAMILIES: Readonly<Record<StudioFontRole, string>> = {
+  translation: '"EB Garamond", Georgia, "Noto Serif", serif',
+  gloss: '"EB Garamond", Georgia, "Noto Serif", serif',
+  label: '"EB Garamond", Georgia, "Noto Serif", serif',
+};
+
+/**
+ * The CSS `font-family` a font field (`text.glossFont`, `overlay.font`, ...) paints with: its own
+ * value, or for `'auto'` the role's book serif. `studioFontFamily('auto', 'label')` starts with
+ * `"EB Garamond"`; `studioFontFamily('Lora, serif', 'gloss')` is `Lora, serif`.
+ */
+export const studioFontFamily = (font: string, role: StudioFontRole): string =>
+  font.trim().toLowerCase() === 'auto' ? AUTO_FAMILIES[role] : font;

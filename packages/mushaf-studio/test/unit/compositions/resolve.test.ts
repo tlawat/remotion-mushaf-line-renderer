@@ -101,7 +101,8 @@ describe('resolveRecitation', () => {
       surah: 1,
       fromAyah: 2,
       toAyah: 7,
-      theme: 'plain',
+      // The Mushaf palette: the default custom theme's gold-line rosettes on the ivory ground.
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
       slice: true,
       data: {words: '/static/data/qpc-v4/words.json.zip', layout: '/static/data/qpc-v4/layout.db.zip'},
     });
@@ -129,7 +130,10 @@ describe('resolveRecitation', () => {
       fetch: fetchJson(fatiha),
       staticFile,
     });
-    expect(linesArg().theme).toEqual({base: 'normal', colors: {accent: '#c8a45c', detail: '#c8a45c'}});
+    expect(linesArg().theme).toEqual({
+      base: 'normal',
+      colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'},
+    });
     expect(linesArg().data).toBeUndefined();
     expect(linesArg().slice).toBe(false);
     // 1:3:1 recited twice: the line of ayah 3 starts at its first or its last recitation.

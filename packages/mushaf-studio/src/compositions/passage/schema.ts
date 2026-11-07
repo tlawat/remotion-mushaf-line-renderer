@@ -58,7 +58,7 @@ export const defaultMushafPassageProps: MushafPassageProps = {
   slice: true,
   holdSeconds: 4,
   header: 'none',
-  theme: 'normal',
+  theme: 'custom',
   customTheme: defaultCustomTheme,
   fonts: 'fallback',
   data: 'mirror',

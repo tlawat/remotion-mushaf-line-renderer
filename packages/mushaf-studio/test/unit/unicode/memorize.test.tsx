@@ -100,7 +100,8 @@ describe('<MushafAyahText> memorisation', () => {
     expect(root.querySelectorAll('[data-audio]')).toHaveLength(1);
     expect(root.querySelector('[data-mushaf-overlay="repeat-counter"]')).toBeNull();
     expect(word(root, '1:2:4').textContent).toBe(words['1:2:4']);
-    expect(word(root, '1:2:4').style.opacity).toBe('');
+    // Still to come: resting in ink, not hidden.
+    expect(word(root, '1:2:4').style.opacity).toBe('0.6');
   });
 
   it('repeat: an audio per clip, the ayah on screen through its plays, the counter, the highlight restarting', async () => {

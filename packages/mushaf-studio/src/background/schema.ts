@@ -5,9 +5,17 @@ import {z} from 'zod';
 
 export const BACKGROUND_KINDS = ['color', 'image', 'video', 'gradient'] as const;
 export const BACKGROUND_FITS = ['cover', 'contain'] as const;
-export const KEN_BURNS = ['none', 'slow-zoom', 'pan-left', 'pan-right'] as const;
+export const KEN_BURNS = ['none', 'slow-zoom'] as const;
+/** @deprecated The values saved before this design; `migrateMushafProps()` maps them to slow-zoom. */
+export const LEGACY_KEN_BURNS = ['pan-left', 'pan-right'] as const;
 
-/** The glow behind the lines that breathes with the recitation (the `audioLevel` the composition passes). */
+/**
+ * The glow behind the lines that breathed with the recitation.
+ *
+ * @deprecated No longer part of `backgroundSchema`: nothing reacts to the audio level any more.
+ * `migrateMushafProps()` turns an enabled glow into a vignette. Kept exported, unused, until the
+ * next breaking release.
+ */
 export const glowSchema = z.object({
   enabled: z
     .boolean()
@@ -56,13 +64,34 @@ export const backgroundSchema = z.object({
     .describe('Video: its length in seconds, for an exact loop (0: detect in the browser)'),
   /** px, at the composition's width. */
   blur: z.number().min(0).max(40).step(1).describe('Image or video: blur in px'),
-  /** Opacity of a black layer over the background (any kind), so light text stays readable. */
-  dim: z.number().min(0).max(1).step(0.05).describe('Darken the background (0: not at all, 1: black)'),
-  kenBurns: z.enum(KEN_BURNS).describe('Image or video: a slow zoom or pan over the whole video (none: still)'),
-  /** The zoom at the end of `slow-zoom` (from 1), and the constant zoom a pan moves inside. */
-  kenBurnsScale: z.number().min(1).max(1.3).step(0.01).describe('Image or video: how far the Ken Burns zooms in'),
+  /**
+   * Opacity of a darkening layer over the background. An image or a video keeps a floor: black at
+   * 0.45 or more under light ink, a veil of the page colour at 0.55 or more under dark ink.
+   */
+  dim: z
+    .number()
+    .min(0)
+    .max(1)
+    .step(0.05)
+    .describe(
+      'Darken the background (image and video keep at least 0.45 under light ink, a 0.55 page veil under dark ink)',
+    ),
+  /** The darkening toward the edges, 0-0.4: black on a dark ground, a darker shade of the page on a light one. */
+  vignette: z
+    .number()
+    .min(0)
+    .max(0.4)
+    .step(0.02)
+    .describe('Soft darkening toward the edges, like the fall-off of a page (0: none)'),
+  kenBurns: z.enum(KEN_BURNS).describe('Image or video: a very slow zoom over the whole video (none: still)'),
+  /** The zoom at the end of `slow-zoom`, from 1, eased over the whole video. */
+  kenBurnsScale: z
+    .number()
+    .min(1)
+    .max(1.05)
+    .step(0.01)
+    .describe('Image or video: the zoom at the end of slow-zoom (at most 1.05)'),
   gradient: gradientSchema.describe('Gradient: its two colours and direction'),
-  glow: glowSchema.describe('Glow behind the lines'),
 });
 
 export type BackgroundKind = (typeof BACKGROUND_KINDS)[number];
@@ -72,17 +101,17 @@ export type Glow = z.infer<typeof glowSchema>;
 export type Gradient = z.infer<typeof gradientSchema>;
 export type Background = z.infer<typeof backgroundSchema>;
 
-/** The page colour of `defaultLayout`, nothing moving, no glow: the compositions' look before this group existed. */
+/** The page colour of `defaultLayout`, nothing moving, no vignette; when a gradient is picked, the ground darkening downward. */
 export const defaultBackground: Background = {
   kind: 'color',
-  color: '#fbf7ee',
+  color: '#f8f3e6',
   src: '',
   fit: 'cover',
   videoSeconds: 0,
   blur: 0,
   dim: 0,
+  vignette: 0,
   kenBurns: 'none',
-  kenBurnsScale: 1.1,
-  gradient: {from: '#0f2027', to: '#2c5364', angle: 180},
-  glow: {enabled: false, color: '#c8a45c', strength: 0.5},
+  kenBurnsScale: 1.04,
+  gradient: {from: '#14191d', to: '#0b0e10', angle: 180},
 };

@@ -9,7 +9,7 @@ import type {MushafLineCommonProps, MushafLineData} from '../types';
 import {useCanvasGuard} from './hooks/use-canvas-guard';
 import {useFontGate} from './hooks/use-font-gate';
 import {useLineFit} from './hooks/use-line-fit';
-import {usePaletteRule} from './hooks/use-palette-rule';
+import {inkPaletteFor, usePaletteRule} from './hooks/use-palette-rule';
 import {LineContext, type LineContextValue} from './LineContext';
 import {Presented} from './Presented';
 import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from './styles';
@@ -20,6 +20,8 @@ export type LineRendererProps = {
   readonly [K in keyof Omit<MushafLineCommonProps, 'name'>]: MushafLineCommonProps[K] | undefined;
 } & {
   readonly line: MushafLineData;
+  /** Set by `<MushafLineWindow>`: the line's signed distance from the centre slot (`WordContext.linePosition`). Default 0. */
+  readonly linePosition?: number | undefined;
 };
 
 /**
@@ -42,6 +44,8 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   activeWordStyle,
   wordStyle,
   wordClassName,
+  inkTint,
+  linePosition = 0,
   fontSrc,
   fontFallback,
 }) => {
@@ -68,7 +72,9 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
     fitKey: `${font.fontFamily}/${baseFontSize}/${Math.round(width)}`,
     rowRef,
   });
-  const palettes = usePaletteRule(font.fontFamily, theme, rowRef);
+  const palettes = usePaletteRule(font.fontFamily, theme, rowRef, {inkTint, inkEntries: fontSet.colorParts.ink});
+  const tints = palettes?.tints;
+  const inkPalette = useMemo(() => (tints === undefined ? undefined : inkPaletteFor(tints)), [tints]);
 
   const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
 
@@ -96,6 +102,8 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       wordStyle,
       wordClassName,
       slice: resolvedSlice,
+      linePosition,
+      inkPalette,
     }),
     [
       line,
@@ -110,6 +118,8 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       wordStyle,
       wordClassName,
       resolvedSlice,
+      linePosition,
+      inkPalette,
     ],
   );
 

@@ -12,9 +12,15 @@ import type {MushafRecitationProps} from '../compositions/recitation/schema';
 import {isMushafStudioError} from '../errors';
 import {resolvePageProps} from '../page/calculate-metadata';
 import type {MushafPageProps} from '../page/schema';
+import {migrateMushafProps} from '../schema';
 import {resolveAyahTextProps} from '../unicode/calculate-metadata';
 import type {MushafAyahTextProps} from '../unicode/schema';
-import type {MushafSlotKind} from './schema';
+import {
+  defaultMushafAyahTextSlotProps,
+  defaultMushafPageSlotProps,
+  defaultMushafRecitationSlotProps,
+  type MushafSlotKind,
+} from './schema';
 
 /** What a slot resolver takes from the template's `calculateMetadata()`. */
 export type ResolveSlotOptions = {
@@ -101,8 +107,15 @@ export const unresolvedSlotErrorOf = (
   );
 };
 
+/** The defaults a slot's props are filled from when they lack a field: the slot's own (a transparent page). */
+const SLOT_DEFAULTS: Readonly<Record<MushafSlotKind, Readonly<Record<string, unknown>>>> = {
+  recitation: defaultMushafRecitationSlotProps,
+  'ayah-text': defaultMushafAyahTextSlotProps,
+  page: defaultMushafPageSlotProps,
+};
+
 const resolveSlot = async <P extends {readonly resolved?: unknown}>(
-  props: P | null,
+  saved: P | null,
   options: ResolveSlotOptions,
   kind: MushafSlotKind,
   resolve: (
@@ -110,7 +123,10 @@ const resolveSlot = async <P extends {readonly resolved?: unknown}>(
     options: {readonly fps: number; readonly signal?: AbortSignal | undefined; readonly lenientSplits: boolean},
   ) => Promise<ResolvedProps<P>>,
 ): Promise<ResolvedSlot<P>> => {
-  if (props === null) return {props: null, durationInFrames: 0, error: null};
+  if (saved === null) return {props: null, durationInFrames: 0, error: null};
+  // First: props saved by an earlier Mushaf Studio (or sent by a host) render the current design,
+  // and the template gets them back migrated whatever happens next.
+  const props = migrateMushafProps<P>(saved, {defaults: SLOT_DEFAULTS[kind]});
   if (slotIsEmpty(kind, props as {readonly timingsFile?: unknown}))
     return {props: {...props, resolved: null}, durationInFrames: 0, error: null};
   const lenient = previewsLeniently(options.isRendering ?? false);

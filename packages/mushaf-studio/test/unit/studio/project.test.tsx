@@ -123,7 +123,7 @@ describe('collectProjectFiles / projectFileOf', () => {
     expect(file.version).toBe(1);
     expect(file.compositionId).toBe('MushafRecitation');
     expect(file.props).not.toHaveProperty('resolved');
-    expect(file.props).toMatchObject({audioFile: 'mushaf-studio/p/a.mp3', theme: 'plain', splits: []});
+    expect(file.props).toMatchObject({audioFile: 'mushaf-studio/p/a.mp3', theme: 'custom', splits: []});
     expect(file.files).toEqual(project.collectProjectFiles(recitation));
   });
 });

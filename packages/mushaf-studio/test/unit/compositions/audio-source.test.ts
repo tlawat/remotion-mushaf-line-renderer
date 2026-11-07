@@ -1,8 +1,7 @@
 // Where the recording plays from and what the cleanup measures it with: the timings' catalogue clip
 // when `audioFile` is missing from public/ (`resolveAudioSource()`), the sidecar's persisted summary
-// instead of an analysis when the glow is off, and the URL the compositions play (`recordingUrl()`).
+// instead of an analysis, and the URL the compositions play (`recordingUrl()`).
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {defaultBackground} from '../../../src/background/schema';
 import {
   type AudioCleanupOptions,
   resolveAudioCleanup,
@@ -10,7 +9,6 @@ import {
   SAMPLE_AUDIO_FILE,
   SAMPLE_COMMAND,
 } from '../../../src/compositions/extras';
-import {glowLevelAt} from '../../../src/compositions/parts';
 import {defaultMushafRecitationProps} from '../../../src/compositions/recitation/schema';
 import {fileUrl, isHttpUrl, recordingUrl} from '../../../src/compositions/shared';
 import {MushafStudioError} from '../../../src/errors';
@@ -183,7 +181,6 @@ describe('resolveAudioSource', () => {
 const cleanupOptions = (changes: Partial<AudioCleanupOptions> = {}): AudioCleanupOptions => ({
   audioFile: SAMPLE_AUDIO_FILE,
   audio: defaultMushafRecitationProps.audio,
-  background: defaultBackground,
   offsetSeconds: 0,
   latestSeconds: 10,
   endSeconds: 27.559,
@@ -192,10 +189,9 @@ const cleanupOptions = (changes: Partial<AudioCleanupOptions> = {}): AudioCleanu
   fetch: server([SAMPLE_AUDIO_FILE]),
   ...changes,
 });
-const glow = {...defaultBackground, glow: {enabled: true, color: '#fff', strength: 0.5}};
 
 describe('resolveAudioCleanup', () => {
-  it('normalises from the sidecar’s summary with the glow off: no analysis, no download', async () => {
+  it('normalises from the sidecar’s summary: no analysis, no download', async () => {
     const result = await resolveAudioCleanup(cleanupOptions({sidecar: sidecar({audio: SUMMARY})}));
     expect(mocks.analyzeAudio).not.toHaveBeenCalled();
     // gainFor({lufs: -18.79, peak: 0.437768}, -14): +4.79 dB, under the -1 dBFS ceiling (+6.18 dB).
@@ -209,27 +205,22 @@ describe('resolveAudioCleanup', () => {
     expect(result.audio.trimSeconds).toBe(0.35);
   });
 
-  it('still analyses for the glow’s levels, and when the summary is missing or not one', async () => {
-    const withGlow = await resolveAudioCleanup(cleanupOptions({background: glow, sidecar: sidecar({audio: SUMMARY})}));
-    expect(mocks.analyzeAudio).toHaveBeenCalledTimes(1);
-    expect(withGlow.audio.levels).toEqual([0.5, 1]);
-    // The levels say the fps they were measured at: a template at another fps reads them right.
-    expect(withGlow.audio.levelsFps).toBe(30);
-    const at60 = await resolveAudioCleanup(
-      cleanupOptions({background: glow, fps: 60, sidecar: sidecar({audio: SUMMARY})}),
-    );
-    expect(at60.audio.levelsFps).toBe(60);
+  it('measures no levels (nothing follows them), and analyses when the summary is missing or not one', async () => {
+    const summarised = await resolveAudioCleanup(cleanupOptions({sidecar: sidecar({audio: SUMMARY})}));
+    expect(mocks.analyzeAudio).not.toHaveBeenCalled();
+    expect(summarised.audio.levels).toEqual([]);
+    expect(summarised.audio.levelsFps).toBeUndefined();
+    await resolveAudioCleanup(cleanupOptions({sidecar: sidecar(), fps: 60}));
     expect(mocks.analyzeAudio).toHaveBeenLastCalledWith(
       staticFile(SAMPLE_AUDIO_FILE),
       expect.objectContaining({fps: 60}),
     );
     mocks.analyzeAudio.mockClear();
-    await resolveAudioCleanup(cleanupOptions({background: glow, sidecar: sidecar({audio: SUMMARY})}));
     await resolveAudioCleanup(cleanupOptions({sidecar: sidecar()}));
     const broken = {...sidecar(), audio: {lufs: 'loud'}} as unknown as AlignmentSidecar;
     const result = await resolveAudioCleanup(cleanupOptions({sidecar: broken}));
-    expect(mocks.analyzeAudio).toHaveBeenCalledTimes(3);
-    expect(result.audio.levelsFps).toBeUndefined();
+    expect(mocks.analyzeAudio).toHaveBeenCalledTimes(2);
+    expect(result.audio.levels).toEqual([]);
     expect(mocks.analyzeAudio).toHaveBeenLastCalledWith(
       staticFile(SAMPLE_AUDIO_FILE),
       expect.objectContaining({fps: 30}),
@@ -238,7 +229,7 @@ describe('resolveAudioCleanup', () => {
   });
 
   it('plays and analyses the timings’ clip when audioFile is missing, with the warning', async () => {
-    const result = await resolveAudioCleanup(cleanupOptions({background: glow, sidecar: sidecar(), fetch: server([])}));
+    const result = await resolveAudioCleanup(cleanupOptions({sidecar: sidecar(), fetch: server([])}));
     expect(result.src).toBe(CLIP);
     expect(mocks.analyzeAudio).toHaveBeenCalledWith(CLIP, expect.objectContaining({fps: 30}));
     expect(result.warning).toContain(SAMPLE_COMMAND);
@@ -286,17 +277,5 @@ describe('recordingUrl', () => {
     expect(isHttpUrl('mushaf-studio/a.mp3')).toBe(false);
     expect(isHttpUrl('ftp://cdn.test/a.mp3')).toBe(false);
     expect(fileUrl('mushaf-studio/a.mp3', staticFile)).toBe(staticFile('mushaf-studio/a.mp3'));
-  });
-});
-
-describe('glowLevelAt', () => {
-  it('reads the level of the second heard at the fps the levels were measured at', () => {
-    const levels = Array.from({length: 60}, (_, i) => i / 100);
-    // Measured at 30 fps, read by a 60 fps template: second 1 is level 30, not 60.
-    expect(glowLevelAt({gain: 1, trimSeconds: 0, levels, levelsFps: 30}, 1, 60)).toBeCloseTo(0.3);
-    // A resolved made before levelsFps: the composition's fps.
-    expect(glowLevelAt({gain: 1, trimSeconds: 0, levels}, 1, 30)).toBeCloseTo(0.3);
-    expect(glowLevelAt({gain: 1, trimSeconds: 0, levels: []}, 1, 30)).toBe(0);
-    expect(glowLevelAt(undefined, 1, 30)).toBe(0);
   });
 });

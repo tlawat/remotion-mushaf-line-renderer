@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import {cleanup, render} from '@testing-library/react';
 import {afterEach, describe, expect, it} from 'vitest';
-import {GlossStrip, TranslationBlock} from '../../../src/translations';
+import {SOFT} from '../../../src/schema';
+import {GlossStrip, glossStripOpacities, glossStripState, TranslationBlock} from '../../../src/translations';
 import type {AyahTranslation, WordGloss} from '../../../src/types';
 
 afterEach(cleanup);
@@ -188,5 +189,48 @@ describe('GlossStrip', () => {
     expect(el.className).toBe('mushaf-gloss mine');
     expect(el.style.textAlign).toBe('left');
     expect(el.style.marginTop).toBe('8px');
+  });
+});
+
+describe('GlossStrip at a word change', () => {
+  const spans = [
+    {id: '1:1:1', surah: 1, ayah: 1, start: 0, end: 1},
+    {id: '1:1:2', surah: 1, ayah: 1, start: 1, end: 2},
+  ];
+
+  it('changes at each kept span, held through a pause, nothing before the first', () => {
+    expect(glossStripState(spans, -0.5, 30)).toEqual({
+      activeWordId: null,
+      previousWordId: null,
+      framesSinceChange: Infinity,
+    });
+    expect(glossStripState(spans, 0.5, 30)).toMatchObject({activeWordId: '1:1:1', previousWordId: null});
+    const change = glossStripState(spans, 1 + 2 / 30, 30);
+    expect(change).toMatchObject({activeWordId: '1:1:2', previousWordId: '1:1:1'});
+    expect(change.framesSinceChange).toBeCloseTo(2, 6);
+    expect(glossStripState(spans, 9, 30).activeWordId).toBe('1:1:2');
+  });
+
+  it('lets the old gloss go over 3 frames and brings the new one in over 6 from 2 frames on', () => {
+    expect(glossStripOpacities(0)).toEqual({out: 1, in: 0});
+    expect(glossStripOpacities(2).in).toBe(0);
+    expect(glossStripOpacities(3).out).toBe(0);
+    expect(glossStripOpacities(5).in).toBeCloseTo(SOFT(0.5), 3);
+    expect(glossStripOpacities(8)).toEqual({out: 0, in: 1});
+    expect(glossStripOpacities(Infinity)).toEqual({out: 0, in: 1});
+  });
+
+  it('draws the outgoing gloss over the incoming one while it fades, then the new one alone', () => {
+    const fading = strip({activeWordId: '1:1:2', previousWordId: '1:1:1', framesSinceChange: 1});
+    const outgoing = fading.querySelectorAll<HTMLElement>('[data-gloss-outgoing]');
+    expect(outgoing).toHaveLength(2);
+    expect(Number(outgoing[0]!.style.opacity)).toBeCloseTo(glossStripOpacities(1).out, 4);
+    expect(outgoing[0]!.textContent).toBe('In (the) name');
+    cleanup();
+    expect(
+      strip({activeWordId: '1:1:2', previousWordId: '1:1:1', framesSinceChange: 10}).querySelector(
+        '[data-gloss-outgoing]',
+      ),
+    ).toBeNull();
   });
 });

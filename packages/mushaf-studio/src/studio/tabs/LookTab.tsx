@@ -31,7 +31,7 @@ type Chip = {readonly label: MessageKey; readonly color: string; readonly inacti
 
 /**
  * The colours the composition would have with the look: page (greyed out where an image, a video or
- * a gradient covers it), ink, the current word's mark (unless the look marks nothing), and the
+ * a gradient covers it), ink, the current word's tint or wash (not for ink or no mark), and the
  * rosette's accent of a custom theme or else the translation.
  */
 const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chip[] => {
@@ -40,7 +40,8 @@ const swatchOf = (props: StudioCompositionProps, look: MushafLook): readonly Chi
     {label: 'look.chip.page', color: next.layout.background, inactive: pageColourInactive(next) !== null},
     {label: 'look.chip.ink', color: next.layout.color, inactive: false},
   ];
-  if (next.highlight.mode !== 'none' && next.highlight.style !== 'none')
+  // Ink marks with the ink itself: only a tint or a wash has a colour of its own.
+  if (next.highlight.mode !== 'none' && next.highlight.style !== 'ink')
     chips.push({label: 'look.chip.currentWord', color: next.highlight.color, inactive: false});
   if ('theme' in next && next.theme === 'custom' && next.customTheme.override.accent)
     chips.push({label: 'look.chip.rosette', color: next.customTheme.accent, inactive: false});

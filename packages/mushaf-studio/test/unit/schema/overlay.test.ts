@@ -13,7 +13,7 @@ describe('overlaySchema', () => {
       introSeconds: 3,
       reciter: '',
       color: '#1b1b1b',
-      font: 'Georgia, "Noto Serif", serif',
+      font: 'auto',
       corner: 'top-right',
       cornerSize: 28,
     });
@@ -29,12 +29,12 @@ describe('overlaySchema', () => {
     expect(headerSchema.description).toMatch(/ayah 1/);
   });
 
-  it('bounds introSeconds to 1-8 and cornerSize to 12-60', () => {
+  it('bounds introSeconds to 2-6 and cornerSize to 12-60', () => {
     const at = (changes: object) => overlaySchema.safeParse({...defaultOverlay, ...changes}).success;
-    expect(at({introSeconds: 1})).toBe(true);
-    expect(at({introSeconds: 8})).toBe(true);
-    expect(at({introSeconds: 0.5})).toBe(false);
-    expect(at({introSeconds: 9})).toBe(false);
+    expect(at({introSeconds: 2})).toBe(true);
+    expect(at({introSeconds: 6})).toBe(true);
+    expect(at({introSeconds: 1.5})).toBe(false);
+    expect(at({introSeconds: 6.5})).toBe(false);
     expect(at({cornerSize: 12})).toBe(true);
     expect(at({cornerSize: 60})).toBe(true);
     expect(at({cornerSize: 11})).toBe(false);

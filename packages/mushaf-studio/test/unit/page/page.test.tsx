@@ -134,15 +134,16 @@ describe('<MushafPage>: the page', () => {
     const root = mount(await props());
     const sequences = [...root.querySelectorAll<HTMLElement>('[data-sequence]')];
     expect(sequences.map((s) => [s.dataset.sequence, s.dataset.from, s.dataset.duration])).toEqual([
-      ['Page 2', '0', String(162 + 18)],
-      ['Page 3', '162', String(330 - 162)],
+      // Page 3's first word is at 6 s: its 0.9 s dissolve (27 frames) starts at 5.1 s.
+      ['Page 2', '0', String(153 + 27)],
+      ['Page 3', '153', String(330 - 153)],
     ]);
   });
 
   it('cuts without overlap', async () => {
     const root = mount(await props({}, {turn: 'cut'}));
     const sequences = [...root.querySelectorAll<HTMLElement>('[data-sequence]')];
-    expect(sequences.map((s) => s.dataset.duration)).toEqual(['162', '168']);
+    expect(sequences.map((s) => s.dataset.duration)).toEqual(['153', '177']);
     at(5.5);
     expect(leaf(mount(await props({}, {turn: 'cut'})), 3).transform).toBe('');
   });
@@ -203,7 +204,8 @@ describe('<MushafPage>: the current line', () => {
     expect(band.parentElement).toBe(slot(root, 2, 4));
     expect(slot(root, 2, 4).dataset.current).toBe('true');
     expect(band.style.position).toBe('absolute');
-    expect(band.style.background).toBe('rgba(200, 164, 92, 0.18)');
+    // The band's gold with its chroma capped, at the wash's faint strength on the ivory page.
+    expect(band.style.background).toBe('rgba(177, 147, 83, 0.1)');
     // Behind the line: before it in the slot, the line positioned over it.
     expect(band.nextElementSibling!.querySelector('.mushaf-line-mock')).not.toBeNull();
   });
@@ -219,11 +221,16 @@ describe('<MushafPage>: the current line', () => {
     expect(marks(root)[0]!.parentElement).toBe(slot(root, 3, 2));
   });
 
-  it('draws a rule for underline and nothing for none', async () => {
+  it('makes the band the page’s one mark, and marks the words as highlight says without it', async () => {
     at(4);
-    expect(marks(mount(await props({}, {lineHighlight: 'underline'})))[0]!.dataset.lineHighlight).toBe('underline');
+    // With the band, the words of the current line carry no mark of their own.
+    const banded = Object.values(wordStyles(mount(await props()), 2, 4));
+    expect(banded.every((style) => style === null)).toBe(true);
     cleanup();
-    expect(marks(mount(await props({}, {lineHighlight: 'none'})))).toHaveLength(0);
+    const none = mount(await props({}, {lineHighlight: 'none'}));
+    expect(marks(none)).toHaveLength(0);
+    // Without it, the ink rests the words still to come.
+    expect(Object.values(wordStyles(none, 2, 4)).some((style) => style?.opacity === 0.6)).toBe(true);
   });
 
   it('dims the other lines with dimOtherLines', async () => {
@@ -240,10 +247,8 @@ describe('<MushafPage>: the page around the lines', () => {
     const simple = mount(await props());
     expect(page(simple, 2).querySelector('svg')!.getAttribute('data-page-frame')).toBe('simple');
     expect(page(simple, 2).querySelectorAll('svg rect')).toHaveLength(2);
+    // Square corners, no ornaments.
     expect(page(simple, 2).querySelectorAll('[data-corner]')).toHaveLength(0);
-    cleanup();
-    const ornate = mount(await props({}, {frame: 'ornate'}));
-    expect(page(ornate, 2).querySelectorAll('[data-corner]')).toHaveLength(4);
     cleanup();
     expect(page(mount(await props({}, {frame: 'none'})), 2).querySelector('svg')).toBeNull();
   });
@@ -256,25 +261,16 @@ describe('<MushafPage>: the page around the lines', () => {
     expect(page(mount(await props({}, {pageNumber: false})), 2).querySelector('[data-page-number]')).toBeNull();
   });
 
-  it('slides the next page in from the left while the one read goes right', async () => {
+  it('dissolves to the next page by default, and nothing moves', async () => {
     const p = await props();
-    at(5.7); // halfway through the turn that starts at 5.4 s
+    remotion.state.frame = 153 + 13.5; // halfway through the 27-frame turn that starts at 5.1 s
     const root = mount(p);
-    const x = (n: number) => Number(/translateX\((-?\d+)px\)/.exec(leaf(root, n).transform)?.[1] ?? 0);
-    expect(x(3)).toBeLessThan(0);
-    expect(x(2)).toBeGreaterThan(0);
-    expect(x(2) - x(3)).toBe(1920);
-    cleanup();
-    at(7);
-    const settled = mount(p);
-    expect(leaf(settled, 3).transform).toBe('');
-  });
-
-  it('cross-fades with fade', async () => {
-    at(5.7);
-    const root = mount(await props({}, {turn: 'fade'}));
     expect(Number(leaf(root, 3).opacity)).toBeCloseTo(0.5, 1);
     expect(Number(leaf(root, 2).opacity)).toBeCloseTo(0.5, 1);
+    expect(leaf(root, 3).transform).toBe('');
+    cleanup();
+    at(7);
+    expect(Number(leaf(mount(p), 3).opacity)).toBe(1);
   });
 
   it('preloads the next page’s font one page ahead, from the lines’ own sources', async () => {

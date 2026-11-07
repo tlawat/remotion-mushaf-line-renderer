@@ -474,7 +474,7 @@ const setSidebarText = async (page: Page, jsonPath: string, value: string) => {
 const NIGHT: Tree = {
   theme: 'dark',
   layout: {background: '#101418', color: '#e8e2d6', backgroundImage: ''},
-  highlight: {mode: 'word', style: 'glow', color: '#f2c66d', dimOthers: 1},
+  highlight: {mode: 'word', style: 'tint', color: '#f2c66d', restOpacity: 0.6},
   text: {translationColor: '#b8b2a6', glossColor: '#8e98a3'},
 };
 const SQUARE: Tree = {
@@ -507,7 +507,7 @@ test('MushafRecitation: a layout edit in the Props sidebar survives a look from 
   const original = readFileSync(rootFile, 'utf8');
   const start = savedPropsOf(original, 'MushafRecitation');
   expect(start).toMatchObject(ALIGNMENT);
-  expect(start.layout).toMatchObject({aspect: '16:9', marginX: 120});
+  expect(start.layout).toMatchObject({aspect: '16:9', marginX: 190});
   try {
     const errors = await openComposition(page, 'MushafRecitation');
     await expect(page.locator('.mushaf-line').first()).toBeVisible({timeout: 180_000});
@@ -574,8 +574,8 @@ test('MushafRecitation: a panel save, a sidebar edit of what it wrote, then anot
       merged(afterLook, {layout: {visibleLines: 5}}),
       'the sidebar never saved layout.visibleLines',
     );
-    await setSidebarNumber(page, 'layout.neighbourOpacity', 0.6);
-    const afterSidebar = merged(afterLook, {layout: {visibleLines: 5, neighbourOpacity: 0.6}});
+    await setSidebarNumber(page, 'layout.neighbourOpacity', 0.45);
+    const afterSidebar = merged(afterLook, {layout: {visibleLines: 5, neighbourOpacity: 0.45}});
     await expectSaved(rootFile, 'MushafRecitation', afterSidebar, 'the sidebar never saved layout.neighbourOpacity');
 
     // Another panel save, of another kind: a line split from the Lines tab.
@@ -595,7 +595,7 @@ test('MushafRecitation: a panel save, a sidebar edit of what it wrote, then anot
     const [split] = saved.splits as Tree[];
     expect(split).toEqual({page: expect.any(Number), line: expect.any(Number), atWordId: expect.any(Number)});
     expect(saved).toEqual(merged(afterSidebar, {splits: [split]}));
-    expect(saved.layout).toMatchObject({aspect: '1:1', visibleLines: 5, neighbourOpacity: 0.6});
+    expect(saved.layout).toMatchObject({aspect: '1:1', visibleLines: 5, neighbourOpacity: 0.45});
     expect(saved).toMatchObject(ALIGNMENT);
     expectOthersUnchanged(original, readFileSync(rootFile, 'utf8'), 'MushafRecitation');
     await expect(panel.locator('[data-mushaf-control="rolled-back"]')).toHaveCount(0);

@@ -5,6 +5,13 @@ import type {MushafWord, WordContext} from '../types';
 import {LineContext} from './LineContext';
 import {HIDDEN_WORD_STYLE, WORD_STYLE} from './styles';
 
+/** `wordStyle`'s result for a word: the rosette keeps its marker palette, whatever `fontPalette` asks. */
+const paintOf = (word: MushafWord, style: React.CSSProperties | undefined): React.CSSProperties | undefined => {
+  if (word.kind !== 'end' || style?.fontPalette === undefined) return style;
+  const {fontPalette: _ignored, ...rest} = style;
+  return rest;
+};
+
 /**
  * One DOM element per word. The text always comes from data and is rendered as-is (1–4 code points
  * in the page font's private range). Adjacent words carry no whitespace between them.
@@ -20,8 +27,16 @@ export const Word: React.FC<{readonly word: MushafWord}> = ({word}) => {
   // A word outside the slice stays in the DOM (the layout is measured from every word) but takes
   // no space and is not painted. Its style is spread last: `wordStyle` cannot re-show it.
   const hidden = !isInSlice(ctx.slice, word.wordId);
-  const context: WordContext = {line: ctx.line, frame: ctx.frame, fps: ctx.fps, active, inSlice: !hidden};
-  const extra = ctx.wordStyle?.(word, context);
+  const context: WordContext = {
+    line: ctx.line,
+    frame: ctx.frame,
+    fps: ctx.fps,
+    active,
+    inSlice: !hidden,
+    linePosition: ctx.linePosition,
+    inkPalette: ctx.inkPalette,
+  };
+  const extra = paintOf(word, ctx.wordStyle?.(word, context));
   const extraClass = ctx.wordClassName?.(word, context);
   // The ayah-number marker glyph takes the theme's marker palette (QUL's `.char-end` rule).
   const marker = word.kind === 'end' && ctx.markerPalette ? {fontPalette: ctx.markerPalette} : undefined;

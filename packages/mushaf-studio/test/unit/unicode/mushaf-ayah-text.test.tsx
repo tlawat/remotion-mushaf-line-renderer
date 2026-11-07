@@ -40,6 +40,7 @@ vi.mock('../../../src/studio', () => ({
 
 const {MushafAyahText, defaultMushafAyahTextProps, resolveAyahText} = await import('../../../src/unicode');
 const {fakeFetch} = await import('../translations/helpers');
+const {legibleAccent, parseColor, washColor} = await import('../../../src/schema');
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
 type ResolvedAyahText = import('../../../src/unicode').ResolvedAyahText;
 
@@ -147,7 +148,7 @@ describe('<MushafAyahText>', () => {
 
   it('paints the page and sets the ayah in the loaded font, centred in the margins at verticalAlign', () => {
     const root = mount({layout: {marginX: 100, verticalAlign: 0.3}, fontSize: 80, lineHeight: 2});
-    expect((root.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(16, 20, 24)');
+    expect((root.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(18, 20, 22)');
     const block = ayahBlock(root, '1:2');
     expect(block.style.fontFamily).toBe('mushaf-uthmanic-hafs');
     expect(block.style.fontSize).toBe('80px');
@@ -171,57 +172,59 @@ describe('<MushafAyahText>', () => {
     const root = mount();
     const style = (key: string) => ayahBlock(root, key).parentElement!.style;
     expect(style('1:3').opacity).toBe('1');
-    expect(style('1:3').transform).toBe('translateY(0.0000px)');
+    // A dissolve: nothing moves.
+    expect(style('1:3').transform).toBe('');
     expect(style('1:2').opacity).toBe('0');
     expect(style('1:4').opacity).toBe('0');
     cleanup();
-    const still = mount({animation: {enter: 'none', exit: 'none'}});
+    const rise = mount({animation: {lines: 'rise'}});
+    expect(ayahBlock(rise, '1:3').parentElement!.style.transform).toBe('translateY(0.0000px)');
+    cleanup();
+    const still = mount({animation: {lines: 'cut'}});
     expect(ayahBlock(still, '1:4').parentElement!.style.opacity).toBe('');
   });
 
-  it('highlights the word being recited and only that one', () => {
+  it('tints the word being recited in the accent read on the dark page, and only that one', () => {
     at(5); // 1:3:2 is heard from 4.563 to 5.693
-    const root = mount({highlight: {style: 'color', color: '#c8a45c'}});
+    const root = mount({highlight: {style: 'tint', color: '#c8a45c'}});
     const active = root.querySelectorAll<HTMLElement>('.mushaf-uword--active');
     expect(Array.from(active).map((s) => s.dataset.location)).toEqual(['1:3:2']);
-    expect(active[0]!.style.color).toBe('rgb(200, 164, 92)');
+    const accent = parseColor(legibleAccent('#c8a45c', '#121416'))!;
+    expect(active[0]!.style.color).toBe(`rgb(${accent.r}, ${accent.g}, ${accent.b})`);
     expect(word(root, '1:3:1').style.color).toBe('');
+    expect(word(root, '1:3:3').style.color).toBe('');
   });
 
-  it('glows or marks the word, as highlight.style says', () => {
+  it('washes the word being recited, faintly', () => {
     at(5);
-    const glow = mount({highlight: {style: 'glow', color: '#c8a45c'}});
-    expect(word(glow, '1:3:2').style.textShadow).toContain('0.25em');
-    cleanup();
-    const marker = mount({highlight: {style: 'marker', color: '#c8a45c'}});
-    expect(word(marker, '1:3:2').style.background).toContain('rgba(200, 164, 92, 0.35)');
+    const wash = mount({highlight: {style: 'wash', color: '#c8a45c'}});
+    expect(word(wash, '1:3:2').style.backgroundImage).toContain(washColor('#c8a45c', 0.13));
+    expect(word(wash, '1:3:1').style.backgroundImage).toBe('');
   });
 
-  it('paints the whole ayah under mode "ayah", and nothing under mode "none"', () => {
+  it('marks nothing under mode "ayah" (the ayah on screen is the one recited), nor under mode "none"', () => {
     at(5);
-    const ayah = mount({highlight: {mode: 'ayah'}});
-    expect(ayah.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
-    for (const id of ['1:3:1', '1:3:2', '1:3:3']) expect(word(ayah, id).style.color).toBe('rgb(200, 164, 92)');
-    expect(word(ayah, '1:4:1').style.color).toBe('');
-    cleanup();
-    const none = mount({highlight: {mode: 'none', dimOthers: 0.3}});
-    expect(none.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
-    expect(word(none, '1:3:1').style.opacity).toBe('');
+    for (const mode of ['ayah', 'none'] as const) {
+      for (const style of ['ink', 'tint', 'wash'] as const) {
+        const root = mount({highlight: {mode, style}});
+        expect(root.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
+        for (const id of ['1:3:1', '1:3:2', '1:3:3', '1:4:1'])
+          expect(word(root, id).getAttribute('style') ?? '').toBe('');
+        cleanup();
+      }
+    }
   });
 
-  it('dims the other words, or only those still to come (the marker at its ayah’s end)', () => {
+  it('rests the words still to come in ink and fills each in as heard (the marker at its ayah’s end)', () => {
     at(5);
-    const all = mount({highlight: {dimOthers: 0.4}});
-    expect(word(all, '1:3:2').style.opacity).toBe('');
-    expect(word(all, '1:3:1').style.opacity).toBe('0.4');
-    expect(word(all, '1:2:1').style.opacity).toBe('0.4');
+    const ink = mount();
+    expect(word(ink, '1:2:1').style.opacity).toBe('');
+    expect(word(ink, '1:3:1').style.opacity).toBe('');
+    expect(word(ink, '1:3:2').style.opacity).toBe('');
+    expect(word(ink, '1:3:3').style.opacity).toBe('0.6');
+    expect(word(ink, '1:4:1').style.opacity).toBe('0.6');
     cleanup();
-    const upcoming = mount({highlight: {dimOthers: 0.4, dimUpcomingOnly: true}});
-    expect(word(upcoming, '1:2:1').style.opacity).toBe('');
-    expect(word(upcoming, '1:3:1').style.opacity).toBe('');
-    expect(word(upcoming, '1:3:2').style.opacity).toBe('');
-    expect(word(upcoming, '1:3:3').style.opacity).toBe('0.4');
-    expect(word(upcoming, '1:4:1').style.opacity).toBe('0.4');
+    expect(word(mount({highlight: {restOpacity: 0.8}}), '1:3:3').style.opacity).toBe('0.8');
   });
 
   it('shows the translation of each ayah under it only when one is loaded', () => {

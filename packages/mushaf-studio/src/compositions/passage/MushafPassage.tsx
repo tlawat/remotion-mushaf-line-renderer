@@ -48,7 +48,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const exitFrames = exitTiming().getDurationInFrames({fps});
 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
-  const animationProps = animationFrom(animation, {visibleLines: slots});
+  const animationProps = animationFrom(animation, {fontSize});
 
   let linesBlock: React.ReactNode;
   if (layout.visibleLines === 0) {
@@ -76,7 +76,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         <MushafLineWindow
           lines={lines}
           steps={starts}
-          scrollTiming={scrollTimingFrom(animation.scroll)}
+          scrollTiming={scrollTimingFrom(animation.tempo)}
           visibleLines={slots}
           neighbourOpacity={layout.neighbourOpacity}
           fontSize={fontSize}
@@ -91,13 +91,11 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   const showTranslation = translationLayers.length > 0 && text.translationPosition !== 'none';
   return (
     <AbsoluteFill style={{backgroundColor: layout.background, color: layout.color}}>
-      {/* No audio here: the glow, if any, stays at rest. */}
       <MushafBackground
         background={{
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
-        glowY={layout.verticalAlign}
       />
       <div data-mushaf-block="Mushaf lines" style={linesBlockStyle(geometry, layout)}>
         {linesBlock}

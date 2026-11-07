@@ -161,7 +161,10 @@ describe('resolveRecitation with header', () => {
     expect(pageCalls()).toEqual([
       {
         page: 1,
-        theme: 'plain',
+        theme: {
+          base: 'normal',
+          colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'},
+        },
         data: {words: '/static/data/qpc-v4/words.json.zip', layout: '/static/data/qpc-v4/layout.db.zip'},
       },
     ]);
@@ -209,7 +212,10 @@ describe('resolvePassage with header', () => {
     const resolved = await resolvePassage(passage({header: 'name-basmalah'}), {staticFile});
     expect(types(resolved.lines)).toEqual(['surah_name', 'basmallah', 'ayah', 'ayah', 'ayah']);
     expect(pageCalls()).toHaveLength(1);
-    expect(pageCalls()[0]).toMatchObject({page: 2, theme: 'normal'});
+    expect(pageCalls()[0]).toMatchObject({
+      page: 2,
+      theme: {base: 'normal', colors: {frame: '#8c6c26', accent: '#efe3c4', detail: '#8c6c26', background: '#f8f3e6'}},
+    });
     const named = await resolvePassage(passage({header: 'name'}), {staticFile});
     expect(types(named.lines)).toEqual(['surah_name', 'ayah', 'ayah', 'ayah']);
   });

@@ -1,13 +1,10 @@
 // What is painted behind the lines (the `background` props group): a colour, a gradient, an image or
-// a looping video, with blur, dim and a Ken Burns move over the whole video, and a glow behind the
-// lines that pulses with the recitation. Pure in props and frame, like the lines.
+// a looping video, with blur, dim, a vignette and a very slow zoom over the whole video. Nothing
+// follows the audio. Pure in props and frame, like the lines.
 
 export {backgroundFor} from './compat';
 export {
   backgroundBaseStyle,
-  GLOW_REST,
-  glowOpacity,
-  glowStyle,
   kenBurnsTransform,
   MushafBackground,
   type MushafBackgroundProps,
@@ -30,4 +27,5 @@ export {
   gradientSchema,
   KEN_BURNS,
   type KenBurns,
+  LEGACY_KEN_BURNS,
 } from './schema';

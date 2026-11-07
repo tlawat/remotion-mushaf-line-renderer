@@ -65,6 +65,9 @@ const RevealRtlPresentation: React.FC<TransitionPresentationComponentProps<Revea
 /**
  * Reveals the line in reading direction (right to left). Same shape as `fade()` from
  * `@remotion/transitions/fade`, so it also works inside a real `<TransitionSeries>`.
+ *
+ * @deprecated The edge passes through words: mid-way it shows half a word and a sliced rosette,
+ * which a printed mushaf never does. Use `fadeRise()` or `fade()`.
  */
 export const revealRtl = (props?: RevealRtlProps): TransitionPresentation<RevealRtlProps> => ({
   component: RevealRtlPresentation,

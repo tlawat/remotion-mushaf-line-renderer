@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import type {Overlay} from '../schema';
+import {studioFontFamily} from '../schema/fonts';
 import {withAlpha} from '../schema/highlight';
 import {clipAt, type MemorizeClip, repeatCounterText} from './timeline';
 
@@ -45,7 +46,7 @@ export const RepeatCounter: React.FC<RepeatCounterProps> = ({clips, repeats, sec
         borderRadius: '1em',
         background: withAlpha(background, 0.7),
         color: overlay.color,
-        fontFamily: overlay.font,
+        fontFamily: studioFontFamily(overlay.font, 'label'),
         fontSize: size,
         lineHeight: 1.3,
         whiteSpace: 'nowrap',

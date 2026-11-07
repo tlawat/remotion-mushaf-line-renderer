@@ -88,10 +88,9 @@ describe('Look tab', () => {
       expect(card(entry.id).textContent).toContain(entry.description);
       expect(card(entry.id).querySelectorAll('[title]').length).toBeGreaterThanOrEqual(3);
     }
-    // The defaults are the classic page; nothing else they match sets the same colours.
-    expect(card('classic').getAttribute('aria-pressed')).toBe('true');
-    expect(card('night').getAttribute('aria-pressed')).toBe('false');
-    // The swatch shows what the look would give: Night's page and its glow colour.
+    // The defaults are the design's own: none of these looks sets them.
+    for (const entry of looksFor('recitation')) expect(card(entry.id).getAttribute('aria-pressed')).toBe('false');
+    // The swatch shows what the look would give: Night's page and its tint colour.
     const night = [...card('night').querySelectorAll<HTMLElement>('[title]')].map((chip) => chip.title);
     expect(night).toEqual(expect.arrayContaining(['Page: #101418', 'Current word: #f2c66d']));
   });
@@ -130,7 +129,7 @@ describe('Look tab', () => {
     await waitFor(() => expect(getStudioState().lookUndo).toEqual({}));
     expect(saved(1, root)).toEqual(root);
     expect(screen.queryByText('Undo Night')).toBeNull();
-    expect(card('classic').getAttribute('aria-pressed')).toBe('true');
+    expect(card('night').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('undoes the looks last first, each only where the props still hold it', async () => {
@@ -192,8 +191,8 @@ describe('Look tab', () => {
           ...look('karaoke'),
           patch: {
             ...look('night').patch,
-            animation: {enter: 'none', exit: 'none'},
-            highlight: {mode: 'ayah', style: 'glow', color: '#000000', dimOthers: 0.9, dimUpcomingOnly: true},
+            animation: {lines: 'cut'},
+            highlight: {mode: 'ayah', style: 'tint', color: '#000000', restOpacity: 0.8},
           },
         }),
       ),
@@ -220,14 +219,13 @@ describe('Look tab', () => {
   });
 
   it('follows a style change made in the Props sidebar', () => {
-    const {rerender} = render(
-      <MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} initialTab="look" />,
-    );
+    const classic = applyLook(defaultMushafRecitationProps, look('classic'));
+    const {rerender} = render(<MushafStudioPanel compositionId="MushafRecitation" props={classic} initialTab="look" />);
     expect(card('classic').getAttribute('aria-pressed')).toBe('true');
     rerender(
       <MushafStudioPanel
         compositionId="MushafRecitation"
-        props={applyLook(defaultMushafRecitationProps, look('sepia'))}
+        props={applyLook(classic, look('sepia'))}
         initialTab="look"
       />,
     );

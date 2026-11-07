@@ -12,11 +12,10 @@ import {
 } from 'remotion';
 import {OWN_BACKGROUND_NAME} from '../audio/host';
 import {fileUrl} from '../compositions/shared';
-import type {Background, Glow, KenBurns} from './schema';
+import type {Background, KenBurns} from './schema';
 
 /** Four decimals: stable strings in a transform or an opacity, free of float noise. */
 const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
-const clamp01 = (value: number): number => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
 
 /**
  * The layer under everything: the colour, and for `gradient` the CSS gradient over it. The colour
@@ -37,12 +36,10 @@ export const showsMedia = (background: Pick<Background, 'kind' | 'src'>): boolea
   (background.kind === 'image' || background.kind === 'video') && background.src !== '';
 
 /**
- * The Ken Burns transform at `frame`, over the whole composition (frame 0 to `durationInFrames - 1`,
- * linear, clamped): `slow-zoom` scales from 1 to `scale`; the pans hold `scale` and travel the
- * margin it gives, edge to edge, so no border ever shows: `pan-left` drifts the picture leftward,
- * `pan-right` rightward. `undefined` for `none`. Pure in its arguments.
+ * The slow zoom at `frame`, over the whole composition (frame 0 to `durationInFrames - 1`, linear,
+ * clamped): `slow-zoom` scales from 1 to `scale`. `undefined` for `none`. Pure in its arguments.
  *
- * `kenBurnsTransform('slow-zoom', 1.2, 0, 300)` is `"scale(1)"`, at frame 299 `"scale(1.2)"`.
+ * `kenBurnsTransform('slow-zoom', 1.04, 0, 300)` is `"scale(1)"`, at frame 299 `"scale(1.04)"`.
  */
 export const kenBurnsTransform = (
   kind: KenBurns,
@@ -54,13 +51,7 @@ export const kenBurnsTransform = (
   const last = durationInFrames - 1;
   const progress =
     last <= 0 ? 0 : interpolate(frame, [0, last], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  if (kind === 'slow-zoom') return `scale(${round4(1 + (scale - 1) * progress)})`;
-  // `translateX()` acts before `scale()` (right to left) in the element's own width: at `scale` the
-  // picture overflows the frame by (scale - 1) / 2 on each side, which is (scale - 1) / (2 scale)
-  // of the unscaled width.
-  const margin = ((scale - 1) / (2 * scale)) * 100;
-  const offset = kind === 'pan-left' ? margin * (1 - 2 * progress) : margin * (2 * progress - 1);
-  return `scale(${round4(scale)}) translateX(${round4(offset)}%)`;
+  return `scale(${round4(1 + (scale - 1) * progress)})`;
 };
 
 /**
@@ -93,59 +84,20 @@ export const mediaStyle = (background: Pick<Background, 'fit'>): React.CSSProper
   objectFit: background.fit,
 });
 
-/** The share of `strength` a silent frame keeps, so the glow breathes rather than blinks. */
-export const GLOW_REST = 0.35;
-
-/**
- * The glow's opacity for an audio level (0-1, clamped; anything not finite reads as silence):
- * `GLOW_REST × strength` at silence, rising linearly to `strength` at the loudest frame.
- * `glowOpacity(0.5, 0.8)` is 0.54.
- */
-export const glowOpacity = (level: number, strength: number): number =>
-  round4(clamp01(strength) * (GLOW_REST + (1 - GLOW_REST) * clamp01(level)));
-
-/**
- * The glow layer: a soft ellipse of `glow.color` centred at `centerY` (0 top, 1 bottom: where the
- * lines are), its opacity from `glowOpacity()` and swelling by up to 8% with the level.
- */
-export const glowStyle = (
-  glow: Pick<Glow, 'color' | 'strength'>,
-  level: number,
-  centerY = 0.5,
-): React.CSSProperties => ({
-  position: 'absolute',
-  inset: 0,
-  backgroundImage: `radial-gradient(ellipse 60% 40% at 50% ${round4(clamp01(centerY) * 100)}%, ${glow.color}, transparent 70%)`,
-  opacity: glowOpacity(level, glow.strength),
-  transform: `scale(${round4(1 + 0.08 * clamp01(level))})`,
-});
-
 export type MushafBackgroundProps = {
   readonly background: Background;
-  /**
-   * The recitation's level on this frame, 0-1, for the glow: `levelAt(analysis.levels, frame)` from
-   * `src/audio`. 0 (the default) holds the glow at rest.
-   */
-  readonly audioLevel?: number | undefined;
-  /** Where the lines are, 0 top to 1 bottom (`layout.verticalAlign`): the glow's centre. Default 0.5. */
-  readonly glowY?: number | undefined;
   /** For tests and other hosts; default Remotion's. */
   readonly staticFile?: ((path: string) => string) | undefined;
 };
 
 /**
  * Everything behind the lines, as an `<AbsoluteFill>` to put first in a composition: the colour or
- * the gradient, then the image (`<Img>`) or the video, then the dim layer, then the glow. The video
+ * the gradient, then the image (`<Img>`) or the video, then the dim layer. Nothing follows the audio. The video
  * is always muted. With `videoSeconds` it is an `<OffthreadVideo>` in a `<Loop>` of that length,
  * frame-exact in a render; without it, `<Html5Video loop>`, which finds the length itself. Pure in
  * its props and the frame.
  */
-export const MushafBackground: React.FC<MushafBackgroundProps> = ({
-  background,
-  audioLevel = 0,
-  glowY = 0.5,
-  staticFile = remotionStaticFile,
-}) => {
+export const MushafBackground: React.FC<MushafBackgroundProps> = ({background, staticFile = remotionStaticFile}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
   let media: React.ReactNode = null;
@@ -174,9 +126,6 @@ export const MushafBackground: React.FC<MushafBackgroundProps> = ({
       )}
       {background.dim > 0 && (
         <AbsoluteFill data-mushaf-background-part="dim" style={{backgroundColor: '#000', opacity: background.dim}} />
-      )}
-      {background.glow.enabled && background.glow.strength > 0 && (
-        <div data-mushaf-background-part="glow" style={glowStyle(background.glow, audioLevel, glowY)} />
       )}
     </AbsoluteFill>
   );

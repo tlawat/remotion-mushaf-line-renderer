@@ -134,15 +134,15 @@ describe('applyLook', () => {
 describe('lookMatches', () => {
   it('is true when every field the look sets is equal, false when one differs', () => {
     const classic = lookById('classic');
-    expect(lookMatches(defaultMushafRecitationProps, classic)).toBe(true);
-    expect(lookMatches(defaultMushafRecitationProps, lookById('night'))).toBe(false);
-    const nudged = {
-      ...defaultMushafRecitationProps,
-      highlight: {...defaultMushafRecitationProps.highlight, color: '#000000'},
-    };
+    const classicProps = applyLook(defaultMushafRecitationProps, classic);
+    expect(lookMatches(classicProps, classic)).toBe(true);
+    // The defaults are the design's own look, not Classic's.
+    expect(lookMatches(defaultMushafRecitationProps, classic)).toBe(false);
+    expect(lookMatches(classicProps, lookById('night'))).toBe(false);
+    const nudged = {...classicProps, highlight: {...classicProps.highlight, color: '#000000'}};
     expect(lookMatches(nudged, classic)).toBe(false);
     // A field the look does not set does not matter.
-    expect(lookMatches({...defaultMushafRecitationProps, fromAyah: 3}, classic)).toBe(true);
+    expect(lookMatches({...classicProps, fromAyah: 3}, classic)).toBe(true);
   });
 
   it('is false for a look of which nothing applies', () => {
@@ -162,8 +162,8 @@ describe('lookUndoPatch', () => {
     const look = lookById('black-gold');
     const before = defaultMushafRecitationProps;
     const undo = lookUndoPatch(before, look);
-    expect(undo.theme).toBe('plain');
-    expect(undo.layout).toEqual({background: '#fbf7ee', color: '#1b1b1b', backgroundImage: ''});
+    expect(undo.theme).toBe('custom');
+    expect(undo.layout).toEqual({background: '#f8f3e6', color: '#1c1a16', backgroundImage: ''});
     expect(undo.customTheme?.override).toEqual(before.customTheme.override);
     const after = applyLook(before, look);
     const back = applyLook(after, {...look, patch: undo});
@@ -216,7 +216,7 @@ describe('lookRevertPatch', () => {
       ...reel,
       patch: {
         layout: {aspect: '1:1', visibleLines: 2},
-        animation: {enter: 'none', exit: 'none'},
+        animation: {lines: 'cut'},
         text: {translationPosition: 'above', translationSize: 30},
       },
     });

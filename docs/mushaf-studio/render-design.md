@@ -1272,3 +1272,59 @@ changed by that review is changed here first.
 | A new `scrollSteps` API | `scrollPosition` already supports `anchor: 'start'` |
 | A window "jump dissolve" for memorise repeats, a codemod CLI | Scope beyond the request; the scroll token and the upgrade banner cover them |
 | Lozenge row repeat counter, Lapis look, a ground toggle | One ornament or layer more than needed |
+
+## Deviations
+
+Recorded while implementing; each is the closest faithful alternative to what is written above.
+
+Stage R1 (tokens, timing model, highlight, migration, renderer):
+
+1. **The staggered dissolve's outgoing share is 48 %, not 45 %, and "never empty" is measured as
+   the ink on screen.** With 45 % the 12-frame (`labelChange`) and 25-frame (slow
+   `translationDissolve`) dissolves leave a frame with 0.09 and 0.12 of ink. And `max(out, in) ≥
+   0.15` at every frame cannot hold together with "never both above 0.2" and "the outgoing line is
+   under 0.25 before the incoming one starts" for any pair of shares with these curves (searched
+   0.35-0.65 × 0.10-0.45). The criterion is therefore `out + in ≥ 0.15`, the measure 3.2 itself
+   uses ("0.03 + 0.17 of ink"). With `o = round(0.48 · D)` and `i = round(0.30 · D)`, all three
+   hold at 12, 18, 20, 27, 28 and 30 frames and at every dissolving token at both tempos. For D = 20
+   the outgoing text goes over f0-f10.
+2. **A tint goes through CSS `color` only under `plain`.** Under `normal`, and a custom palette on
+   `normal`, the ink follows the text colour only as the row's palette rule resolves it, once.
+   Chromium drops `currentColor` inside `override-colors`, so a word's own `color` never reaches the
+   glyphs. Still V7 showed no tint on the Mushaf palette. `tintPath()` is therefore `'css'` for
+   `plain`, `'wash'` on tajweed colours, and `'palette'` for every other colour theme. To match,
+   the renderer's `inkTint` (8.4) registers its four palettes for an ink that follows
+   `currentColor` too, mixing from the row's resolved colour. `WordContext.inkPalette` is
+   `undefined` only without `inkTint` or under `plain`.
+3. **`cardOut` slow is 30 frames, as the table says** (1.4 × 21 would round to 29). `DURATIONS`
+   stores both columns, so the table is the source.
+4. **The anti-flicker floor is 4/30 s at any frame rate** (the flicker is in time, not frames).
+5. **The migration resets an unpainted gradient, and maps `#ffd166`, only in groups saved in the
+   old shape**: a background with `glow`, without `vignette`, with a pan or a scale over 1.05; a
+   highlight with an old style or `dimOthers` / `dimUpcomingOnly`. A group in the new shape always
+   passes through unchanged (7.1).
+6. **`migrateMushafProps(props, {defaults})`** takes the composition's own defaults as an optional
+   second argument to fill missing fields from (AyahText's dark page, a recitation's
+   `glossPosition`). Without it the shared `default*` objects are used. `describeMushafMigration`
+   and `mushafPropsNeedMigration` take the same option.
+7. **Schema parts of later sections changed now, so every migrated value validates.** These are
+   `pageView` (5.11: enums, ranges, defaults), the `'auto'` default and description of
+   `text.translationFont`, `text.glossFont` and `overlay.font`, and `overlay.introSeconds` 2-6.
+   Until `useStudioFonts()` loads EB Garamond, `'auto'` gloss and label fonts resolve to
+   `"EB Garamond", Georgia, "Noto Serif", serif`. The rest of the page's rendering (band
+   cross-fade, metal rule, 0.5 outside opacity, fit) waits for its stage. Its band already uses
+   `washColor()`, and the removed underline, corner ornaments and slide are gone.
+8. **The nine old looks stay until the five looks of 6.2 replace them.** They are written in the
+   new vocabulary, as `migrateMushafProps()` maps their old values (Study's `neighbourOpacity`
+   0.6 is clamped to 0.5).
+9. **Interim motion until the timing stage.** `animationFrom()` maps `lines` to `fade()` /
+   `fadeRise()` / nothing on the old lengths (15 frames in, 10 out), so the old schedules hold.
+   `scrollTimingFrom(tempo)` is the calm scroll (24 frames on `INOUT`) with the old end anchor.
+   4.3's late-not-early schedule and the overlapping one-line Sequences come with that stage.
+   `boundaryStart()` and `outgoingEnd()` are ready and tested for it.
+10. **Gloss marks (5.1.5): the labels' rest (0.7), their accent and emphasis, and the strip's
+    3 + 6 frame change are in.** The no-ellipsis two-row wrap of interlinear labels is layout work
+    and waits for the interlinear stage.
+11. **MushafAyahText's marks follow 5.12** (ayah mode marks nothing; a word wash at 1.35 em and
+    55 %). Its words do not become `inline-block`, its word spacing is not 0.1 em and its block
+    width is not set yet: that waits for its stage.

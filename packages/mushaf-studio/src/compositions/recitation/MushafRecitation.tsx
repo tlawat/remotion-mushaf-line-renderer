@@ -1,5 +1,6 @@
 import {enterTiming, exitTiming, MushafLine, MushafLineWindow, wordAt} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
+import {useMemo} from 'react';
 import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {followsHostAudio} from '../../audio/host';
 import {volumeAt} from '../../audio/volume';
@@ -28,23 +29,29 @@ import {
 } from '../../memorize';
 import {MushafTitleOverlay} from '../../overlay';
 import {
-  activeWordStyleFrom,
   animationFrom,
+  effectiveNeighbourOpacity,
   fontPropsFrom,
+  groundOf,
+  inkTintFor,
+  legibleAccent,
   scrollTimingFrom,
+  studioFontFamily,
   themeSelectionFrom,
+  wordEmphasis,
+  wordSpanIndex,
+  wordSpans,
   wordStyleFrom,
 } from '../../schema';
 import {MushafStudioPanel} from '../../studio';
 import {useInStudio} from '../../studio/environment';
-import {ayahKeyOf, GlossStrip, TranslationStack} from '../../translations';
+import {ayahKeyOf, GlossStrip, glossStripState, TranslationStack} from '../../translations';
 import type {ResolvedRecitation} from '../../types';
 import {endCardFrames} from '../extras';
 import {
   CompositionAudio,
   CompositionEndCard,
   CornerLegend,
-  glowLevelAt,
   StudioWarnings,
   translationsOf,
   useTranslationLayers,
@@ -77,10 +84,11 @@ const currentSlot = (leads: readonly number[], frame: number): number => {
 
 /**
  * The flagship composition: the printed lines of a recited passage follow the audio, one line at a
- * time or through a line window, with the current word highlighted, an ayah translation and a
+ * time or through a line window, the recitation marked by one quiet device (`highlight`: the ink
+ * filling in, a tint or a faint wash, eased in and out), an ayah translation and a
  * word gloss (in a strip, or under each printed word), the surah's header lines before ayah 1 and a
  * title card and corner label when asked, over its background (`background`: a colour, gradient,
- * image or looping video, with a glow that follows the recitation's level), with up to three
+ * image or looping video), with up to three
  * translations stacked, the tajweed legend in a corner and an end card after the last ayah when
  * asked, the audio normalised and faded as `audio` says, and (in the Studio) the doubtful words
  * marked, the fonts, audio and dropped-splits warnings, and the Mushaf panel docked. Outside the
@@ -150,10 +158,16 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const leads = leadFrames(timeline, animation.leadInSeconds, fps);
 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
-  const animationProps = animationFrom(animation, {visibleLines: slots});
-  const activeWordStyle = highlight.mode === 'word' ? activeWordStyleFrom(highlight) : undefined;
-  const activeProps = activeWordStyle ? {activeWordId, activeWordStyle} : {activeWordId};
+  const animationProps = animationFrom(animation, {fontSize});
+  const theme = themeSelectionFrom(props.theme, props.customTheme);
+  const ground = groundOf(layout, props.background.kind);
+  const inkTint = inkTintFor(highlight, theme, ground);
+  // The marks are the word style's; `activeWordId` only names the word (`data-active`) for custom CSS.
+  const activeProps = inkTint === undefined ? {activeWordId} : {activeWordId, inkTint};
   const starts = wordStarts(timings);
+  // The word spans of the marks: the gloss strip changes at each, the interlinear labels follow them.
+  const spans = useMemo(() => wordSpans(timings, {occurrence: highlight.occurrence}), [timings, highlight.occurrence]);
+  const spanIndex = useMemo(() => wordSpanIndex(spans), [spans]);
   const wordStyleFor = (sequenceFrom: number) =>
     wordStyleFrom({
       highlight,
@@ -161,11 +175,14 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       doubtful: resolved.doubtful,
       timingsIndex: starts,
       timings,
-      activeWordId,
       isStudio,
       sequenceFrom,
       audioTime: toAudio,
       memorize: {settings: memorize, clips},
+      theme,
+      ink: layout.color,
+      ground,
+      tempo: animation.tempo,
     });
 
   const slot = timeline[currentSlot(leads, frame)]!;
@@ -212,7 +229,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
     const windowLines = schedule.map((current) => lines[current.index]!);
     const from = Math.max(0, (leads[0] ?? 0) - enterFrames);
     const steps = leads.map((step) => step - from);
-    const scrollTiming = scrollTimingFrom(animation.scroll);
+    const scrollTiming = scrollTimingFrom(animation.tempo);
     // When ayahs repeat, the current line goes back to the ayah's first line for the next play:
     // the window is given its position, from the timeline's slots and the window line each one is.
     const windowIndex = new Map(schedule.map((current, j) => [current.index, j]));
@@ -238,7 +255,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
           lines={windowLines}
           {...scroll}
           visibleLines={slots}
-          neighbourOpacity={layout.neighbourOpacity}
+          neighbourOpacity={effectiveNeighbourOpacity(layout.neighbourOpacity, highlight, theme)}
           fontSize={fontSize}
           lineHeight={lineHeight}
           wordStyle={wordStyleFor(from)}
@@ -256,10 +273,14 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         gloss={resolved.gloss}
         transliteration={resolved.transliteration}
         activeWordId={activeWordId}
-        activeColor={highlight.mode === 'none' ? undefined : highlight.color}
+        activeColor={highlight.mode === 'none' ? undefined : legibleAccent(highlight.color, ground)}
+        emphasisOf={(id) => {
+          const span = spanIndex.get(id);
+          return span === undefined ? 0 : wordEmphasis(span, now);
+        }}
         // A label shows what its word shows: a word a blank mode hides takes its gloss with it.
         visibilityOf={glossVisibilityFrom({memorize, clips, timings, starts, activeWordId, seconds, now})}
-        fontFamily={text.glossFont}
+        fontFamily={studioFontFamily(text.glossFont, 'gloss')}
         fontSize={labelSize}
         color={text.glossColor}
         top={interlinearTop(lineHeight, extraLineHeight)}
@@ -278,8 +299,6 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
-        audioLevel={glowLevelAt(resolved.audio, now, fps)}
-        glowY={layout.verticalAlign}
       />
       {ownAudio && identity && (
         <CompositionAudio
@@ -325,8 +344,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
           <GlossStrip
             translation={resolved.gloss}
             transliteration={resolved.transliteration}
-            activeWordId={heard}
-            fontFamily={text.glossFont}
+            {...glossStripState(spans, now, fps)}
+            fontFamily={studioFontFamily(text.glossFont, 'gloss')}
             fontSize={text.glossSize}
             color={text.glossColor}
           />
@@ -355,8 +374,8 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       />
       <CornerLegend
         legend={legend}
-        theme={themeSelectionFrom(props.theme, props.customTheme)}
-        fontFamily={overlay.font}
+        theme={theme}
+        fontFamily={studioFontFamily(overlay.font, 'label')}
         color={layout.color}
         background={layout.background}
         width={width}
@@ -369,7 +388,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         reciter={overlay.reciter}
         from={contentFrames}
         durationInFrames={cardFrames}
-        fontFamily={overlay.font}
+        fontFamily={studioFontFamily(overlay.font, 'label')}
         color={layout.color}
         background={layout.background}
         width={width}

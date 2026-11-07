@@ -346,7 +346,7 @@ describe('<MushafStudioPanel>', () => {
     const next = call[0].defaultProps({savedDefaultProps: saved});
     expect(next).toMatchObject({audioFile: audioPath, timingsFile: timingsPath, fromAyah: 0, toAyah: 0, splits: []});
     expect(next.text).toEqual(saved.text);
-    expect(next.theme).toBe('plain');
+    expect(next.theme).toBe(saved.theme);
     expect(studio.reevaluateComposition).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     expect(getStudioState().error).toBeNull();

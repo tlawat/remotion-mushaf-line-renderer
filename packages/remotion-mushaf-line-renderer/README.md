@@ -39,6 +39,7 @@ KFGQPC V4 (1441H) mushaf, with entrances and exits written in `@remotion/transit
 - [Slicing a line](#slicing-a-line)
 - [Following a recording](#following-a-recording)
 - [Entrances and exits](#entrances-and-exits)
+- [Marking a word on a colour theme](#marking-a-word-on-a-colour-theme)
 - [Several lines at once](#several-lines-at-once)
 - [Surah names and juz names](#surah-names-and-juz-names)
 - [Fonts](#fonts)
@@ -149,7 +150,8 @@ Two things flow through your code:
 | `style`, `className`     |                                                    | Applied to the root element. The line inherits its CSS `color` from here.                                                                                          |
 | `activeWordId`           | `string \| number \| null`                         | Marks one word as current (`word.id` like `"9:1:3"`, or `word.wordId`). See [Per-word hooks](#per-word-hooks).                                                     |
 | `activeWordStyle`        | `CSSProperties`                                    | Applied to that word. Paint properties only.                                                                                                                       |
-| `wordStyle`              | `(word, ctx) => CSSProperties`                     | Per-word style, called for every word on every frame with `{line, frame, fps, active, inSlice}`. Paint properties only.                                            |
+| `wordStyle`              | `(word, ctx) => CSSProperties`                     | Per-word style, called for every word on every frame with `{line, frame, fps, active, inSlice, linePosition, inkPalette}`. Paint properties only (`color`, `opacity`, `filter`, `background`, `textShadow`, `fontPalette`). |
+| `inkTint`                | CSS colour                                         | A colour the ink can be repainted in, word by word, under any colour-font theme: `ctx.inkPalette(amount)` names the palette for `wordStyle`. See [Marking a word on a colour theme](#marking-a-word-on-a-colour-theme). |
 | `wordClassName`          | `(word, ctx) => string`                            | Appended to `mushaf-word mushaf-word--<kind>`.                                                                                                                     |
 | `name`                   | `string`                                           | Wraps the line in `<Sequence layout="none" name>` so it gets a label in the Studio timeline.                                                                       |
 | `framed`                 | `boolean` (default `true`)                         | `surah_name` lines only: the name inside its printed ornamental frame, or alone. See [Surah names and juz names](#surah-names-and-juz-names).                      |
@@ -552,7 +554,7 @@ One word's `{id, start, end}` from the file, or `null` when it has none for it.
 
 | Presentation                                          | Works                                                                                                                    |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `slideFade()`, `revealRtl()` (this package)           | yes                                                                                                                      |
+| `fadeRise()`, `slideFade()`, `revealRtl()` (this package) | yes (`slideFade` and `revealRtl` are deprecated, see below)                                                          |
 | `fade()`, `slide()`, `wipe()`, `flip()`               | yes                                                                                                                      |
 | `clockWipe({width, height})`, `iris({width, height})` | yes, pass the line box size                                                                                              |
 | `pushCut()`, `none()`                                 | yes                                                                                                                      |
@@ -564,11 +566,24 @@ presentation is accepted as shorthand, so `enter={slideFade()}` means
 
 ### The package's presentations and timings
 
-- **`slideFade(props?)`**: a short vertical slide combined with a fade, the one to reach for when a
-  line replaces another. The line is fully opaque at 75 % of an entrance (the rest is a pure settle)
+- **`fadeRise({distance, easing?, riseEasing?})`**: a dissolve with a slight rise, the one to reach
+  for when a line replaces another. The entering line fades in on `easing` (default
+  `CALM_EASINGS.soft`) while it rises `distance` px into place on `riseEasing` (default
+  `CALM_EASINGS.arrive`); the exiting line only fades (`1 − progress`) and never moves. `distance`
+  is in px, so it is the same for a lone line and a window: `min(12, round(0.12 × fontSize))` keeps
+  it under an eighth of an em. Its curves are its own, so give it a linear timing
+  (`enterTiming({easing: Easing.linear})` or `linearTiming()`).
+- **`CALM_EASINGS`**: `{soft, inOut, sine, arrive}`, the curves of calm motion. `soft`
+  (`bezier(0.25, 0.1, 0.25, 1)`) for arrivals, `inOut` (`bezier(0.45, 0, 0.55, 1)`) for a scroll or a
+  mark letting go, `sine` (`bezier(0.37, 0, 0.63, 1)`) for fade-outs and cards, `arrive`
+  (`bezier(0.33, 0, 0.2, 1)`) for a rise. None overshoots or starts with a jump:
+  `enterTiming({durationInFrames: 24, easing: CALM_EASINGS.inOut})` is a window scroll that never lurches.
+- **`slideFade(props?)`** (deprecated: a line that keeps rising as it leaves reads as a subtitle; use
+  `fadeRise()`): a short vertical slide combined with a fade. The line is fully opaque at 75 % of an entrance (the rest is a pure settle)
   and fully gone at 70 % of an exit, and it travels 28 % of a line box rather than half the screen.
   Props: `{direction: 'up' | 'down', distance, enterOpacityAt, exitOpacityAt, exitDistanceScale, enterStyle, exitStyle}`.
-- **`revealRtl(props?)`**: reveals the line in reading direction (right to left). `softness` (in % of
+- **`revealRtl(props?)`** (deprecated: mid-way it shows half a word and a sliced rosette): reveals
+  the line in reading direction (right to left). `softness` (in % of
   the line, default `0`) fades the edge with a `mask-image` gradient instead of cutting it with a
   `clip-path`. Same shape as `fade()`, so it also works inside a real `<TransitionSeries>`.
 - **`enterTiming(options?)`**: 0.5 s on `Easing.bezier(0.2, 0, 0, 1)`. It eases out of nothing,
@@ -576,8 +591,8 @@ presentation is accepted as shorthand, so `enter={slideFade()}` means
   gentle. A linear timing starts and stops abruptly, and abrupt is what reads as mechanical.
 - **`exitTiming(options?)`**: 0.32 s on `Easing.bezier(0.4, 0, 1, 1)`, accelerating away. Exits are
   shorter than entrances on purpose.
-- **`springyTiming(options?)`**: a spring instead of a curve, for a physical settle
-  (`{config: {damping: 200}}` does not overshoot).
+- **`springyTiming(options?)`** (deprecated: overshoot-free but it starts early, which is not for
+  Quranic text): a spring instead of a curve (`{config: {damping: 200}}` does not overshoot).
 
 Options: `{seconds?, durationInFrames?, easing?}`. `seconds` is resolved against the composition's
 fps at render time, so one timing object suits 24, 30 and 60 fps. They are ordinary
@@ -615,6 +630,41 @@ readable. Overlapping the Sequences (`durationInFrames={HOLD + ENTER}`, next lin
 gives the cross-fade instead, which suits `slide()`. `<TransitionSeries>` works too: put each
 `<MushafLine>` (without `enter`/`exit`) in a `<TransitionSeries.Sequence>` and let the series drive
 both sides.
+
+### Motion etiquette for Quranic text
+
+The line is the printed page, so motion stays quiet and never edits a word:
+
+- No scale, skew, rotation, blur or bounce of a line or a word, and nothing that overshoots.
+- No wipe through words: a partial word or a sliced rosette is never on screen (`revealRtl` does that).
+- Lines give way by a dissolve: the outgoing line is nearly gone before the incoming one shows, and a
+  rise, if any, is a few px (`fadeRise`).
+- A transition starts after the reciter has finished the last word on the outgoing line, never
+  before; it may be late, never early.
+- Mark a word by its ink (opacity, a colour) or a faint band behind it, eased in and out: never a box,
+  a halo or two marks together.
+
+## Marking a word on a colour theme
+
+A colour font paints its letters from its palette, not from CSS `color`, so `{color}` on a word
+only recolours it under `plain`, the monochrome font. Even `normal`, which follows the text colour,
+writes that colour into its palette rule once (Chromium drops `currentColor` there), so a word's
+own `color` does not reach it. Pass `inkTint` instead: the line registers four palettes that mix
+only the ink entries toward it (a quarter, half, three quarters, all of the way), and
+`ctx.inkPalette(amount)` in `wordStyle` names the nearest one (`undefined` under 0.125, the row's
+own palette). The tajweed rules, the silent letters and the rosettes keep their colours, and
+`fontPalette` is ignored on the rosette (`kind: 'end'`), which keeps its marker palette.
+
+```tsx
+<MushafLine
+  line={line}
+  inkTint="#b19353"
+  wordStyle={(word, ctx) => (word.id === current ? {fontPalette: ctx.inkPalette?.(emphasis)} : undefined)}
+/>
+```
+
+`ctx.inkPalette` is `undefined` without `inkTint` and under `plain`: set `color` there. On a tajweed theme, a repainted ink would hide the rules it colours; mark the word
+with a faint `background` instead.
 
 ## Several lines at once
 
@@ -685,7 +735,10 @@ forwarded to every line, `enter` / `exit` / `style` / `className` / `name` for t
 
 `LineWindowContext` is `{line, index, position, distance, current, frame, fps}`: `distance` is
 `|index - position|` (0 in the middle, 1 one slot away, fractional while scrolling) and `current` is
-`index === round(position)`. The word hooks receive the window's local `frame`, so a per-word style
+`index === round(position)`. The word hooks get the same distance, signed, as `ctx.linePosition`
+(`index − position`: −1 one slot above, +0.4 on its way in from below; 0 for a lone `<MushafLine>`),
+so a word mark can fade as its line leaves the centre, with no jump during a scroll. `inkTint` is
+forwarded to every line. The word hooks receive the window's local `frame`, so a per-word style
 and a per-line style are the same kind of function at two levels; `windowLineOpacity({index, position,
 visibleLines, neighbourOpacity?})` gives the number the default dimming uses, to build on.
 
@@ -1001,10 +1054,12 @@ dim the ayahs outside a range:
 
 The active word gets `data-active="true"`, the class `mushaf-word--active` and `activeWordStyle`.
 `wordStyle` and `wordClassName` are called for every word on every frame with
-`{line, frame, fps, active, inSlice}`; keep them pure so renders stay deterministic. Use paint properties only
-(`color`, `opacity`, `filter`, `background`, `textShadow`): anything that changes glyph metrics would
-break the printed line breaks and is overridden by the pinned row style. Under any theme but
-`'plain'` the glyph colours come from the font, so per-word `color` only reaches the plain theme.
+`{line, frame, fps, active, inSlice, linePosition, inkPalette}`; keep them pure so renders stay
+deterministic. Use paint properties only (`color`, `opacity`, `filter`, `background`, `textShadow`,
+`fontPalette`): anything that changes glyph metrics would break the printed line breaks and is
+overridden by the pinned row style. Under any theme but `'plain'` and `'normal'` the glyph colours
+come from the font, so per-word `color` does not reach them: see
+[Marking a word on a colour theme](#marking-a-word-on-a-colour-theme).
 
 ## DOM contract
 
