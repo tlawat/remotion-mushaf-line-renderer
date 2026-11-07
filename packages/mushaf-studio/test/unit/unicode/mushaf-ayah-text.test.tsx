@@ -229,7 +229,7 @@ describe('<MushafAyahText>', () => {
     expect(word(wash, '1:3:2').style.backgroundImage).toBe('');
     const bands = [...wash.querySelectorAll<HTMLElement>('[data-mushaf-word-band]')];
     expect(bands).toHaveLength(1);
-    const strength = /, ([\d.]+)\)$/.exec(washColor('#c8a45c', 0.13))![1];
+    const strength = /, ([\d.]+)\)$/.exec(washColor('#c8a45c', 0.09))![1];
     expect(bands[0]!.style.backgroundImage).toContain(`, ${strength}) `);
     // The block isolates the bands under its text.
     expect(wash.querySelector<HTMLElement>('.mushaf-ayah-text')!.style.isolation).toBe('isolate');

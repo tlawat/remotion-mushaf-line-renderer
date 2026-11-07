@@ -14,7 +14,7 @@ describe('groundFor', () => {
     expect(groundFor(defaultBackground, layout)).toBe(CHARCOAL);
     // So the tint is lightened for the dark picture, and the wash takes the dark ground's strength.
     expect(legibleAccent('#b8913a', groundFor(defaultBackground, layout))).toBe('#b19353');
-    expect(washAlpha(groundFor(defaultBackground, layout))).toBe(0.13);
+    expect(washAlpha(groundFor(defaultBackground, layout))).toBe(0.09);
     // Dark ink over the same image: an ivory stand-in.
     expect(groundFor(defaultBackground, {...layout, color: '#1c1a16'})).toBe(IVORY);
   });

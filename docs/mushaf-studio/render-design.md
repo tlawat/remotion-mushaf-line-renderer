@@ -147,7 +147,7 @@ Resulting values (these are test fixtures):
 
 #### 3.1.3 Other colour guards (render time, never written back)
 
-- `washAlpha(ground) = isLightGround(ground) ? 0.10 : 0.13`. The wash colour is `color` with its
+- `washAlpha(ground) = isLightGround(ground) ? 0.10 : 0.09`. The wash colour is `color` with its
   OKLCH chroma capped at 0.09 (no lightness change), painted at that alpha. Never user-set.
 - Translation, gloss and overlay colours: if `contrast(c, ground) < 4.5`, use
   `mix(ink, ground, 0.32)` (sRGB mix, 68 % ink) instead.
@@ -1731,3 +1731,8 @@ Visual review 2 (the values changed in place above; 12.3 allows a value that fai
     (V10). Its height, place and strength are unchanged; V10 still measures lift 18.7-19.3 levels
     along it at 16:9 and 9:16 and stays clear of the lines (rows 236-306 at half scale, the next line
     at 333). The word wash keeps 0.22 em, so V11's kasra stays well inside its feather.
+66. **The ayah wash is fainter on a dark ground and feathered further** (3.1.3, 5.1.3): `washAlpha`
+    is 0.09 on a dark ground (was 0.13), and `AYAH_WASH_SHAPE` is a 0.6 em feather with 0.9 em ends
+    (was 0.3 em). At full size the Haram night band still read as a lit plate with visible edges, a
+    soft highlight box rather than a faint light. Now the core is about a third of the band and the
+    rest falls off, so it reads as light behind the ayah. V8, V10 and V20 pass the checker with it.

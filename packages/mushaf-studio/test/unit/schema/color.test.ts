@@ -107,11 +107,11 @@ describe('relativeLuminance / contrast / isLightGround', () => {
 });
 
 describe('washAlpha / washColor', () => {
-  it('is 0.10 on a light ground and 0.13 on a dark one, never set by the user', () => {
+  it('is 0.10 on a light ground and 0.09 on a dark one, never set by the user', () => {
     expect(washAlpha(IVORY)).toBe(0.1);
     expect(washAlpha(PAPER)).toBe(0.1);
-    expect(washAlpha(CHARCOAL)).toBe(0.13);
-    expect(washAlpha(GREEN)).toBe(0.13);
+    expect(washAlpha(CHARCOAL)).toBe(0.09);
+    expect(washAlpha(GREEN)).toBe(0.09);
   });
 
   it('caps the chroma only, ignores the colour’s own alpha, and never paints above 0.16', () => {

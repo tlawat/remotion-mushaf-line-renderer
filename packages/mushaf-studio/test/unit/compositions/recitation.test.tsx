@@ -474,7 +474,7 @@ describe('<MushafRecitation>', () => {
     cleanup();
     const ayah = windowOf(mount(props({highlight: highlight({mode: 'ayah', style: 'wash'})})))!;
     expect(ayah.dataset.wordBand).toBe('yes');
-    expect(JSON.parse(ayah.dataset.bandShape!)).toEqual({feather: 0.3});
+    expect(JSON.parse(ayah.dataset.bandShape!)).toEqual({feather: 0.6, end: 0.9});
     cleanup();
     // A tint on a tajweed theme is shown as a wash: the band, and no letter repainted.
     const tajweed = windowOf(mount(props({theme: 'light', highlight: highlight({style: 'tint'})})))!;

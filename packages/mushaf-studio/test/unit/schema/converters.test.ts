@@ -489,7 +489,7 @@ describe('wordStyleFrom', () => {
     expect(ayah(w4, ctx(45))).toBeUndefined();
     // On a dark ground the band is a little stronger.
     const dark = wordBandFrom({...base, ground: '#121416', highlight: highlight({style: 'wash'})});
-    expect(dark(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.13)'});
+    expect(dark(w2, ctx(45))).toEqual({color: 'rgba(177, 147, 83, 0.09)'});
     // Ink and tint draw no band.
     expect(wordBandFrom({...base, highlight: highlight({style: 'tint'})})(w2, ctx(45))).toBeUndefined();
     expect(drawsWordBand(highlight({style: 'ink'}), 'plain')).toBe(false);

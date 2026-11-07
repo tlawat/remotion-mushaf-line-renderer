@@ -153,8 +153,8 @@ export const legibleAccent = (color: string, ground: string): string => {
   return hex;
 };
 
-/** The wash's strength on a ground: 0.10 on a light one, 0.13 on a dark one. Never set by the user. */
-export const washAlpha = (ground: string): number => (isLightGround(ground) ? 0.1 : 0.13);
+/** The wash's strength on a ground: 0.10 on a light one, 0.09 on a dark one (a dark ground shows any band strongly; at 0.13 an ayah band read as a lit plate). Never set by the user. */
+export const washAlpha = (ground: string): number => (isLightGround(ground) ? 0.1 : 0.09);
 
 /**
  * The wash colour: `color` with its chroma capped (no lightness change) at `alpha`, capped at 0.16,
