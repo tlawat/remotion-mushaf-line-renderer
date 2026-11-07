@@ -1,8 +1,9 @@
 # Mushaf Studio: render design (highlight, motion, looks)
 
-Status: design spec, not yet implemented. It is the contract for reworking how
-`@tlawat/mushaf-studio` marks the recitation, moves its text, and dresses the frame, and for the
-small, additive changes this needs in `@tlawat/remotion-mushaf-line`. Every value below is decided.
+Status: implemented (stages R1-R4), with the deviations recorded at the end of this page. It is
+the contract for reworking how `@tlawat/mushaf-studio` marks the recitation, moves its text, and
+dresses the frame, and for the small, additive changes this needs in `@tlawat/remotion-mushaf-line`.
+Every value below is decided.
 Where something must be checked in a render before it is frozen, section 12 names the still and
 the pass criterion, and section 13 says what to do if it fails.
 
@@ -1519,3 +1520,47 @@ Stage R3 review:
 45. **A migration note carries its reason as a code** (`code`, `params`, with `MIGRATION_REASONS` and
     `migrationReasonText()`), and the panel words it through `upgrade.reason.<code>` in English and
     Arabic. `reason` keeps the English text for code users. These keys go beyond 10.4's list.
+
+Stage R4 (documentation, the demo Root, the design stills):
+
+46. **The example template's slot keeps light ink, in the dark ground's tokens.** Its `mushaf` is
+    `defaultMushafRecitationSlotProps` written out, except where it sits on the template's own dark
+    gradient: ink `#f1eadb`, the translation and labels `#b9b1a2`, the gloss `#8f897d`, and the
+    rosettes in Haram night's metal (`frame` and `detail` `#d8b56a`, `accent` `#1a1d20`) with a
+    transparent disc. `marginX` stays the template's 40 (the slot's box is 972 px wide, so a
+    format's 190 would crowd the line), and the Root keeps leaving out the optional `hostAudio` of
+    the three compositions, as before.
+47. **The checker is TypeScript, and strips are PNG sequences.** `apps/mushaf-studio/scripts/
+    design-check.ts` (run with bun) stands for 12.2's `design-check.py`, with its measures in
+    `design-image.ts` and the cases in `design-cases.ts`. A strip is rendered with `remotion render
+    --sequence --image-format=png`, not to an MP4 that ffmpeg splits: the measures read what was
+    drawn, not a codec's approximation of it. The round bundles the app with `--public-dir` pointing
+    at a copy of `public/` that adds the files the cases read, so nothing is written into the app.
+48. **Cases measured as the sample allows.** V1's resting ink is sampled on 1:2:4 at f56 (line 1
+    holds ayah 2 alone, so no word after 1:2:4 rests at f60). V3's scroll starts at f106, the end of
+    ayah 2, which is the `E` of 4.3 for a line that ends on an ayah; the criterion "not before f102"
+    holds. V7 and V9 are measured at f63 against the same props without a mark, 1:2:3 placed by
+    f56; V9's gold is `#806321`, the tint on this ivory page (`#b19353` is the charcoal value). V10's
+    "varies < 1 %" is read as 1 % of the 0-255 range (2.55 levels) of the band's lift over the
+    unmarked frame, along its middle row from the rosette's right edge (the rosette's disc, in the
+    ground's colour, covers the band) to the left cap; V10's slow re-run is V10 itself, as Haram
+    night is slow. V11 is a word wash on Al-Fatihah's 1:2:4 (a kasra under its mīm) at f66, at 16:9
+    and 9:16: `MushafPassage` has no highlight, and the sample has no timings for 2:282 or p.106.
+    V15's "lines settled" is the line in place at rest (0.6) at the first word. V18 has no turn (the
+    sample is one page); its band's cross-fade is measured on f100-f114 against the page without the
+    band and the word mark. V19 uses a generated backdrop (a sky with two thin stripes whose
+    distance gives the zoom). V20's dissolve is measured on f96-f130.
+49. **Releases.** The changelogs' sections are "0.2.0 (unreleased)" and "0.6.0 (unreleased)": the
+    versions in `package.json` and the studio's peer range on `@tlawat/remotion-mushaf-line` (still
+    `>=0.4.1`, though the studio now needs 0.6.0) move in the release commits, as for earlier
+    releases. The studio's earlier unreleased entries sit under "0.1.0 (unreleased)".
+50. **Found, not done in this stage.** (a) The interlinear labels still shrink to 70 % and are then
+    cut with an ellipsis: 5.1.5's two-row wrap never landed (deviations 10 and 22), so the changelog
+    does not list it as fixed. (b) EB Garamond and Amiri have no offline source: every composition
+    waits for them from Google Fonts and stops with `FONT_NETWORK` without a network (13.7); both
+    READMEs say so. (c) The review of 12.3 against a physical mushaf is a person's to do.
+51. **The design stills, round r4** (`bun run --cwd apps/mushaf-studio design`): 27 of 28 measured
+    cases pass. V10 at 16:9 fails on its seams (lift 14.7-19.7 levels along the band: deviation 15,
+    the phase-2 band of 13.2); V10 at 9:16 passes at f60 (the seams come and go with where the tiles
+    fall on the pixel grid). The criteria an eye must judge (the rosettes drawn in line, the card's range order, no lone
+    word on the last line, no banding) are listed as "look" in the report.

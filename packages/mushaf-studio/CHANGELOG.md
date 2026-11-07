@@ -1,7 +1,37 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (unreleased)
 
+The render design ([docs/mushaf-studio/render-design.md](../../docs/mushaf-studio/render-design.md)):
+one quiet mark, motion that waits for the voice, five looks, and a frame dressed like a printed
+mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are read.
+
+### Breaking
+
+- **Types change shape.** `Highlight` is `{mode, style: 'ink' | 'tint' | 'wash', color, restOpacity,
+  occurrence}` and `Animation` is `{lines: 'fade' | 'rise' | 'cut', tempo: 'calm' | 'slow',
+  leadInSeconds}` (`MushafAyahText`'s `animation` too). `Layout` gains `frame`, `Background` loses
+  `glow` and gains `vignette`, `MushafLook` gains `nameAr` and `descriptionAr`. Code that builds
+  these objects must use the new fields; code that reads saved props should pass them through
+  `migrateMushafProps()` first.
+- **Removed options**, each mapped by the migration to its nearest equivalent: the `glow` and
+  `marker` marks and the free `none` style (to `tint`, `wash`, and `mode: 'none'`), `dimOthers` and
+  `dimUpcomingOnly` (to `style: 'ink'` with `restOpacity` the old dimming, 0.5-0.85), `enter`, `exit`
+  and `scroll` (`slide-fade` → `rise`, `fade` and `reveal-rtl` → `fade`, `none` → `cut`; the spring
+  scroll is gone), `background.glow` (a vignette of 0.15 or more), the `pan-left` and `pan-right`
+  Ken Burns (`slow-zoom`, at most 1.05), and `pageView`'s `underline`, `ornate` and `slide` (`band`,
+  `simple`, `fade`). Ranges narrow: `layout.neighbourOpacity` 0.15-0.5, `animation.leadInSeconds`
+  0-2, `overlay.introSeconds` 2-6, `background.kenBurnsScale` 1-1.05, `pageView.turnSeconds` 0.6-1.5,
+  `pageView.dimOtherLines` 0.5-1; older values are clamped. The Karaoke yellow `#ffd166` becomes
+  `#b8913a`; any other colour is kept. The old default font stacks (Georgia, Noto Sans) become
+  `'auto'`. The full table is in the README's "Upgrading saved props" and in section 7 of the
+  design.
+- **Removed looks**: Classic, Tajweed light, Night, Black & gold, Sepia, Reel, Square, Karaoke and
+  Study. `lookById()` maps their ids (`classic`, `sepia`, `karaoke` → `mushaf`; `tajweed-light` →
+  `tajweed`; `night`, `black-gold` → `haram-night`; `study` → `learning`; `reel` and `square` →
+  their format).
+- **Needs `@tlawat/remotion-mushaf-line` 0.6.0** (`CALM_EASINGS`, `fadeRise()`, `inkTint`,
+  `WordContext.linePosition` and `inkPalette`); the peer range follows at release.
 - **Breaking: one quiet mark, and saved props migrated** (docs/mushaf-studio/render-design.md).
   `highlight.style` is `ink` (the default: the words still to come rest at `restOpacity` and fill
   in as heard), `tint` (the word's ink eases into the accent, read at 5:1 on the page) or `wash` (a
@@ -15,6 +45,29 @@
   `mushafPropsNeedMigration()` says whether anything does. The colour, timing and motion tokens
   (`legibleAccent()`, `washColor()`, `wordSpans()`, `boundaryStart()`, `dissolve()`,
   `tempoFrames()`, ...) are exported.
+- **Breaking: five looks and a Format control.** `MUSHAF_LOOKS` is Mushaf (the defaults), Haram
+  night, Madinah green, Tajweed and Learning, each named and described in English and Arabic
+  (`nameAr`, `descriptionAr`), each a ground, an ink, one metal and one mark; looks may now set
+  `overlay` (colour, font), `legend` (show, place, names) and `background` (colour, vignette). The
+  nine old looks are gone: `lookById()` maps their ids (`night` → `haram-night`, `classic` →
+  `mushaf`, ..., with one warning) and gives `reel` and `square` their format. The frame shape is
+  `MUSHAF_FORMATS` / `applyFormat()` (landscape, vertical, square, portrait): the aspect, and the
+  margins and vertical place only while they hold the previous format's, so look and format
+  commute. `layout.verticalAlign` now steps by 0.01 (the formats use 0.45, 0.47, 0.48).
+
+### Changed (what looks different)
+
+- **Gold highlights read.** A saved gold `color` becomes a tint drawn at 5:1 on the page (a darker
+  gold on cream: `#b8913a` is drawn `#806321`), and it now shows on the colour themes too. Glow,
+  marker and Karaoke saves get a quieter mark. The Look tab shows the shade drawn; the saved colour
+  is never rewritten.
+- **Every save gains** the late-never-early timing, the intro delay (when the intro card is on), the
+  1.5 s end hold and 1 s fade, and the loaded fonts: most videos get longer. A host that syncs to the
+  video reads `resolved.introDelaySeconds`.
+- **A translation larger than half the Arabic is drawn at half**, which shows at 9:16 (36 px is drawn
+  26 there).
+- **New projects start from the Mushaf look**: ivory, warm ink, gold-line rosettes on vellum, the ink
+  filling in behind the reciter, three lines, calm dissolves.
 - **The line window scrolls after the last word of the outgoing line**, never while it is heard
   (`anchor: 'start'`, `windowScrollStarts()`), so the word being recited keeps the centre slot and
   its mark. A translation, gloss or label colour that reads under 4.5:1 on its ground is drawn as
@@ -52,15 +105,6 @@
   drawn and draws its names smaller when one would leave the safe area (9:16 with both names). The
   card's Latin range is "Ayat 2–7" (the font sets a capital Ā's macron beside it). The thumbnail
   loads EB Garamond.
-- **Breaking: five looks and a Format control.** `MUSHAF_LOOKS` is Mushaf (the defaults), Haram
-  night, Madinah green, Tajweed and Learning, each named and described in English and Arabic
-  (`nameAr`, `descriptionAr`), each a ground, an ink, one metal and one mark; looks may now set
-  `overlay` (colour, font), `legend` (show, place, names) and `background` (colour, vignette). The
-  nine old looks are gone: `lookById()` maps their ids (`night` → `haram-night`, `classic` →
-  `mushaf`, ..., with one warning) and gives `reel` and `square` their format. The frame shape is
-  `MUSHAF_FORMATS` / `applyFormat()` (landscape, vertical, square, portrait): the aspect, and the
-  margins and vertical place only while they hold the previous format's, so look and format
-  commute. `layout.verticalAlign` now steps by 0.01 (the formats use 0.45, 0.47, 0.48).
 - **The Look tab** has the Format row (hidden in a slot, with a hint under Vertical), cards with
   both names and four chips (page, ink, metal, the mark as drawn), and the mark in one line with a
   note when a tint is drawn in another shade or shown as a wash. Every tab shows an **upgrade
@@ -82,6 +126,22 @@
   wide, each word a box as tall as its line for the wash.
 - The example template's frosted card is gone (the recitation sits in a plain block inside the safe
   area) and its slot follows the default mark.
+
+### Fixed
+
+- **The mark on colour themes**: `highlight.color` did nothing on a colour theme; ink and wash now
+  work everywhere, and a tint repaints only the ink (or shows as a wash on the tajweed colours).
+- **Early changes**: lines, the window's scroll, the translation and the ayah text left up to 1.2 s
+  before their last word ended; now nothing changes before the voice has finished it.
+- **The intro card cut to one frame** when the first word came early: the card now adds its time.
+- **The card's Arabic range read backwards**: it is drawn in a right-to-left isolate («الآيات ٢–٧»,
+  the first ayah rightmost).
+- **The legend covered the text**: it is a band the lines (and the page) are fitted around.
+- **The end card showed the chapter-info title twice**: the title block appears once.
+- **Fonts that were never loaded**: Georgia, Noto Sans and the label fonts fell back to whatever the
+  machine had; EB Garamond and Amiri are now loaded behind the render's font gate.
+
+## 0.1.0 (unreleased)
 
 First proof of concept of Mushaf Studio: Remotion Studio, extended with the package's features
 as a user interface. See [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md) for the

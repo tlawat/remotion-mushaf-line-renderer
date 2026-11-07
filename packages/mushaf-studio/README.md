@@ -27,6 +27,7 @@ design and its roadmap are in [docs/mushaf-studio/plan.md](../../docs/mushaf-stu
 - [Register the compositions](#register-the-compositions)
 - [The Mushaf panel](#the-mushaf-panel)
 - [Inside your own composition](#inside-your-own-composition)
+- [Looks, marks and motion](#looks-marks-and-motion)
 - [Props](#props)
 - [Data contract](#data-contract)
 - [Modules without the compositions](#modules-without-the-compositions)
@@ -108,67 +109,61 @@ export const RemotionRoot: React.FC = () => (
       slice: true,
       splits: [],
       header: 'none',
-      theme: 'plain',
+      theme: 'custom',
       customTheme: {
         base: 'normal',
-        ink: '#1b1b1b',
-        silent: '#8a8a8a',
+        ink: '#1c1a16',
+        silent: '#8a8478',
         rules: '#1b6f3f',
-        frame: '#1b1b1b',
-        accent: '#c8a45c',
-        detail: '#c8a45c',
-        background: 'transparent',
-        override: {ink: false, silent: false, rules: false, frame: false, accent: true, detail: true, background: false},
+        frame: '#8c6c26',
+        accent: '#efe3c4',
+        detail: '#8c6c26',
+        background: '#f8f3e6',
+        override: {ink: false, silent: false, rules: false, frame: true, accent: true, detail: true, background: true},
       },
       fonts: 'fallback',
       data: 'mirror',
       layout: {
         aspect: '16:9',
         visibleLines: 3,
-        neighbourOpacity: 0.45,
-        marginX: 120,
-        background: '#fbf7ee',
-        color: '#1b1b1b',
+        neighbourOpacity: 0.3,
+        marginX: 190,
+        background: '#f8f3e6',
+        color: '#1c1a16',
         backgroundImage: '',
         verticalAlign: 0.5,
         offsetY: 0,
+        frame: 'none',
       },
       background: {
         kind: 'color',
-        color: '#fbf7ee',
+        color: '#f8f3e6',
         src: '',
         fit: 'cover',
         videoSeconds: 0,
         blur: 0,
         dim: 0,
+        vignette: 0,
         kenBurns: 'none',
-        kenBurnsScale: 1.1,
-        gradient: {from: '#0f2027', to: '#2c5364', angle: 180},
-        glow: {enabled: false, color: '#c8a45c', strength: 0.5},
+        kenBurnsScale: 1.04,
+        gradient: {from: '#14191d', to: '#0b0e10', angle: 180},
       },
-      animation: {enter: 'slide-fade', exit: 'slide-fade', leadInSeconds: 0.4, scroll: 'ease'},
-      highlight: {
-        mode: 'word',
-        style: 'color',
-        color: '#c8a45c',
-        dimOthers: 1,
-        dimUpcomingOnly: false,
-        occurrence: 'first',
-      },
+      animation: {lines: 'fade', tempo: 'calm', leadInSeconds: 0.4},
+      highlight: {mode: 'word', style: 'ink', color: '#b8913a', restOpacity: 0.6, occurrence: 'first'},
       memorize: {mode: 'off', repeat: 3, pauseSeconds: 0.5, revealAfterRepeats: 1},
       text: {
         translationFile: '',
         translationPosition: 'below',
-        translationFont: 'Georgia, "Noto Serif", serif',
-        translationSize: 40,
-        translationColor: '#4a4a4a',
+        translationFont: 'auto',
+        translationSize: 36,
+        translationColor: '#5a554c',
         translationDirection: 'ltr',
         translationOffsetY: 0,
         glossFile: '',
         transliterationFile: '',
-        glossFont: '"Noto Sans", "Helvetica Neue", Arial, sans-serif',
-        glossSize: 34,
-        glossColor: '#6a6a6a',
+        glossFont: 'auto',
+        glossSize: 30,
+        glossColor: '#6b6458',
         translations: [],
         glossPosition: 'strip',
       },
@@ -176,12 +171,12 @@ export const RemotionRoot: React.FC = () => (
         title: 'none',
         introSeconds: 3,
         reciter: '',
-        color: '#1b1b1b',
-        font: 'Georgia, "Noto Serif", serif',
+        color: '#5a554c',
+        font: 'auto',
         corner: 'top-right',
-        cornerSize: 28,
+        cornerSize: 0,
       },
-      legend: {show: false, position: 'bottom-left', orientation: 'column', names: 'both'},
+      legend: {show: false, position: 'bottom-left', orientation: 'row', names: 'both'},
       endCard: {show: 'none', seconds: 5, tafsirFile: '', chapterInfoFile: ''},
       audio: {normalize: true, targetLufs: -14, fadeInSeconds: 0.3, fadeOutSeconds: 1, trimSilence: false, volume: 1},
       review: {showDoubtful: true, confidenceThreshold: 0.8, doubtColor: '#d94848'},
@@ -205,7 +200,10 @@ Why it has to look like this:
   checks your Root, give the project a Prettier config in your style (the app's
   [`.prettierrc.json`](../../apps/mushaf-studio/.prettierrc.json) matches this repository's Biome
   settings).
-- The literal above is `defaultMushafRecitationProps` written out. `MushafAyahText`, `MushafPage` and
+- The literal above is `defaultMushafRecitationProps` written out: the Mushaf look (ivory page,
+  warm ink, gold-line rosettes, the ink filling in behind the reciter). A Root saved by an earlier
+  version still renders (its props are migrated as they are read) and the panel offers to save it
+  in the current shape: see [Upgrading saved props](#upgrading-saved-props). `MushafAyahText`, `MushafPage` and
   `MushafPassage` are declared the same way (`mushafAyahTextSchema`, `calculateMushafAyahTextMetadata`,
   `defaultMushafAyahTextProps`, and so on), and `MushafThumbnail` as a `<Still>`;
   [`apps/mushaf-studio/src/Root.tsx`](../../apps/mushaf-studio/src/Root.tsx) has all five.
@@ -475,6 +473,169 @@ The app's `MushafInTemplate` composition ([`apps/mushaf-studio/src/MushafInTempl
 is a working example: a 1080×1920 reel with its own schema, title, intro, outro and track
 (`soundtrack`), which the slot under `mushaf` follows.
 
+## Looks, marks and motion
+
+The render follows one rule: the frame is a printed mushaf leaf. The KFGQPC line is shown exactly
+as printed; nothing scales, slides, bounces, wipes or blurs a glyph, and no partial word is ever on
+screen. Only four things move: a line's opacity, a rise of a whole line of at most 0.12 em as it
+comes in, the ink of a whole word, and a faint band behind a word. Every option below is a
+finished design and every number is clamped to a dignified range, so no combination of them gives
+a pale page, a neon word or a swimming background. The full design, with its values and the
+reasons for them, is [docs/mushaf-studio/render-design.md](../../docs/mushaf-studio/render-design.md).
+
+### Looks
+
+A look is a ground, an ink, one metal and one mark (`MUSHAF_LOOKS`, `applyLook(props, look)`). It
+sets style fields only: never the content (the recitation, the timings, the range, the splits, the
+translation files), `layout.visibleLines`, `animation.leadInSeconds` or where you placed the lines
+(`LOOK_POSITION_FIELDS`). Each look is named and described in English and in Arabic (`name`,
+`nameAr`, `description`, `descriptionAr`).
+
+| Look | Id | For | Ground, ink, metal | Mark |
+| --- | --- | --- | --- | --- |
+| **Mushaf** «مصحف» | `mushaf` | Recitation, ayah text, passage | Ivory `#f8f3e6`, warm ink `#1c1a16`, gold-line rosettes on vellum | Ink: the words still to come rest at 0.6 and fill in as they are heard |
+| **Haram night** «ليل الحرم» | `haram-night` | Recitation, ayah text, passage | Warm ivory `#f1eadb` on charcoal `#121416`, gold `#d8b56a`, a vignette | Wash: the ayah held in a faint gold band; slow tempo |
+| **Madinah green** «أخضر المدينة» | `madinah-green` | Recitation, ayah text, passage | Ivory on `#10241b`, gold `#cfae63`, the jadwal (a thin double rule) | Ink, by ayah |
+| **Tajweed** «تجويد» | `tajweed` | Recitation, passage | The tajweed colours untouched on warm paper `#fbf7ee`, the legend in its band | Ink, the words to come at 0.7 |
+| **Learning** «تعلّم» | `learning` | Recitation, passage | As Mushaf, the gloss under each word | Tint: each word turns antique gold (`#806321` on ivory) as it is recited |
+
+Mushaf is the default: `defaultMushafRecitationProps` equals the Mushaf look at 16:9, and applying
+it changes nothing. The frame's shape is a separate control, the **Format** (`MUSHAF_FORMATS`,
+`applyFormat(props, id)`): `landscape` 16:9, `vertical` 9:16, `square` 1:1 and `portrait` 4:5. A
+format sets `layout.aspect`, and `layout.marginX` and `layout.verticalAlign` only while they still
+hold the previous format's recommended values, so a position you chose stays. Look and format
+commute: `applyFormat(applyLook(p, look), f)` equals `applyLook(applyFormat(p, f), look)`.
+
+```ts
+import {applyFormat, applyLook, defaultMushafRecitationProps, lookById} from '@tlawat/mushaf-studio';
+
+const reel = applyFormat(applyLook(defaultMushafRecitationProps, lookById('haram-night')!), 'vertical');
+```
+
+`lookById()` also takes the ids of the nine looks before this design and names their successor
+once, with a warning: `classic`, `sepia` and `karaoke` → `mushaf`; `tajweed-light` → `tajweed`;
+`night` and `black-gold` → `haram-night`; `study` → `learning`; `reel` and `square` give their
+format.
+
+### Highlight: one mark at a time
+
+A video marks the recitation with exactly one device, `highlight.style`, and never a box, a halo,
+a glow, an underline or two devices together. The mark starts at its word's time, never before it;
+it eases in over 5 frames and out over 10 (the outgoing word lets go while the next comes in, so
+the eye glides without the mark travelling), and after an ayah's last word it lets go 0.25 s later,
+in the breath. A word shorter than 4 frames gets no mark of its own, so a fast recitation does not
+flicker. Without per-word times, `mode: 'word'` follows the ayah.
+
+| `style` | Arabic | What it does | Where |
+| --- | --- | --- | --- |
+| `ink` (default) | مداد | The words of the current line not yet heard rest at `restOpacity` and fill in to full ink as they are recited (over 6 frames); heard words stay full. In `mode: 'ayah'`, the ayah being recited is full and the others rest. | Every theme: it only changes opacity. |
+| `tint` | تذهيب | The word's (or ayah's) ink turns the accent. The accent is corrected so it reads at 5:1 on the page (`legibleAccent()`: `#b8913a` is drawn `#806321` on ivory) and its chroma is capped, so a neon yellow becomes antique gold. The ayah-end rosette keeps its colours. | `plain` paints CSS colour; the other colour themes repaint only their ink (`inkTint`). On a tajweed theme it is **shown as a wash**: a tint would repaint the tajweed colours, which are a reading aid. |
+| `wash` | ظلّ | A faint band with soft ends behind the word, or behind the ayah's run of words on each line (its rosette included): 0.10 of the accent on a light ground, 0.13 on a dark one, never user-set. | Every theme. |
+
+`restOpacity` (0.5–0.85, default 0.6) is the ink mark's rest, and is raised to 0.65 on a tajweed
+theme so the pastels never wash out. Dimming never compounds: the lines around the current one sit
+at `layout.neighbourOpacity`, kept 0.2 under `restOpacity`, never at the product of the two. Lines
+above and below the current one carry no tint or wash; the line being recited is the only one
+marked. Memorisation decides first (hidden, ghost or shown), the ink applies to what is shown,
+and a tint or a wash goes on top: `memorize`'s hiding wins over `restOpacity`. On `MushafPage`, the
+page's line band (`pageView.lineHighlight: 'band'`) is the page's one mark and wins over
+`highlight.style`. The Look tab says which mark is drawn, and in which shade.
+
+### Motion
+
+`animation` (shown as "Motion" in the panel) has three fields: `lines`, how a line or an ayah gives
+way to the next (`fade`, a staggered dissolve: the outgoing line under 0.25 before the incoming one
+starts, never both above 0.2, never an empty frame; `rise`, the same dissolve with the incoming line
+rising at most 12 px into place, the outgoing one still; `cut`, no dissolve, the reduce-motion
+path); `tempo`, `calm` or `slow` (every change 1.4× longer; the word mark keeps the voice's pace);
+and `leadInSeconds` (0–2), the longest a new line waits, settled, before its first word.
+
+| Change | Calm | Slow |
+| --- | --- | --- |
+| One line at a time (`visibleLines: 0`): the line dissolve | 0.67 s | 0.93 s |
+| The window scrolls one line box (on an in-out curve, no lurch, no overshoot) | 0.8 s | 1.13 s |
+| The window's (or the first line's) first appearance | 0.8 s | 1.13 s |
+| `MushafAyahText`'s ayah dissolve | 0.9 s | 1.27 s |
+| The translation's dissolve at an ayah boundary | 0.6 s | 0.83 s |
+| After the last word: the lines hold, then fade | 1.5 s + 1 s | 1.5 s + 1.4 s |
+
+Then the end card, if any, dissolves in on the same ground. The window's lines never fade on their
+own: the whole window scrolls, and `lines` shapes only its entrance and exit (a jump under `cut`).
+The page turn of `MushafPage` is the same dissolve over `pageView.turnSeconds` (or a cut).
+
+### Timing: late, never early
+
+No line, scroll, translation, page or ayah changes before the reciter has finished the last word
+on it. For each boundary, with `E` the end of the outgoing unit's last word (an ayah's end when the
+unit ends on one) and `F` the start of the incoming unit's first word, the change starts at
+`max(E, F − leadInSeconds − D)`, `D` its duration, which a short pause shortens to `F − E` but never
+under 0.33 s. With a pause, the new line is settled `leadInSeconds` before its first word. With
+continuous recitation (hadr), the change takes 0.33 s and overlaps the new line's first word: the
+incoming text is at half its ink by its sixth frame. A change may be late; it is never early
+(`boundaryStart()`). A change that would start before the previous one is over waits for it.
+
+### Intro delay and `resolved.introDelaySeconds`
+
+With `overlay.title` `intro` or `both`, the intro card has its whole `introSeconds`: in
+`MushafRecitation` (and its slot) the recording starts `resolved.introDelaySeconds` later, the
+video grows by as much, and the lines come in after the card. The delay is `introSeconds` + the
+card's entrance (0.8 s, 1.13 s slow) + the spacing of the surah's header lines before ayah 1 (when
+`header` puts any) + `leadInSeconds`, less the time the recording already waits before its first
+word, never negative (`introDelaySeconds()`; 3.869 s for the sample with a 3 s card). A host that
+plays the video next to something synced to the recording (a transcript, a player of its own, the
+Laravel side) maps a video second to the recording's with it:
+
+```ts
+const recordingSeconds = videoSeconds - (resolved.introDelaySeconds ?? 0) + resolved.audioOffsetSeconds;
+```
+
+Under `hostAudio` nothing is delayed: the template's track decides when the recording is heard,
+and the card covers the start in the page colour. `MushafAyahText` and `MushafPage` keep their card
+over the start, until 0.3 s before the first word; `MushafPassage` starts its lines after it.
+
+### Backgrounds: what to use
+
+The Quran is the only large, centred, full-ink element of the frame; the background must not
+compete with it. Use abstract textures, sky, water or a landscape, quiet and out of focus. Avoid
+people, faces or animals in focus, anything underfoot (floors, roads, carpets) and busy, bright or
+flashing footage. Do not put music or sound effects under the recitation. The options keep it calm
+by construction: an image or a video is always dimmed (black at 0.45 or more under light ink, a
+veil of the page at 0.55 or more under dark ink), the slow zoom is at most 1.05 over the whole
+video, nothing pans, and nothing follows the audio's loudness. See [`background`](#background).
+
+### Upgrading saved props
+
+Props saved by an earlier version (a Root, a project file, a JSON payload a host sends) keep
+working: `migrateMushafProps()` runs first in every `calculateMetadata()` and slot resolver, so the
+CLI, Lambda and a host's renders, which Remotion does not validate, render the current design. A
+value that is still valid is never replaced by a new default; values change only when the option
+was removed (mapped to its nearest equivalent), a number is outside its new range (clamped), a font
+is the old default stack that was never loaded (`'auto'`), or a value never showed (the gradient
+when the kind is not a gradient). The main mappings:
+
+| Before | Now |
+| --- | --- |
+| `highlight.dimOthers` under 1 with `dimUpcomingOnly` (or with `style: 'none'`) | `style: 'ink'`, `restOpacity` the old dimming rounded to 0.05, within 0.5–0.85 |
+| `highlight.style` `color` or `glow` | `tint` |
+| `highlight.style` `marker` | `wash` (any dimming dropped: one device) |
+| `highlight.style` `none` without dimming | `mode: 'none'` |
+| `highlight.color` `#ffd166` (the Karaoke yellow) | `#b8913a`; any other colour is kept, and corrected when drawn |
+| `animation.enter` (or `exit`) `slide-fade` / `fade` / `reveal-rtl` / `none` | `lines` `rise` / `fade` / `fade` / `cut`; `scroll` dropped, `tempo: 'calm'` |
+| `background.kenBurns` `pan-left` / `pan-right` | `slow-zoom`, `kenBurnsScale` within 1–1.05 |
+| `background.glow.enabled` | `vignette` 0.15 or more; `glow` dropped |
+| `pageView` `underline` / `ornate` / `slide` | `band` / `simple` / `fade` |
+| `text.translationFont`, `text.glossFont`, `overlay.font`: the old default stacks | `'auto'` (EB Garamond, loaded) |
+| `layout.neighbourOpacity`, `animation.leadInSeconds`, `overlay.introSeconds` | clamped to 0.15–0.5, 0–2, 2–6 |
+
+`describeMushafMigration(props)` lists every change (`{path, from, to, reason}`) and
+`mushafPropsNeedMigration(props)` says whether there is any. In the Studio, the Props sidebar
+validates the Root as it is, so an old Root shows errors on the changed fields until it is
+upgraded; the preview renders the migrated props meanwhile. Every tab of the Mushaf panel then shows
+a banner: **What changes** lists the changes, **Upgrade** saves the migrated props, and **Upgrade
+and apply the Mushaf look** also applies the Mushaf look and the format's positions. The
+[CHANGELOG](./CHANGELOG.md) lists what looks different afterwards (durations included: the intro
+delay and the end hold make most videos longer).
+
 ## Props
 
 The schemas' descriptions are what the Props sidebar shows, in the info bubble beside each field's
@@ -496,11 +657,11 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `slice`       | boolean                     | `true`                        | Hide the neighbours' words on the first and last lines.      |
 | `splits`      | `{page, line, atWordId}[]`  | `[]`                          | Printed lines split into two timed segments; `atWordId` is the `MushafWord.wordId` that starts the second. |
 | `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'`            | When the recitation starts at ayah 1: the surah's header lines before it (see [`header`](#header-mushafrecitation-and-mushafpassage)). Across surahs, each later surah's header lines come between the two surahs as printed, whatever this says. |
-| `theme`       | `'plain'`, `'light'`, `'dark'`, `'sepia'`, `'black'`, `'normal'`, `'p1'`–`'p5'`, `'custom'` | `'plain'` | Colour theme of the mushaf line; `'custom'` uses `customTheme`. |
+| `theme`       | `'plain'`, `'light'`, `'dark'`, `'sepia'`, `'black'`, `'normal'`, `'p1'`–`'p5'`, `'custom'` | `'custom'` | Colour theme of the mushaf line; `'custom'` uses `customTheme` (by default the Mushaf look's gold-line rosettes on vellum). The panel groups them as Mushaf (`custom`), Tajweed (`light`, `dark`, `sepia`) and Advanced (the rest). |
 | `customTheme` | object                      | see below                     | A preset and a colour per part.                              |
 | `fonts`       | `'fallback'`, `'cdn'`, `'package'` | `'fallback'`           | Where the page fonts come from: QUL's CDN with the registered fonts packages as fallback, the CDN only, or the packages only (the surah and juz name fonts from `public/fonts/`). Without `registerMushafFonts()` every mode uses the CDN, with a Studio warning. |
 | `data`        | `'mirror'`, `'cdn'`         | `'mirror'`                    | The mushaf data: the mirror in `public/data/qpc-v4/` through `staticFile()`, or QUL's exports on Tarteel's CDN. |
-| `layout`, `background`, `animation`, `highlight`, `memorize`, `text`, `overlay`, `legend`, `endCard`, `audio`, `review` | objects | see below | The style groups.                            |
+| `layout`, `background`, `animation`, `highlight`, `memorize`, `text`, `overlay`, `legend`, `endCard`, `audio`, `review` | objects | see below | The style groups (see also [Looks, marks and motion](#looks-marks-and-motion)). |
 | `resolved`    | `ResolvedRecitation \| null` | `null`                       | Filled by `calculateMetadata()`: the timings, the lines (splits applied), the schedule, the translations, the gloss, the doubtful words, the audio's analysis (`audio`, `audioWarning`), the URL to play instead of a missing `audioFile` (`audioSrc`), the end card's content. Leave it `null`. |
 
 ### `MushafPassage`
@@ -513,7 +674,7 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `slice`       | boolean   | `true`     | Hide the neighbours' words on the first and last lines. |
 | `holdSeconds` | 0.5–30    | `4`        | Seconds each line stays.                       |
 | `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'` | When `fromAyah` is 1: the surah's header lines first. |
-| `theme`, `customTheme`, `fonts`, `data`, `layout`, `background`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above. |
+| `theme`, `customTheme`, `fonts`, `data`, `layout`, `background`, `animation`, `text`, `overlay` | | as for `MushafRecitation` | As above. |
 | `resolved`    |           | `null`     | Filled by `calculateMetadata()`.               |
 
 Every change of a passage runs at the incoming line's hold start, as nothing is heard to wait for:
@@ -535,12 +696,12 @@ defaults are `defaultMushafAyahTextProps` (a 9:16 reel, light text on a dark pag
 | `font`        | `'uthmani-hafs'`    | `'uthmani-hafs'`                     | The Unicode Quran font, from QUL's CDN (`UNICODE_FONTS`).                   |
 | `fontSize`    | 40–200              | `96`                                 | Size of the Arabic text in px.                                              |
 | `lineHeight`  | 1–2.5               | `1.9`                                | Line height in multiples of the size.                                       |
-| `layout`      | object              | `aspect: '9:16'`, dark page          | As for `MushafRecitation`; `visibleLines` and `neighbourOpacity` do not apply. |
-| `animation`   | `{enter, exit, leadInSeconds}` | slide-fade, 0.4 s         | How each ayah comes in and goes out.                                        |
-| `highlight`, `text` | objects       | as for `MushafRecitation`            | The word-by-word fields of `text` do not apply. The translation is centred under the ayah. |
+| `layout`      | object              | `aspect: '9:16'`, `marginX: 90`, ink `#f1eadb` on charcoal `#121416` | As for `MushafRecitation`; `visibleLines` and `neighbourOpacity` do not apply. The ayah is a balanced block 78 % of the frame wide, its words 0.1 em apart. |
+| `animation`   | `{lines, tempo, leadInSeconds}` | fade, calm, 0.4 s         | How each ayah gives way to the next, after its last word (a 0.9 s dissolve, 1.27 s slow). |
+| `highlight`, `text` | objects       | as for `MushafRecitation`, `translationColor: '#b9b1a2'`, `translationSize: 40` | The word-by-word fields of `text` do not apply. A tint is always CSS colour and a wash is drawn on each word; `mode: 'ayah'` marks nothing (the ayah on screen is the ayah heard). The translation is centred under the ayah, at most half its size. |
 | `memorize`    | object              | as for `MushafRecitation`            | See [`memorize`](#memorize-mushafrecitation-mushafayahtext); here `'first-letters'` shows each upcoming word's first letter. |
 | `overlay`     | object              | as for `MushafRecitation`, `color: '#f4efe6'` | The title card and corner label, in the dark page's ink.              |
-| `background`  | object              | as for `MushafRecitation`, `color: '#101418'` | Behind the ayah; see [`background`](#background).                     |
+| `background`  | object              | as for `MushafRecitation`, `color: '#121416'` | Behind the ayah; see [`background`](#background).                     |
 | `endCard`, `audio` | objects        | as for `MushafRecitation`            | See [`endCard`](#endcard) and [`audio`](#audio).                            |
 | `resolved`    |                     | `null`                               | Filled by `calculateMetadata()`; `audioOffsetSeconds` is set when `audio.trimSilence` skipped a silence. |
 
@@ -556,7 +717,7 @@ recitation props as `MushafRecitation`; the defaults are `defaultMushafPageProps
 | `layout`      | object    | as for `MushafRecitation` | The frame, the colours and the side margins; the page is centred, so the lines' window fields do not apply. |
 | `background`  | object    | as for `MushafRecitation` | Around the page; see [`background`](#background).                      |
 | `highlight`, `review` | objects | as for `MushafRecitation` | The word being heard, and the Studio's doubt marks.                 |
-| `pageView`    | `{lineHighlight, lineHighlightColor, dimOtherLines, frame, pageNumber, turn, turnSeconds}` | a gold band, a simple frame, the page number, a 0.6 s slide | The page: the current line's mark, the border, the number and the turn. |
+| `pageView`    | `{lineHighlight, lineHighlightColor, dimOtherLines, frame, pageNumber, turn, turnSeconds}` | a gold band, no dimming, a simple frame, the page number, a 0.9 s dissolve | The page: the current line's mark (`'band'`, a faint band that cross-fades from line to line and wins over `highlight.style` on the page, or `'none'`), the other lines' opacity (0.5–1), the border (`'simple'`: a double rule in the rosettes' gold, or `'none'`), the number (Amiri, 60 % ink), and the turn after the page's last word (`'fade'` over `turnSeconds`, 0.6–1.5, or `'cut'`). The page fills 92 % of a wide frame's height (84 % of a tall one's width). |
 | `text`        | object    | `translationPosition: 'auto'` | `text`'s translation fields; `translationPosition` is `'auto'` (the room under the page when it holds three lines of translation, else the gutter beside it), `'beside'`, `'below'` or `'none'`. The word-by-word fields do not apply. |
 | `legend`, `endCard`, `audio` | objects | as for `MushafRecitation` | See below.                                             |
 | `resolved`    |           | `null`                    | Filled by `calculateMetadata()`.                                       |
@@ -566,48 +727,52 @@ recitation props as `MushafRecitation`; the defaults are `defaultMushafPageProps
 | Field        | Type    | Default        | Description                                          |
 | ------------ | ------- | -------------- | ---------------------------------------------------- |
 | `base`       | a preset (`'light'` … `'p5'`) | `'normal'` | Preset to start from.                     |
-| `ink`        | colour  | `'#1b1b1b'`    | The letters.                                         |
-| `silent`     | colour  | `'#8a8a8a'`    | Letters written but not pronounced.                  |
+| `ink`        | colour  | `'#1c1a16'`    | The letters.                                         |
+| `silent`     | colour  | `'#8a8478'`    | Letters written but not pronounced.                  |
 | `rules`      | colour  | `'#1b6f3f'`    | The seven tajweed rule colours (one colour for all). |
-| `frame`      | colour  | `'#1b1b1b'`    | The ayah-end rosette and its number.                 |
-| `accent`     | colour  | `'#c8a45c'`    | The rosette's petals.                                |
-| `detail`     | colour  | `'#c8a45c'`    | The jewel at the top of the rosette.                 |
-| `background` | colour  | `'transparent'` | The disc behind the ayah number.                    |
-| `override`   | `{ink, silent, rules, frame, accent, detail, background}` booleans | `accent` and `detail` on | Which parts the colours above override; the others keep the preset's colours. |
+| `frame`      | colour  | `'#8c6c26'`    | The ayah-end rosette's outline and its number: gold line. |
+| `accent`     | colour  | `'#efe3c4'`    | The rosette's petals: vellum, a shade off the page.  |
+| `detail`     | colour  | `'#8c6c26'`    | The jewel at the top of the rosette.                 |
+| `background` | colour  | `'#f8f3e6'`    | The disc behind the ayah number: the page.           |
+| `override`   | `{ink, silent, rules, frame, accent, detail, background}` booleans | `frame`, `accent`, `detail` and `background` on | Which parts the colours above override; the others keep the preset's colours. So every rosette is a gold line drawing, never a solid coin or the preset's pink and mint. |
 
 ### `layout`
 
 | Field              | Type                                 | Default     | Description                                                         |
 | ------------------ | ------------------------------------ | ----------- | ------------------------------------------------------------------- |
 | `aspect`           | `'16:9'`, `'9:16'`, `'1:1'`, `'4:5'` | `'16:9'`    | Frame shape: 1920×1080, 1080×1920 (reels), 1080×1080, 1080×1350.    |
-| `visibleLines`     | 0–7                                  | `3`         | Lines on screen at once (0: one line, replaced in place).           |
-| `neighbourOpacity` | 0–1                                  | `0.45`      | Opacity of the lines around the current one.                        |
-| `marginX`          | 0–400 px                             | `120`       | Side margins, at the composition's width.                           |
-| `background`       | colour                               | `'#fbf7ee'` | Page colour: what `background.kind: 'color'` paints, and the colour of the title card, the counter and the end card. |
-| `color`            | colour                               | `'#1b1b1b'` | Ink colour (the plain theme, and every part a theme paints in `currentColor`). |
+| `visibleLines`     | 0–7                                  | `3`         | Lines on screen at once (0: one line, replaced in place by a dissolve). |
+| `neighbourOpacity` | 0.15–0.5                             | `0.3`       | Opacity of the lines around the current one (under the ink mark, kept 0.2 under `highlight.restOpacity`). |
+| `marginX`          | 0–400 px                             | `190`       | Side margins, at the composition's width (about 10 % of the width reads best at 16:9; 90 at the other formats). |
+| `background`       | colour                               | `'#f8f3e6'` | Page colour: what `background.kind: 'color'` paints, and the colour of the title card, the counter and the end card. |
+| `color`            | colour                               | `'#1c1a16'` | Ink colour (the plain theme, and every part a theme paints in `currentColor`). |
 | `backgroundImage`  | string                               | `''`        | Kept for files saved before `background`: with `background.kind` `'color'` it is painted over the page colour as before, and an `'image'` with no `src` takes it. |
-| `verticalAlign`    | 0–1                                  | `0.5`       | Vertical position of the lines (0 top, 1 bottom).                   |
+| `verticalAlign`    | 0–1, step 0.01                       | `0.5`       | Vertical position of the lines (0 top, 1 bottom).                   |
 | `offsetY`          | −800–800 px                          | `0`         | Move the lines up (negative) or down from there.                    |
+| `frame`            | `'none'`, `'hairline'`               | `'none'`    | `'hairline'`: the jadwal, a thin gold double rule at the safe area, as on a printed page. |
 
 ### `animation`
 
-| Field           | Type                                           | Default        | Description                                     |
-| --------------- | ---------------------------------------------- | -------------- | ----------------------------------------------- |
-| `enter`         | `'slide-fade'`, `'fade'`, `'reveal-rtl'`, `'none'` | `'slide-fade'` | How a line comes in.                         |
-| `exit`          | the same                                       | `'slide-fade'` | How a line goes out.                            |
-| `leadInSeconds` | 0–3                                            | `0.4`          | Seconds a line is on screen before its first word. |
-| `scroll`        | `'ease'`, `'spring'`                           | `'ease'`       | Curve of the window's scroll between lines.     |
+How lines give way, shown as "Motion" in the panel (see [Motion](#motion) and
+[Timing: late, never early](#timing-late-never-early)).
 
-### `highlight` (`MushafRecitation` only)
+| Field           | Type                          | Default  | Description                                     |
+| --------------- | ----------------------------- | -------- | ----------------------------------------------- |
+| `lines`         | `'fade'`, `'rise'`, `'cut'`   | `'fade'` | How a line or an ayah gives way to the next, always after its last word: a dissolve, a dissolve with a slight rise, or a cut. |
+| `tempo`         | `'calm'`, `'slow'`            | `'calm'` | Pace of every change: calm, or slow (1.4× longer). The word mark keeps its pace. |
+| `leadInSeconds` | 0–2, step 0.1                 | `0.4`    | Longest a new line waits, settled, before its first word (it never comes before the last line ends). |
 
-| Field             | Type                                     | Default     | Description                                                     |
-| ----------------- | ---------------------------------------- | ----------- | --------------------------------------------------------------- |
-| `mode`            | `'word'`, `'ayah'`, `'none'`             | `'word'`    | What follows the recitation: the word, the whole ayah, or nothing. |
-| `style`           | `'color'`, `'glow'`, `'marker'`, `'none'` | `'color'`  | How the current word is marked: ink colour, a glow, a marker behind it. |
-| `color`           | colour                                   | `'#c8a45c'` | Colour of the mark.                                             |
-| `dimOthers`       | 0–1                                      | `1`         | Opacity of the other words (1: none). Ignored when `mode` is `'none'`; a word `memorize` hides stays hidden. |
-| `dimUpcomingOnly` | boolean                                  | `false`     | Dim only the words still to come (with `dimOthers` under 1).    |
-| `occurrence`      | `'first'`, `'last'`                      | `'first'`   | For a repeated word: follow its first or its last recitation.   |
+### `highlight` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
+
+One mark at a time (see [Highlight: one mark at a time](#highlight-one-mark-at-a-time)).
+
+| Field         | Type                          | Default     | Description                                                     |
+| ------------- | ----------------------------- | ----------- | --------------------------------------------------------------- |
+| `mode`        | `'word'`, `'ayah'`, `'none'`  | `'word'`    | What follows the recitation: each word, the whole ayah, or nothing. Word falls back to ayah when the timings have no word times. |
+| `style`       | `'ink'`, `'tint'`, `'wash'`   | `'ink'`     | The one mark: ink (the text still to come rests lighter), tint (the ink turns the accent; a wash on tajweed themes) or wash (a faint band behind). Ignored when `mode` is `'none'`. |
+| `color`       | colour                        | `'#b8913a'` | The accent of tint and wash. A tint is darkened or lightened until it reads at 5:1 on the page, its chroma capped; a wash paints it at a fixed faint strength. Ignored by ink. |
+| `restOpacity` | 0.5–0.85, step 0.05           | `0.6`       | Ink only: the opacity of the words not yet heard on the current line (at least 0.65 on tajweed themes). |
+| `occurrence`  | `'first'`, `'last'`           | `'first'`   | For a repeated word: follow its first or its last recitation.   |
 
 ### `memorize` (`MushafRecitation`, `MushafAyahText`)
 
@@ -630,16 +795,16 @@ hidden word's gloss is hidden too (its place kept), a faint word's gloss is fain
 | ---------------------- | ----------------------------- | ------------- | ------------------------------------------------------------ |
 | `translationFile`      | string                        | `''`          | Ayah translation file in `public/` (empty: none). Kept for files saved before `translations`: the one translation, set with the `translation*` fields below, while `translations` is empty; ignored once it is not. |
 | `translationPosition`  | `'below'`, `'above'`, `'none'` | `'below'`    | Where the ayah translation goes; `'none'` hides it (its files are still read, so a bad path still fails). |
-| `translationFont`      | CSS font family               | `'Georgia, "Noto Serif", serif'` | The single translation's font (`TRANSLATION_FONT_PRESETS` has more); ignored once `translations` has a layer. |
-| `translationSize`      | 12–120 px                     | `40`          | The single translation's size; ignored once `translations` has a layer. |
-| `translationColor`     | colour                        | `'#4a4a4a'`   | The single translation's colour; ignored once `translations` has a layer. |
+| `translationFont`      | `'auto'` or a CSS font family | `'auto'`      | The single translation's font: `'auto'` is EB Garamond 500 for Latin scripts (loaded), the language's own font otherwise; ignored once `translations` has a layer. |
+| `translationSize`      | 12–120 px                     | `36`          | The single translation's size, never drawn larger than half the Arabic (36 px stays 36 at 16:9 and is drawn 26 at 9:16); ignored once `translations` has a layer. |
+| `translationColor`     | colour                        | `'#5a554c'`   | The single translation's colour (a muted ink under 4.5:1 on the page); ignored once `translations` has a layer. |
 | `translationDirection` | `'ltr'`, `'rtl'`              | `'ltr'`       | The single translation's writing direction (layers follow their language). |
 | `translationOffsetY`   | −800–800 px                   | `0`           | Move the translation up (negative) or down from its place.   |
 | `glossFile`            | string                        | `''`          | `MushafRecitation` only: word-by-word translation file in `public/` (empty: none). Read whatever `glossPosition` says; `'none'` hides it. |
 | `transliterationFile`  | string                        | `''`          | `MushafRecitation` only: word-by-word transliteration file in `public/` (empty: none), as `glossFile`. |
-| `glossFont`            | CSS font family               | `'"Noto Sans", "Helvetica Neue", Arial, sans-serif'` | Font of the gloss strip.     |
-| `glossSize`            | 12–120 px                     | `34`          | Gloss size.                                                  |
-| `glossColor`           | colour                        | `'#6a6a6a'`   | Gloss colour.                                                |
+| `glossFont`            | `'auto'` or a CSS font family | `'auto'`      | Font of the gloss: `'auto'` is EB Garamond italic.           |
+| `glossSize`            | 12–120 px                     | `30`          | Gloss size (interlinear: at most 0.3 of the Arabic).         |
+| `glossColor`           | colour                        | `'#6b6458'`   | Gloss colour; the gloss of the word being recited turns the highlight's accent. |
 | `glossPosition`        | `'strip'`, `'interlinear'`, `'none'` | `'strip'` | `MushafRecitation` only: the gloss in a strip at the bottom, under each printed word (`<InterlinearGlosses>`, capped to 0.3 of the line's type size, shrunk to fit its word), or nowhere. |
 | `translations`         | up to 3 `{file, font, fontSize, color}` | `[]` | Once it has a layer (even one with an empty `file`), `translationFile` and the `translation*` type fields above are ignored. Translations stacked under each other, a thin rule between them (`<TranslationStack>`); layers with an empty `file` are skipped. `font: 'auto'` loads the web font of the file's language from Google Fonts (`fontFamilyForLanguage()`: EB Garamond for Latin scripts, Noto Naskh Arabic, Noto Nastaliq Urdu, Vazirmatn, the Noto Sans of each Indic script, Noto Sans SC/JP/KR with only the characters shown); any other value is a CSS font family (a family `SCRIPT_FONTS` lists is loaded the same way). The direction follows the language (`directionOfLanguage()`). Every translation is cut to the ayahs shown in `calculateMetadata()`. |
 
@@ -707,9 +872,7 @@ sit inside its inner rule (`frameGeometry(width, height, {jadwal: true})`). On `
 page's own border (`pageView.frame: 'simple'`) is its jadwal, so only one is drawn; with the page
 border off the page is fitted inside the jadwal.
 
-**Backgrounds: what to use.** Abstract textures, sky, water or a landscape, quiet and out of focus;
-no people, faces or animals in focus; nothing underfoot (floors, roads, carpets); and no music or
-sound effects under the recitation.
+What to put behind the recitation, and what not to: [Backgrounds: what to use](#backgrounds-what-to-use).
 
 ### `audio` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
 
@@ -769,8 +932,8 @@ it fits.
 | Field         | Type                                      | Default         | Description                               |
 | ------------- | ----------------------------------------- | --------------- | ----------------------------------------- |
 | `show`        | boolean                                   | `false`         | Show the legend.                          |
-| `position`    | `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` | `'bottom-left'` | Its corner.  |
-| `orientation` | `'row'`, `'column'`                       | `'column'`      | Swatches side by side or one under the other. |
+| `position`    | `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` | `'bottom-left'` | Its band: `top-*` above the lines, `bottom-*` below them. |
+| `orientation` | `'row'`, `'column'`                       | `'row'`         | Ignored: the legend is one centred row in its band (kept for saved props). |
 | `names`       | `'en'`, `'ar'`, `'both'`                  | `'both'`        | The rules' names: English, Arabic or both. |
 
 ### `endCard` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
@@ -1010,6 +1173,11 @@ See [Inside your own composition](#inside-your-own-composition).
 | `QUL_FONTS`                                  | QUL's Quran fonts as data: page fonts (V4 plain and tajweed, V1, V2), Unicode fonts (Uthmani Hafs, Nastaleeq, Indopak, Digital Khatt, Me Quran) and the shared fonts, with resource ids, CDN URLs where public, and whether the package renders them today. |
 | `pageFontUrl(font, page, format?)`           | The CDN URL of one page of a page-fonts resource.                                        |
 | `TRANSLATION_FONT_PRESETS`                   | CSS font stacks that render translations well without a web font.                        |
+| `useStudioFonts()`, `STUDIO_FONT_REQUESTS`   | The type around the lines, loaded from Google Fonts behind the render's font gate: EB Garamond 400, 400 italic and 500 (the translation, the gloss, the labels) and Amiri 400 (the Arabic labels). |
+
+Every composition waits for those faces so that no frame is taken in a fallback, so a render needs
+to reach Google Fonts (as it does for a translation in its language's own font): without a network
+it stops with `FONT_NETWORK`. There is no offline source for them yet.
 
 ### Schema
 
@@ -1018,7 +1186,13 @@ sidebar controls: `themeNameSchema`, `customThemeSchema`, `fontsSchema`, `dataSc
 `layoutSchema`, `animationSchema`, `highlightSchema`, `textSchema`, `reviewSchema`,
 `lineSplitSchema`; their defaults (`defaultCustomTheme`, `defaultLayout`, `defaultAnimation`,
 `defaultHighlight`, `defaultText`, `defaultReview`); the value lists (`THEME_NAMES`, `ASPECTS`,
-`ENTRANCES`, `HIGHLIGHT_STYLES`, `MIRROR_FILES`). Their descriptions say which of two overlapping
+`LINE_MOTIONS`, `TEMPOS`, `HIGHLIGHT_STYLES`, `LAYOUT_FRAMES`, `KEN_BURNS`, `MIRROR_FILES`; the
+saved values they replaced, for migrations, `ENTRANCES`, `LEGACY_HIGHLIGHT_STYLES` and
+`LEGACY_KEN_BURNS`); the tokens of the design (`GROUNDS`, `METAL`, `ACCENT_GOLD`, the curves `SOFT`,
+`INOUT`, `SINE`, `ARRIVE`, `DURATIONS`, `tempoFrames()`, `dissolve()`, `frameGeometry()`); its colour
+guards (`legibleAccent()`, `washColor()`, `readableInk()`, `contrast()`, `isLightGround()`); its timing
+model (`wordSpans()`, `wordEmphasis()`, `ayahEmphasis()`, `inkFill()`, `boundaryStart()`); and the
+migration (`migrateMushafProps()`, `describeMushafMigration()`, `mushafPropsNeedMigration()`). Their descriptions say which of two overlapping
 options wins; their colour fields carry no description, so the Props sidebar shows a picker
 (`.describe()` on a `zColor()` turns it into a text box in Remotion 4.0.539).
 
@@ -1030,8 +1204,8 @@ the same way:
 | `themeSelectionFrom(theme, customTheme)`       | The `theme` of a line.                                                             |
 | `fontPropsFrom(...)`                           | `fontSrc` / `fontFallback` for `fonts` and the line's font set, from the registered fonts packages. |
 | `dataSourceFrom(data, staticFile)`             | The `data` option of `getMushafLines()`: the mirror's two files, or `undefined` for the CDN. |
-| `animationFrom(...)`, `scrollTimingFrom(scroll)` | `enter` / `exit` of a line or a window; the window's `scrollTiming`.            |
-| `activeWordStyleFrom(highlight)`, `wordStyleFrom(...)`, `withAlpha(color, alpha)` | The highlight as `activeWordStyle` and `wordStyle`; a colour at an opacity. |
+| `animationFrom(animation, {enterFrames, exitFrames, fontSize})`, `windowScrollTiming(animation)` | `enter` / `exit` of a line or a window at a boundary's lengths; the window's `scrollTiming` (`scrollTimingFrom()` is deprecated). |
+| `wordStyleFrom(...)`, `inkTintFor(...)`, `washStyle(...)`, `withAlpha(color, alpha)` | The mark as `wordStyle` (ink, tint or wash, with the line's position and the tint palettes); the line's `inkTint`; a wash's CSS; a colour at an opacity. `activeWordStyleFrom()` is deprecated: it migrates its argument and returns the mark at full strength. |
 | `sizeForAspect(aspect)`                        | `{width, height}` for `layout.aspect`.                                              |
 
 `resolveRecitation(props)` is `calculateMetadata()` without the size and duration, to fill

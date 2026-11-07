@@ -70,7 +70,7 @@ The recording belongs to its reciter, so it is not in the repository (`.gitignor
 timeout and one retry, and does nothing when the file is already there. While the file is missing,
 the compositions stream that clip instead and the Studio says so in a notice, with the command to
 run; a render streams it too. The timings also carry the clip's loudness (`alignment.audio`), so
-normalising it needs no download; the background's glow still analyses the audio itself.
+normalising it needs no download.
 `bun run --cwd apps/mushaf-studio sample --help` lists the options (another timings file, another
 destination, a URL of your own, `--force`).
 
@@ -87,10 +87,13 @@ prints why the download failed (`Could not download ...`) and the Studio starts 
   once you are online. The same file is `MushafInTemplate`'s own track (`soundtrack`), which its
   recitation follows (`mushaf.hostAudio`): until it is there that composition plays nothing, and no
   clip stands in for it.
-- Loudness normalisation uses the summary in the timings, so it needs no download. The glow, which
-  needs the recording's levels, analyses the recording itself.
+- Loudness normalisation uses the summary in the timings, so it needs no download.
 - The surah-name and juz fonts (the header lines, the intro card) come from QUL's CDN unless
   `fonts` is `package` and the two files are in `public/fonts/` (see below).
+- The type around the lines (EB Garamond for the translation, the gloss and the labels, Amiri for
+  the Arabic labels) comes from Google Fonts, and every composition waits for it so that no frame is
+  taken in a fallback face: without a network the preview and a render stop with `FONT_NETWORK`.
+  There is no offline source for them yet.
 - The panel's catalogue, Align and the quran.com fetches fail with a message in the status line.
 
 | Composition        | What it is                                                                                     |
@@ -290,14 +293,14 @@ once; the sidebar's save button writes them into `src/Root.tsx`.
 | `fonts`                  | Where the page fonts come from: QUL's CDN with the fonts packages as fallback (`fallback`, the default), the CDN only (`cdn`), or the packages only (`package`, offline). |
 | `data`                   | The mushaf's words and line layout: the mirror committed in `public/data/qpc-v4/` (`mirror`, the default) or QUL's exports on Tarteel's CDN (`cdn`). |
 | `layout`                 | The frame (16:9, 9:16 for reels, 1:1, 4:5; it sets the video's size), the lines on screen at once (0: one line, replaced in place; up to 7 in a scrolling window), the opacity of the lines around the current one, side margins, page and ink colours, the vertical position. `backgroundImage` is kept for projects saved before `background`: it is still painted over the page colour. |
-| `background`             | What is behind the lines: the page colour (`color` kind, `layout.background`), a gradient, an image or a looping, muted video from `public/` or a URL, with blur, a darkening layer and a slow Ken Burns zoom or pan; and a glow behind the lines that breathes with the recitation. |
-| `animation`              | How a line comes in and goes out (`slide-fade`, `fade`, `reveal-rtl`, `none`), the seconds it is on screen before its first word, the window's scroll curve. |
-| `highlight`              | What follows the recitation (the word, the whole ayah, nothing), how the current word is marked (ink colour, a glow, a marker behind it) and in which colour, the dimming of the other words (all of them, or only those still to come), and which recitation of a repeated word moves the highlight. |
+| `background`             | What is behind the lines: the page colour (`color` kind, `layout.background`), a gradient, an image or a looping, muted video from `public/` or a URL, with blur, a darkening layer (an image or a video is always dimmed, so the text reads), a vignette like the fall-off of a page, and a very slow zoom (at most 1.05 over the whole video). Use abstract textures, sky, water or a landscape, out of focus; no people, faces or animals in focus, nothing underfoot, and no music under the recitation. |
+| `animation`              | "Motion" in the panel: how a line or an ayah gives way to the next, always after its last word (`fade`, `rise`: the same dissolve with a slight rise, `cut`), the `tempo` of every change (`calm`, or `slow`: 1.4× longer), and the longest a new line waits, settled, before its first word. |
+| `highlight`              | What follows the recitation (each word, the whole ayah, nothing) and its one mark: `ink` (the words still to come rest at `restOpacity` and fill in as they are heard, the default), `tint` (the word's ink turns the accent, darkened until it reads on the page; shown as a wash on the tajweed colours) or `wash` (a faint band behind the word or the ayah); the accent colour, and which recitation of a repeated word moves the mark. |
 | `memorize`               | Memorisation (`MushafRecitation`, `MushafAyahText`): each ayah played `repeat` times with a counter, and the words still to come (or all but the recited ones) hidden for the first plays; `first-letters` shows each upcoming word's first letter in `MushafAyahText`. The glosses under the words (`glossPosition: interlinear`) hide and fade with them. |
 | `text`                   | The translation and gloss files; the translation's position, font, size, colour and writing direction; the gloss's font, size and colour, and where the gloss goes (`glossPosition`: a strip at the bottom, under each printed word, or nowhere). `translations` stacks up to three translations, each with its file, font (`auto`: the web font of its language, Arabic, Urdu, Bengali, Chinese, ...), size and colour; while it is empty, `translationFile` is the one translation. |
 | `header`                 | When the passage starts at ayah 1: the surah's printed header before it, the name in its ornamental frame (`name`) or the name and the basmalah (`name-basmalah`; Al-Fatihah, whose basmalah is ayah 1, and At-Tawbah, which has none, get the name alone). The header lines come in before the first ayah line, 1.5 s apart (the intro card's seconds when it is on); a recitation that starts at once leaves them no room. `none` by default. |
-| `overlay`                | A title: an intro card (`intro`) over the first seconds, with the surah's name in its printed frame, the ayah range ("Al-Fatihah · 1:2–7 · ١:٢–٧") and the reciter; a small label in a corner (`corner`) with the surah, the ayah being heard and the reciter; or both (`both`: the label comes in as the card goes). The card stays `introSeconds`, or goes 0.3 s before the first word when the recitation starts earlier; nothing is moved for it (in `MushafPassage`, which has no audio, the lines start after it). **`reciter` is typed here**: the panel's Source tab does not fill it. Also the texts' colour and font, the corner and the label's size. |
-| `legend`                 | The tajweed colours' legend in a corner (English, Arabic or both names, in a row or a column), shown only under a theme that colours the rules (`MushafRecitation`, `MushafPage`). |
+| `overlay`                | A title: an intro card (`intro`) on the bare page, with the surah's name in its printed frame, a gold hairline, the ayah range in Arabic and in small caps, the reciter and the translation's credit; a small label in a corner (`corner`, "AL-FATIHAH · 3": the surah and the ayah being heard); or both. The card has its whole `introSeconds`: in `MushafRecitation` the recording starts after it and the video grows by as much (`resolved.introDelaySeconds`). **`reciter` is typed here**: the panel's Source tab does not fill it. Also the texts' colour and font (`auto`: EB Garamond and Amiri), the corner and the label's size (0: it follows the frame). |
+| `legend`                 | The tajweed colours' legend as one centred row in a band above or below the lines (English, Arabic or both names), the lines fitted around it; shown only under a theme that colours the rules (`MushafRecitation`, `MushafPage`). |
 | `endCard`                | A closing card after the last ayah, for `seconds`: the surah, the range, the reciter and the credits, with the tafsir of the last ayah or the surah's introduction (the panel's Text tab fetches them). |
 | `audio`                  | The recitation's loudness (normalised to `targetLufs`, −14 for YouTube), fades in and out, skipping the silence before the first word, and the volume. The recording is analysed once when the composition loads; when the browser cannot analyse it, the preview shows a one-line notice and the audio plays as it is. |
 | `review`                 | Studio only: mark the doubtful words, the confidence threshold, the mark's colour.                |
@@ -305,11 +308,11 @@ once; the sidebar's save button writes them into `src/Root.tsx`.
 
 `MushafPassage` has `surah`, `fromAyah`, `toAyah` (0: to the end of the surah), `slice` and
 `holdSeconds`, and the same `header`, `theme`, `fonts`, `data`, `layout`, `background`, `animation`,
-`text` and `overlay` groups (no audio: no `audio`, and the glow stays at rest). `MushafAyahText` has
+`text` and `overlay` groups (no audio: no `audio`). `MushafAyahText` has
 the `overlay`, `background`, `endCard` and `audio` groups too (no `header` or `legend`: it sets no
 printed lines). `MushafPage` has the recitation's content and `theme`, `fonts`, `data`, `layout`,
 `background`, `highlight`, `review`, `legend`, `endCard` and `audio`, plus `pageView` (the current
-line's band or rule, the page's border and number, the page turn) and a `text` group whose
+line's band, the page's border and number, the page turn) and a `text` group whose
 translations go beside the page or under it (`translationPosition: 'auto'` picks where there is more
 room). `MushafThumbnail` is a still: the surah, the ayah its line is taken from, a title, a subtitle
 (the surah and range when empty), the theme, colours, fonts and margins.
@@ -417,6 +420,27 @@ Behind a TLS-intercepting proxy (a sandbox, a corporate network) the renderer's 
 certificate of QUL's CDN and, with `fonts: 'fallback'` (the default), the fonts packages take over:
 that is by design, and the video is the same. To let the browser reach the CDN anyway, pass
 `-- --ignore-certificate-errors`; to never ask it, `--props` with `{"fonts": "package"}`.
+
+### Design stills
+
+`bun run design` renders the stills and strips of the render design's visual checks
+([docs/mushaf-studio/render-design.md](../../docs/mushaf-studio/render-design.md), section 12.2:
+V1-V20) and measures them: the page and ink colours, the opacity of a word at rest, the ink filling
+in, the scroll and the dissolves frame by frame, the tint's shade, the wash's band, the jadwal, the
+legend's band, the translation's size, the intro delay, the end. It is a tool for working on the
+design, not for making videos:
+
+```bash
+bun run design --round r1 -- --browser-executable=/opt/pw-browsers/chromium
+bun scripts/design-check.ts out/design/r1          # measure a round again
+```
+
+Each case's props (`<case>.json`: the look, the format and what the case changes, whole style
+groups), its stills (`<case>-f060.png`) and its strips (`<case>-strip/`, every frame a PNG) go to
+`out/design/<round>/`, with `report.json`. The round bundles the app with a copy of `public/` that
+adds the backdrop of V19 and the translation of V14 and V15 (Saheeh International, fetched from
+quran.com once, or `--translation <file>`), so nothing is written into the app. A criterion only an
+eye can judge (a rosette drawn in line, a lone word on the last line) is listed as "look".
 
 ## Where the files go
 
