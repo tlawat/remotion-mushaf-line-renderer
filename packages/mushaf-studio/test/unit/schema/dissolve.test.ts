@@ -1,7 +1,7 @@
 // The staggered dissolve (render-design.md 3.2), the one shape of every text change: never two
 // lines of text at reading strength, never an empty frame.
 import {describe, expect, it} from 'vitest';
-import {DURATIONS, dissolve, SINE, SOFT} from '../../../src/schema';
+import {DURATIONS, dissolve, dissolveShares, SINE, SOFT} from '../../../src/schema';
 
 /** Every length a dissolve runs at: the design's test lengths, and each dissolving token at both tempos. */
 const LENGTHS = [
@@ -46,5 +46,20 @@ describe('dissolve', () => {
     expect(dissolve(-5, 20)).toEqual({out: 1, in: 0});
     expect(dissolve(50, 20)).toEqual({out: 0, in: 1});
     expect(dissolve(1, 1)).toEqual({out: 0, in: 1});
+  });
+});
+
+describe('dissolveShares', () => {
+  it('names the frames dissolve() turns at, the one source of the overlapping Sequences', () => {
+    expect(dissolveShares(20)).toEqual({out: 10, in: 6});
+    expect(dissolveShares(10)).toEqual({out: 5, in: 3});
+    expect(dissolveShares(1)).toEqual({out: 1, in: 0});
+    for (const duration of LENGTHS) {
+      const {out, in: incoming} = dissolveShares(duration);
+      expect(dissolve(out, duration).out).toBe(0);
+      expect(dissolve(out - 1, duration).out).toBeGreaterThan(0);
+      expect(dissolve(incoming, duration).in).toBe(0);
+      expect(dissolve(incoming + 1, duration).in).toBeGreaterThan(0);
+    }
   });
 });

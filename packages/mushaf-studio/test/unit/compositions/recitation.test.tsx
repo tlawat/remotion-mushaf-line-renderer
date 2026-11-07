@@ -73,6 +73,7 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
         className="mushaf-line-window-mock"
         data-line-count={props.lines.length}
         data-steps={JSON.stringify(props.steps)}
+        data-anchor={props.anchor ?? 'end'}
         data-visible-lines={props.visibleLines}
         data-neighbour-opacity={props.neighbourOpacity}
         data-scroll-frames={props.scrollTiming?.getDurationInFrames({fps: 30})}
@@ -137,7 +138,7 @@ const {scheduleLines, scrollPosition} = await import('@tlawat/remotion-mushaf-li
 const {registerMushafFonts} = await import('../../../src/fonts');
 const {withHeaderSlots, withInnerHeaderSlots} = await import('../../../src/compositions/shared');
 const {clipTimeline} = await import('../../../src/memorize');
-const {defaultOverlay} = await import('../../../src/schema');
+const {defaultOverlay, scrollTimingFrom} = await import('../../../src/schema');
 const {syntheticLine} = await import('../../../../remotion-mushaf-line-renderer/test/fixtures/synthetic-lines');
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/compositions/recitation').ResolvedRecitation;
@@ -252,10 +253,24 @@ describe('<MushafRecitation>', () => {
       scrollFrames: '24',
       enter: 'yes',
     });
-    // Line j becomes current 0.4 s before its first word, in frames; the first one before frame 0.
-    const steps = resolved().schedule.map((slot) => lead(slot.start));
-    expect(JSON.parse(w.dataset.steps!)).toEqual(steps);
-    expect(steps[0]).toBe(-2);
+    // The first line rises into place to be settled 0.4 s before its first word (frame -2), so its
+    // scroll starts 24 frames before. Every later scroll starts where it does, never earlier: once
+    // the outgoing line's last word has been recited (E), or 0.4 s + 24 frames before the incoming
+    // line's first word if that is later. On this recitation the pauses are short: each starts at E.
+    expect(w.dataset.anchor).toBe('start');
+    const steps = JSON.parse(w.dataset.steps!) as number[];
+    expect(steps[0]).toBe(lead(0.331) - 24);
+    const ends = [3.391, 5.693, 8.615, 12.989, 16.106].map((end) => Math.ceil(end * 30));
+    expect(steps.slice(1)).toEqual(ends);
+    resolved().schedule.forEach((slot, j) => {
+      if (j > 0) expect(steps[j]).toBe(Math.max(ends[j - 1]!, lead(slot.start) - 24));
+    });
+    // The window does not move before E of a boundary: 1:2:4 (f58-f102) stays in the centre slot.
+    for (let j = 1; j < steps.length; j++) {
+      for (let frame = steps[j - 1]! + 24; frame <= ends[j - 1]!; frame++) {
+        expect(scrollPosition({frame, fps: 30, steps, timing: scrollTimingFrom(), anchor: 'start'})).toBe(j - 1);
+      }
+    }
     const lineBlock = block(c, 'Mushaf lines')!;
     expect(lineBlock.contains(w)).toBe(true);
     expect(lineBlock.style.left).toBe('190px');
@@ -355,8 +370,10 @@ describe('<MushafRecitation>', () => {
     const c = mount(props({highlight: highlight({occurrence: 'last'})}, content));
     // The window starts its entrance 15 frames before the first slot is in place (frame 108); its steps are local.
     expect(sequences(c)[0]!.dataset.from).toBe('93');
+    // The first scroll starts 24 frames before the first slot is in place; the later ones once the
+    // outgoing line is over (line 1's slot, collapsed to nothing, at 4.0 s: f120).
     const steps = JSON.parse(windowOf(c)!.dataset.steps!) as number[];
-    expect(steps).toEqual([108 - 93, 108 - 93, 172 - 93, 250 - 93, 383 - 93, 483 - 93]);
+    expect(steps).toEqual([108 - 24 - 93, 120 - 93, 171 - 93, 259 - 93, 390 - 93, 484 - 93]);
     expect(steps.every((step, i) => i === 0 || step >= steps[i - 1]!)).toBe(true);
     expect(() => scrollPosition({frame: 0, fps: 30, steps})).not.toThrow();
     cleanup();
@@ -610,7 +627,8 @@ describe('<MushafRecitation>', () => {
     const from = lead(3.331 - 1.5) - 15;
     expect(sequences(w.parentElement!.parentElement!)[0]!.dataset.from).toBe(String(from));
     const steps = JSON.parse(w.dataset.steps!) as number[];
-    expect(steps.slice(0, 2)).toEqual([lead(1.831) - from, lead(3.331) - from]);
+    // The header has nothing to wait for: the first ayah line scrolls in to be settled 0.4 s before its word.
+    expect(steps.slice(0, 2)).toEqual([lead(1.831) - 24 - from, lead(3.331) - 24 - from]);
     expect(steps.every((step, i) => i === 0 || step >= steps[i - 1]!)).toBe(true);
     cleanup();
     const c = mount(props({layout: layout({visibleLines: 0})}, content));

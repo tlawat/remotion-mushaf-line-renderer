@@ -1,6 +1,7 @@
 // The timing model of the marks (render-design.md, section 4) on the bundled Al-Fatihah timings:
 // the word spans and their anti-flicker floor, the release after an ayah, the emphasis sampled per
 // frame, and the start of every change: late, never early.
+import {readFileSync} from 'node:fs';
 import type {RecitationTimingsV1} from '@tlawat/remotion-mushaf-line';
 import {describe, expect, it} from 'vitest';
 import {
@@ -11,6 +12,7 @@ import {
   hasWordTimes,
   INOUT,
   inkFill,
+  markerIds,
   outgoingEnd,
   SOFT,
   tempoFrames,
@@ -20,6 +22,7 @@ import {
   wordSpans,
   wordStartIndex,
 } from '../../../src/schema';
+import {glossStripState} from '../../../src/translations';
 import fatiha from '../../fixtures/timings/fatiha.json';
 
 const timings = fatiha as unknown as RecitationTimingsV1;
@@ -122,6 +125,32 @@ describe('wordSpans', () => {
     expect(wordSpanIndex(wordSpans(repeated, {occurrence: 'last'})).get('1:1:1')).toMatchObject({start: 2, end: 3});
     expect(wordStartIndex(repeated)['1:1:1']).toBe(0);
     expect(wordStartIndex(repeated, 'last')['1:1:1']).toBe(2);
+  });
+
+  it('gives a rosette the timings time as a word no span, so the last word holds to the release', () => {
+    // The Studio's bundled Al-Fatihah times each ayah's rosette (1:2:5 over 3.391-3.533 s).
+    const bundled = JSON.parse(
+      readFileSync(
+        new URL('../../../../../apps/mushaf-studio/public/mushaf-studio/fatiha/timings.json', import.meta.url),
+        'utf8',
+      ),
+    ) as RecitationTimingsV1;
+    // The rosettes as the lines name them: the last entry of every ayah.
+    const lines = bundled.ayat.map((ayah) => ({
+      words: (ayah.words ?? []).map((w, i, all) => ({id: w.id, kind: i === all.length - 1 ? 'end' : 'word'})),
+    }));
+    const markers = markerIds(lines);
+    expect(markers.has('1:2:5')).toBe(true);
+    expect(markerIds(lines)).toBe(markers);
+    const spans = wordSpans(bundled, {markers});
+    // 1:2:4 ends at release(2) = min(3.533, 3.533 + 0.25), not where the rosette starts.
+    expect(wordSpanIndex(spans).get('1:2:4')).toMatchObject({start: 1.941, end: 3.533});
+    expect(spans.some((span) => markers.has(span.id))).toBe(false);
+    // The gloss strip keeps the word's gloss over the rosette, up to the next ayah's first word.
+    expect(glossStripState(spans, 3.45, fps)).toMatchObject({activeWordId: '1:2:4'});
+    expect(glossStripState(spans, 3.54, fps)).toMatchObject({activeWordId: '1:3:1', previousWordId: '1:2:4'});
+    // Without the markers the rosette would take the span over.
+    expect(wordSpanIndex(wordSpans(bundled)).get('1:2:4')!.end).toBe(3.391);
   });
 
   it('is empty without per-word times, and hasWordTimes says so', () => {

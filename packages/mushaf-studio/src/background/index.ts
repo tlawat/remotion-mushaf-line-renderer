@@ -2,7 +2,7 @@
 // a looping video, with blur, dim, a vignette and a very slow zoom over the whole video. Nothing
 // follows the audio. Pure in props and frame, like the lines.
 
-export {backgroundFor} from './compat';
+export {backgroundFor, groundFor} from './compat';
 export {
   backgroundBaseStyle,
   kenBurnsTransform,

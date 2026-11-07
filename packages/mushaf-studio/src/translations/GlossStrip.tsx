@@ -12,8 +12,8 @@ export type GlossStripState = {
   readonly framesSinceChange: number;
 };
 
-/** Frames after a change the incoming gloss starts to come in: the outgoing one is mostly gone by then. */
-const GLOSS_IN_DELAY = 2;
+/** Seconds after a change the incoming gloss starts to come in (2 frames at 30 fps): the outgoing one is mostly gone by then. */
+const GLOSS_IN_DELAY_SECONDS = 2 / 30;
 
 /**
  * Which word the strip shows at `seconds` of the recording: the word of the last kept span
@@ -38,11 +38,21 @@ export const glossStripState = (spans: readonly WordSpan[], seconds: number, fps
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
 
-/** The outgoing and incoming text's opacity, `framesSinceChange` after a change: out over `glossOut`, in over `glossIn` from 2 frames on. */
-export const glossStripOpacities = (framesSinceChange: number): {readonly out: number; readonly in: number} => ({
-  out: round4(1 - SINE(clamp01(framesSinceChange / tempoFrames('glossOut')))),
-  in: round4(SOFT(clamp01((framesSinceChange - GLOSS_IN_DELAY) / tempoFrames('glossIn')))),
-});
+/**
+ * The outgoing and incoming text's opacity, `framesSinceChange` frames of a `fps` composition after
+ * a change: out over `glossOut` (0.1 s), in over `glossIn` (0.2 s) from 0.067 s on, the same in
+ * time at any frame rate (3, 6 and 2 frames at 30 fps; 6, 12 and 4 at 60).
+ */
+export const glossStripOpacities = (
+  framesSinceChange: number,
+  fps = 30,
+): {readonly out: number; readonly in: number} => {
+  const delay = Math.round(GLOSS_IN_DELAY_SECONDS * fps);
+  return {
+    out: round4(1 - SINE(clamp01(framesSinceChange / tempoFrames('glossOut', 'calm', fps)))),
+    in: round4(SOFT(clamp01((framesSinceChange - delay) / tempoFrames('glossIn', 'calm', fps)))),
+  };
+};
 
 export type GlossStripProps = {
   /** The word translation and/or transliteration to show for the active word. */
@@ -54,6 +64,8 @@ export type GlossStripProps = {
   readonly previousWordId?: string | null | undefined;
   /** Frames since `activeWordId` took over. Default: the change is long done (no fade). */
   readonly framesSinceChange?: number | undefined;
+  /** The composition's frame rate, which `framesSinceChange` counts in. Default 30. */
+  readonly fps?: number | undefined;
   readonly fontFamily: string;
   readonly fontSize: number;
   readonly color: string;
@@ -65,7 +77,7 @@ export type GlossStripProps = {
  * A strip that shows the active word's gloss: its translation and, under it, its transliteration,
  * centred. There is one row per gloss given (`null` leaves its row out), and a row keeps its height
  * when there is no active word or the word has no gloss there, so the layout never jumps. At a
- * change the previous gloss fades out over 3 frames and the new one in over 6 from 2 frames on
+ * change the previous gloss fades out over 0.1 s and the new one in over 0.2 s from 0.067 s on
  * (`glossStripOpacities()`). Pure in its props.
  */
 export const GlossStrip: React.FC<GlossStripProps> = ({
@@ -74,13 +86,14 @@ export const GlossStrip: React.FC<GlossStripProps> = ({
   activeWordId,
   previousWordId = null,
   framesSinceChange = Infinity,
+  fps = 30,
   fontFamily,
   fontSize,
   color,
   style,
   className,
 }) => {
-  const opacities = glossStripOpacities(framesSinceChange);
+  const opacities = glossStripOpacities(framesSinceChange, fps);
   const fading = previousWordId !== null && previousWordId !== activeWordId && opacities.out > 0;
   const textOf = (gloss: WordGloss, id: string | null): string => (id === null ? '' : (gloss.words[id] ?? ''));
   const row = (gloss: WordGloss, kind: 'translation' | 'transliteration') => (

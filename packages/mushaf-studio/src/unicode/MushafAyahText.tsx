@@ -12,12 +12,13 @@ import {useMemo} from 'react';
 import {AbsoluteFill, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {followsHostAudio} from '../audio/host';
 import {volumeAt} from '../audio/volume';
-import {backgroundFor} from '../background/compat';
+import {backgroundFor, groundFor} from '../background/compat';
 import {MushafBackground} from '../background/MushafBackground';
 import {endCardFrames} from '../compositions/extras';
 import {
   CompositionAudio,
   CompositionEndCard,
+  readableLayers,
   StudioWarnings,
   translationsOf,
   useTranslationLayers,
@@ -42,9 +43,10 @@ import {
 } from '../memorize';
 import {MushafTitleOverlay} from '../overlay';
 import {
-  groundOf,
   inkFill,
   legibleAccent,
+  markerIds,
+  readableInk,
   riseDistance,
   SINE,
   SOFT,
@@ -154,11 +156,14 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
   const heard = wordAt(timings, now);
   const activeWordId = highlight.mode === 'none' ? null : heard;
   // No theme here: a tint is always the text's CSS colour, read at 5:1 on the page.
-  const ground = groundOf(layout, props.background.kind);
+  const ground = groundFor(props.background, layout);
+  // Translation, gloss and label colours as drawn: one under 4.5:1 on the ground gives way to a muted ink.
+  const readable = (color: string): string => readableInk(color, layout.color, ground);
+  const shownOverlay = {...overlay, color: readable(overlay.color)};
   const accent = legibleAccent(highlight.color, ground);
   const spans = useMemo(
-    () => wordSpanIndex(wordSpans(timings, {occurrence: highlight.occurrence})),
-    [timings, highlight.occurrence],
+    () => wordSpanIndex(wordSpans(timings, {occurrence: highlight.occurrence, markers: markerIds(ayahs)})),
+    [timings, highlight.occurrence, ayahs],
   );
   const measure = width - 2 * layout.marginX;
   const titleFontSize = fontSizeForWidth(measure);
@@ -272,7 +277,11 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         const duration = Math.max(1, end - from);
         const block = showTranslation ? (
           // Centred, as the ayah over (or under) it is.
-          <TranslationStack layers={translationLayers} ayahKey={key} align="center" />
+          <TranslationStack
+            layers={readableLayers(translationLayers, layout.color, ground)}
+            ayahKey={key}
+            align="center"
+          />
         ) : null;
         return (
           <Sequence key={key} from={from} durationInFrames={duration} premountFor={fps} name={`Ayah ${key}`}>
@@ -314,7 +323,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         );
       })}
       <MushafTitleOverlay
-        overlay={overlay}
+        overlay={shownOverlay}
         surah={span.from.surah}
         fromAyah={span.from.ayah}
         toSurah={span.to.surah}
@@ -331,7 +340,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         clips={clips}
         repeats={repeats}
         seconds={seconds}
-        overlay={overlay}
+        overlay={shownOverlay}
         background={layout.background}
       />
       <CompositionEndCard

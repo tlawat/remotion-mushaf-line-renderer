@@ -117,6 +117,21 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 /** The two sides of a staggered dissolve at one frame: the outgoing text's opacity and the incoming text's. */
 export type DissolveOpacities = {readonly out: number; readonly in: number};
 
+/** The frames of a staggered dissolve's two sides: the outgoing text goes over `out`, the incoming one comes in from `in`. */
+export type DissolveShares = {readonly out: number; readonly in: number};
+
+/**
+ * Where the two sides of a `duration`-frame dissolve fall: the outgoing text is gone after
+ * `round(0.48 · D)` frames (at least 1), the incoming one starts at `round(0.30 · D)`. One source for
+ * `dissolve()` and for the Sequences a composition overlaps around it, so the two cannot drift.
+ * `dissolveShares(20)` is `{out: 10, in: 6}`.
+ */
+export const dissolveShares = (duration: number): DissolveShares => {
+  const d = Math.max(1, duration);
+  // 48 %, not the 45 % first designed: at 12 and 25 frames the 45 % share left a frame with under 0.1 of ink.
+  return {out: Math.max(1, Math.round(0.48 * d)), in: Math.round(0.3 * d)};
+};
+
 /**
  * The staggered dissolve, the one shape of every text change (lines, ayah text, translation, end
  * card, page turn), at frame `f` of a transition `duration` frames long: the outgoing text goes
@@ -127,9 +142,7 @@ export type DissolveOpacities = {readonly out: number; readonly in: number};
  */
 export const dissolve = (f: number, duration: number): DissolveOpacities => {
   const d = Math.max(1, duration);
-  // 48 %, not the 45 % first designed: at 12 and 25 frames the 45 % share left a frame with under 0.1 of ink.
-  const o = Math.max(1, Math.round(0.48 * d));
-  const i = Math.round(0.3 * d);
+  const {out: o, in: i} = dissolveShares(d);
   return {
     out: 1 - SINE(clamp01(f / o)),
     in: SOFT(clamp01((f - i) / Math.max(1, d - i))),

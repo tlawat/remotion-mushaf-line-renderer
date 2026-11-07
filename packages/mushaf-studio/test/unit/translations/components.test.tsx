@@ -220,6 +220,23 @@ describe('GlossStrip at a word change', () => {
     expect(glossStripOpacities(Infinity)).toEqual({out: 0, in: 1});
   });
 
+  it('keeps the same pace in time at 60 fps: out over 6 frames, in over 12 from 4 frames on', () => {
+    // Every 1/30 s after a change, the 60 fps strip shows what the 30 fps one does.
+    for (let step = 0; step <= 9; step++) {
+      expect(glossStripOpacities(step * 2, 60)).toEqual(glossStripOpacities(step, 30));
+    }
+    expect(glossStripOpacities(4, 60).in).toBe(0);
+    expect(glossStripOpacities(6, 60).out).toBe(0);
+    expect(glossStripOpacities(15, 60).in).toBeLessThan(1);
+    expect(glossStripOpacities(16, 60)).toEqual({out: 0, in: 1});
+    // The strip itself takes the composition's rate.
+    const fading = strip({activeWordId: '1:1:2', previousWordId: '1:1:1', framesSinceChange: 2, fps: 60});
+    expect(Number(fading.querySelector<HTMLElement>('[data-gloss-outgoing]')!.style.opacity)).toBeCloseTo(
+      glossStripOpacities(1, 30).out,
+      4,
+    );
+  });
+
   it('draws the outgoing gloss over the incoming one while it fades, then the new one alone', () => {
     const fading = strip({activeWordId: '1:1:2', previousWordId: '1:1:1', framesSinceChange: 1});
     const outgoing = fading.querySelectorAll<HTMLElement>('[data-gloss-outgoing]');

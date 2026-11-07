@@ -4,7 +4,7 @@ import {useMemo} from 'react';
 import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {followsHostAudio} from '../../audio/host';
 import {volumeAt} from '../../audio/volume';
-import {backgroundFor} from '../../background/compat';
+import {backgroundFor, groundFor} from '../../background/compat';
 import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {
@@ -32,9 +32,10 @@ import {
   animationFrom,
   effectiveNeighbourOpacity,
   fontPropsFrom,
-  groundOf,
   inkTintFor,
   legibleAccent,
+  markerIds,
+  readableInk,
   scrollTimingFrom,
   studioFontFamily,
   themeSelectionFrom,
@@ -52,6 +53,7 @@ import {
   CompositionAudio,
   CompositionEndCard,
   CornerLegend,
+  readableLayers,
   StudioWarnings,
   translationsOf,
   useTranslationLayers,
@@ -71,6 +73,7 @@ import {
 } from '../shared';
 import {passageSpan} from '../timings';
 import type {MushafRecitationProps} from './schema';
+import {windowScrollStarts} from './scroll';
 
 /** The slot on screen at `frame`, by the frames the slots are in place at: the last one in place, else the first. */
 const currentSlot = (leads: readonly number[], frame: number): number => {
@@ -160,13 +163,21 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const fontSetup = fontPropsFrom(fonts, lines[0]?.fontSet ?? 'qpc-v4', staticFile);
   const animationProps = animationFrom(animation, {fontSize});
   const theme = themeSelectionFrom(props.theme, props.customTheme);
-  const ground = groundOf(layout, props.background.kind);
+  const ground = groundFor(props.background, layout);
+  // Translation, gloss and label colours as drawn: one under 4.5:1 on the ground gives way to a muted ink.
+  const readable = (color: string): string => readableInk(color, layout.color, ground);
+  const shownOverlay = {...overlay, color: readable(overlay.color)};
   const inkTint = inkTintFor(highlight, theme, ground);
   // The marks are the word style's; `activeWordId` only names the word (`data-active`) for custom CSS.
   const activeProps = inkTint === undefined ? {activeWordId} : {activeWordId, inkTint};
   const starts = wordStarts(timings);
   // The word spans of the marks: the gloss strip changes at each, the interlinear labels follow them.
-  const spans = useMemo(() => wordSpans(timings, {occurrence: highlight.occurrence}), [timings, highlight.occurrence]);
+  // A rosette the timings time as a word of its own is never a span: the ayah's last word holds to the release.
+  const markers = markerIds(lines);
+  const spans = useMemo(
+    () => wordSpans(timings, {occurrence: highlight.occurrence, markers}),
+    [timings, highlight.occurrence, markers],
+  );
   const spanIndex = useMemo(() => wordSpanIndex(spans), [spans]);
   const wordStyleFor = (sequenceFrom: number) =>
     wordStyleFrom({
@@ -183,6 +194,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       ink: layout.color,
       ground,
       tempo: animation.tempo,
+      markers,
     });
 
   const slot = timeline[currentSlot(leads, frame)]!;
@@ -224,17 +236,27 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       );
     });
   } else {
-    // One window for the passage: line j becomes current `leadInSeconds` before its first word is
-    // heard, and the scroll that brings it to the centre finishes exactly then (the default anchor).
+    // One window for the passage. Each scroll starts once the outgoing line's last word has been
+    // recited, and is over `leadInSeconds` before the incoming line's first word when the pause
+    // allows it (`anchor: 'start'`): the word being heard never leaves the centre slot.
     const windowLines = schedule.map((current) => lines[current.index]!);
     const from = Math.max(0, (leads[0] ?? 0) - enterFrames);
-    const steps = leads.map((step) => step - from);
     const scrollTiming = scrollTimingFrom(animation.tempo);
+    const steps = windowScrollStarts({
+      timeline,
+      lines,
+      timings,
+      clips,
+      fps,
+      leadInSeconds: animation.leadInSeconds,
+      scrollFrames: scrollTiming.getDurationInFrames({fps}),
+      occurrence: highlight.occurrence,
+    }).map((step) => step - from);
     // When ayahs repeat, the current line goes back to the ayah's first line for the next play:
     // the window is given its position, from the timeline's slots and the window line each one is.
     const windowIndex = new Map(schedule.map((current, j) => [current.index, j]));
     const scroll = identity
-      ? {steps, scrollTiming}
+      ? {steps, scrollTiming, anchor: 'start' as const}
       : {
           position: scrollTargetPosition({
             frame: frame - from,
@@ -242,6 +264,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
             steps,
             targets: timeline.map((current) => windowIndex.get(current.index) ?? 0),
             timing: scrollTiming,
+            anchor: 'start',
           }),
         };
     linesBlock = (
@@ -282,7 +305,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         visibilityOf={glossVisibilityFrom({memorize, clips, timings, starts, activeWordId, seconds, now})}
         fontFamily={studioFontFamily(text.glossFont, 'gloss')}
         fontSize={labelSize}
-        color={text.glossColor}
+        color={readable(text.glossColor)}
         top={interlinearTop(lineHeight, extraLineHeight)}
       >
         {linesBlock}
@@ -336,7 +359,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
       </div>
       {showTranslation && (
         <div data-mushaf-block="Translation" style={translationBlockStyle(geometry, layout, text, height)}>
-          <TranslationStack layers={translationLayers} ayahKey={ayahKey} />
+          <TranslationStack layers={readableLayers(translationLayers, layout.color, ground)} ayahKey={ayahKey} />
         </div>
       )}
       {showGloss && (
@@ -345,14 +368,15 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
             translation={resolved.gloss}
             transliteration={resolved.transliteration}
             {...glossStripState(spans, now, fps)}
+            fps={fps}
             fontFamily={studioFontFamily(text.glossFont, 'gloss')}
             fontSize={text.glossSize}
-            color={text.glossColor}
+            color={readable(text.glossColor)}
           />
         </div>
       )}
       <MushafTitleOverlay
-        overlay={overlay}
+        overlay={shownOverlay}
         surah={span.from.surah}
         fromAyah={span.from.ayah}
         toSurah={span.to.surah}
@@ -369,7 +393,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         clips={clips}
         repeats={repeats}
         seconds={seconds}
-        overlay={overlay}
+        overlay={shownOverlay}
         background={layout.background}
       />
       <CornerLegend

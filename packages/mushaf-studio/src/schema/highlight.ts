@@ -169,6 +169,11 @@ export type WordStyleOptions = {
   readonly ground?: string | undefined;
   /** `animation.tempo`: the length of an ayah's mark. Default `'calm'`. */
   readonly tempo?: Tempo | undefined;
+  /**
+   * The ayah-end markers of the lines (`markerIds(lines)`): a rosette the timings time as a word
+   * gets no span, so the last word of the ayah holds its mark to the release. Default: none.
+   */
+  readonly markers?: ReadonlySet<string> | undefined;
 };
 
 /** The thickness of the dotted doubt underline, in em of the line's type size. */
@@ -185,26 +190,37 @@ type TimingIndex = {
   readonly hasWords: boolean;
 };
 
-const indexCache = new WeakMap<RecitationTimings, Map<string, TimingIndex>>();
+const indexCache = new WeakMap<RecitationTimings, Map<string, WeakMap<ReadonlySet<string>, TimingIndex>>>();
+/** The `markers` of a caller that names none. */
+const NO_MARKERS: ReadonlySet<string> = new Set();
 
-const timingIndex = (timings: RecitationTimings, occurrence: Highlight['occurrence']): TimingIndex => {
+const timingIndex = (
+  timings: RecitationTimings,
+  occurrence: Highlight['occurrence'],
+  markers: ReadonlySet<string> = NO_MARKERS,
+): TimingIndex => {
   let byOccurrence = indexCache.get(timings);
   if (byOccurrence === undefined) {
     byOccurrence = new Map();
     indexCache.set(timings, byOccurrence);
   }
-  const cached = byOccurrence.get(occurrence);
+  let byMarkers = byOccurrence.get(occurrence);
+  if (byMarkers === undefined) {
+    byMarkers = new WeakMap();
+    byOccurrence.set(occurrence, byMarkers);
+  }
+  const cached = byMarkers.get(markers);
   if (cached !== undefined) return cached;
   const ayahTimings = new Map<string, AyahTiming>();
   for (const ayah of normalizeTimings(timings).ayat) ayahTimings.set(`${ayah.surah}:${ayah.ayah}`, ayah);
   const index: TimingIndex = {
-    spans: wordSpanIndex(wordSpans(timings, {occurrence})),
+    spans: wordSpanIndex(wordSpans(timings, {occurrence, markers})),
     ayat: ayahSpanIndex(ayahSpans(timings)),
     ayahTimings,
     starts: wordStartIndex(timings, occurrence),
     hasWords: hasWordTimes(timings),
   };
-  byOccurrence.set(occurrence, index);
+  byMarkers.set(markers, index);
   return index;
 };
 
@@ -268,7 +284,7 @@ export const wordStyleFrom = (
   const ink = options.ink ?? '#1c1a16';
   const ground = options.ground ?? groundOf({background: '#f8f3e6', color: ink});
   const tempo = options.tempo ?? 'calm';
-  const index = timings ? timingIndex(timings, highlight.occurrence) : null;
+  const index = timings ? timingIndex(timings, highlight.occurrence, options.markers) : null;
   const mode = highlight.mode === 'word' && index !== null && !index.hasWords ? 'ayah' : highlight.mode;
   const rest = effectiveRestOpacity(highlight, theme);
   const path = tintPath(theme);

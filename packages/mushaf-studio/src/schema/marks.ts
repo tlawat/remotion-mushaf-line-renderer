@@ -86,13 +86,38 @@ export const wordStartIndex = (
 export type WordSpanOptions = {
   /** Which recitation of a repeated word is marked. Default `'first'`. */
   readonly occurrence?: WordOccurrence | undefined;
+  /**
+   * The ids of the ayah-end markers (`markerIds()`): a timings file may time the rosette as a word
+   * of its own, but it is never marked, so it gets no span and the word before it holds to the
+   * ayah's release. Default: none (every timed entry is a word).
+   */
+  readonly markers?: ReadonlySet<string> | undefined;
+};
+
+const markerCache = new WeakMap<object, ReadonlySet<string>>();
+
+/**
+ * The ids of the ayah-end markers (`kind: 'end'`) among `words`, for `wordSpans()`'s `markers`.
+ * Worked out once per array of lines or words (`lines` may be the lines themselves, each with its
+ * `words`), so the same set comes back for the same array.
+ */
+export const markerIds = (
+  source: readonly {readonly words: readonly {readonly id: string; readonly kind?: string}[]}[],
+): ReadonlySet<string> => {
+  const cached = markerCache.get(source);
+  if (cached !== undefined) return cached;
+  const ids = new Set<string>();
+  for (const item of source) for (const word of item.words) if (word.kind === 'end') ids.add(word.id);
+  markerCache.set(source, ids);
+  return ids;
 };
 
 /**
  * The spans of the tint and wash, in recitation order. A word's span runs from its start to the
  * start of the next timed word in its ayah; the last word's to the ayah's release. A span shorter
  * than 4 frames (0.133 s) is dropped (it would flicker) and the previous kept word of its ayah
- * holds on to its end instead. A word without a time of its own has no span.
+ * holds on to its end instead. A word without a time of its own has no span, and neither has an
+ * ayah-end marker named in `markers`.
  */
 export const wordSpans = (timings: RecitationTimings, options: WordSpanOptions = {}): readonly WordSpan[] => {
   const occurrence = options.occurrence ?? 'first';
@@ -100,8 +125,9 @@ export const wordSpans = (timings: RecitationTimings, options: WordSpanOptions =
   const floor = MIN_SPAN_FRAMES / 30;
   const ayat = ayahSpans(timings);
   const normalised = normalizeTimings(timings).ayat;
+  const markers = options.markers;
   const all = normalised.flatMap((ayah, a) => {
-    const words = ayah.words ?? [];
+    const words = markers === undefined ? (ayah.words ?? []) : (ayah.words ?? []).filter((w) => !markers.has(w.id));
     const release = ayat[a]!.release;
     return words.map((word, i) => ({
       id: word.id,

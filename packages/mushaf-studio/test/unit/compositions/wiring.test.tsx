@@ -74,7 +74,9 @@ const {backgroundFor, defaultBackground} = await import('../../../src/background
 const {clipTimeline} = await import('../../../src/memorize');
 const {MushafStudioError} = await import('../../../src/errors');
 const {FONTS_ATTRIBUTION} = await import('../../../src/export');
-const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, textSchema} = await import('../../../src/schema');
+const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, mixColors, textSchema} = await import(
+  '../../../src/schema'
+);
 const {planTranslationLayer} = await import('../../../src/compositions/parts');
 const {loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import('../../../src/compositions/extras');
 const {assertNoHostRepeats, defaultHostAudio, hostAudioOf, OWN_AUDIO_NAME} = await import('../../../src/audio');
@@ -619,6 +621,49 @@ describe('stacked translations', () => {
     // A 16:9 frame has its room beside the page.
     expect(block.dataset.place).toBe('beside');
     expect(block.querySelectorAll('.mushaf-translation')).toHaveLength(2);
+  });
+});
+
+describe('readable text colours', () => {
+  const blocks = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>('.mushaf-translation'));
+  const rgb = (hex: string) => {
+    const n = Number.parseInt(hex.slice(1), 16);
+    return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`;
+  };
+  // The default ink mixed a third into the ivory page: 68 % ink.
+  const muted = mixColors('#1c1a16', '#f8f3e6', 0.32);
+
+  it('draws a translation colour under 4.5:1 on the page as the muted ink, and keeps a readable one', async () => {
+    const pale = recitationProps({
+      text: text({translations: [{file: 'en.json', font: 'auto', fontSize: 36, color: '#d9d2c2'}]}),
+    });
+    remotion.state.frame = 110;
+    const [block] = blocks(mount(<MushafRecitation {...pale} resolved={await resolvedOf(pale)} />));
+    expect(block!.style.color).toBe(rgb(muted));
+    // The saved colour is the user's: only what is drawn changes.
+    expect(pale.text.translations[0]!.color).toBe('#d9d2c2');
+    cleanup();
+    const fine = recitationProps({
+      text: text({translations: [{file: 'en.json', font: 'auto', fontSize: 36, color: '#5a554c'}]}),
+    });
+    const [kept] = blocks(mount(<MushafRecitation {...fine} resolved={await resolvedOf(fine)} />));
+    expect(kept!.style.color).toBe(rgb('#5a554c'));
+  });
+
+  it('reads the colour against what is painted: light ink over a legacy backgroundImage is on a dark ground', async () => {
+    const props = recitationProps({
+      layout: {...defaultMushafRecitationProps.layout, color: '#f1eadb', backgroundImage: 'bg.jpg'},
+      text: text({translations: [{file: 'en.json', font: 'auto', fontSize: 36, color: '#b9b1a2'}]}),
+    });
+    remotion.state.frame = 110;
+    // #b9b1a2 is 8.7:1 on charcoal, the ground that image stands for, though 2.1:1 on the ivory under it.
+    const [block] = blocks(mount(<MushafRecitation {...props} resolved={await resolvedOf(props)} />));
+    expect(block!.style.color).toBe(rgb('#b9b1a2'));
+    cleanup();
+    // The same colours on the bare ivory page give way.
+    const bare = {...props, layout: {...props.layout, backgroundImage: ''}};
+    const [onPage] = blocks(mount(<MushafRecitation {...bare} resolved={await resolvedOf(bare)} />));
+    expect(onPage!.style.color).toBe(rgb(mixColors('#f1eadb', '#f8f3e6', 0.32)));
   });
 });
 

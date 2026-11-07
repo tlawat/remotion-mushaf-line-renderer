@@ -1057,8 +1057,8 @@ The active word gets `data-active="true"`, the class `mushaf-word--active` and `
 `{line, frame, fps, active, inSlice, linePosition, inkPalette}`; keep them pure so renders stay
 deterministic. Use paint properties only (`color`, `opacity`, `filter`, `background`, `textShadow`,
 `fontPalette`): anything that changes glyph metrics would break the printed line breaks and is
-overridden by the pinned row style. Under any theme but `'plain'` and `'normal'` the glyph colours
-come from the font, so per-word `color` does not reach them: see
+overridden by the pinned row style. Under any theme but `'plain'`, per-word `color` does not reach
+the glyphs (even under `'normal'` the ink follows the row's colour only): see
 [Marking a word on a colour theme](#marking-a-word-on-a-colour-theme).
 
 ## DOM contract

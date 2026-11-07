@@ -8,17 +8,18 @@ import {
   wordAt,
 } from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
-import {useEffect} from 'react';
+import {useEffect, useMemo} from 'react';
 import {AbsoluteFill, Easing, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {followsHostAudio} from '../audio/host';
 import {volumeAt} from '../audio/volume';
-import {backgroundFor} from '../background/compat';
+import {backgroundFor, groundFor} from '../background/compat';
 import {MushafBackground} from '../background/MushafBackground';
 import {endCardFrames} from '../compositions/extras';
 import {
   CompositionAudio,
   CompositionEndCard,
   CornerLegend,
+  readableLayers,
   StudioWarnings,
   translationsOf,
   useTranslationLayers,
@@ -34,8 +35,8 @@ import {
   defaultOverlay,
   type FontProps,
   fontPropsFrom,
-  groundOf,
   inkTintFor,
+  markerIds,
   studioFontFamily,
   themeSelectionFrom,
   washAlpha,
@@ -304,6 +305,8 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
     );
   }
   const {timings, pages} = resolved;
+  // The rosettes of every page: a rosette timed as a word of its own is never a span of its own.
+  const markers = useMemo(() => markerIds(pages.flatMap((page) => page.lines)), [pages]);
   const ranges = rangesOf(resolved);
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
   // The frames before the end card: the audio fades out by their end, the last page stays to it.
@@ -314,7 +317,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
   const heard = wordAt(timings, now);
   const activeWordId = highlight.mode === 'none' ? null : heard;
   const theme = themeSelectionFrom(props.theme, props.customTheme);
-  const ground = groundOf(layout, props.background.kind);
+  const ground = groundFor(props.background, layout);
   // With the band on, the band is the page's one mark: the words carry none of their own.
   const marked = pageView.lineHighlight === 'band' ? {...highlight, mode: 'none' as const} : highlight;
   const inkTint = inkTintFor(marked, theme, ground);
@@ -346,6 +349,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
         theme,
         ink: layout.color,
         ground,
+        markers,
       }),
       ranges,
     );
@@ -407,7 +411,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
           data-place={place}
           style={pageTranslationStyle(place, geometry, layout.marginX, translationSize, text.translationOffsetY)}
         >
-          <TranslationStack layers={translationLayers} ayahKey={ayahKey} />
+          <TranslationStack layers={readableLayers(translationLayers, layout.color, ground)} ayahKey={ayahKey} />
         </div>
       )}
       <CornerLegend

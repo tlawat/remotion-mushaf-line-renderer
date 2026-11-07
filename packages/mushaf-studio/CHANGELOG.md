@@ -15,6 +15,12 @@
   `mushafPropsNeedMigration()` says whether anything does. The colour, timing and motion tokens
   (`legibleAccent()`, `washColor()`, `wordSpans()`, `boundaryStart()`, `dissolve()`,
   `tempoFrames()`, ...) are exported.
+- **The line window scrolls after the last word of the outgoing line**, never while it is heard
+  (`anchor: 'start'`, `windowScrollStarts()`), so the word being recited keeps the centre slot and
+  its mark. A translation, gloss or label colour that reads under 4.5:1 on its ground is drawn as
+  a muted ink (`readableInk()`); the ground counts a `layout.backgroundImage` as the image it is
+  (`groundFor()`). A rosette the timings time as a word holds the ayah's last word's mark to the
+  release (`markerIds()`), and the gloss strip keeps its pace at any frame rate.
 
 First proof of concept of Mushaf Studio: Remotion Studio, extended with the package's features
 as a user interface. See [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md) for the

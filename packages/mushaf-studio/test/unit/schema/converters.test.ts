@@ -33,6 +33,7 @@ import {
   fontPropsFrom,
   type Highlight,
   inkTintFor,
+  markerIds,
   riseDistance,
   SINE,
   SOFT,
@@ -396,6 +397,17 @@ describe('wordStyleFrom', () => {
     // On a dark ground the band is a little stronger.
     const dark = wordStyleFrom({...base, ground: '#121416', highlight: highlight({style: 'wash'})});
     expect(dark(w2, ctx(45))).toEqual(washStyle({color: 'rgba(177, 147, 83, 0.13)', cap: 'both'}));
+  });
+
+  it('holds the last word of an ayah to the release when the timings time its rosette as a word', () => {
+    // The rosette 1:1:3 has its own entry (2-3 s): told it is the marker, 1:1:2 keeps its band past 2 s.
+    const plain = wordStyleFrom({...base, highlight: highlight({style: 'wash'})});
+    expect(plain(w2, ctx(75))).toBeUndefined();
+    const held = wordStyleFrom({...base, highlight: highlight({style: 'wash'}), markers: markerIds([line])});
+    expect(held(w2, ctx(75))).toEqual(washStyle({color: 'rgba(177, 147, 83, 0.1)', cap: 'both'}));
+    // It lets go at the release, 3.25 s, over markOut.
+    expect(held(w2, ctx(110))).toBeUndefined();
+    expect(held(w3, ctx(75))).toBeUndefined();
   });
 
   it('carries no tint or wash on a line leaving the centre slot upward, full strength on one coming in', () => {

@@ -1,15 +1,15 @@
 import {exitTiming, MushafLine, MushafLineWindow} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
-import {backgroundFor} from '../../background/compat';
+import {backgroundFor, groundFor} from '../../background/compat';
 import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {MushafTitleOverlay} from '../../overlay';
-import {animationFrom, fontPropsFrom, scrollTimingFrom} from '../../schema';
+import {animationFrom, fontPropsFrom, readableInk, scrollTimingFrom} from '../../schema';
 import {useInStudio} from '../../studio/environment';
 import {ayahCount} from '../../studio/surahs';
 import {TranslationStack} from '../../translations';
-import {StudioWarnings, translationsOf, useTranslationLayers} from '../parts';
+import {readableLayers, StudioWarnings, translationsOf, useTranslationLayers} from '../parts';
 import {blockGeometry, firstAyahKey, linesBlockStyle, translationBlockStyle} from '../shared';
 import {passageTimeline, type ResolvedPassage} from './resolve';
 import type {MushafPassageProps} from './schema';
@@ -36,6 +36,8 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
   }
   const {lines} = resolved;
   const translationLayers = useTranslationLayers(text, translationsOf(resolved));
+  // What the text sits on: a translation or label colour under 4.5:1 there gives way to a muted ink.
+  const ground = groundFor(props.background, layout);
   const {starts, holds} = passageTimeline(lines, props, fps);
   // The line on screen: the last one whose hold has begun, else the first.
   let current = 0;
@@ -102,11 +104,14 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
       </div>
       {showTranslation && (
         <div data-mushaf-block="Translation" style={translationBlockStyle(geometry, layout, text, height)}>
-          <TranslationStack layers={translationLayers} ayahKey={firstAyahKey(lines[current])} />
+          <TranslationStack
+            layers={readableLayers(translationLayers, layout.color, ground)}
+            ayahKey={firstAyahKey(lines[current])}
+          />
         </div>
       )}
       <MushafTitleOverlay
-        overlay={overlay}
+        overlay={{...overlay, color: readableInk(overlay.color, layout.color, ground)}}
         surah={props.surah}
         fromAyah={props.fromAyah}
         toAyah={props.toAyah === 0 ? Math.max(props.fromAyah, ayahCount(props.surah)) : props.toAyah}

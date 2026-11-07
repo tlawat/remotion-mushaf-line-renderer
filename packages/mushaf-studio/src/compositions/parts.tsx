@@ -22,6 +22,7 @@ import {TajweedLegend} from '../content/TajweedLegend';
 import {themeHasTajweedColors} from '../content/tajweed';
 import {attributionLines} from '../export/description';
 import type {EndCardSettings, Legend} from '../schema';
+import {readableInk} from '../schema/color';
 import type {TranslationLayer} from '../translations/TranslationStack';
 import type {AyahTranslation, ResolvedAudio, ResolvedEndCard, StudioTimings} from '../types';
 import {isAutoFont, type TranslationLayerSpec, type TranslationTextProps, translationLayerSpecs} from './extras';
@@ -113,6 +114,20 @@ export const useTranslationLayers = (
   useWebFonts(requests);
   return planned.map((p) => p.layer);
 };
+
+/**
+ * The layers as drawn on `ground`: a colour that reads under 4.5:1 there gives way to the ink mixed
+ * a third into the ground (`readableInk()`), so a muted translation never fades into the page. The
+ * saved colours are not touched. The same array when every colour already reads.
+ */
+export const readableLayers = (
+  layers: readonly TranslationLayer[],
+  ink: string,
+  ground: string,
+): readonly TranslationLayer[] =>
+  layers.every((layer) => readableInk(layer.color, ink, ground) === layer.color)
+    ? layers
+    : layers.map((layer) => ({...layer, color: readableInk(layer.color, ink, ground)}));
 
 /**
  * The translations of a `resolved`: its `translations`, or for one made before them, its single

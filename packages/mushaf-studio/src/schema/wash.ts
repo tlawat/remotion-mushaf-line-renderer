@@ -19,7 +19,7 @@ export type WashStyleOptions = {
 
 /** The feather at the band's top and bottom. */
 const FEATHER = '0.22em';
-/** The width of a round end: a third of an em, never more than half the word. */
+/** The width of a round end: 0.35 em, never more than half the word. */
 const CAP_WIDTH = 'min(0.35em, 50%)';
 
 const band = (color: string): string =>

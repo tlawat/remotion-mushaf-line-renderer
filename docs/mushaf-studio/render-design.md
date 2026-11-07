@@ -1287,7 +1287,10 @@ Stage R1 (tokens, timing model, highlight, migration, renderer):
    0.35-0.65 × 0.10-0.45). The criterion is therefore `out + in ≥ 0.15`, the measure 3.2 itself
    uses ("0.03 + 0.17 of ink"). With `o = round(0.48 · D)` and `i = round(0.30 · D)`, all three
    hold at 12, 18, 20, 27, 28 and 30 frames and at every dissolving token at both tempos. For D = 20
-   the outgoing text goes over f0-f10.
+   the outgoing text goes over f0-f10. This governs every 0.45 above: in 3.2, in 5.2's one-line
+   Sequences (the outgoing Sequence ends at `t0 + round(0.48 · D_eff)` with an exit that long) and
+   in 12.2. `dissolveShares(D)` (S:schema/tokens.ts) returns both shares, `{out, in}`; `dissolve()`
+   takes them from it, and the timing stage's overlapping Sequences are to, so they cannot drift.
 2. **A tint goes through CSS `color` only under `plain`.** Under `normal`, and a custom palette on
    `normal`, the ink follows the text colour only as the row's palette rule resolves it, once.
    Chromium drops `currentColor` inside `override-colors`, so a word's own `color` never reaches the
@@ -1319,12 +1322,40 @@ Stage R1 (tokens, timing model, highlight, migration, renderer):
    0.6 is clamped to 0.5).
 9. **Interim motion until the timing stage.** `animationFrom()` maps `lines` to `fade()` /
    `fadeRise()` / nothing on the old lengths (15 frames in, 10 out), so the old schedules hold.
-   `scrollTimingFrom(tempo)` is the calm scroll (24 frames on `INOUT`) with the old end anchor.
-   4.3's late-not-early schedule and the overlapping one-line Sequences come with that stage.
-   `boundaryStart()` and `outgoingEnd()` are ready and tested for it.
+   MushafRecitation's window already scrolls as 5.2 says, because a 24-frame scroll on the old end
+   anchor started while the outgoing line's last word was still heard, and the neighbour factor
+   (5.1.4) then took that word's mark away: `scrollTimingFrom(tempo)` (24 frames on `INOUT`) with
+   `anchor: 'start'` and `steps[j] = max(E(j−1), F(j) − leadIn − scroll)` from
+   `windowScrollStarts()` (S:compositions/recitation/scroll.ts, built on `boundaryStart()` and
+   `outgoingEnd()`, the word ends moved onto their clips when ayahs repeat). The window's first
+   appearance (`windowIn`), its end hold, MushafPassage's steps and the overlapping one-line
+   Sequences come with the timing stage.
 10. **Gloss marks (5.1.5): the labels' rest (0.7), their accent and emphasis, and the strip's
     3 + 6 frame change are in.** The no-ellipsis two-row wrap of interlinear labels is layout work
     and waits for the interlinear stage.
 11. **MushafAyahText's marks follow 5.12** (ayah mode marks nothing; a word wash at 1.35 em and
     55 %). Its words do not become `inline-block`, its word spacing is not 0.1 em and its block
     width is not set yet: that waits for its stage.
+12. **`washStyle({color, cap, height?, y?})`, not `washStyle({color, alpha, cap})`.** The colour
+    comes from `washColor(color, alpha)` with its alpha already in, so the chroma cap and the 0.16
+    cap are applied in one place. `height` and `y` (default `1.55em`, `54%`) carry MushafAyahText's
+    band (`1.35em` at `55%`, 5.12). The CSS is otherwise exactly 5.1.3's, pinned literally in
+    `test/unit/schema/wash.test.ts`.
+13. **The ground of a composition is `groundFor(background, layout)`** (S:background/compat.ts):
+    `groundOf()` of the kind `backgroundFor()` paints, so props whose image is still in
+    `layout.backgroundImage` (kind `'color'`) count as an image background (3.1.1).
+14. **A rosette the timings time as a word of its own is not a word span (4.1).** The Studio's
+    bundled Al-Fatihah gives each ayah's marker an entry (1:2:5 over 3.391-3.533 s). `wordSpans()`
+    and `wordStyleFrom()` take `markers` (`markerIds(lines)`, the `kind: 'end'` words), so the last
+    word holds to `release(a)` and the gloss strip keeps its gloss until the next ayah.
+15. **V10 fails: the wash shows faint seams where two tiles meet.** Chromium antialiases each
+    background tile at its own fractional edge, and two partly covering tiles of one colour leave
+    the shared pixel about 25 % weaker (measured on the Haram-night ayah wash at 9:16: band
+    `(39,38,33)`, seam columns `(34,34,30)` and `(31,31,28)`, on a `(18,20,22)` ground). It happens
+    where two words meet and where a cap tile meets its body, at some fractional positions and not
+    others. Overhanging the tiles by 0.5 px each way (negative margin and padding, or
+    `border-image-outset`) doubles the alpha instead: on a test row of the same band, a brighter
+    line, `(57,50,37)` against `(39,36,30)`. Nothing a
+    paint-only word style can do joins the tiles, so the seams stay until 13.2's phase-2 band (one
+    shape per run on a line, drawn by the renderer behind the row) lands; the band geometry above
+    stays as it is for it.
