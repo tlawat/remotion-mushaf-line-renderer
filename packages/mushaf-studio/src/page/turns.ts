@@ -96,3 +96,25 @@ export const pageLineEmphasis = (
   const away = next === undefined ? 0 : INOUT(clamp01((frame - next.start * fps) / markOut));
   return Math.round(into * (1 - away) * 10_000) / 10_000;
 };
+
+/**
+ * How far the page's dimming has come in at `frame`, 0-1: nothing before the passage's first word,
+ * then over `markIn` on `SOFT` from it, as the first line's band does, so at the first word the
+ * other lines ease down with the band instead of dropping in one frame.
+ */
+export const pageDimPresence = (slots: readonly PageLineSlot[], frame: number, fps: number): number => {
+  const first = slots[0];
+  if (first === undefined) return 0;
+  const markIn = tempoFrames('markIn', 'calm', fps);
+  return Math.round(SOFT(clamp01((frame - first.start * fps) / markIn)) * 10_000) / 10_000;
+};
+
+/**
+ * A printed line's opacity under `pageView.dimOtherLines`: `1 − (1 − dimOtherLines) × (presence −
+ * emphasis)`, never above 1. The line being recited (`emphasis` 1) stays at full ink, the others
+ * rest at `dimOtherLines` once the dimming is in (`presence`, `pageDimPresence()`), and a line
+ * coming in or letting go eases between the two. At the first word `presence` and the first line's
+ * emphasis rise together, so that line never dips.
+ */
+export const pageLineDim = (dimOtherLines: number, presence: number, emphasis: number): number =>
+  Math.round((1 - (1 - dimOtherLines) * Math.max(0, presence - emphasis)) * 10_000) / 10_000;

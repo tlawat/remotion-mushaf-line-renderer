@@ -13,7 +13,9 @@ import {
   defaultHighlight,
   defaultLayout,
   describeMushafMigration,
+  MIGRATION_REASONS,
   migrateMushafProps,
+  migrationReasonText,
   mushafPropsNeedMigration,
 } from '../../../src/schema';
 import {
@@ -292,19 +294,43 @@ describe('describeMushafMigration / mushafPropsNeedMigration', () => {
       from: 'color',
       to: 'tint',
       reason: 'renamed: a tint',
+      code: 'colorTint',
+      params: {},
     });
-    expect(at('highlight.dimOthers')).toMatchObject({from: 1, to: undefined});
-    expect(at('animation.lines')).toMatchObject({from: undefined, to: 'rise', reason: 'from enter "slide-fade"'});
+    expect(at('highlight.dimOthers')).toMatchObject({from: 1, to: undefined, code: 'dimOthersRemoved'});
+    expect(at('animation.lines')).toMatchObject({
+      from: undefined,
+      to: 'rise',
+      reason: 'from enter "slide-fade"',
+      code: 'linesFrom',
+      params: {field: 'enter', value: '"slide-fade"'},
+    });
     expect(at('animation.scroll')).toMatchObject({from: 'ease', to: undefined});
     expect(at('background.glow')?.reason).toMatch(/nothing follows the audio level/);
-    expect(at('background.kenBurnsScale')).toMatchObject({from: 1.1, to: 1.05});
+    expect(at('background.kenBurnsScale')).toMatchObject({
+      from: 1.1,
+      to: 1.05,
+      reason: 'outside the new range 1–1.05: clamped',
+      code: 'clamped',
+      params: {min: 1, max: 1.05},
+    });
     expect(at('layout.frame')).toMatchObject({from: undefined, to: 'none'});
     expect(at('text.translationFont')?.reason).toMatch(/never loaded/);
     // Nothing still valid is listed.
     expect(at('layout.marginX')).toBeUndefined();
     expect(at('theme')).toBeUndefined();
-    for (const note of notes) expect(note.reason.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.reason.length).toBeGreaterThan(0);
+      // The English reason is the code's text, filled in: a host can word the code in its own language.
+      expect(note.reason).toBe(migrationReasonText(note.code, note.params));
+    }
     expect(mushafPropsNeedMigration(old.MushafRecitation)).toBe(true);
+  });
+
+  it('words a reason from its code, its values filled in', () => {
+    expect(migrationReasonText('clamped', {min: 0.5, max: 0.85})).toBe('outside the new range 0.5–0.85: clamped');
+    expect(migrationReasonText('frameNew')).toBe(MIGRATION_REASONS.frameNew);
+    expect(migrationReasonText('linesFrom', {field: 'exit'})).toBe('from exit {value}');
   });
 
   it('is empty for props that need nothing, and true once a field is missing', () => {

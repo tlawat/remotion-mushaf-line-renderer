@@ -47,6 +47,7 @@ const {
   vignetteStyle,
 } = await import('../../../src/background');
 type Background = import('../../../src/background').Background;
+const {frameGeometry} = await import('../../../src/schema/tokens');
 
 const background = (changes: Partial<Background> = {}): Background => ({...defaultBackground, ...changes});
 const at = (frame: number, props: React.ComponentProps<typeof MushafBackground>) => {
@@ -251,9 +252,44 @@ describe('vignette', () => {
 
   it('is a radial gradient clear over the middle, nothing at 0', () => {
     expect(vignetteStyle(0.22, '#121416')).toEqual({
-      backgroundImage: 'radial-gradient(ellipse 120% 100% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)',
+      backgroundImage: 'radial-gradient(ellipse 60% 50% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)',
     });
     expect(vignetteStyle(0, '#121416')).toBeNull();
+  });
+
+  it('reaches the frame: a clear share at the middle of each edge, all of it at the corners', () => {
+    // The share of `vignette` the CSS gradient paints at (x, y), from its own ellipse and stops.
+    const [, rx, ry, cx, cy, clear] = vignetteStyle(0.22, '#121416')!
+      .backgroundImage!.toString()
+      .match(/ellipse (\d+)% (\d+)% at (\d+)% (\d+)%, transparent (\d+)%/)!
+      .map(Number) as [number, number, number, number, number, number];
+    for (const [width, height] of [
+      [1920, 1080],
+      [1080, 1920],
+      [1080, 1080],
+    ] as const) {
+      const share = (x: number, y: number) => {
+        const r = Math.hypot(
+          (x - (cx / 100) * width) / ((rx / 100) * width),
+          (y - (cy / 100) * height) / ((ry / 100) * height),
+        );
+        return Math.min(1, Math.max(0, (r - clear / 100) / (1 - clear / 100)));
+      };
+      // The middle stays clear; the sides take over half of it, the top and bottom most of it.
+      expect(share(width / 2, height / 2)).toBe(0);
+      expect(share(0.3 * width, 0.4 * height)).toBe(0);
+      expect(share(0, height / 2)).toBeGreaterThan(0.5);
+      expect(share(width, height / 2)).toBeGreaterThan(0.5);
+      expect(share(width / 2, 0)).toBeGreaterThan(0.85);
+      expect(share(width / 2, height)).toBe(1);
+      for (const [x, y] of [
+        [0, 0],
+        [width, 0],
+        [0, height],
+        [width, height],
+      ] as const)
+        expect(share(x, y)).toBe(1);
+    }
   });
 
   it('draws the vignette and its fixed noise over the background, and neither without a vignette', () => {
@@ -262,6 +298,16 @@ describe('vignette', () => {
     expect(part(c, 'vignette')!.style.backgroundImage).toContain('rgba(0, 0, 0, 0.2)');
     const noise = part(c, 'noise')!;
     expect(noise.style.opacity).toBe(String(NOISE_OPACITY));
+    // Zero-mean: a grain around 50 % grey (taken in sRGB), laid on where that grey changes nothing.
+    expect(noise.style.mixBlendMode).toBe('overlay');
+    expect(noise.querySelector('filter')!.getAttribute('color-interpolation-filters')).toBe('sRGB');
+    const matrix = noise.querySelector('feColorMatrix')!.getAttribute('values')!.split(' ').map(Number);
+    for (const row of [0, 1, 2]) {
+      const gains = matrix.slice(row * 5, row * 5 + 3);
+      expect(gains.reduce((sum, gain) => sum + gain, 0)).toBeCloseTo(1, 3);
+      expect(matrix[row * 5 + 4]).toBe(0);
+    }
+    expect(matrix.slice(15)).toEqual([0, 0, 0, 0, 1]);
     const turbulence = noise.querySelector('feTurbulence')!;
     expect([
       turbulence.getAttribute('baseFrequency'),
@@ -284,6 +330,28 @@ describe('jadwal', () => {
     expect(jadwalRules(1920, 1080)).toEqual({outer: {inset: 54, width: 2}, inner: {inset: 62, width: 1}});
     expect(jadwalRules(1080, 1920)).toEqual({outer: {inset: 54, width: 2}, inner: {inset: 62, width: 1}});
     expect(jadwalRules(3840, 2160)).toEqual({outer: {inset: 108, width: 4}, inner: {inset: 124, width: 2}});
+  });
+
+  it('keeps the furniture inside its inner rule by half a label, at every format', () => {
+    for (const [width, height] of [
+      [1920, 1080],
+      [1080, 1920],
+      [1080, 1080],
+      [1080, 1350],
+      [3840, 2160],
+    ] as const) {
+      const {inner} = jadwalRules(width, height);
+      const plain = frameGeometry(width, height);
+      const inside = frameGeometry(width, height, {jadwal: true});
+      const clear = inner.inset + inner.width + Math.round(0.5 * plain.label);
+      expect(inside.safe, `${width}x${height}`).toBeGreaterThanOrEqual(Math.ceil(clear));
+      expect(inside.top).toBe(Math.max(plain.top, inside.safe));
+      expect(inside.bottom).toBe(Math.max(plain.bottom, inside.safe));
+      expect([inside.label, inside.unit]).toEqual([plain.label, plain.unit]);
+    }
+    expect(frameGeometry(1920, 1080, {jadwal: true})).toEqual({safe: 76, label: 26, unit: 1, top: 76, bottom: 76});
+    expect(frameGeometry(1080, 1920, {jadwal: true})).toEqual({safe: 82, label: 37, unit: 1, top: 230, bottom: 346});
+    expect(frameGeometry(1920, 1080, {jadwal: false})).toEqual(frameGeometry(1920, 1080));
   });
 
   it('is 0.55 on a light ground and 0.45 on a dark one, in the metal', () => {

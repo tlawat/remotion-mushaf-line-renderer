@@ -66,11 +66,17 @@ const {
   defaultMushafPageProps,
   defaultPageView,
   OUTSIDE_OPACITY,
+  pageDimPresence,
   pageGeometry,
+  pageLineDim,
   pageLineEmphasis,
+  pageReserve,
   pageTurns,
   resolvePage,
 } = await import('../../../src/page');
+const {jadwalRules} = await import('../../../src/background');
+const {legendBand} = await import('../../../src/compositions/parts');
+const {frameGeometry, SOFT, tempoFrames} = await import('../../../src/schema/tokens');
 type MushafPageProps = import('../../../src/page').MushafPageProps;
 type PageView = import('../../../src/page').PageView;
 
@@ -305,9 +311,127 @@ describe('<MushafPage>: the current line', () => {
     expect(slot(root, 2, 3).style.opacity).toBe('0.5');
     expect(slot(root, 2, 1).style.opacity).toBe('0.5');
   });
+
+  it('eases the dimming in with the first band: no line drops in one frame, the recited one never dips', async () => {
+    const p = await props({}, {dimOtherLines: 0.6});
+    const markIn = tempoFrames('markIn', 'calm', 30);
+    // No more than the band's own steepest frame on SOFT, at the dimming's depth.
+    const steepest = Math.max(...Array.from({length: markIn}, (_, i) => SOFT((i + 1) / markIn) - SOFT(i / markIn)));
+    const step = (1 - 0.6) * steepest + 1e-4;
+    // Page 2: surah 2's header, the basmalah, then ayah lines 3 and 4.
+    const lines = [1, 2, 3, 4];
+    const opacityOf = (root: HTMLElement, line: number) => Number(slot(root, 2, line).style.opacity || 1);
+    let before: number[] | null = null;
+    // The first word is at 0.5 s, frame 15.
+    for (let frame = 12; frame <= 24; frame++) {
+      remotion.state.frame = frame;
+      const root = mount(p);
+      const now = lines.map((line) => opacityOf(root, line));
+      cleanup();
+      if (before !== null) {
+        for (const [i, line] of lines.entries()) {
+          expect(before[i]! - now[i]!, `line ${line} at frame ${frame}`).toBeLessThanOrEqual(step);
+          // Line 3 is the one recited from the first word.
+          if (line === 3) expect(now[i]!, `frame ${frame}`).toBeGreaterThanOrEqual(before[i]!);
+        }
+      }
+      before = now;
+    }
+    // Settled: the recited line at full ink, the others at dimOtherLines.
+    expect(before).toEqual([0.6, 0.6, 1, 0.6]);
+    // The pure parts: nothing before the first word, in over markIn on SOFT, then held.
+    const slots = [{page: 2, line: 3, start: 0.5, end: 3.2}];
+    expect(pageDimPresence(slots, 14, 30)).toBe(0);
+    expect(pageDimPresence(slots, 15 + markIn, 30)).toBe(1);
+    expect(pageDimPresence([], 100, 30)).toBe(0);
+    expect(pageLineDim(0.6, 1, 0)).toBe(0.6);
+    expect(pageLineDim(0.6, 1, 1)).toBe(1);
+    expect(pageLineDim(0.6, 0.4, 0.4)).toBe(1);
+    expect(pageLineDim(1, 1, 0)).toBe(1);
+  });
+
+  it('never multiplies a word’s own dimming by its line’s: the lower of the two wins', async () => {
+    at(4);
+    // Ayah 1 (page 2, line 3) is outside the passage and no longer recited: its words rest at 0.5, not 0.5 × 0.6.
+    const root = mount(await props({fromAyah: 2, toAyah: 3}, {dimOtherLines: 0.6}));
+    expect(slot(root, 2, 3).style.opacity).toBe('0.6');
+    for (const style of Object.values(wordStyles(root, 2, 3)))
+      expect(0.6 * style!.opacity!).toBeCloseTo(OUTSIDE_OPACITY, 3);
+    // Another surah's header: the lower of the two, not their product.
+    expect(slot(root, 3, 3).style.opacity).toBe(String(OUTSIDE_OPACITY));
+    cleanup();
+    // Without the band, the ink's rest (0.6) of the words still to come, inside a line at 0.6, stays 0.6.
+    at(1);
+    const ink = mount(await props({}, {dimOtherLines: 0.6, lineHighlight: 'none'}));
+    expect(slot(ink, 2, 4).style.opacity).toBe('0.6');
+    for (const style of Object.values(wordStyles(ink, 2, 4))) expect(0.6 * (style?.opacity ?? 1)).toBeCloseTo(0.6, 3);
+  });
 });
 
 describe('<MushafPage>: the page around the lines', () => {
+  it('draws one border: the page’s own rule is its jadwal, and without it the page sits inside the jadwal', async () => {
+    const hairline = {...defaultMushafPageProps.layout, frame: 'hairline' as const};
+    const ruled = mount(await props({layout: hairline}));
+    expect(ruled.querySelector('[data-mushaf-jadwal]')).toBeNull();
+    expect(page(ruled, 2).querySelector('svg[data-page-frame="simple"]')).not.toBeNull();
+    cleanup();
+    for (const [width, height] of [
+      [1920, 1080],
+      [1080, 1920],
+      [1080, 1080],
+    ] as const) {
+      remotion.state.width = width;
+      remotion.state.height = height;
+      const bare = mount(await props({layout: hairline}, {frame: 'none'}));
+      expect(bare.querySelector('[data-mushaf-jadwal]')).not.toBeNull();
+      const {inner} = jadwalRules(width, height);
+      const box = page(bare, 2).style;
+      const [left, top, w, h] = [box.left, box.top, box.width, box.height].map((v) => Number.parseFloat(v));
+      // The page box, its page number included, never meets the jadwal's rules.
+      const clear = inner.inset + inner.width;
+      expect(top, `${width}x${height}`).toBeGreaterThan(clear);
+      expect(left).toBeGreaterThan(clear);
+      expect(top! + h!).toBeLessThan(height - clear);
+      expect(left! + w!).toBeLessThan(width - clear);
+      cleanup();
+    }
+  });
+
+  it('keeps half a line box between the page and the legend’s band, and fits it inside the jadwal', () => {
+    const legend = {show: true, position: 'bottom-left' as const, names: 'both' as const};
+    const frame = {width: 1920, height: 1080, lineHeight: pageGeometry({width: 1920, height: 1080}).lineHeight};
+    const band = legendBand(legend, 'light', frame)!;
+    const reserve = pageReserve(legend, 'light', frame);
+    // The other edge keeps the page's own margin (4 % of the height), so the page is not pushed against it.
+    expect(reserve).toEqual({top: 43, bottom: band.inset + band.height + Math.round(0.5 * frame.lineHeight)});
+    const g = pageGeometry({width: 1920, height: 1080}, reserve);
+    const bandTop = 1080 - band.inset - band.height;
+    expect(bandTop - (g.top + g.height)).toBeGreaterThanOrEqual(Math.round(0.5 * frame.lineHeight));
+    expect(g.top).toBeGreaterThanOrEqual(43);
+    // No legend and no jadwal: only the margins, so the page is fitted exactly as without a reserve.
+    expect(pageReserve({...legend, show: false}, 'light', frame)).toEqual({top: 43, bottom: 43});
+    for (const size of [
+      {width: 1920, height: 1080},
+      {width: 1080, height: 1920},
+      {width: 1080, height: 1350},
+    ])
+      expect(pageGeometry(size, pageReserve({...legend, show: false}, 'light', {...frame, ...size}))).toEqual(
+        pageGeometry(size),
+      );
+    // The jadwal alone: its inner rule and half a label.
+    const inside = frameGeometry(1920, 1080, {jadwal: true}).safe;
+    expect(pageReserve({...legend, show: false}, 'light', {...frame, jadwal: true})).toEqual({
+      top: inside,
+      bottom: inside,
+    });
+    const both = pageReserve(legend, 'light', {...frame, jadwal: true});
+    const ruledBand = legendBand(legend, 'light', {...frame, jadwal: true})!;
+    expect(both).toEqual({
+      top: inside,
+      bottom: ruledBand.inset + ruledBand.height + Math.round(0.5 * frame.lineHeight),
+    });
+  });
+
   it('draws the border as asked, in the rosettes’ gold', async () => {
     const simple = mount(await props());
     expect(page(simple, 2).querySelector('svg')!.getAttribute('data-page-frame')).toBe('simple');

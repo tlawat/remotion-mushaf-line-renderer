@@ -253,6 +253,18 @@ describe('<MushafTitleOverlay>', () => {
     });
   });
 
+  it('moves the corner label inside the jadwal’s inner rule when the jadwal is drawn', () => {
+    // The inner rule ends at 63 px: the label starts half a label (13 px) inside it, never across the gold.
+    const label = corner(at(60, base({overlay: overlay({title: 'corner', corner: 'top-right'}), jadwal: true})))!;
+    expect(label.style).toMatchObject({top: '76px', right: '76px'});
+    cleanup();
+    remotion.state.width = 1080;
+    remotion.state.height = 1920;
+    expect(
+      corner(at(60, base({overlay: overlay({title: 'corner', corner: 'bottom-left'}), jadwal: true})))!.style,
+    ).toMatchObject({bottom: '346px', left: '82px'});
+  });
+
   it('brings the corner label in from 0.4 s after the card under both, and halos it over an image', () => {
     const p = base({overlay: overlay({title: 'both', introSeconds: 3}), addsTime: true});
     expect(corner(at(0, p))).toBeNull();

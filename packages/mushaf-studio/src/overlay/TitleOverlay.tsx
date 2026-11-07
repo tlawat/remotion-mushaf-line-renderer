@@ -454,6 +454,11 @@ export type MushafTitleOverlayProps = {
   readonly background: string;
   /** Over an image or a video: the corner label gets a soft halo of the ground. */
   readonly overImage?: boolean | undefined;
+  /**
+   * The composition draws the jadwal (`layout.frame: 'hairline'`): the corner label goes inside its
+   * inner rule (`frameGeometry(width, height, {jadwal: true})`), never across the gold. Default `false`.
+   */
+  readonly jadwal?: boolean | undefined;
   readonly tempo?: Tempo | undefined;
   readonly fontSize: number;
   readonly lineHeight: number;
@@ -473,8 +478,9 @@ const CORNER_ALONE_SECONDS = 0.5;
 /**
  * The `overlay` group of a composition's props on the canvas: the intro card (`intro`, `both`) and
  * the corner label (`corner`, `both`), which fades in over 24 frames from 0.4 s after the card (0.5 s
- * into the video without one), inside the safe area (at 9:16 clear of the platform bands). Nothing
- * for `title: 'none'`. Pure in its props and the frame.
+ * into the video without one), inside the safe area (at 9:16 clear of the platform bands, and inside
+ * the jadwal's inner rule when one is drawn). Nothing for `title: 'none'`. Pure in its props and the
+ * frame.
  */
 export const MushafTitleOverlay: React.FC<MushafTitleOverlayProps> = (props) => {
   const {overlay} = props;
@@ -484,7 +490,7 @@ export const MushafTitleOverlay: React.FC<MushafTitleOverlayProps> = (props) => 
   const intro = showsIntro(overlay.title) && props.surah !== undefined;
   const addsTime = props.addsTime === true;
   const endSeconds = addsTime ? overlay.introSeconds : introEndSeconds(overlay.introSeconds, props.firstWordSeconds);
-  const geometry = frameGeometry(width, height);
+  const geometry = frameGeometry(width, height, {jadwal: props.jadwal});
   const cornerFrom = intro
     ? (endSeconds + CORNER_AFTER_CARD_SECONDS) * fps
     : props.surah === undefined

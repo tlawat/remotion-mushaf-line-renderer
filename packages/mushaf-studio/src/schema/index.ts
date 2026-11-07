@@ -91,9 +91,13 @@ export {
 } from './marks';
 export {
   describeMushafMigration,
+  MIGRATION_REASONS,
   type MigrateOptions,
   type MigrationNote,
+  type MigrationReason,
+  type MigrationReasonParams,
   migrateMushafProps,
+  migrationReasonText,
   mushafPropsNeedMigration,
 } from './migrate';
 export {
@@ -106,10 +110,12 @@ export {
   dissolve,
   dissolveShares,
   type FrameGeometry,
+  type FrameGeometryOptions,
   frameGeometry,
   GROUNDS,
   type GroundTokens,
   INOUT,
+  JADWAL_DEPTH_UNITS,
   METAL,
   metalOf,
   SINE,

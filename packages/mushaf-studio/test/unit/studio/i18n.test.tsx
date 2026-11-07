@@ -102,6 +102,17 @@ describe('the dictionary', () => {
     expect(Object.keys(MESSAGES.en)).not.toContain('look.chip.rosette');
   });
 
+  it('words every reason of the migration in both languages, the English as the migration does', async () => {
+    const {MIGRATION_REASONS} = await import('../../../src/schema/migrate');
+    const codes = Object.keys(MIGRATION_REASONS) as (keyof typeof MIGRATION_REASONS)[];
+    const reasonKeys = Object.keys(MESSAGES.en).filter((key) => key.startsWith('upgrade.reason.'));
+    expect(reasonKeys.sort()).toEqual(codes.map((code) => `upgrade.reason.${code}`).sort());
+    for (const code of codes) {
+      expect(MESSAGES.en[`upgrade.reason.${code}`], code).toBe(MIGRATION_REASONS[code]);
+      expect(MESSAGES.ar[`upgrade.reason.${code}`], code).not.toBe(MIGRATION_REASONS[code]);
+    }
+  });
+
   it('fills the same placeholders in both languages', () => {
     for (const key of Object.keys(MESSAGES.en) as (keyof typeof MESSAGES.en)[])
       expect(placeholders(MESSAGES.ar[key]), key).toEqual(placeholders(MESSAGES.en[key]));

@@ -171,7 +171,14 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
   const theme = themeSelectionFrom(props.theme, props.customTheme);
   const plainLineBox = blockGeometry(layout, {width, height}).lineHeight;
   const labelFamily = studioFontFamily(overlay.font, 'label');
-  const reserve = legendReserve(legend, theme, {width, height, lineHeight: plainLineBox, fontFamily: labelFamily});
+  const jadwal = layout.frame === 'hairline';
+  const reserve = legendReserve(legend, theme, {
+    width,
+    height,
+    lineHeight: plainLineBox,
+    fontFamily: labelFamily,
+    jadwal,
+  });
   // Interlinear glosses: every line slot grows by the label rows, and the line moves up into it.
   const glossRows =
     text.glossPosition === 'interlinear' ? interlinearRows(resolved.gloss, resolved.transliteration) : 0;
@@ -408,7 +415,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         }}
         layout={layout}
       />
-      {layout.frame === 'hairline' && <Jadwal metal={metal} ground={ground} />}
+      {jadwal && <Jadwal metal={metal} ground={ground} />}
       {ownAudio &&
         identity &&
         (delayFrames > 0 ? (
@@ -497,6 +504,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         addsTime={cardAddsTime}
         background={ground}
         overImage={overImage}
+        jadwal={jadwal}
         tempo={animation.tempo}
         fontSize={fontSize}
         lineHeight={lineHeight}
@@ -512,6 +520,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         overlay={shownOverlay}
         labelShown={showsCorner(overlay.title)}
         tempo={animation.tempo}
+        jadwal={jadwal}
       />
       <LegendBand
         legend={legend}
@@ -521,6 +530,7 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
         width={width}
         height={height}
         lineHeight={plainLineBox}
+        jadwal={jadwal}
       />
       <CompositionEndCard
         endCard={endCard}

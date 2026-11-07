@@ -410,8 +410,8 @@ save into it, and every panel save fails.
 
 **The resolver**, in the template's `calculateMetadata()`:
 
-- resolves at the template's `fps`: the durations, the memorisation's clips, the audio's trim and
-  the glow's levels (`levelsFps`) are in the template's frames, at 30 or 60 alike;
+- resolves at the template's `fps`: the durations, the memorisation's clips and the audio's trim
+  are in the template's frames, at 30 or 60 alike;
 - returns `{props, durationInFrames, error}` and no size (the box decides it); the length is also in
   `props.resolved.durationInFrames` (`slotDurationOf()`), which the slot sizes its `<Sequence>` by, so
   the end card and the fade-out end with the recitation, not with the template;
@@ -702,7 +702,10 @@ Nothing in it follows the audio.
 | `gradient`      | `{from, to, angle}`                           | `#14191d` → `#0b0e10`, 180° | The gradient's colours and direction.               |
 
 `layout.frame: 'hairline'` draws the jadwal over the background: two thin rules in the rosettes'
-gold at the safe area (`<Jadwal>`).
+gold at the safe area (`<Jadwal>`). The corner label, the repetition counter and the legend then
+sit inside its inner rule (`frameGeometry(width, height, {jadwal: true})`). On `MushafPage` the
+page's own border (`pageView.frame: 'simple'`) is its jadwal, so only one is drawn; with the page
+border off the page is fitted inside the jadwal.
 
 **Backgrounds: what to use.** Abstract textures, sky, water or a landscape, quiet and out of focus;
 no people, faces or animals in focus; nothing underfoot (floors, roads, carpets); and no music or
@@ -713,11 +716,11 @@ sound effects under the recitation.
 The recitation cleaned up on its way out. `calculateMetadata()` first checks that `audioFile` is
 there: a `public/` path the server answers 404 for, with timings that name their catalogue clip
 (`alignment.recitation.audioUrl`), plays that clip instead (`resolved.audioSrc`), and the Studio
-shows a warning that names the missing file and the fix. It then analyses the recording (`analyzeAudio()`, browser Web Audio) when
-`normalize` or `trimSilence` is on or the background's glow is, and keeps the result in
-`resolved.audio` (`{gain, trimSeconds, levels}`; the levels, one per frame to three decimals, only
-for the glow). With the glow off, the timings' `alignment.audio` summary stands in for the analysis
-and nothing is downloaded. When the analysis fails (`AUDIO_ANALYSIS_FAILED`:
+shows a warning that names the missing file and the fix. It then analyses the recording (`analyzeAudio()`, browser Web Audio) only
+when `normalize` or `trimSilence` is on (nothing on screen follows the level), and keeps the result
+in `resolved.audio` (`{gain, trimSeconds, levels}`; `levels` is always `[]`, kept so `resolved`
+objects saved earlier read the same). Whenever the timings carry their `alignment.audio` summary, it
+stands in for the analysis and nothing is downloaded. When the analysis fails (`AUDIO_ANALYSIS_FAILED`:
 no Web Audio, a file the browser cannot fetch or decode) the audio plays as it is, and the reason is
 in `resolved.audioWarning`, shown as a one-line banner in the Studio only. The `<Audio>` gets
 `volume={(f) => volumeAt(f, curve)}`; under memorisation every clip gets the same gain, and the
@@ -740,8 +743,7 @@ The template plays the audio, and the composition follows it: a template with it
 track (in a slot, or around the composition). Optional, and read leniently (`hostAudioOf()`), so
 props saved before it keep working; the defaults have it off. When `enabled`, the composition plays
 no `<Audio>` of its own, its timings start at `offsetSeconds` of `audioFile` (the second of the
-template's track heard at the composition's frame 0; negative when the track starts later, and the
-glow's levels are silent until then), the `audio` cleanup does nothing (the template's `<Audio>`
+template's track heard at the composition's frame 0; negative when the track starts later), the `audio` cleanup does nothing (the template's `<Audio>`
 owns its volume and fades; no catalogue clip stands in for a missing file), and a `memorize` repeat
 is refused with `BAD_STUDIO_PROP` (the track plays straight through). The Mushaf panel sets it from
 the template's track on the Studio's timeline (Source, **A track in this video**) and offers
@@ -874,7 +876,7 @@ The studio adds one top-level key, `alignment`, which the main package passes th
 | `segments`        | The aligner's segments, recording-relative: `timeFrom`, `timeTo`, `refFrom`/`refTo` (`null` for an isti'adha, a basmala or no match), `confidence` (0–1, per segment: the aligner gives none per word), `hasMissingWords`, `hasRepeatedWords`, `error`, `matchedText`, `kind`. |
 | `words`           | Every recited word with its Uthmani `text` and its `segment`, one entry per occurrence.         |
 | `edits`           | What was changed by hand in the panel (`nudge`, `split-segment`, `realign`, `trim`), with a time and a note. A captions import is a `realign` noted `captions import`. |
-| `audio`           | The recording measured when the panel saved the timings (`audioSummaryOf()`): `lufs`, `peak`, `firstSoundSeconds`, `durationSeconds`. With the glow off, `audio.normalize` and `audio.trimSilence` use it, so the recording is not downloaded again. Absent when the recording could not be measured. |
+| `audio`           | The recording measured when the panel saved the timings (`audioSummaryOf()`): `lufs`, `peak`, `firstSoundSeconds`, `durationSeconds`. `audio.normalize` and `audio.trimSilence` use it, so the recording is not downloaded again. Absent when the recording could not be measured. |
 
 A word is doubtful (`doubtfulWords()`, the Review tab, the marks in the preview) when its segment's
 confidence is under `review.confidenceThreshold`, when its segment reports missing words or an

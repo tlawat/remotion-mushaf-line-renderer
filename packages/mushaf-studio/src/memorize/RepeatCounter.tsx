@@ -18,6 +18,8 @@ export type RepeatCounterProps = {
   readonly labelShown?: boolean | undefined;
   /** `animation.tempo`, for the change's length (`labelChange`). Default `'calm'`. */
   readonly tempo?: Tempo | undefined;
+  /** The composition draws the jadwal (`layout.frame: 'hairline'`): the counter goes inside its inner rule. Default `false`. */
+  readonly jadwal?: boolean | undefined;
   /** No longer drawn (the counter has no pill); kept for callers written before the render design. */
   readonly background?: string | undefined;
 };
@@ -34,15 +36,24 @@ const ACROSS: Readonly<Record<Overlay['corner'], Overlay['corner']>> = {
  * The repetition counter of the memorisation modes: "2 / 3" while the second of three plays of an
  * ayah is heard (and through the pause after it), as plain text in the label face (small caps,
  * tabular figures, 60 % ink), in the corner across from the title overlay's label (top left when
- * there is none), inside the safe area. It changes by a `labelChange` dissolve when the next play
- * starts. Nothing when ayahs play once or before the first clip. Pure in its props.
+ * there is none), inside the safe area, and inside the jadwal's inner rule when one is drawn. It
+ * changes by a `labelChange` dissolve when the next play starts. Nothing when ayahs play once or
+ * before the first clip. Pure in its props.
  */
-export const RepeatCounter: React.FC<RepeatCounterProps> = ({clips, repeats, seconds, overlay, labelShown, tempo}) => {
+export const RepeatCounter: React.FC<RepeatCounterProps> = ({
+  clips,
+  repeats,
+  seconds,
+  overlay,
+  labelShown,
+  tempo,
+  jadwal,
+}) => {
   const {fps, width, height} = useVideoConfig();
   const clip = clipAt(clips, seconds);
   const text = repeatCounterText(clip, repeats);
   if (text === null || clip === null) return null;
-  const geometry = frameGeometry(width, height);
+  const geometry = frameGeometry(width, height, {jadwal});
   const corner = labelShown === false ? 'top-left' : ACROSS[overlay.corner];
   const size = overlay.cornerSize > 0 ? overlay.cornerSize : geometry.label;
   const index = clips.indexOf(clip);

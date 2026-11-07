@@ -242,7 +242,7 @@ const LEGEND_NAMES = {en: 'english', ar: 'arabic', both: 'both'} as const;
 export type LegendBandGeometry = {
   /** `top` for `top-*` positions, `bottom` for `bottom-*`. */
   readonly edge: 'top' | 'bottom';
-  /** px from that edge to the band: the safe area, or at 9:16 the platform band. */
+  /** px from that edge to the band: the safe area, or at 9:16 the platform band; inside the jadwal's inner rule when one is drawn. */
   readonly inset: number;
   /** px of the names: `0.8 L`, or less when the widest entry would not fit in the safe area's width. */
   readonly fontSize: number;
@@ -266,6 +266,8 @@ export type LegendBandFrame = {
   readonly lineHeight: number;
   /** The English names' family (`studioFontFamily(overlay.font, 'label')`); default the `'auto'` label face. */
   readonly fontFamily?: string | undefined;
+  /** The frame draws the jadwal (`layout.frame: 'hairline'`): the band goes inside its inner rule. Default `false`. */
+  readonly jadwal?: boolean | undefined;
 };
 
 /**
@@ -284,7 +286,9 @@ export const legendBand = (
   frame: LegendBandFrame,
 ): LegendBandGeometry | null => {
   if (!legend.show || !themeHasTajweedColors(theme)) return null;
-  const geometry = frameGeometry(frame.width, frame.height);
+  const geometry = frameGeometry(frame.width, frame.height, {jadwal: frame.jadwal});
+  // The reserve counts from the bare safe area, as the lines' own margins do.
+  const {safe} = frameGeometry(frame.width, frame.height);
   const labelSize = Math.round(0.8 * geometry.label);
   const edge = legend.position.startsWith('top') ? 'top' : 'bottom';
   const inset = edge === 'top' ? geometry.top : geometry.bottom;
@@ -323,7 +327,7 @@ export const legendBand = (
     rows,
     rowWidths,
     height,
-    reserve: inset - geometry.safe + height + Math.round(0.5 * frame.lineHeight),
+    reserve: inset - safe + height + Math.round(0.5 * frame.lineHeight),
   };
 };
 
@@ -349,6 +353,8 @@ export type LegendBandProps = {
   readonly height: number;
   /** The lines' line box, for the gap `legendBand()` keeps. */
   readonly lineHeight: number;
+  /** The frame draws the jadwal: the band goes inside its inner rule. Default `false`. */
+  readonly jadwal?: boolean | undefined;
 };
 
 /**
@@ -364,10 +370,11 @@ export const LegendBand: React.FC<LegendBandProps> = ({
   width,
   height,
   lineHeight,
+  jadwal,
 }) => {
-  const band = legendBand(legend, theme, {width, height, lineHeight, fontFamily});
+  const band = legendBand(legend, theme, {width, height, lineHeight, fontFamily, jadwal});
   if (band === null) return null;
-  const {safe} = frameGeometry(width, height);
+  const {safe} = frameGeometry(width, height, {jadwal});
   return (
     <div
       data-mushaf-block="Tajweed legend"

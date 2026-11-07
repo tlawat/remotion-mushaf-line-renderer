@@ -1480,3 +1480,42 @@ Stage R3 (background, page, ayah text, looks, Look tab):
 38. **The example template's "plain safe-area block"** is the slot's box itself, moved to the safe
     area's sides (54 px, 972 px wide) with nothing drawn around it; its slot's mark is the default
     look's (ink, `#b8913a`, a fade). The template's own gradient and title are its own and stay.
+
+Stage R3 review:
+
+39. **The Format control's vertical hint is not shown on MushafAyahText.** The hint recommends the
+    Ayah text composition for reels; on that composition it would point at itself, so the Look tab
+    shows it under Vertical on the printed-line compositions only.
+40. **With the jadwal drawn, the furniture moves inside its inner rule.** 3.3 and 5.3 put the corner
+    label, the repetition counter and the legend's band at the safe area, which is where the jadwal's
+    outer rule is, so their glyphs crossed the gold. `frameGeometry(width, height, {jadwal: true})`
+    gives insets of at least the inner rule's inside edge plus `0.5 L` (76 px at 16:9; 82 px at the
+    sides of 9:16, whose platform bands are already further in), and the three take it when
+    `layout.frame` is `'hairline'`. The legend's reserve grows by the same amount, so the lines keep
+    their gap to it. The end card's ground covers the jadwal and the intro card is centred, so neither
+    moves.
+41. **MushafPage draws one border.** Its own double rule (`pageView.frame: 'simple'`) is its jadwal,
+    so `layout.frame: 'hairline'` draws nothing more there; with the page border off, the jadwal is
+    drawn and the page is fitted inside it. `pageReserve()` (S:page/MushafPage.tsx) reserves, from each
+    edge, the larger of the page's own 4 % margin, the jadwal's inside plus `0.5 L`, and on the
+    legend's edge its band plus half the page's line box, so the page number no longer sits against
+    the legend's first row and a band at one edge does not push the page against the other.
+42. **The vignette's ellipse is 60 % × 50 % of the frame** (`radial-gradient(ellipse 60% 50% at 50%
+    48%, ...)`), the ellipse 120 % of the width and 100 % of the height across, as 5.10's figures
+    read as its size. Taken as radii they put the 100 % stop far outside the frame: the middle of
+    every edge stayed under the clear 55 % and the corners got a quarter of `v` (0.06 at Haram
+    night). Now the sides take about 0.6 of `v`, the top 0.9 and the corners all of it.
+43. **The anti-banding noise is centred on 50 % grey and laid on with `mix-blend-mode: overlay`.**
+    Composited normally, the grey grain (about 85 % after the linearRGB conversion) lifted a dark
+    ground by about 3 levels. The filter now works in sRGB (`color-interpolation-filters`), so the
+    averaged turbulence is centred on 50 %, where overlay changes nothing: the ground keeps its colour
+    (Haram night measures within 0.5 of `#121416`), and the 1.5 % opacity is as written.
+44. **The page's dimming eases in at the first word, and never compounds.** `pageDimPresence()` rises
+    over `markIn` on `SOFT` from the first word, and a line's opacity is `1 − (1 − dimOtherLines) ×
+    max(0, presence − emphasis)` (`pageLineDim()`), so the first recited line stays at full ink and
+    the others ease down with the band. A word's own opacity (outside the ranges, or at the ink's rest)
+    and its line's are not multiplied: the word shows at the lower of the two, and another surah's
+    header at `min(dimOtherLines, 0.5)`.
+45. **A migration note carries its reason as a code** (`code`, `params`, with `MIGRATION_REASONS` and
+    `migrationReasonText()`), and the panel words it through `upgrade.reason.<code>` in English and
+    Arabic. `reason` keeps the English text for code users. These keys go beyond 10.4's list.

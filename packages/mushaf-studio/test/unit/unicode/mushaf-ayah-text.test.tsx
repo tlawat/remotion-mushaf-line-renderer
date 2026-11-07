@@ -43,7 +43,7 @@ const {MushafAyahText, ayahPresence, ayahTextPlan, defaultMushafAyahTextProps, r
 );
 const {clipTimeline} = await import('../../../src/memorize');
 const {fakeFetch} = await import('../translations/helpers');
-const {legibleAccent, markerIds, parseColor, washColor} = await import('../../../src/schema');
+const {frameGeometry, legibleAccent, markerIds, parseColor, washColor} = await import('../../../src/schema');
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
 type ResolvedAyahText = import('../../../src/unicode').ResolvedAyahText;
 
@@ -295,6 +295,12 @@ describe('<MushafAyahText>', () => {
     const c = mount({overlay: both, highlight: {mode: 'none'}});
     expect(c.querySelector('[data-mushaf-overlay="intro"]')).toBeNull();
     expect(c.querySelector('[data-mushaf-overlay="corner"]')!.textContent).toBe('Al-Fatihah · 3');
+    cleanup();
+    // With the jadwal drawn the corner label sits inside its inner rule.
+    const ruled = mount({overlay: both, layout: {frame: 'hairline'}});
+    const {safe} = frameGeometry(remotion.state.width, remotion.state.height, {jadwal: true});
+    expect(ruled.querySelector('[data-mushaf-jadwal]')).not.toBeNull();
+    expect(ruled.querySelector<HTMLElement>('[data-mushaf-overlay="corner"]')!.style.right).toBe(`${safe}px`);
   });
 
   it('refuses to render without resolved, saying how to fill it', () => {

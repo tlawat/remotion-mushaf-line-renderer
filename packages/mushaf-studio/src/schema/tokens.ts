@@ -179,19 +179,35 @@ export type FrameGeometry = {
 };
 
 /**
+ * How deep the jadwal (`layout.frame: 'hairline'`) is, in `u`: the outer rule's 2, the gap's 6 and
+ * the inner rule's 1, from the safe area in (`jadwalRules()`).
+ */
+export const JADWAL_DEPTH_UNITS = 9;
+
+export type FrameGeometryOptions = {
+  /**
+   * The frame draws the jadwal: the furniture's insets (`safe`, `top`, `bottom`) move inside its
+   * inner rule by half a label, so no label is drawn across the gold. Default `false`.
+   */
+  readonly jadwal?: boolean | undefined;
+};
+
+/**
  * The furniture geometry of a `width` × `height` frame: the 5 % safe area, the label size, the
  * hairline unit, and at a vertical frame (taller than 3:2) the platform bands kept clear.
- * `frameGeometry(1080, 1920)` is `{safe: 54, label: 37, unit: 1, top: 230, bottom: 346}`.
+ * `frameGeometry(1080, 1920)` is `{safe: 54, label: 37, unit: 1, top: 230, bottom: 346}`. With
+ * `{jadwal: true}` every inset is at least the inside of the jadwal's inner rule plus `0.5 L`:
+ * `frameGeometry(1920, 1080, {jadwal: true})` is `{safe: 76, label: 26, unit: 1, top: 76, bottom: 76}`.
  */
-export const frameGeometry = (width: number, height: number): FrameGeometry => {
+export const frameGeometry = (width: number, height: number, options: FrameGeometryOptions = {}): FrameGeometry => {
   const short = Math.min(width, height);
   const safe = Math.round(0.05 * short);
   const tall = height / width > 1.5;
-  return {
-    safe,
-    label: Math.round(Math.min(0.024 * height, 0.034 * width)),
-    unit: short / 1080,
-    top: tall ? Math.round(0.12 * height) : safe,
-    bottom: tall ? Math.round(0.18 * height) : safe,
-  };
+  const label = Math.round(Math.min(0.024 * height, 0.034 * width));
+  const unit = short / 1080;
+  const top = tall ? Math.round(0.12 * height) : safe;
+  const bottom = tall ? Math.round(0.18 * height) : safe;
+  if (options.jadwal !== true) return {safe, label, unit, top, bottom};
+  const inside = Math.ceil(safe + JADWAL_DEPTH_UNITS * unit) + Math.round(0.5 * label);
+  return {safe: inside, label, unit, top: Math.max(top, inside), bottom: Math.max(bottom, inside)};
 };

@@ -2,6 +2,7 @@ import {
   loadPageFont,
   MushafLine,
   type MushafLineData,
+  type MushafThemeSelection,
   type MushafWord,
   type RecitedRange,
   type WordContext,
@@ -21,7 +22,8 @@ import {
   CompositionAudio,
   CompositionEndCard,
   LegendBand,
-  legendReserve,
+  type LegendBandFrame,
+  legendBand,
   readableLayers,
   StudioWarnings,
   translationsOf,
@@ -39,6 +41,7 @@ import {
   type FontProps,
   fontPropsFrom,
   inkTintFor,
+  type Legend,
   markerIds,
   metalOf,
   studioFontFamily,
@@ -47,11 +50,11 @@ import {
   washColor,
   wordStyleFrom,
 } from '../schema';
-import {dissolve, dissolveShares} from '../schema/tokens';
+import {dissolve, dissolveShares, frameGeometry} from '../schema/tokens';
 import {MushafStudioPanel} from '../studio';
 import {useInStudio} from '../studio/environment';
 import {ayahKeyOf, TranslationStack} from '../translations';
-import {LINES_PER_PAGE, type PageGeometry, pageGeometry, rowOf} from './geometry';
+import {LINES_PER_PAGE, PAGE_FIT, type PageGeometry, type PageReserve, pageGeometry, rowOf} from './geometry';
 import {PageFrame} from './PageFrame';
 import {
   inRanges,
@@ -63,7 +66,7 @@ import {
   rangesOf,
 } from './resolve';
 import type {MushafPageProps, PageText, PageView} from './schema';
-import {pageLineEmphasis, pageTurns} from './turns';
+import {pageDimPresence, pageLineDim, pageLineEmphasis, pageTurns} from './turns';
 
 /** Opacity of the words of the page outside the ayahs followed, and of another surah's header: there to read, at rest. */
 export const OUTSIDE_OPACITY = 0.5;
@@ -79,6 +82,53 @@ const dimmingOutside =
 /** A header line belongs to the passage when it heads a surah recited; another surah's is dimmed with its words. */
 const headerOutside = (line: MushafLineData, ranges: readonly RecitedRange[]): boolean =>
   line.type !== 'ayah' && line.surahNumber !== undefined && !ranges.some((range) => range.surah === line.surahNumber);
+
+const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
+
+/**
+ * `style` for the words of a line drawn at `lineOpacity`: dimming never compounds (principle 5), so
+ * a word's own opacity (outside the ranges, or at its ink rest) and the line's are not multiplied:
+ * the word shows at the lower of the two. A word at full ink shows at the line's opacity.
+ */
+const notCompounded =
+  (style: WordStyle, lineOpacity: number): WordStyle =>
+  (word, context) => {
+    const own = style(word, context);
+    const opacity = own?.opacity;
+    if (typeof opacity !== 'number' || opacity >= 1) return own;
+    return {...own, opacity: round4(Math.min(opacity, lineOpacity) / lineOpacity)};
+  };
+
+/**
+ * The opacity of a printed line: `dim` (`pageLineDim()`), and for another surah's header the lower
+ * of that and `OUTSIDE_OPACITY`, never their product.
+ */
+export const pageLineOpacity = (dim: number, outside: boolean): number =>
+  round4(outside ? Math.min(dim, OUTSIDE_OPACITY) : dim);
+
+/**
+ * px kept clear above and below the printed page (`pageGeometry()`'s reserve), from the frame's
+ * edges: on the legend's edge, its band from the edge with half the page's line box between it and
+ * the page (the page number included); with the jadwal drawn (`frame.jadwal`), at least its inner
+ * rule and half a label (`frameGeometry(..., {jadwal: true}).safe`), so neither border nor band
+ * touches the page; and on every edge at least the page's own margin (half of the 8 % `PAGE_FIT`
+ * leaves), so a band at one edge never pushes the page against the other. Without legend or jadwal
+ * the page is fitted exactly as without a reserve.
+ */
+export const pageReserve = (
+  legend: Pick<Legend, 'show' | 'position' | 'names'>,
+  theme: MushafThemeSelection,
+  frame: LegendBandFrame,
+): PageReserve => {
+  const margin = Math.floor(((1 - PAGE_FIT.height) / 2) * frame.height);
+  const jadwal = frame.jadwal === true ? frameGeometry(frame.width, frame.height, {jadwal: true}).safe : 0;
+  const band = legendBand(legend, theme, frame);
+  const clear = band === null ? 0 : band.inset + band.height + Math.round(0.5 * frame.lineHeight);
+  return {
+    top: Math.max(margin, jadwal, band?.edge === 'top' ? clear : 0),
+    bottom: Math.max(margin, jadwal, band?.edge === 'bottom' ? clear : 0),
+  };
+};
 
 /**
  * A page's opacity while it turns: `incoming` and `outgoing` are its sides of the staggered
@@ -112,6 +162,8 @@ type PageLeafProps = {
   /** What the page sits on (`groundOf()`): the band's strength depends on it. */
   readonly ground: string;
   readonly current: PageLineSlot | null;
+  /** How far the dimming of the other lines has come in (`pageDimPresence()`). */
+  readonly presence: number;
   /** How much each printed line of this page is the current one (`pageLineEmphasis()`), by line number. */
   readonly emphasis: (line: number) => number;
   /** The video's metal (`metalOf()`): the border's rules. */
@@ -159,6 +211,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
   pageView,
   ground,
   current,
+  presence,
   emphasis,
   metal,
   ranges,
@@ -192,9 +245,11 @@ const PageLeaf: React.FC<PageLeafProps> = ({
         {slot.lines.map((line) => {
           const isCurrent = currentHere?.line === line.line;
           const strength = emphasis(line.line);
-          // The other lines rest at dimOtherLines once a line is current; a line coming in or letting go eases.
-          const dimOther = current === null ? 1 : 1 - (1 - pageView.dimOtherLines) * (1 - strength);
-          const opacity = Math.round(dimOther * (headerOutside(line, ranges) ? OUTSIDE_OPACITY : 1) * 10_000) / 10_000;
+          // The other lines rest at dimOtherLines once the dimming is in; a line coming in or letting go eases.
+          const opacity = pageLineOpacity(
+            pageLineDim(pageView.dimOtherLines, presence, strength),
+            headerOutside(line, ranges),
+          );
           return (
             <div
               key={line.line}
@@ -219,7 +274,7 @@ const PageLeaf: React.FC<PageLeafProps> = ({
                   fit="line"
                   fontSize={fontSize}
                   lineHeight={lineHeight}
-                  wordStyle={wordStyle}
+                  wordStyle={opacity < 1 ? notCompounded(wordStyle, opacity) : wordStyle}
                   {...activeProps}
                   {...fontProps}
                 />
@@ -342,12 +397,15 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
   const inkTint = inkTintFor(marked, theme, ground);
   const activeProps = inkTint === undefined ? {activeWordId} : {activeWordId, inkTint};
   const current = pageLineAt(resolved.lines, now);
-  // The page is fitted around the legend's band, so the legend never covers a line.
-  const reserve = legendReserve(legend, theme, {
+  // One border: the page's own double rule is its jadwal, so the jadwal is drawn only without it.
+  const jadwal = layout.frame === 'hairline' && pageView.frame === 'none';
+  // The page is fitted around the legend's band and inside the jadwal, so neither touches it.
+  const reserve = pageReserve(legend, theme, {
     width,
     height,
     lineHeight: pageGeometry({width, height}).lineHeight,
     fontFamily: studioFontFamily(defaultOverlay.font, 'label'),
+    jadwal,
   });
   const geometry = pageGeometry({width, height}, reserve);
   const metal = metalOf({theme: props.theme, customTheme: props.customTheme, ground});
@@ -367,6 +425,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
     [resolved, fps, turnFrames, highlight.occurrence],
   );
   const lineEmphasis = (page: number) => (line: number) => pageLineEmphasis(resolved.lines, page, line, frame, fps);
+  const presence = pageDimPresence(resolved.lines, frame, fps);
 
   const leaves = pages.map((slot, i) => {
     const into = turns[i - 1];
@@ -410,6 +469,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
             pageView={pageView}
             ground={ground}
             current={current}
+            presence={presence}
             emphasis={lineEmphasis(slot.page)}
             metal={metal}
             ranges={ranges}
@@ -441,7 +501,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
         }}
         layout={layout}
       />
-      {layout.frame === 'hairline' && <Jadwal metal={metal} ground={ground} />}
+      {jadwal && <Jadwal metal={metal} ground={ground} />}
       {ownAudio && (
         <CompositionAudio
           src={recordingUrl(audioFile, resolved, staticFile)}
@@ -467,6 +527,7 @@ export const MushafPage: React.FC<WithPanelOption<MushafPageProps>> = ({panel = 
         width={width}
         height={height}
         lineHeight={geometry.lineHeight}
+        jadwal={jadwal}
       />
       <CompositionEndCard
         endCard={endCard}

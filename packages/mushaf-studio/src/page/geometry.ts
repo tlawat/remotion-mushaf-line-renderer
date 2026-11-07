@@ -60,12 +60,12 @@ export const pageBox = (measure: number): PageBox => {
 /** The share of the frame a page may fill: 84 % of its width, 92 % of its height. */
 export const PAGE_FIT = {width: 0.84, height: 0.92} as const;
 
-/** px kept clear above and below the page (the legend's band, `legendReserve()`). */
+/** px kept clear above and below the page, from the frame's edges (the legend's band and the jadwal, `pageReserve()`). */
 export type PageReserve = {readonly top: number; readonly bottom: number};
 
 /**
  * The printed page in a frame of `size`: the widest measure whose page box fits in 84 % of the
- * width and 92 % of the height (less `reserve`, the legend's band), centred in the room the reserve
+ * width and 92 % of the height (less `reserve`: the legend's band, the jadwal), centred in the room the reserve
  * leaves. A wide or square frame is filled top to bottom (at 16:9 the page is 92 % of the height), a
  * tall one across (at 9:16, 84 % of the width). Pure, and the same for the same arguments on every
  * machine.

@@ -378,6 +378,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         ayahKey={ayahKeyOf(heard) ?? ayahAt(timings, now)}
         firstWordSeconds={timings.ayat[0]!.words?.[0]?.start ?? timings.ayat[0]!.start}
         background={ground}
+        jadwal={layout.frame === 'hairline'}
         // The surah name is set as a printed line would be across the measure, not at the Arabic text's size.
         fontSize={titleFontSize}
         lineHeight={lineHeightForFontSize(titleFontSize)}
@@ -390,6 +391,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
         overlay={shownOverlay}
         labelShown={showsCorner(overlay.title)}
         tempo={animation.tempo}
+        jadwal={layout.frame === 'hairline'}
       />
       <CompositionEndCard
         endCard={endCard}

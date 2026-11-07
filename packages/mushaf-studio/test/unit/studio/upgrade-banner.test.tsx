@@ -169,5 +169,30 @@ describe('the upgrade banner', () => {
     expect(button('migrate').textContent).toBe('ترقية');
     expect(button('details').textContent).toBe('ما الذي يتغيّر');
     expect(button('with-look').textContent).toBe('ترقية وتطبيق مظهر المصحف');
+    // The list of changes gives each reason in Arabic too, its values filled in.
+    fireEvent.click(button('details'));
+    expect(document.body.querySelector('[data-mushaf-control="upgrade-details"] p')!.textContent).toBe(
+      'يغيّر حفظ الترقية هذه الحقول (والمعاينة تعرضها الآن):',
+    );
+    const item = (path: string) =>
+      document.body.querySelector<HTMLElement>(`[data-mushaf-control="upgrade-details"] li[data-path="${path}"]`)!;
+    expect(item('highlight.style').textContent).toContain('تغيّر اسمه: تذهيب');
+    expect(item('background.kenBurnsScale').textContent).toContain('خارج المدى الجديد 1–1.05');
+    expect(item('animation.lines').textContent).toContain('من enter "slide-fade"');
+    expect(item('background.glow').textContent).toContain('لا شيء يتبع مستوى الصوت');
+    for (const note of describeMushafMigration(OLD, {defaults})) {
+      expect(item(note.path).textContent, note.path).not.toContain(note.reason);
+    }
+  });
+
+  it('gives each reason in English in the English panel, as the migration words it', () => {
+    mount(OLD);
+    fireEvent.click(button('details'));
+    for (const note of describeMushafMigration(OLD, {defaults})) {
+      const item = document.body.querySelector<HTMLElement>(
+        `[data-mushaf-control="upgrade-details"] li[data-path="${note.path}"]`,
+      )!;
+      expect(item.textContent, note.path).toContain(` · ${note.reason}`);
+    }
   });
 });

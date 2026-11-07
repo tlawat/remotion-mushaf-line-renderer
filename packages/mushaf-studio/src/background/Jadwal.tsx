@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import {useVideoConfig} from 'remotion';
 import {isLightGround} from '../schema/color';
-import {frameGeometry} from '../schema/tokens';
+import {frameGeometry, JADWAL_DEPTH_UNITS} from '../schema/tokens';
 
 /** One rule of the jadwal: how far in from the frame's edge it sits and how thick it is, in px. */
 export type JadwalRule = {readonly inset: number; readonly width: number};
@@ -16,7 +16,7 @@ export const jadwalRules = (
   height: number,
 ): {readonly outer: JadwalRule; readonly inner: JadwalRule} => {
   const {safe, unit} = frameGeometry(width, height);
-  return {outer: {inset: safe, width: 2 * unit}, inner: {inset: safe + 8 * unit, width: unit}};
+  return {outer: {inset: safe, width: 2 * unit}, inner: {inset: safe + (JADWAL_DEPTH_UNITS - 1) * unit, width: unit}};
 };
 
 /** The jadwal's opacity: 0.55 on a light ground, 0.45 on a dark one, so the gold reads as a line, never a stripe. */

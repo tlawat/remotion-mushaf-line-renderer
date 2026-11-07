@@ -350,7 +350,7 @@ const UpgradeBanner: React.FC<{
                 <span dir="ltr" style={styles.code}>
                   {shownValue(note.from)} → {shownValue(note.to)}
                 </span>
-                <span style={styles.label}> · {note.reason}</span>
+                <span style={styles.label}> · {t(`upgrade.reason.${note.code}`, note.params)}</span>
               </li>
             ))}
           </ul>

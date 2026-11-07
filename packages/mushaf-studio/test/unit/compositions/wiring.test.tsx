@@ -76,9 +76,8 @@ const {FONTS_ATTRIBUTION} = await import('../../../src/export');
 const {defaultEndCard, defaultLegend, endCardSchema, legendSchema, mixColors, tempoSeconds, textSchema} = await import(
   '../../../src/schema'
 );
-const {cappedTranslationSize, drawnTranslationLayers, legendBand, legendReserve, planTranslationLayer} = await import(
-  '../../../src/compositions/parts'
-);
+const {cappedTranslationSize, drawnTranslationLayers, LegendBand, legendBand, legendReserve, planTranslationLayer} =
+  await import('../../../src/compositions/parts');
 const {BOOK_SERIF_REQUEST, STUDIO_FONT_REQUESTS} = await import('../../../src/compositions/fonts');
 const {loadTranslationLayers, pickAyahs, translationLayerSpecs} = await import('../../../src/compositions/extras');
 const {assertNoHostRepeats, defaultHostAudio, hostAudioOf, OWN_AUDIO_NAME} = await import('../../../src/audio');
@@ -766,6 +765,36 @@ describe('tajweed legend', () => {
     expect(
       legendReserve({...legend, position: 'top-left'}, 'light', {width: 1920, height: 1080, lineHeight: 198}).top,
     ).toBe(wide.reserve);
+  });
+
+  it('sits inside the jadwal’s inner rule when the jadwal is drawn, and keeps the lines that much further away', () => {
+    const shown = {...legend, position: 'bottom-right' as const};
+    const frame = {width: 1920, height: 1080, lineHeight: 198};
+    const plain = legendBand(shown, 'light', frame)!;
+    const ruled = legendBand(shown, 'light', {...frame, jadwal: true})!;
+    expect(ruled.inset).toBe(76);
+    expect(ruled.reserve).toBe(plain.reserve + 76 - 54);
+    for (const row of ruled.rowWidths) expect(row).toBeLessThanOrEqual(1920 - 2 * 76);
+    // At 9:16 the platform band is further in than the jadwal already.
+    const tall = {width: 1080, height: 1920, lineHeight: 114};
+    expect(legendBand(shown, 'light', {...tall, jadwal: true})!.inset).toBe(346);
+    const c = mount(
+      <LegendBand
+        legend={shown}
+        theme="light"
+        fontFamily="serif"
+        color="#1c1a16"
+        width={1920}
+        height={1080}
+        lineHeight={198}
+        jadwal
+      />,
+    );
+    expect(c.querySelector<HTMLElement>('[data-mushaf-block="Tajweed legend"]')!.style).toMatchObject({
+      left: '76px',
+      right: '76px',
+      bottom: '76px',
+    });
   });
 
   it('fits every row inside the safe area at 9:16 with both names, drawing the names smaller when an entry is too wide', () => {

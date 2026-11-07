@@ -170,6 +170,7 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
         // The lines start after the card (`passageTimeline()`): it has its whole time on the ground.
         addsTime
         background={ground}
+        jadwal={layout.frame === 'hairline'}
         tempo={animation.tempo}
         fontSize={fontSize}
         lineHeight={lineHeight}

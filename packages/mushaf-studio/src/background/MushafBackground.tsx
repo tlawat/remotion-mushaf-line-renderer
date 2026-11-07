@@ -130,26 +130,33 @@ export const vignetteRgb = (ground: string): string => {
 };
 
 /**
- * The vignette at strength `vignette` (0-0.4) on `ground`: a radial gradient, clear over the
- * middle 55 %, darkening toward the edges like the fall-off of a page. `null` for 0.
+ * The vignette at strength `vignette` (0-0.4) on `ground`: a radial gradient over an ellipse 120 % of
+ * the frame wide and 100 % high (radii of 60 % and 50 %), clear over its middle 55 %, darkening
+ * toward the edges like the fall-off of a page: about 0.6 of `vignette` at the middle of the sides,
+ * 0.9 at the top, all of it at the corners. `null` for 0.
  *
  * `vignetteStyle(0.22, '#121416').backgroundImage` is
- * `"radial-gradient(ellipse 120% 100% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)"`.
+ * `"radial-gradient(ellipse 60% 50% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)"`.
  */
 export const vignetteStyle = (vignette: number, ground: string): React.CSSProperties | null =>
   vignette > 0
     ? {
-        backgroundImage: `radial-gradient(ellipse 120% 100% at 50% 48%, transparent 55%, rgba(${vignetteRgb(ground)}, ${round4(vignette)}) 100%)`,
+        backgroundImage: `radial-gradient(ellipse 60% 50% at 50% 48%, transparent 55%, rgba(${vignetteRgb(ground)}, ${round4(vignette)}) 100%)`,
       }
     : null;
 
 /** Opacity of the noise that dithers the vignette against banding at video bitrates. */
 export const NOISE_OPACITY = 0.015;
 
+/** The noise's colour matrix: the three channels' mean in each (a grey around 50 %), alpha 1. */
+const NOISE_MATRIX = '0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0 0 0 0 1';
+
 /**
  * A fine grey noise over the whole frame (`feTurbulence`, base frequency 0.9, one octave, seed 7: the
  * same grain on every frame and every machine), at `NOISE_OPACITY`, so a smooth gradient does not
- * band once a video is encoded.
+ * band once a video is encoded. The grain is centred on 50 % grey (the turbulence taken in sRGB) and
+ * laid on with `mix-blend-mode: overlay`, where that grey changes nothing: it dithers the ground
+ * around its own colour and never lifts or darkens it.
  */
 const Noise: React.FC = () => {
   // A filter id per instance (two compositions on one page), without the colons useId() puts in.
@@ -159,13 +166,13 @@ const Noise: React.FC = () => {
       data-mushaf-background-part="noise"
       width="100%"
       height="100%"
-      style={{position: 'absolute', left: 0, top: 0, opacity: NOISE_OPACITY}}
+      style={{position: 'absolute', left: 0, top: 0, opacity: NOISE_OPACITY, mixBlendMode: 'overlay'}}
       aria-hidden="true"
     >
-      <filter id={id} x="0" y="0" width="100%" height="100%">
+      <filter id={id} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
         <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves={1} seed={7} stitchTiles="stitch" />
-        {/* Grey and opaque: the grain shifts lightness only, at the layer's own opacity. */}
-        <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1" />
+        {/* Grey around 50 % and opaque: the grain shifts lightness only, at the layer's own opacity. */}
+        <feColorMatrix type="matrix" values={NOISE_MATRIX} />
       </filter>
       <rect width="100%" height="100%" filter={`url(#${id})`} />
     </svg>

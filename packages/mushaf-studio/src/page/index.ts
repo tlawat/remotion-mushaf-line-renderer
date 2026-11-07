@@ -12,7 +12,7 @@ export {
   pageGeometry,
   rowOf,
 } from './geometry';
-export {MushafPage, OUTSIDE_OPACITY, turnStyle} from './MushafPage';
+export {MushafPage, OUTSIDE_OPACITY, pageLineOpacity, pageReserve, turnStyle} from './MushafPage';
 export {PageFrame, type PageFrameProps} from './PageFrame';
 export {
   inRange,
@@ -44,4 +44,11 @@ export {
   pageTextSchema,
   pageViewSchema,
 } from './schema';
-export {type PageTurn, type PageTurnOptions, pageLineEmphasis, pageTurns} from './turns';
+export {
+  type PageTurn,
+  type PageTurnOptions,
+  pageDimPresence,
+  pageLineDim,
+  pageLineEmphasis,
+  pageTurns,
+} from './turns';

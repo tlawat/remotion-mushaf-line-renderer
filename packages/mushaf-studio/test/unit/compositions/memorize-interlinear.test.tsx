@@ -213,7 +213,20 @@ describe('<MushafRecitation> memorisation', () => {
     expect(counter(settled)!.textContent).toBe('2 / 3');
     expect(counter(settled)!.style).toMatchObject({left: '54px', top: '54px', opacity: '0.6', background: ''});
     expect(counter(settled)!.style.color).toBe('rgb(90, 85, 76)');
-    const c2 = settled;
+    cleanup();
+    // With the jadwal drawn, the counter sits inside its inner rule, not across the gold.
+    const ruled = mount(
+      props(
+        {
+          memorize: memorize({mode: 'repeat', ...three}),
+          layout: {...defaultMushafRecitationProps.layout, frame: 'hairline'},
+        },
+        {audioOffsetSeconds: 2},
+      ),
+    );
+    expect(counter(ruled)!.style).toMatchObject({left: '76px', top: '76px'});
+    cleanup();
+    const c2 = mount(props({memorize: memorize({mode: 'repeat', ...three})}, {audioOffsetSeconds: 2}));
     // Repeat hides nothing.
     expect(hidesNothing(stylesOf(windowOf(c2)))).toBe(true);
   });
