@@ -61,9 +61,16 @@ vi.mock('../../../src/studio', () => ({
   isInStudio: () => false,
 }));
 
-const {MushafPage, defaultMushafPageProps, defaultPageView, OUTSIDE_OPACITY, pageGeometry, resolvePage} = await import(
-  '../../../src/page'
-);
+const {
+  MushafPage,
+  defaultMushafPageProps,
+  defaultPageView,
+  OUTSIDE_OPACITY,
+  pageGeometry,
+  pageLineEmphasis,
+  pageTurns,
+  resolvePage,
+} = await import('../../../src/page');
 type MushafPageProps = import('../../../src/page').MushafPageProps;
 type PageView = import('../../../src/page').PageView;
 
@@ -114,7 +121,7 @@ afterEach(cleanup);
 describe('<MushafPage>: the page', () => {
   it('shows every line of each page in its row, headers included, fitted to the page’s measure', async () => {
     const root = mount(await props());
-    const g = pageGeometry(defaultMushafPageProps.layout, {width: 1920, height: 1080});
+    const g = pageGeometry({width: 1920, height: 1080});
     const types = (n: number) =>
       [...page(root, n).querySelectorAll<HTMLElement>('.mushaf-line-mock')].map((l) => l.dataset.type);
     expect(types(2)).toEqual(['surah_name', 'basmallah', 'ayah', 'ayah']);
@@ -130,22 +137,40 @@ describe('<MushafPage>: the page', () => {
     expect(page(root, 2).style.left).toBe(`${g.left}px`);
   });
 
-  it('puts one Sequence per page, the outgoing one held through the next one’s turn', async () => {
+  it('puts one Sequence per page, the two overlapping by the staggered dissolve after the last word', async () => {
     const root = mount(await props());
     const sequences = [...root.querySelectorAll<HTMLElement>('[data-sequence]')];
+    // Page 2's last word (2:2:3) ends at 6 s, where page 3's first (2:2:4) starts: no pause, so the
+    // 27-frame dissolve shrinks to Dmin (10 frames) from frame 180; page 2 goes over its first 5,
+    // page 3 comes from its 3rd.
     expect(sequences.map((s) => [s.dataset.sequence, s.dataset.from, s.dataset.duration])).toEqual([
-      // Page 3's first word is at 6 s: its 0.9 s dissolve (27 frames) starts at 5.1 s.
-      ['Page 2', '0', String(153 + 27)],
-      ['Page 3', '153', String(330 - 153)],
+      ['Page 2', '0', '185'],
+      ['Page 3', '183', String(330 - 183)],
     ]);
   });
 
-  it('cuts without overlap', async () => {
+  it('cuts without overlap, after the last word', async () => {
     const root = mount(await props({}, {turn: 'cut'}));
     const sequences = [...root.querySelectorAll<HTMLElement>('[data-sequence]')];
-    expect(sequences.map((s) => s.dataset.duration)).toEqual(['153', '177']);
-    at(5.5);
+    expect(sequences.map((s) => s.dataset.duration)).toEqual(['180', '150']);
+    at(6.1);
     expect(leaf(mount(await props({}, {turn: 'cut'})), 3).transform).toBe('');
+  });
+
+  it('turns no earlier than the outgoing page’s last word, and waits leadIn before a pause', async () => {
+    const p = await props();
+    const resolved = p.resolved as import('../../../src/page').ResolvedPage;
+    expect(pageTurns(resolved, {fps: 30, turnFrames: 27, leadInSeconds: 0.4})).toEqual([{start: 180, duration: 10}]);
+    // With a 2 s pause before page 3, the whole dissolve runs and page 3 is settled 0.4 s before its word.
+    const paused = {
+      ...resolved,
+      lines: resolved.lines.map((line) => (line.page === 3 && line.line === 1 ? {...line, start: 8} : line)),
+    };
+    expect(pageTurns(paused, {fps: 30, turnFrames: 27, leadInSeconds: 0.4})).toEqual([
+      {start: Math.round(7.6 * 30) - 27, duration: 27},
+    ]);
+    // A cut changes at max(E, F − leadIn).
+    expect(pageTurns(paused, {fps: 30, turnFrames: 0, leadInSeconds: 0.4})).toEqual([{start: 228, duration: 0}]);
   });
 
   it('dims the words outside the passage, at both ends, and another surah’s header', async () => {
@@ -233,6 +258,46 @@ describe('<MushafPage>: the current line', () => {
     expect(Object.values(wordStyles(none, 2, 4)).some((style) => style?.opacity === 0.6)).toBe(true);
   });
 
+  it('cross-fades the band between lines at the new line’s first word: out over 10 frames, in over 5', () => {
+    const slots = [
+      {page: 2, line: 3, start: 0.5, end: 3.2},
+      {page: 2, line: 4, start: 3.2, end: 6},
+    ];
+    const at30 = (line: number, frame: number) => pageLineEmphasis(slots, 2, line, frame, 30);
+    // Before the first word, nothing; in over markIn from it, then held.
+    expect(at30(3, 14)).toBe(0);
+    expect(at30(3, 17)).toBeGreaterThan(0);
+    expect(at30(3, 17)).toBeLessThan(1);
+    expect(at30(3, 20)).toBe(1);
+    // At line 4's first word (frame 96): line 3 lets go over 10 frames while line 4 comes in over 5.
+    expect(at30(3, 96)).toBe(1);
+    expect(at30(4, 96)).toBe(0);
+    const outs = [97, 98, 99, 100, 101, 102, 103, 104, 105, 106].map((f) => at30(3, f));
+    const ins = [97, 98, 99, 100, 101].map((f) => at30(4, f));
+    for (let i = 1; i < outs.length; i++) expect(outs[i]!).toBeLessThan(outs[i - 1]!);
+    for (let i = 1; i < ins.length; i++) expect(ins[i]!).toBeGreaterThan(ins[i - 1]!);
+    expect(at30(3, 106)).toBe(0);
+    expect(at30(4, 101)).toBe(1);
+    // Both partly there for a few frames: a cross-fade, never a jump.
+    expect(at30(3, 98)).toBeGreaterThan(0.2);
+    expect(at30(4, 98)).toBeGreaterThan(0.2);
+    expect(pageLineEmphasis(slots, 2, 1, 50, 30)).toBe(0);
+  });
+
+  it('draws both bands while they cross-fade, each at its share of the faint strength', async () => {
+    remotion.state.frame = 96 + 2; // line 4 of page 2 starts at 3.2 s
+    const root = mount(await props());
+    expect(marks(root)).toHaveLength(2);
+    const [outgoing, incoming] = [slot(root, 2, 3), slot(root, 2, 4)].map((s) =>
+      s.querySelector<HTMLElement>('[data-line-highlight]'),
+    );
+    const alpha = (band: HTMLElement | null | undefined) => Number(/, ([\d.]+)\)$/.exec(band!.style.background)![1]);
+    expect(alpha(outgoing)).toBeGreaterThan(0);
+    expect(alpha(outgoing)).toBeLessThan(0.1);
+    expect(alpha(incoming)).toBeGreaterThan(0);
+    expect(alpha(incoming)).toBeLessThan(0.1);
+  });
+
   it('dims the other lines with dimOtherLines', async () => {
     at(4);
     const root = mount(await props({}, {dimOtherLines: 0.5}));
@@ -243,10 +308,13 @@ describe('<MushafPage>: the current line', () => {
 });
 
 describe('<MushafPage>: the page around the lines', () => {
-  it('draws the border as asked', async () => {
+  it('draws the border as asked, in the rosettes’ gold', async () => {
     const simple = mount(await props());
     expect(page(simple, 2).querySelector('svg')!.getAttribute('data-page-frame')).toBe('simple');
     expect(page(simple, 2).querySelectorAll('svg rect')).toHaveLength(2);
+    // The default custom theme repaints the rosette frame: its gold is the metal.
+    for (const rule of page(simple, 2).querySelectorAll('svg rect'))
+      expect(rule.getAttribute('stroke')).toBe(defaultMushafPageProps.customTheme.frame);
     // Square corners, no ornaments.
     expect(page(simple, 2).querySelectorAll('[data-corner]')).toHaveLength(0);
     cleanup();
@@ -256,6 +324,7 @@ describe('<MushafPage>: the page around the lines', () => {
   it('numbers the page in Arabic-Indic digits, or not', async () => {
     const root = mount(await props());
     expect(page(root, 2).querySelector('[data-page-number]')!.textContent).toBe('٢');
+    expect(page(root, 2).querySelector<HTMLElement>('[data-page-number]')!.style.opacity).toBe('0.6');
     expect(page(root, 3).querySelector('[data-page-number]')!.textContent).toBe('٣');
     cleanup();
     expect(page(mount(await props({}, {pageNumber: false})), 2).querySelector('[data-page-number]')).toBeNull();
@@ -263,14 +332,18 @@ describe('<MushafPage>: the page around the lines', () => {
 
   it('dissolves to the next page by default, and nothing moves', async () => {
     const p = await props();
-    remotion.state.frame = 153 + 13.5; // halfway through the 27-frame turn that starts at 5.1 s
+    remotion.state.frame = 183; // into the 10-frame turn from frame 180: page 2 fading, page 3 coming
     const root = mount(p);
-    expect(Number(leaf(root, 3).opacity)).toBeCloseTo(0.5, 1);
-    expect(Number(leaf(root, 2).opacity)).toBeCloseTo(0.5, 1);
+    const out = Number(leaf(root, 2).opacity);
+    const into = Number(leaf(root, 3).opacity);
+    expect(out).toBeGreaterThan(0);
+    expect(out).toBeLessThan(0.5);
+    expect(into).toBeLessThan(0.2);
     expect(leaf(root, 3).transform).toBe('');
     cleanup();
     at(7);
-    expect(Number(leaf(mount(p), 3).opacity)).toBe(1);
+    // Settled: no opacity of its own.
+    expect(leaf(mount(p), 3).opacity).toBe('');
   });
 
   it('preloads the next page’s font one page ahead, from the lines’ own sources', async () => {

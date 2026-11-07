@@ -162,7 +162,7 @@ export const previewsLeniently = (isRendering: boolean): boolean => !isRendering
 
 /** Options of the resolvers that `calculateMetadata()` and the drop-in slots share. */
 export type ResolvePropsOptions = {
-  /** The frame rate the durations, the audio's trim and the glow's levels are computed at. */
+  /** The frame rate the durations, and the audio's trim are computed at. */
   readonly fps: number;
   /** `calculateMetadata()`'s `abortSignal`: reaches every fetch. */
   readonly signal?: AbortSignal | undefined;
@@ -176,7 +176,7 @@ export type ResolvedProps<P> = {readonly props: P; readonly durationInFrames: nu
 /**
  * `resolved` of `<MushafRecitation>` and its length at `fps`, the props migrated first
  * (`migrateMushafProps()`): the content, the audio's analysis
- * when `audio` or the background's glow needs it, a background video's length; the duration from
+ * when `audio` needs it (nothing else does: no analysis otherwise), a background video's length; the duration from
  * the timings (moved `audioOffsetSeconds` earlier), or from the clip timeline when `memorize`
  * repeats the ayahs, plus the end card's seconds. No size: `calculateMetadata()` adds it, a slot's
  * box decides it.
@@ -203,7 +203,7 @@ export const resolveRecitationProps = async (
 
 /**
  * `calculateMetadata` for `<Composition id="MushafRecitation">`: `resolveRecitationProps()` at 30
- * fps (`resolved`: the content, the audio's analysis when `audio` or the background's glow needs
+ * fps (`resolved`: the content, the audio's analysis when `audio` needs
  * it, a background video's length; the duration from the timings, or from the clip timeline when
  * `memorize` repeats the ayahs, plus the end card's seconds), width and height from the aspect.
  * `abortSignal` reaches every fetch. On the Studio's page a split that no longer fits is left out

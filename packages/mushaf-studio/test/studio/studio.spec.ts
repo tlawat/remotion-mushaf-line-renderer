@@ -339,7 +339,7 @@ test('MushafInTemplate docks the panel on the intro, offers its own audio track,
     // A look from the panel: saved in the Root under the template's `mushaf` key, nowhere else.
     await panel.getByRole('tab', {name: 'Look'}).click();
     await expect(panel.getByText(/a look leaves layout\.aspect as it is/)).toBeVisible();
-    await panel.locator('[data-look="night"]').click();
+    await panel.locator('[data-look="haram-night"]').click();
     await expect
       .poll(() => readFileSync(rootFile, 'utf8') !== original, {timeout: 60_000, message: 'the Root was never saved'})
       .toBe(true);
@@ -355,15 +355,15 @@ test('MushafInTemplate docks the panel on the intro, offers its own audio track,
       );
     expect(values(after)).toEqual(values(before));
     expect(values(after)[0]).toBe("'Al-Fatihah'");
-    // The slot took the look: Night's page and theme, its files untouched.
-    expect(slotOf(after)).toMatch(/theme:\s*['"]dark['"]/);
-    expect(slotOf(after)).toMatch(/background:\s*['"]#101418['"]/);
+    // The slot took the look: Haram night's page and theme, its files untouched.
+    expect(slotOf(after)).toMatch(/theme:\s*['"]custom['"]/);
+    expect(slotOf(after)).toMatch(/background:\s*['"]#121416['"]/);
     expect(slotOf(after)).toMatch(/timingsFile:\s*['"]mushaf-studio\/fatiha\/timings\.json['"]/);
-    expect(ownOf(after)).not.toMatch(/#101418|theme:/);
+    expect(ownOf(after)).not.toMatch(/#121416|theme:/);
     // Nothing of the look went into another composition's props.
     const elsewhere = (root: string) => root.replace(templateBlockOf(root), '');
-    expect(elsewhere(readFileSync(rootFile, 'utf8')).match(/#101418/g)?.length ?? 0).toBe(
-      elsewhere(original).match(/#101418/g)?.length ?? 0,
+    expect(elsewhere(readFileSync(rootFile, 'utf8')).match(/#121416/g)?.length ?? 0).toBe(
+      elsewhere(original).match(/#121416/g)?.length ?? 0,
     );
     // Still on the intro, the panel still there.
     expect(Number((await frameDisplay.textContent())?.trim())).toBeLessThan(60);
@@ -471,15 +471,55 @@ const setSidebarText = async (page: Page, jsonPath: string, value: string) => {
 };
 
 /** The looks' patches as the panel writes them (restated from `MUSHAF_LOOKS`: a look that changes is updated here). */
-const NIGHT: Tree = {
-  theme: 'dark',
-  layout: {background: '#101418', color: '#e8e2d6', backgroundImage: ''},
-  highlight: {mode: 'word', style: 'tint', color: '#f2c66d', restOpacity: 0.6},
-  text: {translationColor: '#b8b2a6', glossColor: '#8e98a3'},
+const ROSETTE_OVERRIDE: Tree = {
+  ink: false,
+  silent: false,
+  rules: false,
+  frame: true,
+  accent: true,
+  detail: true,
+  background: true,
 };
-const SQUARE: Tree = {
-  layout: {aspect: '1:1', visibleLines: 3, neighbourOpacity: 0.35},
-  text: {translationPosition: 'below', translationSize: 36},
+const NIGHT: Tree = {
+  theme: 'custom',
+  customTheme: {
+    base: 'normal',
+    frame: '#d8b56a',
+    accent: '#1a1d20',
+    detail: '#d8b56a',
+    background: '#121416',
+    override: ROSETTE_OVERRIDE,
+  },
+  layout: {background: '#121416', color: '#f1eadb', neighbourOpacity: 0.25, frame: 'none', backgroundImage: ''},
+  animation: {lines: 'fade', tempo: 'slow'},
+  highlight: {mode: 'ayah', style: 'wash', color: '#d8b56a', restOpacity: 0.6},
+  text: {translationColor: '#b9b1a2', glossColor: '#8f897d', translationFont: 'auto', glossFont: 'auto'},
+  overlay: {color: '#b9b1a2', font: 'auto'},
+  background: {color: '#121416', vignette: 0.22},
+};
+const LEARNING: Tree = {
+  theme: 'custom',
+  customTheme: {
+    base: 'normal',
+    frame: '#8c6c26',
+    accent: '#efe3c4',
+    detail: '#8c6c26',
+    background: '#f8f3e6',
+    override: ROSETTE_OVERRIDE,
+  },
+  layout: {background: '#f8f3e6', color: '#1c1a16', neighbourOpacity: 0.4, frame: 'none', backgroundImage: ''},
+  animation: {lines: 'fade', tempo: 'calm'},
+  highlight: {mode: 'word', style: 'tint', color: '#b8913a', restOpacity: 0.6},
+  text: {
+    translationPosition: 'below',
+    glossPosition: 'interlinear',
+    translationColor: '#4a463e',
+    glossColor: '#6b6458',
+    translationFont: 'auto',
+    glossFont: 'auto',
+  },
+  overlay: {color: '#5a554c', font: 'auto'},
+  background: {color: '#f8f3e6', vignette: 0},
 };
 
 /** Applies `lookId` from the panel's Look tab and waits for the panel to be ready again. */
@@ -528,7 +568,7 @@ test('MushafRecitation: a layout edit in the Props sidebar survives a look from 
     await expectSaved(rootFile, 'MushafRecitation', afterSidebar, 'the sidebar never saved layout.marginX');
 
     // (b) The panel: a look, which writes into the same `layout` group.
-    await applyLook(page, 'night');
+    await applyLook(page, 'haram-night');
 
     // (c) The Root: the sidebar's edit, the alignment and the look, and nothing else changed.
     await expectSaved(rootFile, 'MushafRecitation', merged(afterSidebar, NIGHT), 'the look was not saved as expected');
@@ -559,14 +599,14 @@ test('MushafRecitation: a panel save, a sidebar edit of what it wrote, then anot
     const panel = page.locator(PANEL);
     await expect(panel).toBeVisible();
 
-    // A panel save first: the Square look writes layout.visibleLines and layout.neighbourOpacity.
-    await applyLook(page, 'square');
-    const afterLook = merged(start, SQUARE);
-    await expectSaved(rootFile, 'MushafRecitation', afterLook, 'the Square look was not saved as expected');
+    // A panel save first: the Learning look writes layout.neighbourOpacity, among its style fields.
+    await applyLook(page, 'learning');
+    const afterLook = merged(start, LEARNING);
+    await expectSaved(rootFile, 'MushafRecitation', afterLook, 'the Learning look was not saved as expected');
     // Past the window in which a sidebar save counts as racing the panel's: this is a later edit.
     await page.waitForTimeout(6000);
 
-    // The sidebar changes two of the values that look wrote.
+    // The sidebar changes a value that look wrote, and the lines on screen.
     await setSidebarNumber(page, 'layout.visibleLines', 5);
     await expectSaved(
       rootFile,
@@ -589,13 +629,13 @@ test('MushafRecitation: a panel save, a sidebar edit of what it wrote, then anot
       .toBe(1);
     await expect(panel.getByRole('status')).toContainText('Ready', {timeout: 60_000});
 
-    // The Root: the split added, the sidebar's values kept (the look's 3 and 0.35 not written
-    // again over them), the rest of the look and the alignment as they were.
+    // The Root: the split added, the sidebar's values kept (the look's 0.4 not written again over
+    // them), the rest of the look and the alignment as they were.
     const saved = savedPropsOf(readFileSync(rootFile, 'utf8'), 'MushafRecitation');
     const [split] = saved.splits as Tree[];
     expect(split).toEqual({page: expect.any(Number), line: expect.any(Number), atWordId: expect.any(Number)});
     expect(saved).toEqual(merged(afterSidebar, {splits: [split]}));
-    expect(saved.layout).toMatchObject({aspect: '1:1', visibleLines: 5, neighbourOpacity: 0.45});
+    expect(saved.layout).toMatchObject({aspect: '16:9', visibleLines: 5, neighbourOpacity: 0.45});
     expect(saved).toMatchObject(ALIGNMENT);
     expectOthersUnchanged(original, readFileSync(rootFile, 'utf8'), 'MushafRecitation');
     await expect(panel.locator('[data-mushaf-control="rolled-back"]')).toHaveCount(0);
@@ -626,8 +666,8 @@ test("MushafInTemplate: a sidebar edit of the template's own title survives a pa
     await expectSaved(rootFile, 'MushafInTemplate', afterSidebar, 'the sidebar never saved the title');
     await expect(page.locator('[data-template-part="title"]')).toContainText('Al-Fatihah, recited');
 
-    // In a slot a look leaves layout.aspect to the template's box (Night has none to leave).
-    await applyLook(page, 'night');
+    // In a slot a look leaves layout.aspect to the template's box (no look sets one).
+    await applyLook(page, 'haram-night');
     await expectSaved(
       rootFile,
       'MushafInTemplate',

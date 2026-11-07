@@ -59,7 +59,7 @@ export const mushafAyahTextSchema = z.object({
     'Frame, page colour (painted when background.kind is color), margins and position. Lines on screen and their opacity do not apply',
   ),
   background: backgroundSchema.describe(
-    'Behind the ayah: a colour, a gradient, an image or a looping video, and a glow. background.color fills only behind an image, video or gradient',
+    'Behind the ayah: a colour, a gradient, an image or a looping video, a vignette and a slow zoom. background.color fills only behind an image, video or gradient',
   ),
   animation: ayahAnimationSchema.describe('How each ayah comes in and goes out'),
   highlight: highlightSchema.describe('What follows the recitation and how it is marked'),

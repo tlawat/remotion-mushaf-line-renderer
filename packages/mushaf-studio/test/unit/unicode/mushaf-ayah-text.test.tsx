@@ -38,9 +38,12 @@ vi.mock('../../../src/studio', () => ({
   isInStudio: () => false,
 }));
 
-const {MushafAyahText, defaultMushafAyahTextProps, resolveAyahText} = await import('../../../src/unicode');
+const {MushafAyahText, ayahPresence, ayahTextPlan, defaultMushafAyahTextProps, resolveAyahText} = await import(
+  '../../../src/unicode'
+);
+const {clipTimeline} = await import('../../../src/memorize');
 const {fakeFetch} = await import('../translations/helpers');
-const {legibleAccent, parseColor, washColor} = await import('../../../src/schema');
+const {legibleAccent, markerIds, parseColor, washColor} = await import('../../../src/schema');
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
 type ResolvedAyahText = import('../../../src/unicode').ResolvedAyahText;
 
@@ -106,7 +109,7 @@ const at = (seconds: number) => {
 };
 
 describe('<MushafAyahText>', () => {
-  it('plays one Sequence per timed ayah, from the lead-in before its first word to where the next comes in', () => {
+  it('plays one Sequence per timed ayah, each change after the last word, the two overlapping only by the dissolve', () => {
     const root = mount();
     const all = sequences(root);
     expect(all.map((s) => s.dataset.sequence)).toEqual([
@@ -117,20 +120,41 @@ describe('<MushafAyahText>', () => {
       'Ayah 1:6',
       'Ayah 1:7',
     ]);
-    const lead = defaultMushafAyahTextProps.animation.leadInSeconds;
-    const fromOf = (start: number) => Math.max(0, Math.round((start - lead) * 30));
-    const starts = resolved.ayahs.map((a) => a.start);
-    expect(all.map((s) => Number(s.dataset.from))).toEqual(starts.map(fromOf));
-    expect(all.map((s) => Number(s.dataset.duration))).toEqual(
-      starts.map((start, i) => (i < starts.length - 1 ? fromOf(starts[i + 1]!) : 900) - fromOf(start)),
+    const plans = ayahTextPlan({
+      timings: resolved.timings,
+      clips: resolved.clips ?? clipTimeline(resolved.timings, defaultMushafAyahTextProps.memorize),
+      markers: markerIds(resolved.ayahs),
+      fps: 30,
+      leadInSeconds: defaultMushafAyahTextProps.animation.leadInSeconds,
+      tempo: 'calm',
+      motion: 'fade',
+    });
+    expect(all.map((s) => [Number(s.dataset.from), Number(s.dataset.duration)])).toEqual(
+      plans.map((plan) => [plan.from, plan.durationInFrames]),
     );
     expect(all.every((s) => s.dataset.premount === '30')).toBe(true);
-    // No two ayahs share a frame.
-    for (let i = 1; i < all.length; i++) {
-      expect(Number(all[i]!.dataset.from)).toBe(
-        Number(all[i - 1]!.dataset.from) + Number(all[i - 1]!.dataset.duration),
-      );
+    // The first ayah is settled the lead-in before its first word, after a 24-frame appearance.
+    const firstWord = resolved.timings.ayat[0]!.words![0]!.start;
+    expect(plans[0]!.from).toBe(Math.max(0, Math.round((firstWord - 0.4) * 30) - 24));
+    for (let i = 1; i < plans.length; i++) {
+      const outgoing = resolved.timings.ayat[i - 1]!;
+      const lastEnd = outgoing.words![outgoing.words!.length - 1]!.end;
+      // Late, never early: the change starts once the outgoing ayah's last word has ended.
+      expect(plans[i]!.enter.start).toBeGreaterThanOrEqual(Math.ceil(lastEnd * 30 - 1e-6));
+      // The two overlap only over the change, and are never both at reading strength.
+      const before = plans[i - 1]!;
+      expect(plans[i]!.from).toBeLessThan(before.from + before.durationInFrames);
+      for (let f = plans[i]!.enter.start; f <= plans[i]!.enter.start + plans[i]!.enter.duration; f++) {
+        const out = ayahPresence(before, f).opacity;
+        const into = ayahPresence(plans[i]!, f).opacity;
+        expect(Math.min(out, into)).toBeLessThanOrEqual(0.2);
+        expect(out + into).toBeGreaterThanOrEqual(0.15);
+      }
     }
+    // The last holds 1.5 s after the last word, then fades over a second: the composition ends there.
+    const last = plans[plans.length - 1]!;
+    expect(last.exit).toMatchObject({duration: 30, last: true});
+    expect(last.exit.start + 30).toBe(last.from + last.durationInFrames);
     expect(ayahBlock(root, '1:7').textContent).toContain('٧');
   });
 
@@ -153,7 +177,8 @@ describe('<MushafAyahText>', () => {
     expect(block.style.fontFamily).toBe('mushaf-uthmanic-hafs');
     expect(block.style.fontSize).toBe('80px');
     expect(block.style.lineHeight).toBe('2');
-    expect(block.style.maxWidth).toBe('880px');
+    // 78 % of the frame, inside the margins.
+    expect(block.style.maxWidth).toBe('842px');
     expect(block.style.visibility).toBe('');
     const frame = block.parentElement!.parentElement!;
     expect(frame.style.left).toBe('100px');
@@ -171,14 +196,16 @@ describe('<MushafAyahText>', () => {
     at(5);
     const root = mount();
     const style = (key: string) => ayahBlock(root, key).parentElement!.style;
-    expect(style('1:3').opacity).toBe('1');
+    // Settled: no opacity of its own.
+    expect(style('1:3').opacity).toBe('');
     // A dissolve: nothing moves.
     expect(style('1:3').transform).toBe('');
     expect(style('1:2').opacity).toBe('0');
     expect(style('1:4').opacity).toBe('0');
     cleanup();
     const rise = mount({animation: {lines: 'rise'}});
-    expect(ayahBlock(rise, '1:3').parentElement!.style.transform).toBe('translateY(0.0000px)');
+    // Risen into place: no transform left.
+    expect(ayahBlock(rise, '1:3').parentElement!.style.transform).toBe('');
     cleanup();
     const still = mount({animation: {lines: 'cut'}});
     expect(ayahBlock(still, '1:4').parentElement!.style.opacity).toBe('');
@@ -208,8 +235,9 @@ describe('<MushafAyahText>', () => {
       for (const style of ['ink', 'tint', 'wash'] as const) {
         const root = mount({highlight: {mode, style}});
         expect(root.querySelectorAll('.mushaf-uword--active')).toHaveLength(0);
+        // Only the word's own box: no opacity, colour or band.
         for (const id of ['1:3:1', '1:3:2', '1:3:3', '1:4:1'])
-          expect(word(root, id).getAttribute('style') ?? '').toBe('');
+          expect(word(root, id).getAttribute('style')).toBe('display: inline-block;');
         cleanup();
       }
     }

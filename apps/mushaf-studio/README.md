@@ -150,29 +150,35 @@ replaces.
 
 ### Look
 
-One-click style presets. Each card shows a look's name, what it is for and a swatch of the colours
-it gives (page, ink, the current word's mark, the rosettes or the translation); the look the props
-already have is ticked. A click saves the look's style props (theme, layout, animation,
-highlighting, text placement) into `src/Root.tsx` and never touches the content: the recitation,
-the timings, the ayah range, the splits and the translation files stay as they are. Fine-tune any
-of it in the Props sidebar afterwards. **Undo** steps back through the looks applied, last first,
-and puts back only the fields that still hold a look's values: a field you edited since keeps your
-value. Each
-composition shows the looks designed for it (`MushafAyahText` has no tajweed theme, so it gets no
-Tajweed light; it takes the page, ink and highlighting of the others). The looks are exported as
-`MUSHAF_LOOKS`, with `applyLook()`, for use in code.
+At the top, **Format**: Landscape 16:9, Vertical 9:16, Square 1:1 or Portrait 4:5. It sets the
+frame, and the margins and the vertical place only while they still hold the previous format's
+(a position you chose stays). Under Vertical a hint says printed lines are small there: the Ayah
+text composition suits reels better. In a template's slot there is no Format: the box decides.
 
-- **Classic page**: ink on a cream page, the current word in gold, three lines on screen.
-- **Tajweed light**: the tajweed colours on a white page, the words still to come dimmed.
-- **Night**: the dark tajweed theme on a deep blue-black page, the current word glowing.
-- **Black & gold**: warm white on black, the rosettes and the current word in gold.
-- **Sepia**: the sepia tajweed theme on an old-paper page, a soft marker behind the current word.
-- **Reel 9:16**: a vertical frame for reels and stories, one line at a time, the translation below.
-  Like every look it leaves the positions alone (margins, vertical position, offsets): set them in
-  the Props sidebar.
-- **Square post 1:1**: a square frame, three lines with faint neighbours, the translation below.
-- **Karaoke**: a bright marker that walks word by word, the other words dimmed.
-- **Study**: the translation below, a readable gloss strip, the current word in teal.
+Then the looks, one-click style presets, each a ground, an ink, one metal and one mark. Each card
+shows the look's English and Arabic names, what it is for, and four chips: the page, the ink, the
+metal (the gold of the rosettes and rules) and the mark as it is drawn; the look the props already
+have is ticked. A click saves the look's style props (theme, layout colours, motion, the mark, the
+text and label colours, the legend, the vignette) into `src/Root.tsx` and never touches the
+content (the recitation, the timings, the ayah range, the splits, the translation files) or where
+you placed the lines. **Undo** steps back through the looks applied, last first, and puts back
+only the fields that still hold a look's values. `MushafAyahText` has no tajweed theme, so it gets
+no Tajweed or Learning. Under the cards, the mark in one line ("Follows each word · Ink"), with a
+note when a tint is drawn in a darker shade so it reads on the page, or shown as a wash on the
+tajweed colours, and the motion ("Motion: Dissolve · Calm").
+
+- **Mushaf** (the defaults): a printed Madinah page, ivory paper, gold-line rosettes, the ink
+  filling in behind the reciter.
+- **Haram night**: warm ivory on charcoal, the ayah held in a faint gold band, slow and still.
+- **Madinah green**: ivory on the deep green of the Prophet's Mosque inside a thin gold rule; the
+  ayah followed in ink.
+- **Tajweed**: the tajweed colours untouched on warm paper, the words still to come lighter, the
+  legend in its own band.
+- **Learning**: each word turns antique gold as it is recited, with its meaning beneath it.
+
+When `src/Root.tsx` holds props an earlier Mushaf Studio saved, every tab shows a banner: the
+preview already renders them in the current design, **What changes** lists each field that moves,
+**Upgrade** saves them, and **Upgrade and apply the Mushaf look** saves them with the Mushaf look.
 
 ### Align
 

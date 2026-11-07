@@ -38,6 +38,7 @@ const {MushafStudioPanel} = await import('../../../src/studio');
 const {defaultMushafRecitationProps} = await import('../../../src/compositions/recitation/schema');
 const {resetStudioStore, getStudioState, setStudioState, t} = await import('../../../src/studio/store');
 const {surahLabel} = await import('../../../src/studio/surahs');
+const {MUSHAF_LOOKS} = await import('../../../src/presets');
 type Message = import('../../../src/studio/i18n').Message;
 
 const forms = (message: Message): readonly string[] =>
@@ -68,6 +69,39 @@ describe('the dictionary', () => {
       }
   });
 
+  it('names and describes every look as the look itself does, in both languages', () => {
+    for (const look of MUSHAF_LOOKS) {
+      const name = `look.name.${look.id}` as keyof typeof MESSAGES.en;
+      const description = `look.description.${look.id}` as keyof typeof MESSAGES.en;
+      expect(translate('en', name), look.id).toBe(look.name);
+      expect(translate('ar', name), look.id).toBe(look.nameAr);
+      expect(translate('en', description), look.id).toBe(look.description);
+      expect(translate('ar', description), look.id).toBe(look.descriptionAr);
+    }
+  });
+
+  it('labels the options the panel shows as the design names them', () => {
+    expect(['ink', 'tint', 'wash'].map((v) => translate('ar', `highlight.style.${v}` as never))).toEqual([
+      'مداد',
+      'تذهيب',
+      'ظلّ',
+    ]);
+    expect(['word', 'ayah', 'none'].map((v) => translate('ar', `highlight.mode.${v}` as never))).toEqual([
+      'كلمة',
+      'آية',
+      'بلا',
+    ]);
+    expect(['fade', 'rise', 'cut'].map((v) => translate('ar', `animation.lines.${v}` as never))).toEqual([
+      'ذوبان',
+      'ذوبان مع ارتفاع',
+      'قطع',
+    ]);
+    expect(translate('ar', 'group.motion')).toBe('الحركة');
+    expect(translate('en', 'group.motion')).toBe('Motion');
+    expect(Object.keys(MESSAGES.en)).not.toContain('look.chip.currentWord');
+    expect(Object.keys(MESSAGES.en)).not.toContain('look.chip.rosette');
+  });
+
   it('fills the same placeholders in both languages', () => {
     for (const key of Object.keys(MESSAGES.en) as (keyof typeof MESSAGES.en)[])
       expect(placeholders(MESSAGES.ar[key]), key).toEqual(placeholders(MESSAGES.en[key]));
@@ -81,6 +115,9 @@ describe('the dictionary', () => {
       'review.editEntry',
       'project.badProps',
       'unit.seconds',
+      // Templates of two phrases that are each translated: only the separator is the message's own.
+      'look.mark.summary',
+      'look.mark.motion',
     ]);
     for (const [key, message] of Object.entries(MESSAGES.ar))
       if (!technical.has(key)) for (const form of forms(message)) expect(arabic.test(form), key).toBe(true);

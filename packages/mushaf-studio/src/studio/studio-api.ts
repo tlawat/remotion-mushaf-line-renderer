@@ -536,6 +536,34 @@ export const patchProps = (target: StudioTarget | string, patch: PropsPatch): Pr
 };
 
 /**
+ * Replaces the target's props in the Root file with `transform` of what they are there now (the
+ * live Root values), and re-runs `calculateMetadata()`: for a change a merge cannot make, such as
+ * the upgrade banner's (`migrateMushafProps()` deletes the fields an earlier Mushaf Studio saved).
+ * A slot whose key holds nothing is left as it is. Runs after the saves before it, in call order;
+ * a failure rejects and writes nothing.
+ */
+export const replaceTargetProps = (
+  target: StudioTarget | string,
+  transform: (own: Readonly<Record<string, unknown>>) => Readonly<Record<string, unknown>>,
+): Promise<void> => {
+  const to = toTarget(target);
+  return serially(async () => {
+    await saveDefaultProps({
+      compositionId: to.compositionId,
+      defaultProps: ({savedDefaultProps}) => {
+        pageLoadProps.set(to.compositionId, savedDefaultProps);
+        const whole = liveProps[to.compositionId] ?? savedDefaultProps;
+        const own = targetPropsOf(whole, to);
+        if (own === null) return whole as Record<string, unknown>;
+        const next = transform(own);
+        return (to.propsKey ? {...whole, [to.propsKey]: next} : next) as Record<string, unknown>;
+      },
+    });
+    reevaluateComposition();
+  });
+};
+
+/**
  * Judges the live props the dock just rendered against the panel's saves (and keeps them, as
  * `rememberLiveProps()` does), once per new live props object of a composition:
  *

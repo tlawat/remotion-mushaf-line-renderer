@@ -5,6 +5,7 @@ import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} fro
 import {followsHostAudio} from '../../audio/host';
 import {volumeAt} from '../../audio/volume';
 import {backgroundFor, groundFor} from '../../background/compat';
+import {Jadwal} from '../../background/Jadwal';
 import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {
@@ -405,7 +406,9 @@ export const MushafRecitation: React.FC<WithPanelOption<MushafRecitationProps>> 
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
+        layout={layout}
       />
+      {layout.frame === 'hairline' && <Jadwal metal={metal} ground={ground} />}
       {ownAudio &&
         identity &&
         (delayFrames > 0 ? (

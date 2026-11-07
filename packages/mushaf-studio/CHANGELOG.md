@@ -52,6 +52,36 @@
   drawn and draws its names smaller when one would leave the safe area (9:16 with both names). The
   card's Latin range is "Ayat 2–7" (the font sets a capital Ā's macron beside it). The thumbnail
   loads EB Garamond.
+- **Breaking: five looks and a Format control.** `MUSHAF_LOOKS` is Mushaf (the defaults), Haram
+  night, Madinah green, Tajweed and Learning, each named and described in English and Arabic
+  (`nameAr`, `descriptionAr`), each a ground, an ink, one metal and one mark; looks may now set
+  `overlay` (colour, font), `legend` (show, place, names) and `background` (colour, vignette). The
+  nine old looks are gone: `lookById()` maps their ids (`night` → `haram-night`, `classic` →
+  `mushaf`, ..., with one warning) and gives `reel` and `square` their format. The frame shape is
+  `MUSHAF_FORMATS` / `applyFormat()` (landscape, vertical, square, portrait): the aspect, and the
+  margins and vertical place only while they hold the previous format's, so look and format
+  commute. `layout.verticalAlign` now steps by 0.01 (the formats use 0.45, 0.47, 0.48).
+- **The Look tab** has the Format row (hidden in a slot, with a hint under Vertical), cards with
+  both names and four chips (page, ink, metal, the mark as drawn), and the mark in one line with a
+  note when a tint is drawn in another shade or shown as a wash. Every tab shows an **upgrade
+  banner** while the Root holds props an earlier Mushaf Studio saved: *What changes* lists every
+  change, *Upgrade* saves the migrated props (`replaceTargetProps()`), *Upgrade and apply the
+  Mushaf look* adds the look and the format's positions. English and Arabic.
+- **The background draws its vignette** (darker page at the edges; black on a dark ground),
+  dithered by a fixed noise so it does not band; an image or a video keeps a dim floor (black at
+  0.45 under light ink, a page veil at 0.55 under dark ink: `dimLayer()`); the slow zoom eases on
+  `SINE`. `layout.frame: 'hairline'` draws the jadwal: two gold rules at the safe area (`<Jadwal>`).
+- **MushafPage**: the page fills 92 % of a wide frame's height (84 % of a tall one's width) around
+  the legend's band (`pageGeometry(size, reserve)`, no longer from `marginX`), turns by the
+  staggered dissolve after its last word (`pageTurns()`), cross-fades the line band from line to
+  line (`pageLineEmphasis()`), draws its double rule in the metal and its number at 60 %, and rests
+  the words outside the ayahs followed at 0.5.
+- **MushafAyahText**: each ayah comes in by the dissolve after the last word of the one before
+  (`ayahTextPlan()`), the last holds 1.5 s and fades before the end card (the duration grows to
+  it: `ayahTextContentFrames()`); the words are 0.1 em apart in a balanced block 78 % of the frame
+  wide, each word a box as tall as its line for the wash.
+- The example template's frosted card is gone (the recitation sits in a plain block inside the safe
+  area) and its slot follows the default mark.
 
 First proof of concept of Mushaf Studio: Remotion Studio, extended with the package's features
 as a user interface. See [docs/mushaf-studio/plan.md](../../docs/mushaf-studio/plan.md) for the

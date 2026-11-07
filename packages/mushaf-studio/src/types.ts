@@ -76,7 +76,7 @@ export type CatalogueOrigin = {
  * What a timings file keeps of `analyzeAudio()`'s measurements of its recording, under
  * `alignment.audio`: enough for `audio.normalize` (`gainFor()`) and `audio.trimSilence`
  * (`silenceTrimSeconds()`) without downloading the recording again. The names and units are
- * `AudioAnalysis`'s; the glow's levels are not kept (they still need the analysis).
+ * `AudioAnalysis`'s; the per-frame levels are not kept (nothing draws them).
  */
 export type AudioSummary = {
   /** Integrated loudness (BS.1770), LUFS to two decimals; `null` for silence or under 0.4 s of audio. */
@@ -174,7 +174,7 @@ export type Translation = AyahTranslation | WordGloss;
 /**
  * What `calculateMetadata()` measured of the recording (`analyzeAudio()`) and does with it, as plain
  * data in the props: the gain of `audio.normalize`, the silence `audio.trimSilence` skipped, and the
- * levels the background's glow follows.
+ * per-frame levels, which nothing follows any more.
  */
 export type ResolvedAudio = {
   /** `gainFor()` of the analysis under `audio.normalize`, else 1. */

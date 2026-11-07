@@ -1,14 +1,10 @@
 import {type CalculateMetadataFunction, staticFile} from 'remotion';
 import {followsHostAudio} from '../audio/host';
 import {backgroundVideoSecondsFor, endCardFrames, resolveAudioCleanup} from '../compositions/extras';
-import {
-  type ResolvedProps,
-  type ResolvePropsOptions,
-  recitationDuration,
-  STUDIO_FPS,
-} from '../compositions/recitation/calculate-metadata';
-import {isIdentityTimeline, timelineDuration} from '../memorize/timeline';
-import {migrateMushafProps, sizeForAspect} from '../schema';
+import {type ResolvedProps, type ResolvePropsOptions, STUDIO_FPS} from '../compositions/recitation/calculate-metadata';
+import {linesEndFrame, recitationEndSeconds} from '../compositions/recitation/transitions';
+import {clipTimeline} from '../memorize/timeline';
+import {markerIds, migrateMushafProps, sizeForAspect} from '../schema';
 import {type ResolvedAyahText, resolveAyahText, skipAyahTextStart} from './resolve';
 import {defaultMushafAyahTextProps, type MushafAyahTextProps} from './schema';
 
@@ -46,10 +42,33 @@ export const withAyahTextAudio = async (
 };
 
 /**
+ * Frames of an ayah text before its end card: the last word's end (`recitationEndSeconds()`, the
+ * ayah-end rosette left out; the last clip's when ayahs repeat), the end hold and the ayah's fade
+ * (`linesEndFrame()`), as `ayahTextPlan()` ends the last ayah.
+ */
+export const ayahTextContentFrames = (
+  resolved: Pick<ResolvedAyahText, 'timings' | 'clips' | 'ayahs'>,
+  props: Pick<MushafAyahTextProps, 'animation' | 'memorize'>,
+  fps: number,
+): number =>
+  Math.max(
+    1,
+    linesEndFrame(
+      recitationEndSeconds(
+        resolved.timings,
+        resolved.clips ?? clipTimeline(resolved.timings, props.memorize),
+        markerIds(resolved.ayahs),
+      ),
+      props.animation.tempo,
+      fps,
+    ),
+  );
+
+/**
  * `resolved` of `<MushafAyahText>` and its length at `fps`, the props migrated first (`migrateMushafProps()`): the content, the audio's analysis when
- * `audio` needs it, a background video's length; the duration from the
- * timings (the last ayah's end plus one second, for it to leave), or from the clip timeline when
- * `memorize` repeats the ayahs, plus the end card's seconds. No size.
+ * `audio` needs it, a background video's length; the duration to the last ayah's end hold and
+ * fade (`ayahTextContentFrames()`), on the clip timeline when `memorize` repeats the ayahs, plus
+ * the end card's seconds. No size.
  */
 export const resolveAyahTextProps = async (
   saved: MushafAyahTextProps,
@@ -63,12 +82,9 @@ export const resolveAyahTextProps = async (
     withAyahTextAudio(props, content, {fps, signal}),
     backgroundVideoSecondsFor(props.background, staticFile),
   ]);
-  const recitation = isIdentityTimeline(resolved.clips)
-    ? recitationDuration(resolved.timings, fps)
-    : timelineDuration(resolved.clips, fps);
   return {
     props: {...props, resolved: {...resolved, backgroundVideoSeconds}},
-    durationInFrames: recitation + endCardFrames(props.endCard, fps),
+    durationInFrames: ayahTextContentFrames(resolved, props, fps) + endCardFrames(props.endCard, fps),
   };
 };
 

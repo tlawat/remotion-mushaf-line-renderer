@@ -13,6 +13,7 @@ const {SOFT} = await import('../../../src/schema');
 const {QUL_FONTS} = await import('../../../src/fonts');
 const {
   ayahPresentationStyle,
+  ayahTextContentFrames,
   calculateMushafAyahTextMetadata,
   defaultMushafAyahTextProps,
   mushafAyahTextSchema,
@@ -164,7 +165,7 @@ describe('resolveAyahText', () => {
 });
 
 describe('calculateMushafAyahTextMetadata', () => {
-  it('resolves the props, sizes the frame from the aspect and lasts until a second after the last ayah', async () => {
+  it('resolves the props, sizes the frame from the aspect and lasts until the last ayah’s end hold and fade', async () => {
     const {fetch} = studio();
     vi.stubGlobal('fetch', fetch);
     const metadata = await calculateMushafAyahTextMetadata({
@@ -177,8 +178,13 @@ describe('calculateMushafAyahTextMetadata', () => {
     expect(metadata.width).toBe(1080);
     expect(metadata.height).toBe(1920);
     expect(metadata.fps).toBe(30);
-    expect(metadata.durationInFrames).toBe(Math.ceil((27.559 + 1) * 30));
-    expect((metadata.props as MushafAyahTextProps).resolved.ayahs).toHaveLength(6);
+    const resolved = (metadata.props as MushafAyahTextProps).resolved;
+    expect(resolved.ayahs).toHaveLength(6);
+    // The last word's end, 1.5 s of hold and 1 s of fade.
+    const lastAyah = resolved.timings.ayat[resolved.timings.ayat.length - 1]!;
+    expect(metadata.durationInFrames).toBe(ayahTextContentFrames(resolved, props(), 30));
+    expect(metadata.durationInFrames).toBeGreaterThan(Math.ceil(lastAyah.start * 30) + 45 + 30);
+    expect(metadata.durationInFrames).toBeLessThanOrEqual(Math.ceil(lastAyah.end * 30) + 45 + 30);
   });
 });
 

@@ -19,14 +19,15 @@ const mount = (props: Partial<React.ComponentProps<typeof AyahText>> = {}) =>
 const spans = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLElement>('span.mushaf-uword'));
 
 describe('<AyahText>', () => {
-  it('is one right-to-left Arabic block, centred, in the font, with wider word spacing', () => {
+  it('is one right-to-left Arabic block, centred and balanced, in the font, its words 0.1 em apart', () => {
     const root = mount({color: 'rgb(244, 239, 230)', maxWidth: 840});
     expect(root.tagName).toBe('DIV');
     expect(root.getAttribute('dir')).toBe('rtl');
     expect(root.getAttribute('lang')).toBe('ar');
     expect(root.className).toBe('mushaf-ayah-text');
     expect(root.style.textAlign).toBe('center');
-    expect(root.style.wordSpacing).toBe('0.25em');
+    expect(root.style.wordSpacing).toBe('0.1em');
+    expect(root.style.getPropertyValue('text-wrap') || (root.style as {textWrap?: string}).textWrap).toBe('balance');
     expect(root.style.fontFamily).toBe('mushaf-uthmanic-hafs');
     expect(root.style.fontSize).toBe('96px');
     expect(root.style.lineHeight).toBe('1.9');
@@ -60,7 +61,8 @@ describe('<AyahText>', () => {
     expect(active!.style.opacity).toBe('0.4');
     expect(first!.className).not.toContain('--active');
     expect(first!.style.color).toBe('rgb(1, 2, 3)');
-    expect(marker!.getAttribute('style')).toBeNull();
+    // Every word is a box as tall as its line, and carries nothing else of its own.
+    expect(marker!.getAttribute('style')).toBe('display: inline-block;');
     expect(root.querySelectorAll('.mushaf-uword--active')).toHaveLength(1);
   });
 

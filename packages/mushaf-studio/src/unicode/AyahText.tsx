@@ -21,7 +21,7 @@ export type AyahTextProps = {
   /** A multiple of `fontSize`: Uthmani marks above and below need 1.8 or more. */
   readonly lineHeight: number;
   readonly color?: string | undefined;
-  /** px; the text wraps inside it and is centred. */
+  /** px; the text wraps inside it, balanced so no word is left alone on the last line, and is centred. */
   readonly maxWidth?: number | undefined;
   readonly style?: React.CSSProperties | undefined;
   readonly className?: string | undefined;
@@ -29,6 +29,12 @@ export type AyahTextProps = {
 
 /** The class of the span holding an ayah's last word and its end marker, which never wraps between them. */
 export const AYAH_TAIL_CLASS = 'mushaf-ayah-tail';
+
+/** The space between two words: 0.1 em, as the Uthmani text is set in print. */
+export const AYAH_WORD_SPACING = '0.1em';
+
+/** Each word is a box as tall as its line, so a wash painted on it (`washStyle()`) has the line box to sit in. */
+const WORD_BOX: React.CSSProperties = {display: 'inline-block'};
 
 const classOf = (word: AyahWord, active: boolean): string =>
   `mushaf-uword mushaf-uword--${word.kind}${active ? ' mushaf-uword--active' : ''}`;
@@ -53,6 +59,8 @@ const cueOver = (text: string, cue: string): React.ReactNode => (
  * (`١`) in a span of its own: QUL's Uthmani Hafs font draws the rosette around them itself, and a
  * U+06DD in front would add a second, empty one. The last word and the marker sit together in a
  * `white-space: nowrap` span (`mushaf-ayah-tail`), so the marker never starts a line on its own.
+ * Each word is an inline block as tall as its line (a wash fills its line box), the words 0.1 em
+ * apart, the lines balanced (`text-wrap: balance`) so none ends on a lone word.
  * The active word gets `highlightStyle` and `mushaf-uword--active`. Font features are left to the
  * font. Pure in its props, so frames are deterministic.
  */
@@ -76,7 +84,7 @@ export const AyahText: React.FC<AyahTextProps> = ({
     const merged = active && highlightStyle ? {...own, ...highlightStyle} : own;
     const cue = wordText?.(word);
     return (
-      <span className={classOf(word, active)} data-location={word.id} style={merged}>
+      <span className={classOf(word, active)} data-location={word.id} style={{...WORD_BOX, ...merged}}>
         {cue === undefined || cue === word.text ? word.text : cueOver(word.text, cue)}
       </span>
     );
@@ -95,8 +103,10 @@ export const AyahText: React.FC<AyahTextProps> = ({
         lineHeight,
         color,
         maxWidth,
+        marginInline: 'auto',
         textAlign: 'center',
-        wordSpacing: '0.25em',
+        textWrap: 'balance',
+        wordSpacing: AYAH_WORD_SPACING,
         ...style,
       }}
     >

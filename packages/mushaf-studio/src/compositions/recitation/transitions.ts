@@ -243,6 +243,12 @@ export type AyahChange = {readonly key: string | null; readonly start: number; r
 
 export type AyahChangeOptions = Omit<BoundaryInputs, 'timeline' | 'lines'> & {
   readonly tempo: Tempo;
+  /** Which dissolve `D` is: the translation's (default) or `MushafAyahText`'s ayah. */
+  readonly token?: 'translationDissolve' | 'ayahDissolve' | undefined;
+  /** A cut: every change is 0 frames, at `max(E, F − leadIn)`. */
+  readonly cut?: boolean | undefined;
+  /** The earliest frame the first change may start at: when the first ayah has appeared. Default none. */
+  readonly settledFrom?: number | undefined;
 };
 
 /** The translation key `"surah:ayah"` of a clip. */
@@ -253,21 +259,22 @@ const clipKey = (clip: MemorizeClip, timings: RecitationTimings): string =>
  * When the ayah on screen changes, for the translation and the corner number: the first entry is
  * the first ayah, from the start (`start` −∞); every later one starts at `t0 = max(E, F − leadIn −
  * D_eff)` with `E` the end of the outgoing ayah's last word and `F` the incoming ayah's first word,
- * `D = translationDissolve` compressed to `D_eff` (`boundaryStart()`), and never before the change
- * before it is over. A play of the same ayah again (memorisation) changes nothing.
+ * `D = translationDissolve` (or `token`'s) compressed to `D_eff` (`boundaryStart()`), and never
+ * before the change before it is over (nor before `settledFrom`). A play of the same ayah again
+ * (memorisation) changes nothing.
  */
 export const ayahChanges = (options: AyahChangeOptions): readonly AyahChange[] => {
   const {timings, clips, fps, leadInSeconds, tempo} = options;
   const ayat = normalizeTimings(timings).ayat;
   const timingOf = (clip: MemorizeClip) =>
     ayat.find((a) => a.ayah === clip.ayah && (clip.surah === undefined || a.surah === clip.surah));
-  const duration = tempoFrames('translationDissolve', tempo, fps);
+  const duration = options.cut ? 0 : tempoFrames(options.token ?? 'translationDissolve', tempo, fps);
   const changes: AyahChange[] = [];
   let previous: MemorizeClip | undefined;
   for (const clip of clips) {
     const key = clipKey(clip, timings);
     if (previous === undefined) {
-      changes.push({key, start: Number.NEGATIVE_INFINITY, duration: 0});
+      changes.push({key, start: options.settledFrom ?? Number.NEGATIVE_INFINITY, duration: 0});
     } else if (key !== clipKey(previous, timings)) {
       const outgoing = timingOf(previous);
       const incoming = timingOf(clip);

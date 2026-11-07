@@ -73,7 +73,7 @@ export const mushafRecitationSchema = z.object({
     'Frame and lines. background is the page colour: painted when background.kind is color, and on the title card, counter and end card',
   ),
   background: backgroundSchema.describe(
-    'Behind the lines: a colour, a gradient, an image or a looping video, and a glow. background.color fills only behind an image, video or gradient',
+    'Behind the lines: a colour, a gradient, an image or a looping video, a vignette and a slow zoom. background.color fills only behind an image, video or gradient',
   ),
   animation: animationSchema,
   highlight: highlightSchema,

@@ -39,6 +39,7 @@ const {
   slotErrorOf,
 } = await import('../../../src/slots');
 const {recitationContentFrames, recitationDuration} = await import('../../../src/compositions/recitation');
+const {ayahTextContentFrames} = await import('../../../src/unicode');
 type MemorizeClip = import('../../../src/memorize').MemorizeClip;
 type MushafRecitationProps = import('../../../src/compositions/recitation').MushafRecitationProps;
 type ResolvedRecitation = import('../../../src/types').ResolvedRecitation;
@@ -228,8 +229,10 @@ describe('resolveMushafAyahTextSlot and resolveMushafPageSlot', () => {
     const resolved = at60.props?.resolved as ResolvedAyahText;
     expect(at60.error).toBeNull();
     expect(resolved.ayahs).toHaveLength(6);
-    expect(at60.durationInFrames).toBe(recitationDuration(resolved.timings, 60) + 120);
-    expect(at30.durationInFrames).toBe(recitationDuration(resolved.timings, 30) + 60);
+    expect(at60.durationInFrames).toBe(ayahTextContentFrames(resolved, ayahText, 60) + 120);
+    expect(at30.durationInFrames).toBe(
+      ayahTextContentFrames(at30.props?.resolved as ResolvedAyahText, ayahText, 30) + 60,
+    );
     expect(at60.durationInFrames).toBeGreaterThan(at30.durationInFrames * 1.9);
     expect(resolved.durationInFrames).toBe(at60.durationInFrames);
     expect(slotDurationOf(at60.props)).toBe(at60.durationInFrames);

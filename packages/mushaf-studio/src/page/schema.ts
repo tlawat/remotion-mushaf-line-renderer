@@ -89,7 +89,7 @@ export const mushafPageSchema = z.object({
     'Frame, page colour (painted when background.kind is color) and margins. The page is centred: lines on screen, their opacity and position do not apply',
   ),
   background: backgroundSchema.describe(
-    'Around the page: a colour, a gradient, an image or a looping video, and a glow. background.color fills only behind an image, video or gradient',
+    'Around the page: a colour, a gradient, an image or a looping video, a vignette and a slow zoom. background.color fills only behind an image, video or gradient',
   ),
   highlight: highlightSchema.describe(
     'What follows the recitation inside the line and how it is marked (pageView marks the line)',

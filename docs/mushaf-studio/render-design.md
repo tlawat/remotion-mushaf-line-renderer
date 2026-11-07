@@ -1429,3 +1429,54 @@ Stage R2 review:
     `SINE`, the mark the previous play ended on lets go over `markOut`, and a word the previous
     play ended with hidden that this play shows (the next ayah once `revealAfterRepeats` is over)
     comes in over `reveal` on `SOFT` from the play's start (5.7).
+
+Stage R3 (background, page, ayah text, looks, Look tab):
+
+30. **`layout.verticalAlign` steps by 0.01, not 0.05.** The Format table places the lines at 0.47
+    (portrait) and 0.48 (square), which the schema's 0.05 step refused (the Props sidebar and every
+    render that validates). The step is the only change; the range and the default are as before.
+31. **"Upgrade and apply the Mushaf look" sets the positions the props' own format recommends**
+    (the Landscape format's at 16:9, as 10.3 says), not always Landscape's: a 9:16 ayah text would
+    otherwise get 190 px margins. In a slot it sets no position and no aspect (`lookInBox()`), as
+    the box decides them. It is `upgradeWithLook()` (S:studio/MushafStudioPanel.tsx).
+32. **The banner reads the Root, not the rendered props.** The composition renders props
+    `calculateMetadata()` has already migrated, so `mushafPropsNeedMigration()` of them is always
+    false; the banner reads the Studio's live Root values for the target (a slot's under its key)
+    with the composition's (or the slot's) defaults. Its saves replace the target's props whole
+    (`replaceTargetProps()`, S:studio/studio-api.ts): a merge through `saveDefaultProps` cannot
+    delete the fields an earlier version saved. The notice counts the migration's notes.
+33. **`lookById('reel')` and `lookById('square')` return their format as a look** whose patch is
+    the format's aspect, margins and vertical place (`{layout: {aspect, marginX, verticalAlign}}`),
+    for a code user who stored the id; `applyFormat()` is the path that keeps a position the user
+    chose, and the panel uses it.
+34. **MushafPage is no longer fitted from `layout.marginX`.** `pageGeometry(size, reserve)` fits
+    the page box in 84 % of the width and 92 % of the height less the legend's band
+    (`legendReserve()`), which also closes deviation 20's gap (the page now fits around the band).
+    `marginX` still places a `beside` translation. With whole-px type sizes the page comes out a
+    step under the cap (at 16:9, 957 of the 993 px). The turn is timed in the component
+    (`pageTurns()`: `E` the end of the last word the passage recites on the outgoing page, `F` the
+    next page's first line, `leadInSeconds` the recitation's default as the page has no
+    `animation`, calm tempo; a cut at `max(E, F − leadIn)`); `PageSlot.start` from `resolvePage()`
+    keeps its old meaning. `dimOtherLines` eases with the band (`pageLineEmphasis()`), so the other
+    lines do not jump either.
+35. **MushafAyahText's ayah dissolve (5.2) is done here**, as deviation 16 left it to this stage:
+    `ayahTextPlan()` on `ayahChanges({token: 'ayahDissolve'})`. 5.2 gives the ayah text no first
+    appearance or ending, so it takes the window's: the first ayah appears over `windowIn` on
+    `SINE` settled `leadInSeconds` before its first word, and the last holds `endHold` after the
+    last word and fades over `endFade` before the end card; the duration grows to it
+    (`ayahTextContentFrames()`), as for the recitation. The block is `min(78 % of the frame, the
+    measure between the margins)` wide. Its intro card still covers the start (deviation 16).
+36. **The noise is grey and opaque before the layer's 1.5 %.** `feTurbulence` alone gives coloured
+    noise with a noisy alpha, so its strength would be about half the 1.5 % and tinted; an
+    `feColorMatrix` averages the channels and sets alpha 1. Base frequency 0.9, one octave, seed 7,
+    as written.
+37. **The Look tab shows the motion under the mark** ("Motion: Dissolve · Calm"), the one place the
+    panel names the `animation` group, so `group.motion` and the `animation.*` labels of 10.2 are
+    shown. Keys beyond 10.4: `look.mark.title`, `look.mark.follows.{word,ayah,none}` (the summary's
+    first half: "Follows each word"), `look.mark.motion`, `look.format.busy`, `upgrade.hideDetails`,
+    `upgrade.detailsTitle`, `upgrade.busy`. `look.chip.translation` went with the old chips. The
+    look names and descriptions are dictionary keys pinned to the look objects by a test; a look a
+    code user adds shows its own `name`/`nameAr` and `description`/`descriptionAr`.
+38. **The example template's "plain safe-area block"** is the slot's box itself, moved to the safe
+    area's sides (54 px, 972 px wide) with nothing drawn around it; its slot's mark is the default
+    look's (ink, `#b8913a`, a fade). The template's own gradient and title are its own and stay.

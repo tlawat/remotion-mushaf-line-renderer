@@ -2,6 +2,7 @@ import {MushafLine, MushafLineWindow} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {backgroundFor, groundFor} from '../../background/compat';
+import {Jadwal} from '../../background/Jadwal';
 import {MushafBackground} from '../../background/MushafBackground';
 import {MushafStudioError} from '../../errors';
 import {MushafTitleOverlay} from '../../overlay';
@@ -137,7 +138,11 @@ export const MushafPassage: React.FC<MushafPassageProps> = (props) => {
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
+        layout={layout}
       />
+      {layout.frame === 'hairline' && (
+        <Jadwal metal={metalOf({theme: props.theme, customTheme: props.customTheme, ground})} ground={ground} />
+      )}
       <div data-mushaf-block="Mushaf lines" style={linesBlockStyle(geometry, layout)}>
         {linesBlock}
       </div>

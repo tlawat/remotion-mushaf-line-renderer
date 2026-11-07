@@ -280,6 +280,17 @@ describe('background', () => {
     remotion.state.frame = 13;
     const c = mount(<MushafRecitation {...props} resolved={resolved} />);
     expect(c.querySelector('[data-mushaf-background-part="glow"]')).toBeNull();
+    // The vignette the glow became, with its noise; no jadwal unless asked.
+    expect(c.querySelector('[data-mushaf-background-part="noise"]')).not.toBeNull();
+    expect(c.querySelector('[data-mushaf-jadwal]')).toBeNull();
+    cleanup();
+    // layout.frame 'hairline': the jadwal in the metal, over the background.
+    const framed = mount(
+      <MushafRecitation {...props} layout={{...props.layout, frame: 'hairline'}} resolved={resolved} />,
+    );
+    const jadwal = framed.querySelector<HTMLElement>('[data-mushaf-jadwal]')!;
+    expect(jadwal.style.opacity).toBe('0.55');
+    expect(jadwal.querySelector<HTMLElement>('[data-mushaf-jadwal-rule="outer"]')!.style.left).toBe('54px');
     cleanup();
     // The layout's image of a saved file is still painted.
     const image = mount(

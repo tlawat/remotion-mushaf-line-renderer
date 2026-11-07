@@ -1,5 +1,4 @@
 import {fontSizeForWidth, lineHeightForFontSize} from '@tlawat/remotion-mushaf-line';
-import type {Layout} from '../schema';
 
 /** Lines of a printed page of the V4 mushaf (pages 1-2 have 8, centred in the same grid). */
 export const LINES_PER_PAGE = 15;
@@ -58,18 +57,26 @@ export const pageBox = (measure: number): PageBox => {
   };
 };
 
+/** The share of the frame a page may fill: 84 % of its width, 92 % of its height. */
+export const PAGE_FIT = {width: 0.84, height: 0.92} as const;
+
+/** px kept clear above and below the page (the legend's band, `legendReserve()`). */
+export type PageReserve = {readonly top: number; readonly bottom: number};
+
 /**
- * The printed page in a frame of `size`: the widest measure whose page box fits between the side
- * margins (`marginX`) and half of them above and below, the box centred. A tall frame is filled
- * across, a wide one top to bottom: a 16:9 frame shows the page in the middle at the height of the
- * frame. Pure, and the same for the same arguments on every machine.
+ * The printed page in a frame of `size`: the widest measure whose page box fits in 84 % of the
+ * width and 92 % of the height (less `reserve`, the legend's band), centred in the room the reserve
+ * leaves. A wide or square frame is filled top to bottom (at 16:9 the page is 92 % of the height), a
+ * tall one across (at 9:16, 84 % of the width). Pure, and the same for the same arguments on every
+ * machine.
  */
 export const pageGeometry = (
-  layout: Pick<Layout, 'marginX'>,
   size: {readonly width: number; readonly height: number},
+  reserve: PageReserve = {top: 0, bottom: 0},
 ): PageGeometry => {
-  const roomX = Math.max(1, size.width - 2 * layout.marginX);
-  const roomY = Math.max(1, size.height - 2 * Math.round(layout.marginX / 2));
+  const free = Math.max(1, size.height - reserve.top - reserve.bottom);
+  const roomX = Math.max(1, Math.floor(PAGE_FIT.width * size.width));
+  const roomY = Math.max(1, Math.min(Math.floor(PAGE_FIT.height * size.height), free));
   const fits = (measure: number) => {
     const box = pageBox(measure);
     return box.width <= roomX && box.height <= roomY;
@@ -86,7 +93,7 @@ export const pageGeometry = (
   return {
     ...box,
     left: Math.round((size.width - box.width) / 2),
-    top: Math.round((size.height - box.height) / 2),
+    top: Math.round(reserve.top + (free - box.height) / 2),
     textLeft: box.band + box.padX,
     textTop: box.band + box.padY,
   };

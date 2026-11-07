@@ -28,9 +28,15 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => ({
 }));
 vi.mock('../../../src/studio', () => ({MushafStudioPanel: () => null, isInStudio: () => false}));
 
-const {MushafAyahText, defaultMushafAyahTextProps, resolveAyahText, calculateMushafAyahTextMetadata} = await import(
-  '../../../src/unicode'
-);
+const {
+  MushafAyahText,
+  ayahTextContentFrames,
+  ayahTextPlan,
+  defaultMushafAyahTextProps,
+  resolveAyahText,
+  calculateMushafAyahTextMetadata,
+} = await import('../../../src/unicode');
+const {markerIds} = await import('../../../src/schema');
 const {clipAyahKey, clipTimeline, firstLetterOf, timelineDuration} = await import('../../../src/memorize');
 const {fakeFetch} = await import('../translations/helpers');
 type MushafAyahTextProps = import('../../../src/unicode').MushafAyahTextProps;
@@ -87,8 +93,15 @@ describe('<MushafAyahText> memorisation', () => {
     // calculateMetadata reads through the global fetch: serve the fixtures to it.
     vi.stubGlobal('fetch', io().fetch);
     try {
-      expect(await metadata(defaultMushafAyahTextProps.memorize)).toBe(Math.ceil((27.559 + 1) * 30));
-      expect(await metadata(three)).toBe(timelineDuration(clipTimeline(plain.timings, three), 30));
+      expect(await metadata(defaultMushafAyahTextProps.memorize)).toBe(
+        ayahTextContentFrames(plain, {...base, memorize: defaultMushafAyahTextProps.memorize}, 30),
+      );
+      // Under repeats, to the hold and fade after the last play's last word: within the clip timeline's second.
+      const repeated = (await metadata(three)) ?? 0;
+      expect(repeated).toBe(
+        ayahTextContentFrames({...plain, clips: clipTimeline(plain.timings, three)}, {...base, memorize: three}, 30),
+      );
+      expect(Math.abs(repeated - (timelineDuration(clipTimeline(plain.timings, three), 30) + 45))).toBeLessThan(30);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -115,10 +128,25 @@ describe('<MushafAyahText> memorisation', () => {
     expect(counter.querySelector('[data-mushaf-overlay-part="outgoing"]')!.textContent).toBe('1 / 3');
     expect(counter.lastElementChild!.textContent).toBe('2 / 3');
     expect(root.querySelector('.mushaf-uword--active')!.getAttribute('data-location')).toBe('1:2:1');
-    // Ayah 3 comes in before its first play, after ayah 2's three.
+    // Ayah 3 comes in after the last word of ayah 2's third play, and before its own first word.
     const clips = clipTimeline(plain.timings, three);
     const ayah3 = root.querySelector<HTMLElement>('[data-sequence="Ayah 1:3"]')!;
-    expect(Number(ayah3.dataset.from)).toBe(Math.round((clips[3]!.compositionFrom - 0.4) * 30));
+    const plans = ayahTextPlan({
+      timings: plain.timings,
+      clips,
+      markers: markerIds(plain.ayahs),
+      fps: 30,
+      leadInSeconds: 0.4,
+      tempo: 'calm',
+      motion: 'fade',
+    });
+    const plan3 = plans.find((plan) => plan.key === '1:3')!;
+    expect(Number(ayah3.dataset.from)).toBe(plan3.from);
+    const ayah2 = plain.timings.ayat[0]!;
+    const lastEnd = clips[2]!.compositionFrom + ayah2.words!.at(-1)!.end - clips[2]!.audioFrom;
+    expect(plan3.enter.start).toBeGreaterThanOrEqual(Math.ceil(lastEnd * 30 - 1e-6));
+    const ayah3First = clips[3]!.compositionFrom + plain.timings.ayat[1]!.words![0]!.start - clips[3]!.audioFrom;
+    expect(plan3.from).toBeLessThan(Math.round(ayah3First * 30));
   });
 
   it('first-letters cuts the words to come to their first letter, keeps the marker, reveals on the next play', async () => {
@@ -180,12 +208,23 @@ describe('<MushafAyahText> memorisation across surahs', () => {
     const props = {...base, timingsFile: 'openings.json', textFile: 'openings-text.json', memorize: three};
     const resolved = await resolveAyahText(props, io());
     const root = render(<MushafAyahText {...props} resolved={resolved} />).container;
-    const lead = props.animation.leadInSeconds;
     const keys = ['113:1', '113:2', '114:1', '114:2'];
-    const froms = keys.map((key) => {
+    const plans = ayahTextPlan({
+      timings: resolved.timings,
+      clips: resolved.clips,
+      markers: markerIds(resolved.ayahs),
+      fps: 30,
+      leadInSeconds: props.animation.leadInSeconds,
+      tempo: 'calm',
+      motion: 'fade',
+    });
+    expect(plans.map((plan) => plan.key)).toEqual(keys);
+    const froms = keys.map((key, i) => {
       const first = resolved.clips.find((clip) => clipAyahKey(clip) === key && clip.repetition === 1)!;
       const sequence = root.querySelector<HTMLElement>(`[data-sequence="Ayah ${key}"]`)!;
-      expect(Number(sequence.dataset.from)).toBe(Math.max(0, Math.round((first.compositionFrom - lead) * 30)));
+      expect(Number(sequence.dataset.from)).toBe(plans[i]!.from);
+      // In before its own first play: 114:1 is not taken for 113:1.
+      expect(Number(sequence.dataset.from)).toBeLessThanOrEqual(Math.round(first.compositionFrom * 30) + 30);
       return Number(sequence.dataset.from);
     });
     // One after the other, each on screen through its three plays.

@@ -3,8 +3,13 @@ import {memo, useEffect, useMemo, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useVideoConfig} from 'remotion';
 import {hostAudioOf} from '../audio/host';
+import {defaultMushafRecitationProps} from '../compositions/recitation/schema';
+import {defaultMushafPageProps} from '../page/schema';
+import {applyLook, formatOf, lookById, lookInBox, MUSHAF_FORMATS} from '../presets';
+import {describeMushafMigration, type MigrationNote, migrateMushafProps} from '../schema/migrate';
 import {slotDurationOf, slotErrorOf, unresolvedSlotErrorOf} from '../slots/resolve';
-import {emptySlotPropsFor} from '../slots/schema';
+import {emptySlotPropsFor, MUSHAF_SLOT_DEFAULTS} from '../slots/schema';
+import {defaultMushafAyahTextProps} from '../unicode/schema';
 import {reserveDockSpace} from './dock-space';
 import {DoubtMarkers} from './doubts';
 import {useInStudio} from './environment';
@@ -43,7 +48,9 @@ import {
   patchProps,
   rememberLiveProps,
   rememberPanelProps,
+  replaceTargetProps,
   restoreRolledBack,
+  targetPropsOf,
 } from './studio-api';
 import {colors, styles} from './styles';
 import {
@@ -238,6 +245,121 @@ const HostTrackTiming: React.FC<{
   );
 };
 
+/** The defaults a kind's saved props are migrated with: a composition's own, or a slot's (transparent page). */
+const MIGRATION_DEFAULTS: {
+  readonly composition: Readonly<Record<MushafStudioPanelKind, Readonly<Record<string, unknown>>>>;
+  readonly slot: Readonly<Record<MushafStudioPanelKind, Readonly<Record<string, unknown>>>>;
+} = {
+  composition: {
+    recitation: defaultMushafRecitationProps,
+    'ayah-text': defaultMushafAyahTextProps,
+    page: defaultMushafPageProps,
+  },
+  slot: MUSHAF_SLOT_DEFAULTS,
+};
+
+/**
+ * What "Upgrade and apply the Mushaf look" saves: `props` migrated, the Mushaf look applied (in a
+ * slot without its aspect: the box decides), and outside a slot the margins and the vertical place
+ * the props' format recommends (the Landscape format's at 16:9). Pure.
+ */
+export const upgradeWithLook = (
+  props: Readonly<Record<string, unknown>>,
+  options: {readonly defaults: Readonly<Record<string, unknown>>; readonly inSlot: boolean},
+): Readonly<Record<string, unknown>> => {
+  const migrated = migrateMushafProps<Readonly<Record<string, unknown>>>(props, {defaults: options.defaults});
+  const mushaf = lookById('mushaf')!;
+  const looked = applyLook(migrated, options.inSlot ? lookInBox(mushaf) : mushaf);
+  if (options.inSlot) return looked;
+  const layout = looked.layout as {readonly aspect?: string} | undefined;
+  if (layout === undefined) return looked;
+  const format = formatOf(looked as never) ?? MUSHAF_FORMATS[0]!;
+  return {...looked, layout: {...layout, marginX: format.marginX, verticalAlign: format.verticalAlign}};
+};
+
+/** One change of the upgrade, as the "What changes" list shows it: `undefined` is "(none)". */
+const shownValue = (value: unknown): string => (value === undefined ? '—' : JSON.stringify(value));
+
+/**
+ * Shown on every tab while the target's props in the Root were saved by an earlier Mushaf Studio
+ * (`describeMushafMigration()` of the live Root values has notes): the preview already renders them
+ * migrated (`calculateMetadata()`), but the Root keeps the old fields, which the Props sidebar
+ * refuses. *What changes* lists every note (field, before, after, why); *Upgrade* saves the migrated
+ * props; *Upgrade and apply the Mushaf look* saves them with the Mushaf look (`upgradeWithLook()`).
+ * Nothing is written until a button is pressed.
+ */
+const UpgradeBanner: React.FC<{
+  readonly target: StudioTarget;
+  readonly notes: readonly MigrationNote[];
+  readonly defaults: Readonly<Record<string, unknown>>;
+}> = ({target, notes, defaults}) => {
+  const {busy} = useStudioState();
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const working = busy !== null;
+  const inSlot = target.propsKey !== undefined;
+  const upgrade = (withLook: boolean) =>
+    void runStudioTask(tNow('upgrade.busy'), async () => {
+      await replaceTargetProps(target, (own) =>
+        withLook ? upgradeWithLook(own, {defaults, inSlot}) : migrateMushafProps(own, {defaults}),
+      );
+      setOpen(false);
+      setStudioState({notice: tNow('upgrade.done', {count: notes.length})});
+    });
+  return (
+    <div
+      style={{...styles.status, ...styles.statusLine('notice'), flexWrap: 'wrap'}}
+      role="alert"
+      data-mushaf-control="upgrade"
+    >
+      <span style={{flex: '1 1 100%'}}>{t('upgrade.banner')}</span>
+      <button
+        type="button"
+        data-upgrade="migrate"
+        style={styles.button('primary', working)}
+        disabled={working}
+        onClick={() => upgrade(false)}
+      >
+        {t('upgrade.button')}
+      </button>
+      <button
+        type="button"
+        data-upgrade="details"
+        aria-expanded={open}
+        style={styles.button('default', false)}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? t('upgrade.hideDetails') : t('upgrade.details')}
+      </button>
+      <button
+        type="button"
+        data-upgrade="with-look"
+        style={styles.button('default', working)}
+        disabled={working}
+        onClick={() => upgrade(true)}
+      >
+        {t('upgrade.withLook')}
+      </button>
+      {open ? (
+        <div style={{flex: '1 1 100%'}} data-mushaf-control="upgrade-details">
+          <p style={{...styles.label, margin: '4px 0'}}>{t('upgrade.detailsTitle')}</p>
+          <ul style={{margin: 0, paddingInlineStart: 16}}>
+            {notes.map((note) => (
+              <li key={`${note.path}:${shownValue(note.from)}`} data-path={note.path} style={{marginBottom: 2}}>
+                <code style={styles.code}>{note.path}</code>{' '}
+                <span dir="ltr" style={styles.code}>
+                  {shownValue(note.from)} → {shownValue(note.to)}
+                </span>
+                <span style={styles.label}> · {note.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 /** What the dock renders from the panel's props: its target, the props the tabs see, its kind. */
 type PanelView = {
   readonly target: StudioTarget;
@@ -289,6 +411,14 @@ const StudioDock: React.FC<{
   rememberLiveProps(live);
   useEffect(() => observeLiveProps(live), [live]);
   const pendingPatch = state.pendingPatches[key];
+  // The target's props as the Root holds them: the upgrade banner reads these, not the migrated props rendered.
+  const savedWhole = live[compositionId];
+  const saved = savedWhole === undefined ? null : targetPropsOf(savedWhole, target);
+  const migrationDefaults = MIGRATION_DEFAULTS[propsKey ? 'slot' : 'composition'][view.kind];
+  const migrationNotes = useMemo(
+    () => (saved === null ? [] : describeMushafMigration(saved, {defaults: migrationDefaults})),
+    [saved, migrationDefaults],
+  );
   // The composition has come back with what was saved: the tabs read the props themselves again.
   useEffect(() => {
     if (pendingPatch !== undefined && patchApplied(base, pendingPatch as Readonly<Record<string, unknown>>))
@@ -415,6 +545,9 @@ const StudioDock: React.FC<{
               </button>
             ))}
           </div>
+          {migrationNotes.length > 0 ? (
+            <UpgradeBanner target={target} notes={migrationNotes} defaults={migrationDefaults} />
+          ) : null}
           <div style={styles.content} role="tabpanel">
             <TabErrorBoundary
               key={tab}

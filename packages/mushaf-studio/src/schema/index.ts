@@ -226,7 +226,8 @@ export const layoutSchema = z.object({
       'Legacy image in public/: shown when background.kind is color, or image with an empty src (background.src wins; empty: none)',
     ),
   /** Vertical position of the lines' block, 0 top, 0.5 middle, 1 bottom. */
-  verticalAlign: z.number().min(0).max(1).step(0.05).describe('Vertical position of the lines (0 top, 1 bottom)'),
+  /** Steps of 0.01: the formats place the lines at 0.45 (vertical), 0.47 (portrait) and 0.48 (square). */
+  verticalAlign: z.number().min(0).max(1).step(0.01).describe('Vertical position of the lines (0 top, 1 bottom)'),
   /** px, added to the block's position from `verticalAlign`: a nudge the canvas cannot write into the props itself. */
   offsetY: z.number().int().min(-800).max(800).step(10).describe('Move the lines up (negative) or down, in px'),
 });

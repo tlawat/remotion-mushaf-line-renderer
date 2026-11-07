@@ -24,7 +24,7 @@ import {
 
 /** What a slot resolver takes from the template's `calculateMetadata()`. */
 export type ResolveSlotOptions = {
-  /** The template's frame rate: the slot's durations, the audio's trim and the glow's levels are at it. */
+  /** The template's frame rate: the slot's durations, and the audio's trim are at it. */
   readonly fps: number;
   /** `calculateMetadata()`'s `abortSignal`: reaches every fetch. */
   readonly abortSignal?: AbortSignal | undefined;

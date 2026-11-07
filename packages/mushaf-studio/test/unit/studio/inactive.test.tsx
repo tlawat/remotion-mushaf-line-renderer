@@ -252,12 +252,11 @@ describe('the Look tab', () => {
     expect(ink.dataset.inactive).toBeUndefined();
   });
 
-  it('under a legacy backgroundImage greys out only the looks that keep it', () => {
+  it('under a legacy backgroundImage greys out no look’s page: every look empties layout.backgroundImage', () => {
     lookTab(recitation({layout: {...defaultMushafRecitationProps.layout, backgroundImage: 'bg.jpg'}}));
     expect(screen.getByText(en('inactive.pageColourLegacy', {kind: 'image'}))).toBeTruthy();
     const chipOf = (id: string) => document.body.querySelector<HTMLElement>(`[data-look="${id}"] [title^="Page:"]`)!;
-    // A colour look empties layout.backgroundImage; a frame look leaves it.
-    expect(chipOf('night').dataset.inactive).toBeUndefined();
-    expect(chipOf('reel').dataset.inactive).toBe('');
+    for (const id of ['mushaf', 'haram-night', 'madinah-green', 'tajweed', 'learning'])
+      expect(chipOf(id).dataset.inactive, id).toBeUndefined();
   });
 });

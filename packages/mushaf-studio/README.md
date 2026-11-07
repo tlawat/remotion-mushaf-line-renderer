@@ -235,7 +235,7 @@ six tabs:
 | Tab        | What it does                                                                                                     |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
 | **Source** | Where the audio comes from, as one choice: the QUD catalogue's reviewed recitations, a recording of your own, a file already in `public/`, or a track the template plays. A "Now:" line says what plays now. |
-| **Look**   | One-click style presets (`MUSHAF_LOOKS`, `applyLook()`): theme, layout, animation, highlighting and text placement, never the content or the positions you set; **Undo** goes back through the looks applied, putting back only the fields that still hold a look's values. |
+| **Look**   | The Format row (`MUSHAF_FORMATS`, `applyFormat()`: the frame, and the margins while they are the format's), then the five looks (`MUSHAF_LOOKS`, `applyLook()`, `lookById()`: Mushaf, Haram night, Madinah green, Tajweed, Learning), each a ground, an ink, one metal and one mark, never the content or the positions you set; the mark in one line; **Undo** goes back through the looks applied, putting back only the fields that still hold a look's values. Every tab shows the upgrade banner while the Root holds props an earlier version saved. |
 | **Align**  | Uploads the recording to the [QUD Universal Aligner](https://aligner.qud.dev) with streaming progress, then fetches the word times. Says first that the audio leaves the machine. |
 | **Review** | The segments and their words with confidence; click to seek; nudge a word, split a segment, re-align. Exports captions and imports them back. |
 | **Lines**  | The resolved lines and their time slots; split a line at a word into two timed segments, and remove in one click the splits that no longer fit. On `<MushafPage>`, the pages. |
@@ -513,7 +513,7 @@ are what the panel sets; the groups below are style, set in the sidebar.
 | `slice`       | boolean   | `true`     | Hide the neighbours' words on the first and last lines. |
 | `holdSeconds` | 0.5–30    | `4`        | Seconds each line stays.                       |
 | `header`      | `'none'`, `'name'`, `'name-basmalah'` | `'none'` | When `fromAyah` is 1: the surah's header lines first. |
-| `theme`, `customTheme`, `fonts`, `data`, `layout`, `background`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above; no audio, so the background's glow stays at rest. |
+| `theme`, `customTheme`, `fonts`, `data`, `layout`, `background`, `animation`, `text`, `overlay` | | `theme: 'normal'`, the rest as for `MushafRecitation` | As above. |
 | `resolved`    |           | `null`     | Filled by `calculateMetadata()`.               |
 
 Every change of a passage runs at the incoming line's hold start, as nothing is heard to wait for:
@@ -685,20 +685,28 @@ The transliterated names are `SURAH_NAMES` / `surahEnglishName()`.
 Behind everything, in all four compositions (`backgroundSchema`, `defaultBackground`, painted by
 `<MushafBackground>`). `layout.background` stays the page colour: the `'color'` kind paints it, and
 `background.color` only fills what an image, a video or a gradient leaves (`backgroundFor()`).
+Nothing in it follows the audio.
 
 | Field           | Type                                          | Default      | Description                                                       |
 | --------------- | --------------------------------------------- | ------------ | ----------------------------------------------------------------- |
 | `kind`          | `'color'`, `'image'`, `'video'`, `'gradient'` | `'color'`    | What is painted.                                                  |
-| `color`         | colour                                        | `'#fbf7ee'`  | Behind an image, a video (the bars of `contain`) or a gradient.   |
+| `color`         | colour                                        | `'#f8f3e6'`  | Behind an image, a video (the bars of `contain`) or a gradient.   |
 | `src`           | string                                        | `''`         | Image or video: a path in `public/` or a URL (an empty image falls back to `layout.backgroundImage`). |
 | `fit`           | `'cover'`, `'contain'`                        | `'cover'`    | Fill the frame (cropped) or fit inside it.                        |
 | `videoSeconds`  | 0–3600                                        | `0`          | The video's length, for a frame-exact loop; 0: `calculateMetadata()` probes it (`probeVideoSeconds()`), else the browser loops it. Always muted. |
 | `blur`          | 0–40 px                                       | `0`          | Blur of the image or video.                                       |
-| `dim`           | 0–1                                           | `0`          | A black layer over the background, so light text reads.           |
-| `kenBurns`      | `'none'`, `'slow-zoom'`, `'pan-left'`, `'pan-right'` | `'none'` | A slow zoom or pan over the whole video.                      |
-| `kenBurnsScale` | 1–1.3                                         | `1.1`        | How far the Ken Burns zooms in.                                   |
-| `gradient`      | `{from, to, angle}`                           | `#0f2027` → `#2c5364`, 180° | The gradient's colours and direction.              |
-| `glow`          | `{enabled, color, strength}`                  | off, `'#c8a45c'`, `0.5` | A soft glow behind the lines that breathes with the recitation's level (`audio`'s analysis; at rest without audio). |
+| `dim`           | 0–1                                           | `0`          | A darkening layer. An image or a video keeps a floor (`dimLayer()`): black at 0.45 or more under light ink, a veil of the page colour at 0.55 or more under dark ink. |
+| `vignette`      | 0–0.4                                         | `0`          | Darkening toward the edges, like the fall-off of a page: black on a dark ground, a deeper shade of the page on a light one, dithered by a fixed noise so it never bands. |
+| `kenBurns`      | `'none'`, `'slow-zoom'`                       | `'none'`     | Image or video: a very slow zoom over the whole video, eased.     |
+| `kenBurnsScale` | 1–1.05                                        | `1.04`       | The zoom at the end of `slow-zoom`.                               |
+| `gradient`      | `{from, to, angle}`                           | `#14191d` → `#0b0e10`, 180° | The gradient's colours and direction.               |
+
+`layout.frame: 'hairline'` draws the jadwal over the background: two thin rules in the rosettes'
+gold at the safe area (`<Jadwal>`).
+
+**Backgrounds: what to use.** Abstract textures, sky, water or a landscape, quiet and out of focus;
+no people, faces or animals in focus; nothing underfoot (floors, roads, carpets); and no music or
+sound effects under the recitation.
 
 ### `audio` (`MushafRecitation`, `MushafAyahText`, `MushafPage`)
 

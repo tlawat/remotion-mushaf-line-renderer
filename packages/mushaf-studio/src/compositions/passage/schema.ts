@@ -38,9 +38,9 @@ export const mushafPassageSchema = z.object({
   layout: layoutSchema.describe(
     'Frame and lines. background is the page colour: painted when background.kind is color, and on the title card',
   ),
-  /** No audio here: the glow stays at rest. */
+  /** Nothing in it follows the audio, so a passage without one paints it the same. */
   background: backgroundSchema.describe(
-    'Behind the lines: a colour, a gradient, an image or a looping video (no audio: the glow stays at rest)',
+    'Behind the lines: a colour, a gradient, an image or a looping video, a vignette and a slow zoom',
   ),
   animation: animationSchema,
   text: textSchema.describe('The ayah translations (the word-by-word fields do not apply)'),

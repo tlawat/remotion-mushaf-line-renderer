@@ -2,12 +2,12 @@
 // composition and every old look, as the Studio saved them before the render design, come out in
 // the current shape; a still-valid value is never replaced; the migration is idempotent; a group
 // sent in part is filled; props in the current shape pass through as they are.
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {defaultMushafPassageProps, mushafPassageSchema} from '../../../src/compositions/passage';
 import {defaultMushafRecitationProps, mushafRecitationSchema} from '../../../src/compositions/recitation';
 import {defaultMushafThumbnailProps, mushafThumbnailSchema} from '../../../src/export';
 import {defaultMushafPageProps, mushafPageSchema} from '../../../src/page/schema';
-import {applyLook, MUSHAF_LOOKS} from '../../../src/presets';
+import {applyLook, LEGACY_LOOK_IDS, lookById} from '../../../src/presets';
 import {
   defaultAnimation,
   defaultHighlight,
@@ -159,12 +159,19 @@ describe('migrateMushafProps: the old looks', () => {
     expect(migrate(migrated)).toEqual(migrated);
   });
 
-  it.each(Object.keys(expected))('gives %s the same props as applying today’s look to the migrated Root', (id) => {
-    const look = MUSHAF_LOOKS.find((entry) => entry.id === id)!;
-    const fromOld = migrate(merged(old.MushafRecitation!, (oldLooks as Record<string, Plain>)[id]!));
-    const fromNew = applyLook(migrate(old.MushafRecitation), look);
-    expect(fromOld).toEqual(fromNew);
-  });
+  it.each(Object.keys(expected))(
+    'names %s by the look (or format) that replaced it, which applies to the migrated Root',
+    (id) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const look = lookById(id)!;
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+      expect(look.id).toBe(LEGACY_LOOK_IDS[id]);
+      const fromNew = applyLook(migrate(old.MushafRecitation), look);
+      expect(mushafRecitationSchema.parse(fromNew)).toEqual(fromNew);
+      expect(migrate(fromNew)).toEqual(fromNew);
+    },
+  );
 });
 
 describe('migrateMushafProps: the rules', () => {

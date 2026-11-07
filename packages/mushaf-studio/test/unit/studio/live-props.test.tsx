@@ -106,10 +106,10 @@ describe('the dock in the live props', () => {
       layout: {...defaultMushafRecitationProps.layout, visibleLines: 5},
     };
     studioModel.echo(sidebar);
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
-    expect(studioModel.file).toEqual(applyLook(sidebar, look('night')));
+    expect(studioModel.file).toEqual(applyLook(sidebar, look('haram-night')));
     expect(studioModel.file).toMatchObject({
       text: {translationFile: 'mushaf-studio/p/t.json'},
       layout: {visibleLines: 5},
@@ -118,7 +118,7 @@ describe('the dock in the live props', () => {
 
   it('offers Restore when the live props lose a panel save, and writes it only when asked', async () => {
     const studioModel = mount();
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     studioModel.echo();
     expect(screen.queryByRole('button', {name: 'Restore'})).toBeNull();
@@ -126,21 +126,21 @@ describe('the dock in the live props', () => {
     act(() => studioModel.echo(studioModel.pageLoad));
     const notice = await screen.findByRole('alert');
     expect(notice.textContent).toMatch(
-      /^Some of the panel's changes are no longer in the props \(theme, layout\.background, /,
+      /^Some of the panel's changes are no longer in the props \(customTheme\.frame, customTheme\.accent, /,
     );
     expect(notice.textContent).toMatch(/and \d+ more\)/);
     expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', {name: 'Restore'}));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
-    expect(studioModel.file).toEqual(applyLook(studioModel.pageLoad, look('night')));
+    expect(studioModel.file).toEqual(applyLook(studioModel.pageLoad, look('haram-night')));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('keeps the props as they are when the offer is dismissed, and says it in Arabic too', async () => {
     setStudioState({language: 'ar'});
     const studioModel = mount();
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     studioModel.echo();
     act(() => studioModel.echo(studioModel.pageLoad));
@@ -153,18 +153,18 @@ describe('the dock in the live props', () => {
 
   it('undoes looks one by one, the last first, on the composition that applied them', async () => {
     const studioModel = mount();
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     studioModel.echo();
-    fireEvent.click(card('sepia'));
+    fireEvent.click(card('learning'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     studioModel.echo();
-    expect(getStudioState().lookUndo[ID]!.map((entry) => entry.name)).toEqual(['Night', 'Sepia']);
-    fireEvent.click(screen.getByText('Undo Sepia'));
+    expect(getStudioState().lookUndo[ID]!.map((entry) => entry.name)).toEqual(['Haram night', 'Learning']);
+    fireEvent.click(screen.getByText('Undo Learning'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
-    expect(studioModel.file).toEqual(applyLook(studioModel.pageLoad, look('night')));
+    expect(studioModel.file).toEqual(applyLook(studioModel.pageLoad, look('haram-night')));
     studioModel.echo();
-    fireEvent.click(screen.getByText('Undo Night'));
+    fireEvent.click(screen.getByText('Undo Haram night'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     expect(studioModel.file).toEqual(studioModel.pageLoad);
     expect(screen.queryByText(/^Undo /)).toBeNull();
@@ -178,16 +178,16 @@ describe('state per composition', () => {
     const {rerender} = render(
       <MushafStudioPanel compositionId={ID} props={defaultMushafRecitationProps} initialTab="look" />,
     );
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(getStudioState().busy).toBeNull());
-    // Not back yet: the recitation shows Night from its pending patch.
-    expect(card('night').getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByText('Undo Night')).toBeTruthy();
+    // Not back yet: the recitation shows Haram night from its pending patch.
+    expect(card('haram-night').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Undo Haram night')).toBeTruthy();
     // On another composition neither shows: its look is its own.
     rerender(<MushafStudioPanel compositionId="MushafAyahText" props={defaultMushafAyahTextProps} initialTab="look" />);
-    expect(screen.queryByText('Undo Night')).toBeNull();
+    expect(screen.queryByText('Undo Haram night')).toBeNull();
     expect(document.body.querySelector('[data-look][aria-pressed="true"]')?.getAttribute('data-look')).not.toBe(
-      'night',
+      'haram-night',
     );
     expect(Object.keys(getStudioState().pendingPatches)).toEqual([ID]);
   });

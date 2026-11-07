@@ -1,5 +1,5 @@
 // The parts every composition paints from what `./extras` resolved: the translation stack with its
-// web fonts, the volume curve of the `<Audio>`, the glow's level, the tajweed legend in a corner,
+// web fonts, the volume curve of the `<Audio>`, the tajweed legend in its band,
 // the end card and the Studio-only warnings. Pure in their props and the frame.
 import {Audio as MediaAudio} from '@remotion/media';
 import type {MushafThemeSelection} from '@tlawat/remotion-mushaf-line';

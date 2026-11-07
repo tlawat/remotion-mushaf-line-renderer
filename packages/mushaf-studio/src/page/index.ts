@@ -1,11 +1,13 @@
 // The page composition: the whole printed page a recitation is on, followed line by line. The Zod
 // schema and defaults (schema.ts), the resolver (resolve.ts), `calculateMetadata`
-// (calculate-metadata.ts), the page's geometry (geometry.ts) and the component.
+// (calculate-metadata.ts), the page's geometry (geometry.ts), its turns and line band (turns.ts) and the component.
 export {calculateMushafPageMetadata, resolvePageProps, withPageAudio} from './calculate-metadata';
 export {
   LINES_PER_PAGE,
+  PAGE_FIT,
   type PageBox,
   type PageGeometry,
+  type PageReserve,
   pageBox,
   pageGeometry,
   rowOf,
@@ -42,3 +44,4 @@ export {
   pageTextSchema,
   pageViewSchema,
 } from './schema';
+export {type PageTurn, type PageTurnOptions, pageLineEmphasis, pageTurns} from './turns';

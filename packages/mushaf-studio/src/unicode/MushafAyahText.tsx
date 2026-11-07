@@ -13,6 +13,7 @@ import {AbsoluteFill, interpolateColors, Sequence, staticFile, useCurrentFrame, 
 import {followsHostAudio} from '../audio/host';
 import {volumeAt} from '../audio/volume';
 import {backgroundFor, groundFor} from '../background/compat';
+import {Jadwal} from '../background/Jadwal';
 import {MushafBackground} from '../background/MushafBackground';
 import {endCardFrames} from '../compositions/extras';
 import {useStudioFonts} from '../compositions/fonts';
@@ -44,6 +45,7 @@ import {
 } from '../memorize';
 import {MushafTitleOverlay, showsCorner} from '../overlay';
 import {
+  ARRIVE,
   inkFill,
   legibleAccent,
   markerIds,
@@ -64,6 +66,7 @@ import {useInStudio} from '../studio/environment';
 import {ayahKeyOf, TranslationStack} from '../translations';
 import {AyahText} from './AyahText';
 import {useUnicodeFont} from './font';
+import {type AyahPlan, ayahPresence, ayahTextPlan} from './plan';
 import type {ResolvedAyah, ResolvedAyahText} from './resolve';
 import type {AyahAnimation, MushafAyahTextProps} from './schema';
 import type {AyahWord} from './text';
@@ -81,6 +84,10 @@ const entranceStyle = (
 };
 
 /**
+ * @deprecated `<MushafAyahText>` now times each ayah by `ayahTextPlan()` and styles it with
+ * `ayahPlanStyle()` (the dissolve after the last word). Kept for code users until the next breaking
+ * release.
+ *
  * The style of an ayah `frame` frames into its Sequence of `durationInFrames`: the entrance over the
  * first `enterTiming()` frames, the exit over the last `exitTiming()` frames (the exit wins where a
  * short Sequence has them overlap), on the calm curves: a fade, or with `'rise'` a rise of
@@ -104,10 +111,35 @@ export const ayahPresentationStyle = (
 };
 
 /**
+ * The style of an ayah at `frame` of the composition (`ayahPresence()` of its plan): its opacity,
+ * and with `'rise'` a rise of `riseDistance(fontSize)` px on `ARRIVE` over its entrance (the
+ * translation in the block moves with it). A leaving ayah only fades. `'cut'`: nothing. Pure.
+ */
+export const ayahPlanStyle = (
+  plan: AyahPlan,
+  lines: AyahAnimation['lines'],
+  frame: number,
+  fontSize: number,
+): React.CSSProperties => {
+  if (lines === 'cut') return {};
+  const {opacity, entered} = ayahPresence(plan, frame);
+  if (lines === 'rise' && entered < 1) {
+    const offset = (1 - ARRIVE(entered)) * riseDistance(fontSize);
+    return {opacity, transform: `translateY(${offset.toFixed(4)}px)`};
+  }
+  return opacity < 1 ? {opacity} : {};
+};
+
+/** The share of the frame's width the ayah's block is set in at most: no word is left alone on a line. */
+export const AYAH_BLOCK_WIDTH = 0.78;
+
+/**
  * One ayah at a time as Unicode text in QUL's Uthmani Hafs font, following the audio: the framing
  * of reels and short clips, where `<MushafRecitation>` shows the printed page lines. Each timed
- * ayah is a Sequence from `leadInSeconds` before its first word to where the next one comes in,
- * centred at `layout.verticalAlign`, the recitation marked as `highlight` says (the words still to
+ * ayah comes in by the staggered dissolve after the last word of the one before (`ayahTextPlan()`),
+ * the first settled `leadInSeconds` before its first word, the last holding 1.5 s after the last
+ * word before it fades, the block 78 % of the frame wide with balanced lines, centred at
+ * `layout.verticalAlign`, the recitation marked as `highlight` says (the words still to
  * come resting lighter, a tint or a wash on the word; the ayah on screen is the ayah being recited,
  * so `mode: 'ayah'` marks nothing), and its translation under it, with the title card and corner
  * label of `overlay` when asked, over its `background`, the audio
@@ -169,6 +201,23 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
     [timings, highlight.occurrence, ayahs],
   );
   const measure = width - 2 * layout.marginX;
+  // The ayah's own block: 78 % of the frame, inside the margins.
+  const blockWidth = Math.min(measure, Math.round(AYAH_BLOCK_WIDTH * width));
+  const markers = markerIds(ayahs);
+  const plans = useMemo(
+    () =>
+      ayahTextPlan({
+        timings,
+        clips,
+        markers,
+        fps,
+        leadInSeconds: animation.leadInSeconds,
+        tempo: animation.tempo,
+        motion: animation.lines,
+        occurrence: highlight.occurrence,
+      }),
+    [timings, clips, markers, fps, animation.leadInSeconds, animation.tempo, animation.lines, highlight.occurrence],
+  );
   const titleFontSize = fontSizeForWidth(measure);
   const showTranslation = translationLayers.length > 0 && text.translationPosition !== 'none';
 
@@ -223,13 +272,6 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
           (word: AyahWord): string | undefined =>
             word.kind === 'word' && visibilityOf(ayah, word) === 'first-letter' ? firstLetterOf(word.text) : undefined
       : undefined;
-  /**
-   * Where an ayah's first play starts on the composition's clock: its own start when ayahs play once.
-   * A clip of timings across surahs names its surah, so 114:1 is not taken for 113:1.
-   */
-  const startOnTimeline = (ayah: ResolvedAyah): number =>
-    clips.find((c) => c.repetition === 1 && c.ayah === ayah.ayah && (c.surah ?? ayah.surah) === ayah.surah)
-      ?.compositionFrom ?? ayah.start;
   const span = passageSpan(timings);
 
   return (
@@ -239,7 +281,9 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
           ...backgroundFor(props.background, layout),
           ...(resolved.backgroundVideoSeconds ? {videoSeconds: resolved.backgroundVideoSeconds} : {}),
         }}
+        layout={layout}
       />
+      {layout.frame === 'hairline' && <Jadwal metal={metalOf({ground})} ground={ground} />}
       {ownAudio && identity && (
         <CompositionAudio
           src={recordingUrl(audioFile, resolved, staticFile)}
@@ -270,14 +314,14 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
             </Sequence>
           );
         })}
-      {ayahs.map((ayah, i) => {
+      {ayahs.map((ayah) => {
         const key = `${ayah.surah}:${ayah.ayah}`;
-        // On screen from `leadInSeconds` before its first word until the next ayah comes in: one
-        // ayah at a time, never two half-visible ones over each other.
-        const from = Math.max(0, Math.round((startOnTimeline(ayah) - animation.leadInSeconds) * fps));
-        const next = ayahs[i + 1];
-        const end = next ? Math.round((startOnTimeline(next) - animation.leadInSeconds) * fps) : contentFrames;
-        const duration = Math.max(1, end - from);
+        // On screen from the incoming side of the change that brings it to the outgoing side of the
+        // one that takes it away: one ayah at a time, the two never both at reading strength.
+        const plan = plans.find((entry) => entry.key === key);
+        if (plan === undefined) return null;
+        const {from} = plan;
+        const duration = plan.durationInFrames;
         const block = showTranslation ? (
           // Centred, as the ayah over (or under) it is.
           <TranslationStack
@@ -302,7 +346,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: Math.round(text.translationSize * 0.6),
-                  ...ayahPresentationStyle(animation, frame - from, duration, fps, fontSize),
+                  ...ayahPlanStyle(plan, animation.lines, frame, fontSize),
                 }}
               >
                 {text.translationPosition === 'above' && block}
@@ -315,7 +359,7 @@ export const MushafAyahText: React.FC<WithPanelOption<MushafAyahTextProps>> = ({
                   fontSize={fontSize}
                   lineHeight={lineHeight}
                   color={layout.color}
-                  maxWidth={measure}
+                  maxWidth={blockWidth}
                   // Until the face is in document.fonts the render waits; the Studio preview shows nothing rather than a fallback.
                   style={font.ready ? undefined : {visibility: 'hidden'}}
                 />

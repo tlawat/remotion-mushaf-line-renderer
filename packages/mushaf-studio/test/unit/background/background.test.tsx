@@ -33,11 +33,18 @@ const {
   backgroundBaseStyle,
   backgroundSchema,
   defaultBackground,
+  dimLayer,
+  Jadwal,
+  jadwalOpacity,
+  jadwalRules,
   kenBurnsTransform,
   MushafBackground,
   mediaBoxStyle,
   mediaStyle,
+  NOISE_OPACITY,
   showsMedia,
+  vignetteRgb,
+  vignetteStyle,
 } = await import('../../../src/background');
 type Background = import('../../../src/background').Background;
 
@@ -114,6 +121,20 @@ describe('kenBurnsTransform', () => {
     expect(kenBurnsTransform('slow-zoom', 1.2, 300, 301)).toBe('scale(1.2)');
   });
 
+  it('eases the zoom on SINE: slow at the start and the end, never past the scale', () => {
+    // A quarter of the way in, the eased zoom is behind a linear one; three quarters in, ahead of it.
+    const quarter = Number(/scale\(([\d.]+)\)/.exec(kenBurnsTransform('slow-zoom', 1.04, 75, 301)!)![1]);
+    const threeQuarters = Number(/scale\(([\d.]+)\)/.exec(kenBurnsTransform('slow-zoom', 1.04, 225, 301)!)![1]);
+    expect(quarter).toBeLessThan(1.01);
+    expect(quarter).toBeGreaterThan(1);
+    expect(threeQuarters).toBeGreaterThan(1.03);
+    expect(threeQuarters).toBeLessThan(1.04);
+    for (let f = 0; f <= 300; f += 10) {
+      const scale = Number(/scale\(([\d.]+)\)/.exec(kenBurnsTransform('slow-zoom', 1.05, f, 301)!)![1]);
+      expect(scale).toBeLessThanOrEqual(1.05);
+    }
+  });
+
   it('clamps outside the composition, holds still for one frame, and is nothing for none', () => {
     expect(kenBurnsTransform('slow-zoom', 1.2, -5, 301)).toBe('scale(1)');
     expect(kenBurnsTransform('slow-zoom', 1.2, 400, 301)).toBe('scale(1.2)');
@@ -177,6 +198,34 @@ describe('<MushafBackground>', () => {
     expect(part(at(300, {background: changes}), 'media')!.style.transform).toBe('scale(1.2)');
   });
 
+  it('keeps an image or a video dimmed to its floor: black under light ink, a page veil under dark ink', () => {
+    const image = background({kind: 'image', src: 'sky.jpg'});
+    expect(dimLayer(image, {background: '#121416', color: '#f1eadb'})).toEqual({color: '#000', opacity: 0.45});
+    expect(dimLayer({...image, dim: 0.6}, {background: '#121416', color: '#f1eadb'})).toEqual({
+      color: '#000',
+      opacity: 0.6,
+    });
+    expect(dimLayer(image, {background: '#f8f3e6', color: '#1c1a16'})).toEqual({color: '#f8f3e6', opacity: 0.55});
+    // A colour or a gradient takes dim as set; without layout, so does an image.
+    expect(dimLayer(background({kind: 'gradient'}), {background: '#121416', color: '#f1eadb'})).toBeNull();
+    expect(dimLayer(background({kind: 'gradient', dim: 0.2}), {background: '#121416', color: '#f1eadb'})).toEqual({
+      color: '#000',
+      opacity: 0.2,
+    });
+    expect(dimLayer(image)).toBeNull();
+    // An image without a src shows none: the colour is the page, dimmed as set.
+    expect(dimLayer(background({kind: 'image', src: ''}), {background: '#121416', color: '#f1eadb'})).toBeNull();
+  });
+
+  it('draws the floor over a media background when the layout is given', () => {
+    const c = at(0, {
+      background: background({kind: 'video', src: 'bg/waves.mp4'}),
+      layout: {background: '#f8f3e6', color: '#1c1a16'},
+    });
+    expect(part(c, 'dim')!.style.opacity).toBe('0.55');
+    expect(part(c, 'dim')!.style.backgroundColor).toBe('rgb(248, 243, 230)');
+  });
+
   it('dims with a black layer at the dim opacity, over any kind', () => {
     const c = at(0, {background: background({kind: 'gradient', dim: 0.4})});
     expect(part(c, 'dim')!.style.opacity).toBe('0.4');
@@ -186,5 +235,76 @@ describe('<MushafBackground>', () => {
   it('draws no glow, even for props that still carry one', () => {
     const legacy = {...background(), glow: {enabled: true, color: '#c8a45c', strength: 0.8}} as Background;
     expect(part(at(0, {background: legacy}), 'glow')).toBeNull();
+  });
+});
+
+describe('vignette', () => {
+  it('darkens toward black on a dark ground and toward a deeper shade of the page on a light one', () => {
+    expect(vignetteRgb('#121416')).toBe('0, 0, 0');
+    const [r, g, b] = vignetteRgb('#f8f3e6').split(', ').map(Number) as [number, number, number];
+    // Warm: red over blue, as the ivory is, and clearly darker than it.
+    expect(r).toBeGreaterThan(b);
+    expect(g).toBeGreaterThan(b);
+    expect(r).toBeLessThan(0xf8 - 20);
+    expect(r).toBeGreaterThan(0xf8 - 60);
+  });
+
+  it('is a radial gradient clear over the middle, nothing at 0', () => {
+    expect(vignetteStyle(0.22, '#121416')).toEqual({
+      backgroundImage: 'radial-gradient(ellipse 120% 100% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)',
+    });
+    expect(vignetteStyle(0, '#121416')).toBeNull();
+  });
+
+  it('draws the vignette and its fixed noise over the background, and neither without a vignette', () => {
+    const layout = {background: '#121416', color: '#f1eadb'};
+    let c = at(0, {background: background({vignette: 0.2}), layout});
+    expect(part(c, 'vignette')!.style.backgroundImage).toContain('rgba(0, 0, 0, 0.2)');
+    const noise = part(c, 'noise')!;
+    expect(noise.style.opacity).toBe(String(NOISE_OPACITY));
+    const turbulence = noise.querySelector('feTurbulence')!;
+    expect([
+      turbulence.getAttribute('baseFrequency'),
+      turbulence.getAttribute('numOctaves'),
+      turbulence.getAttribute('seed'),
+    ]).toEqual(['0.9', '1', '7']);
+    // The rect points at its own filter.
+    const id = noise.querySelector('filter')!.id;
+    expect(noise.querySelector('rect')!.getAttribute('filter')).toBe(`url(#${id})`);
+    expect(id).toMatch(/^[\w-]+$/);
+    cleanup();
+    c = at(0, {background: background(), layout});
+    expect(part(c, 'vignette')).toBeNull();
+    expect(part(c, 'noise')).toBeNull();
+  });
+});
+
+describe('jadwal', () => {
+  it('puts the outer rule at the safe area, 2 u thick, and the inner one 6 u inside it, 1 u thick', () => {
+    expect(jadwalRules(1920, 1080)).toEqual({outer: {inset: 54, width: 2}, inner: {inset: 62, width: 1}});
+    expect(jadwalRules(1080, 1920)).toEqual({outer: {inset: 54, width: 2}, inner: {inset: 62, width: 1}});
+    expect(jadwalRules(3840, 2160)).toEqual({outer: {inset: 108, width: 4}, inner: {inset: 124, width: 2}});
+  });
+
+  it('is 0.55 on a light ground and 0.45 on a dark one, in the metal', () => {
+    expect(jadwalOpacity('#f8f3e6')).toBe(0.55);
+    expect(jadwalOpacity('#10241b')).toBe(0.45);
+    remotion.state.width = 1920;
+    remotion.state.height = 1080;
+    const c = render(<Jadwal metal="#cfae63" ground="#10241b" />).container;
+    const root = c.querySelector<HTMLElement>('[data-mushaf-jadwal]')!;
+    expect(root.style.opacity).toBe('0.45');
+    const outer = c.querySelector<HTMLElement>('[data-mushaf-jadwal-rule="outer"]')!;
+    const inner = c.querySelector<HTMLElement>('[data-mushaf-jadwal-rule="inner"]')!;
+    expect([outer.style.left, outer.style.top, outer.style.border]).toEqual([
+      '54px',
+      '54px',
+      '2px solid rgb(207, 174, 99)',
+    ]);
+    expect([inner.style.right, inner.style.bottom, inner.style.border]).toEqual([
+      '62px',
+      '62px',
+      '1px solid rgb(207, 174, 99)',
+    ]);
   });
 });

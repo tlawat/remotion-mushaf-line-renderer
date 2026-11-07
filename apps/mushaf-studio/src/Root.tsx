@@ -604,13 +604,13 @@ export const RemotionRoot: React.FC = () => {
             },
             animation: {
               leadInSeconds: 0.4,
-              lines: 'rise',
+              lines: 'fade',
               tempo: 'calm',
             },
             highlight: {
               mode: 'word',
-              style: 'tint',
-              color: '#f2c14e',
+              style: 'ink',
+              color: '#b8913a',
               occurrence: 'first',
               restOpacity: 0.6,
             },

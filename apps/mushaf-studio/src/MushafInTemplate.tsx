@@ -35,8 +35,11 @@ export const TEMPLATE_FPS = 30;
 /** The name of the template's own `<Audio>`: what the Studio's timeline and the Mushaf panel call the track. */
 export const TEMPLATE_AUDIO_NAME = 'Template audio';
 
-/** Where the recitation sits, in template pixels. */
-const BOX = {left: 60, top: 600, width: 960, height: 720} as const;
+/**
+ * Where the recitation sits, in template pixels: a plain block across the frame inside its 5 % safe
+ * area (54 px), with no card, fill or border of its own, so nothing competes with the text.
+ */
+const BOX = {left: 54, top: 600, width: 972, height: 720} as const;
 
 export const mushafInTemplateSchema = z.object({
   title: z.string().describe('The title the intro shows'),
@@ -76,7 +79,7 @@ export const calculateMushafInTemplateMetadata: CalculateMetadataFunction<Mushaf
   };
 };
 
-/** The template: its own background, title card and outro, and the recitation in a box. */
+/** The template: its own background, title card and outro, and the recitation in a plain block inside the safe area. */
 export const MushafInTemplate: React.FC<MushafInTemplateProps> = ({
   title,
   subtitle,
@@ -109,15 +112,6 @@ export const MushafInTemplate: React.FC<MushafInTemplateProps> = ({
         <div style={{fontSize: 84}}>{title}</div>
         <div style={{fontSize: 40, opacity: 0.75, marginTop: 16}}>{subtitle}</div>
       </div>
-      <div
-        style={{
-          position: 'absolute',
-          ...BOX,
-          borderRadius: 36,
-          background: 'rgba(255, 255, 255, 0.06)',
-          border: '2px solid rgba(255, 255, 255, 0.22)',
-        }}
-      />
       {/* The template's own track, from the recitation's start: the slot's `hostAudio` follows it,
           so the recitation plays nothing itself and its words keep time with this. Muted while the
           recitation plays its own recording instead (still listed in Source, to follow it again). */}

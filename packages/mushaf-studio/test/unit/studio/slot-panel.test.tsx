@@ -74,7 +74,7 @@ const {Waveform} = await import('../../../src/studio/Waveform');
 const {emptySlotPropsFor, defaultMushafRecitationSlotProps, mushafRecitationSlotSchema} = await import(
   '../../../src/slots'
 );
-const {MUSHAF_LOOKS, lookInBox} = await import('../../../src/presets');
+const {MUSHAF_LOOKS, lookById, lookInBox} = await import('../../../src/presets');
 const {resetStudioStore, getStudioState, setStudioState} = await import('../../../src/studio/store');
 const {resetSaveTracking} = await import('../../../src/studio/studio-api');
 const {dockSpaceHolders, STUDIO_CONTAINER_ID} = await import('../../../src/studio/dock-space');
@@ -170,7 +170,7 @@ describe('a slot with no recitation yet', () => {
   it('writes complete props under the key on the first save, and leaves the template its own', async () => {
     render(<MushafStudioPanel compositionId="MyTemplate" props={null} kind="recitation" propsKey="mushaf" />);
     fireEvent.click(screen.getByRole('tab', {name: 'Look'}));
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     expect(saveTarget(0)).toBe('MyTemplate');
     const next = saved(0, template(null));
@@ -179,8 +179,8 @@ describe('a slot with no recitation yet', () => {
     const mushaf = next.mushaf as MushafRecitationProps;
     // The template's schema takes it: complete props, the empty slot's with the look.
     expect(mushafRecitationSlotSchema.safeParse(mushaf).success).toBe(true);
-    expect(mushaf).toMatchObject({audioFile: '', timingsFile: '', theme: 'dark', data: 'mirror'});
-    expect(mushaf.layout.background).toBe('#101418');
+    expect(mushaf).toMatchObject({audioFile: '', timingsFile: '', theme: 'custom', data: 'mirror'});
+    expect(mushaf.layout.background).toBe('#121416');
     expect(Object.keys(mushaf).sort()).toEqual(Object.keys(emptySlotPropsFor('recitation')).sort());
   });
 
@@ -201,17 +201,19 @@ describe('a slot with no recitation yet', () => {
 });
 
 describe('a slot with a recitation', () => {
-  it('keeps layout.aspect when a look is applied: the box decides the size', async () => {
+  it('hides the Format row and keeps layout.aspect when a look is applied: the box decides the size', async () => {
     render(<MushafStudioPanel compositionId="MyTemplate" props={resolvedSlot()} propsKey="mushaf" initialTab="look" />);
     expect(screen.getByText(/a look leaves layout\.aspect as it is/)).toBeTruthy();
-    fireEvent.click(card('reel'));
+    expect(document.body.querySelector('[data-mushaf-control="format"]')).toBeNull();
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     const mushaf = saved(0, template(resolvedSlot())).mushaf as MushafRecitationProps;
     expect(mushaf.layout.aspect).toBe('16:9');
-    expect(mushaf.layout.visibleLines).toBe(0);
-    const reel = MUSHAF_LOOKS.find((look) => look.id === 'reel')!;
-    expect(reel.patch.layout?.aspect).toBe('9:16');
-    expect(lookInBox(reel).patch.layout).toEqual({visibleLines: 0});
+    expect(mushaf.layout.background).toBe('#121416');
+    // An old frame look's id gives its format, which a slot takes without the aspect.
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(lookInBox(lookById('reel')!).patch.layout).toEqual({marginX: 90, verticalAlign: 0.45});
+    expect(MUSHAF_LOOKS.every((look) => look.patch.layout?.aspect === undefined)).toBe(true);
   });
 
   it("seeks at the slot's start in the template, and marks the doubts there", () => {
@@ -331,11 +333,11 @@ describe('several slots in one template', () => {
     // The second slot is empty: its dock opens on Source and says so.
     expect(document.body.querySelector('[data-mushaf-control="slot-empty"]')?.textContent).toContain('second');
     fireEvent.click(screen.getByRole('tab', {name: 'Look'}));
-    fireEvent.click(card('night'));
+    fireEvent.click(card('haram-night'));
     await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
     const next = saved(0, {first: resolvedSlot(), second: null});
     expect((next.first as MushafRecitationProps).layout.background).toBe('transparent');
-    expect((next.second as MushafRecitationProps).layout.background).toBe('#101418');
+    expect((next.second as MushafRecitationProps).layout.background).toBe('#121416');
   });
 
   it('show one dock for two slots with one key, and keep it when the first goes', () => {

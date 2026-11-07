@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import {useId} from 'react';
 import {
   AbsoluteFill,
   Html5Video,
@@ -12,6 +13,9 @@ import {
 } from 'remotion';
 import {OWN_BACKGROUND_NAME} from '../audio/host';
 import {fileUrl} from '../compositions/shared';
+import type {Layout} from '../schema';
+import {fromOklch, groundOf, isLightGround, relativeLuminance, toOklch} from '../schema/color';
+import {SINE} from '../schema/tokens';
 import type {Background, KenBurns} from './schema';
 
 /** Four decimals: stable strings in a transform or an opacity, free of float noise. */
@@ -36,8 +40,9 @@ export const showsMedia = (background: Pick<Background, 'kind' | 'src'>): boolea
   (background.kind === 'image' || background.kind === 'video') && background.src !== '';
 
 /**
- * The slow zoom at `frame`, over the whole composition (frame 0 to `durationInFrames - 1`, linear,
- * clamped): `slow-zoom` scales from 1 to `scale`. `undefined` for `none`. Pure in its arguments.
+ * The slow zoom at `frame`, over the whole composition (frame 0 to `durationInFrames - 1`, eased on
+ * `SINE`, clamped): `slow-zoom` scales from 1 to `scale`, centred. `undefined` for `none`. Pure in
+ * its arguments.
  *
  * `kenBurnsTransform('slow-zoom', 1.04, 0, 300)` is `"scale(1)"`, at frame 299 `"scale(1.04)"`.
  */
@@ -50,7 +55,9 @@ export const kenBurnsTransform = (
   if (kind === 'none') return undefined;
   const last = durationInFrames - 1;
   const progress =
-    last <= 0 ? 0 : interpolate(frame, [0, last], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+    last <= 0
+      ? 0
+      : interpolate(frame, [0, last], [0, 1], {easing: SINE, extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   return `scale(${round4(1 + (scale - 1) * progress)})`;
 };
 
@@ -84,22 +91,117 @@ export const mediaStyle = (background: Pick<Background, 'fit'>): React.CSSProper
   objectFit: background.fit,
 });
 
+/** The darkest an image or a video is veiled: black under light ink, the page colour under dark ink. */
+export const MEDIA_DIM_FLOOR = {black: 0.45, page: 0.55} as const;
+
+/** The dim layer: its colour and opacity. */
+export type DimLayer = {readonly color: string; readonly opacity: number};
+
+/**
+ * The layer that darkens the background, or `null` for none. An image or a video keeps a floor so
+ * the text always reads on it: under light ink (`relativeLuminance(layout.color) > 0.5`) black at
+ * `max(dim, 0.45)`, under dark ink a veil of the page colour at `max(dim, 0.55)`. A colour or a
+ * gradient takes `dim` as set, in black. Without `layout`, `dim` as set for every kind.
+ *
+ * `dimLayer({...defaultBackground, kind: 'image', src: 'sky.jpg'}, {background: '#121416', color: '#f1eadb'})` is black at 0.45.
+ */
+export const dimLayer = (
+  background: Pick<Background, 'kind' | 'src' | 'dim'>,
+  layout?: Pick<Layout, 'background' | 'color'> | undefined,
+): DimLayer | null => {
+  if (layout !== undefined && showsMedia(background)) {
+    return relativeLuminance(layout.color) > 0.5
+      ? {color: '#000', opacity: Math.max(background.dim, MEDIA_DIM_FLOOR.black)}
+      : {color: layout.background, opacity: Math.max(background.dim, MEDIA_DIM_FLOOR.page)};
+  }
+  return background.dim > 0 ? {color: '#000', opacity: background.dim} : null;
+};
+
+/**
+ * The vignette's edge colour on `ground`, as `r, g, b`: black on a dark ground, the ground itself
+ * 0.12 darker in OKLCH lightness on a light one (a warm page edge, not a grey one).
+ */
+export const vignetteRgb = (ground: string): string => {
+  if (!isLightGround(ground)) return '0, 0, 0';
+  const oklch = toOklch(ground);
+  if (oklch === null) return '0, 0, 0';
+  const {r, g, b} = fromOklch({...oklch, l: Math.max(0, oklch.l - 0.12)});
+  return `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
+};
+
+/**
+ * The vignette at strength `vignette` (0-0.4) on `ground`: a radial gradient, clear over the
+ * middle 55 %, darkening toward the edges like the fall-off of a page. `null` for 0.
+ *
+ * `vignetteStyle(0.22, '#121416').backgroundImage` is
+ * `"radial-gradient(ellipse 120% 100% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)"`.
+ */
+export const vignetteStyle = (vignette: number, ground: string): React.CSSProperties | null =>
+  vignette > 0
+    ? {
+        backgroundImage: `radial-gradient(ellipse 120% 100% at 50% 48%, transparent 55%, rgba(${vignetteRgb(ground)}, ${round4(vignette)}) 100%)`,
+      }
+    : null;
+
+/** Opacity of the noise that dithers the vignette against banding at video bitrates. */
+export const NOISE_OPACITY = 0.015;
+
+/**
+ * A fine grey noise over the whole frame (`feTurbulence`, base frequency 0.9, one octave, seed 7: the
+ * same grain on every frame and every machine), at `NOISE_OPACITY`, so a smooth gradient does not
+ * band once a video is encoded.
+ */
+const Noise: React.FC = () => {
+  // A filter id per instance (two compositions on one page), without the colons useId() puts in.
+  const id = `mushaf-noise-${useId().replace(/[^\w-]/g, '')}`;
+  return (
+    <svg
+      data-mushaf-background-part="noise"
+      width="100%"
+      height="100%"
+      style={{position: 'absolute', left: 0, top: 0, opacity: NOISE_OPACITY}}
+      aria-hidden="true"
+    >
+      <filter id={id} x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves={1} seed={7} stitchTiles="stitch" />
+        {/* Grey and opaque: the grain shifts lightness only, at the layer's own opacity. */}
+        <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1" />
+      </filter>
+      <rect width="100%" height="100%" filter={`url(#${id})`} />
+    </svg>
+  );
+};
+
 export type MushafBackgroundProps = {
   readonly background: Background;
+  /**
+   * The page colour and the ink (`layout.background`, `layout.color`): the floor an image or a video
+   * is dimmed to (`dimLayer()`) and the ground the vignette darkens (`groundOf()`) depend on them.
+   * Without them `dim` is drawn as set and the vignette darkens toward `background.color`.
+   */
+  readonly layout?: Pick<Layout, 'background' | 'color'> | undefined;
   /** For tests and other hosts; default Remotion's. */
   readonly staticFile?: ((path: string) => string) | undefined;
 };
 
 /**
  * Everything behind the lines, as an `<AbsoluteFill>` to put first in a composition: the colour or
- * the gradient, then the image (`<Img>`) or the video, then the dim layer. Nothing follows the audio. The video
+ * the gradient, then the image (`<Img>`) or the video (zoomed very slowly when asked), then the dim
+ * layer (`dimLayer()`), then the vignette and its noise. Nothing follows the audio. The video
  * is always muted. With `videoSeconds` it is an `<OffthreadVideo>` in a `<Loop>` of that length,
  * frame-exact in a render; without it, `<Html5Video loop>`, which finds the length itself. Pure in
  * its props and the frame.
  */
-export const MushafBackground: React.FC<MushafBackgroundProps> = ({background, staticFile = remotionStaticFile}) => {
+export const MushafBackground: React.FC<MushafBackgroundProps> = ({
+  background,
+  layout,
+  staticFile = remotionStaticFile,
+}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
+  const dim = dimLayer(background, layout);
+  const ground = layout === undefined ? background.color : groundOf(layout, background.kind);
+  const vignette = vignetteStyle(background.vignette, ground);
   let media: React.ReactNode = null;
   if (showsMedia(background)) {
     const src = fileUrl(background.src, staticFile);
@@ -124,8 +226,14 @@ export const MushafBackground: React.FC<MushafBackgroundProps> = ({background, s
           {media}
         </div>
       )}
-      {background.dim > 0 && (
-        <AbsoluteFill data-mushaf-background-part="dim" style={{backgroundColor: '#000', opacity: background.dim}} />
+      {dim !== null && (
+        <AbsoluteFill data-mushaf-background-part="dim" style={{backgroundColor: dim.color, opacity: dim.opacity}} />
+      )}
+      {vignette !== null && (
+        <>
+          <AbsoluteFill data-mushaf-background-part="vignette" style={vignette} />
+          <Noise />
+        </>
       )}
     </AbsoluteFill>
   );

@@ -1,6 +1,6 @@
 // The recitation cleaned up on its way out (the `audio` props group): measured once in
 // `calculateMetadata()` (loudness, true peak, the first sound, a level per frame), then normalised,
-// faded and trimmed by pure per-frame functions, with the levels driving the background's glow.
+// faded and trimmed by pure per-frame functions, Nothing on screen follows the level.
 export {
   type AnalyzeOptions,
   type AudioAnalysis,
