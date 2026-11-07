@@ -8,8 +8,11 @@ mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are re
 
 ### Breaking
 
-- **Types change shape.** `Highlight` is `{mode, style: 'ink' | 'tint' | 'wash', color, restOpacity,
-  occurrence}` and `Animation` is `{lines: 'fade' | 'rise' | 'cut', tempo: 'calm' | 'slow',
+- **One quiet mark, and types that change shape.** `Highlight` is `{mode, style: 'ink' | 'tint' |
+  'wash', color, restOpacity, occurrence}`: `ink` (the default: the words still to come rest at
+  `restOpacity` and fill in as heard), `tint` (the word's ink eases into the accent, read at 5:1 on
+  the page) or `wash` (a faint, soft-ended band). Each eases in and out, and none dims a neighbour
+  line twice. `Animation` is `{lines: 'fade' | 'rise' | 'cut', tempo: 'calm' | 'slow',
   leadInSeconds}` (`MushafAyahText`'s `animation` too). `Layout` gains `frame`, `Background` loses
   `glow` and gains `vignette`, `MushafLook` gains `nameAr` and `descriptionAr`. Code that builds
   these objects must use the new fields; code that reads saved props should pass them through
@@ -26,34 +29,29 @@ mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are re
   `#b8913a`; any other colour is kept. The old default font stacks (Georgia, Noto Sans) become
   `'auto'`. The full table is in the README's "Upgrading saved props" and in section 7 of the
   design.
-- **Removed looks**: Classic, Tajweed light, Night, Black & gold, Sepia, Reel, Square, Karaoke and
-  Study. `lookById()` maps their ids (`classic`, `sepia`, `karaoke` → `mushaf`; `tajweed-light` →
-  `tajweed`; `night`, `black-gold` → `haram-night`; `study` → `learning`; `reel` and `square` →
-  their format).
+- **Saved props are migrated as they are read.** `migrateMushafProps()` runs first in every
+  `calculateMetadata()` and slot resolver, so props saved by 0.1.0 render the new design;
+  `describeMushafMigration()` lists what changes and `mushafPropsNeedMigration()` says whether
+  anything does. The colour, timing and motion tokens (`legibleAccent()`, `washColor()`,
+  `wordSpans()`, `boundaryStart()`, `dissolve()`, `tempoFrames()`, ...) are exported.
+- **Five looks and a Format control replace the nine old looks.** `MUSHAF_LOOKS` is Mushaf (the
+  defaults), Haram night, Madinah green, Tajweed and Learning, each named and described in English
+  and Arabic, each a ground, an ink, one metal and one mark; looks may now set `overlay` (colour,
+  font), `legend` (show, place, names) and `background` (colour, vignette). Classic, Tajweed light,
+  Night, Black & gold, Sepia, Reel, Square, Karaoke and Study are gone: `lookById()` maps their ids
+  (`classic`, `sepia`, `karaoke` → `mushaf`; `tajweed-light` → `tajweed`; `night`, `black-gold` →
+  `haram-night`; `study` → `learning`), with one warning, and gives `reel` and `square` their
+  format. The frame shape is `MUSHAF_FORMATS` / `applyFormat()` (landscape, vertical, square,
+  portrait): the aspect, and the margins and vertical place only while they hold the previous
+  format's, so look and format commute. `layout.verticalAlign` now steps by 0.01 (the formats use
+  0.45, 0.47, 0.48).
+- **Helpers written before the design** keep working, deprecated: `activeWordStyleFrom()` migrates
+  its argument and returns the mark at full emphasis (`undefined` for ink, the tint drawn on the
+  ground, a lone wash); `scrollTimingFrom()` returns the window's scroll (24 frames on `INOUT`, 34
+  slow; `windowScrollTiming()` also knows the cut). `animationFrom()` takes the new `Animation` and
+  the lengths of the boundary it runs at (`{enterFrames, exitFrames}`).
 - **Needs `@tlawat/remotion-mushaf-line` 0.6.0** (`CALM_EASINGS`, `fadeRise()`, `inkTint`,
   `WordContext.linePosition` and `inkPalette`); the peer range follows at release.
-- **Breaking: one quiet mark, and saved props migrated** (docs/mushaf-studio/render-design.md).
-  `highlight.style` is `ink` (the default: the words still to come rest at `restOpacity` and fill
-  in as heard), `tint` (the word's ink eases into the accent, read at 5:1 on the page) or `wash` (a
-  faint, soft-ended band). Each eases in and out, and none of them dims a neighbour line twice.
-  `dimOthers` and `dimUpcomingOnly` are gone. `animation` is `{lines: fade | rise | cut, tempo:
-  calm | slow, leadInSeconds}`. `background` loses `glow` and the pans and gains `vignette` (its
-  drawing comes later). `layout` gains `frame`. `pageView` keeps a band, a simple frame and a fade.
-  New projects start from the Mushaf palette: ivory, warm ink, gold-line rosettes on vellum.
-  `migrateMushafProps()` runs first in every `calculateMetadata()` and slot resolver, so props saved
-  before render the new design. `describeMushafMigration()` lists what changes and
-  `mushafPropsNeedMigration()` says whether anything does. The colour, timing and motion tokens
-  (`legibleAccent()`, `washColor()`, `wordSpans()`, `boundaryStart()`, `dissolve()`,
-  `tempoFrames()`, ...) are exported.
-- **Breaking: five looks and a Format control.** `MUSHAF_LOOKS` is Mushaf (the defaults), Haram
-  night, Madinah green, Tajweed and Learning, each named and described in English and Arabic
-  (`nameAr`, `descriptionAr`), each a ground, an ink, one metal and one mark; looks may now set
-  `overlay` (colour, font), `legend` (show, place, names) and `background` (colour, vignette). The
-  nine old looks are gone: `lookById()` maps their ids (`night` → `haram-night`, `classic` →
-  `mushaf`, ..., with one warning) and gives `reel` and `square` their format. The frame shape is
-  `MUSHAF_FORMATS` / `applyFormat()` (landscape, vertical, square, portrait): the aspect, and the
-  margins and vertical place only while they hold the previous format's, so look and format
-  commute. `layout.verticalAlign` now steps by 0.01 (the formats use 0.45, 0.47, 0.48).
 
 ### Changed (what looks different)
 
@@ -61,9 +59,14 @@ mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are re
   gold on cream: `#b8913a` is drawn `#806321`), and it now shows on the colour themes too. Glow,
   marker and Karaoke saves get a quieter mark. The Look tab shows the shade drawn; the saved colour
   is never rewritten.
-- **Every save gains** the late-never-early timing, the intro delay (when the intro card is on), the
-  1.5 s end hold and 1 s fade, and the loaded fonts: most videos get longer. A host that syncs to the
-  video reads `resolved.introDelaySeconds`.
+- **Late, never early, and every save gains it.** One line at a time, consecutive lines overlap by
+  the staggered dissolve after the outgoing line's last word (`oneLinePlan()`); the window fades in
+  over 0.8 s with its first line in place, and after the last word it holds 1.5 s and fades over
+  1 s before the end card, which then dissolves in on the same ground. The translation and the
+  corner number change after the outgoing ayah's last word (`ayahChanges()`), by a dissolve.
+  `tempo: 'slow'` lengthens every change 1.4×. With the intro delay (when the intro card is on) and
+  the loaded fonts, most videos get longer; a host that syncs to the video reads
+  `resolved.introDelaySeconds`.
 - **A translation larger than half the Arabic is drawn at half**, which shows at 9:16 (36 px is drawn
   26 there).
 - **New projects start from the Mushaf look**: ivory, warm ink, gold-line rosettes on vellum, the ink
@@ -74,12 +77,6 @@ mushaf leaf. Props saved by 0.1.0 still render: they are migrated as they are re
   a muted ink (`readableInk()`); the ground counts a `layout.backgroundImage` as the image it is
   (`groundFor()`). A rosette the timings time as a word holds the ayah's last word's mark to the
   release (`markerIds()`), and the gloss strip keeps its pace at any frame rate.
-- **Late, never early: the timing of the render design.** One line at a time, consecutive lines
-  overlap by the staggered dissolve after the outgoing line's last word (`oneLinePlan()`); the
-  window fades in over 0.8 s with its first line in place, and after the last word it holds 1.5 s
-  and fades over 1 s before the end card, which then dissolves in on the same ground. The
-  translation and the corner number change after the outgoing ayah's last word (`ayahChanges()`),
-  by a dissolve. `tempo: 'slow'` lengthens every change 1.4×. Durations change accordingly.
 - **The intro card adds its time.** With `overlay.title` `intro` or `both`, the recording starts
   `resolved.introDelaySeconds` later (`introSeconds` + the card's entrance + the lead-in, less what
   the recording already waits), the video grows by it, and the card has its whole `introSeconds`:

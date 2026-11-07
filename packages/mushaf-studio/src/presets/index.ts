@@ -85,7 +85,10 @@ const ROSETTE_OVERRIDE: CustomTheme['override'] = {
   background: true,
 };
 
-/** The rosettes of a custom look: their outline and jewel in `metal`, their petals in `petals`, the number disc the ground. */
+/**
+ * The rosettes of a custom look: their outline and jewel in `metal`, their petals in `petals`, the
+ * number disc the ground (`'transparent'` lets whatever is behind the rosette show, a wash included).
+ */
 const rosettes = (metal: string, petals: string, ground: string): NonNullable<MushafLookPatch['customTheme']> => ({
   base: 'normal',
   frame: metal,
@@ -138,7 +141,8 @@ export const MUSHAF_LOOKS: readonly MushafLook[] = [
     applies: ['recitation', 'ayah-text', 'passage'],
     patch: {
       theme: 'custom',
-      customTheme: rosettes('#d8b56a', '#1a1d20', '#121416'),
+      // Petals and disc left clear: the ayah's wash passes behind the rosette (render-design.md V10).
+      customTheme: rosettes('#d8b56a', 'transparent', 'transparent'),
       layout: {...SHARED.layout, background: '#121416', color: '#f1eadb', neighbourOpacity: 0.25, frame: 'none'},
       animation: {...SHARED.animation, tempo: 'slow'},
       highlight: {mode: 'ayah', style: 'wash', color: '#d8b56a', restOpacity: 0.6},

@@ -11,9 +11,13 @@ export type WashStyleOptions = {
   readonly color: string;
   /** Which outer side ends the run on this word. */
   readonly cap: WashCap;
-  /** The band's height. Default `1.55em`: the letter bodies and vowels, 0.32 em clear of the lines above and below. */
+  /**
+   * The band's height. Default `1.65em`: the letter bodies and vowels, the kasra and tanween under
+   * the letters inside its lower feather (the raised band of render-design.md 12.2, V11: 1.55 em let a kasra
+   * touch its edge).
+   */
   readonly height?: string | undefined;
-  /** The band's vertical centre in the word's box. Default `54%`. */
+  /** The band's place in the word's box, as a CSS background position. Default `55%`. */
   readonly y?: string | undefined;
 };
 
@@ -37,7 +41,7 @@ const capAt = (color: string, inner: 'left' | 'right'): string =>
  * washStyle({color: washColor('#b8913a', 0.1), cap: 'both'});
  * ```
  */
-export const washStyle = ({color, cap, height = '1.55em', y = '54%'}: WashStyleOptions): React.CSSProperties => {
+export const washStyle = ({color, cap, height = '1.65em', y = '55%'}: WashStyleOptions): React.CSSProperties => {
   const tile = (width: string) => `${width} ${height}`;
   switch (cap) {
     case 'none':

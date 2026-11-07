@@ -3,8 +3,9 @@
 // into a round folder and checks them with scripts/design-check.ts. Each case's props are
 // `applyFormat(applyLook(defaults, look), format)` and its overrides (scripts/design-cases.ts),
 // written as whole style groups to `<case>.json`; the app is bundled once, with a copy of its
-// `public/` that adds the files the cases read (V19's backdrop, the translation of V14 and V15), so
-// nothing is written into the app. Dev only. `bun scripts/design-stills.ts --help` for the options.
+// `public/` that adds the files the cases read (V19's backdrop, the translation of V14 and V15, the
+// paused timings of V4-slow), so nothing is written into the app. Dev only.
+// `bun scripts/design-stills.ts --help` for the options.
 import {spawn} from 'node:child_process';
 import {cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -23,11 +24,15 @@ import {
   durationFrom,
   needsDuration,
   parseDesignArgs,
+  pausedTimings,
+  SAMPLE_PAUSE,
+  SAMPLE_TIMINGS,
   selectCases,
   stillArgs,
   stillFile,
   stripArgs,
   stripDir,
+  type TimingsJson,
 } from './design-cases';
 import {folderImages, formatReports, runChecks} from './design-check';
 import {backdropImage, encodePng} from './design-image';
@@ -69,7 +74,7 @@ const pool = async (jobs: number, tasks: readonly (() => Promise<void>)[]): Prom
   await Promise.all(Array.from({length: Math.min(jobs, tasks.length)}, worker));
 };
 
-/** The round's `public/`: the app's, with the backdrop and the translation added. Returns what it holds. */
+/** The round's `public/`: the app's, with the backdrop, the paused timings and the translation added. Returns what it holds. */
 const preparePublic = async (dir: string, options: DesignOptions): Promise<Set<DesignAsset>> => {
   const publicDir = path.join(dir, 'public');
   cpSync(path.join(APP_DIR, 'public'), publicDir, {recursive: true});
@@ -77,6 +82,12 @@ const preparePublic = async (dir: string, options: DesignOptions): Promise<Set<D
   const assets = new Set<DesignAsset>();
   writeFileSync(path.join(publicDir, ASSET_PATHS.backdrop), encodePng(backdropImage()));
   assets.add('backdrop');
+  const sample = JSON.parse(readFileSync(path.join(publicDir, SAMPLE_TIMINGS), 'utf8')) as TimingsJson;
+  writeFileSync(
+    path.join(publicDir, ASSET_PATHS.paused),
+    `${JSON.stringify(pausedTimings(sample, SAMPLE_PAUSE), null, 2)}\n`,
+  );
+  assets.add('paused');
   const translationFile = path.join(publicDir, ASSET_PATHS.translation);
   if (options.translation !== null) {
     cpSync(path.resolve(options.translation), translationFile);

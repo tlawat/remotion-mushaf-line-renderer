@@ -1539,17 +1539,34 @@ Stage R4 (documentation, the demo Root, the design stills):
 48. **Cases measured as the sample allows.** V1's resting ink is sampled on 1:2:4 at f56 (line 1
     holds ayah 2 alone, so no word after 1:2:4 rests at f60). V3's scroll starts at f106, the end of
     ayah 2, which is the `E` of 4.3 for a line that ends on an ayah; the criterion "not before f102"
-    holds. V7 and V9 are measured at f63 against the same props without a mark, 1:2:3 placed by
-    f56; V9's gold is `#806321`, the tint on this ivory page (`#b19353` is the charcoal value). V10's
-    "varies < 1 %" is read as 1 % of the 0-255 range (2.55 levels) of the band's lift over the
-    unmarked frame, along its middle row from the rosette's right edge (the rosette's disc, in the
-    ground's colour, covers the band) to the left cap; V10's slow re-run is V10 itself, as Haram
-    night is slow. V11 is a word wash on Al-Fatihah's 1:2:4 (a kasra under its mīm) at f66, at 16:9
-    and 9:16: `MushafPassage` has no highlight, and the sample has no timings for 2:282 or p.106.
-    V15's "lines settled" is the line in place at rest (0.6) at the first word. V18 has no turn (the
-    sample is one page); its band's cross-fade is measured on f100-f114 against the page without the
-    band and the word mark. V19 uses a generated backdrop (a sky with two thin stripes whose
-    distance gives the zoom). V20's dissolve is measured on f96-f130.
+    holds. The sample is recited without a pause between ayat, so every line change takes `Dmin` at
+    either tempo (V4 measures 10 frames): V4-slow reads the sample's timings with a second of
+    silence put after ayah 2 (`pausedTimings()`, a file of the round's `public/`; the audio does not
+    move, so it serves stills only) and must last the slow 28 frames, which it does. V6 also renders
+    each look's surah header: the recitation sample starts at ayah 2 and shows none, so it is
+    `MushafPassage` over Al-Fatihah 1-2 with `header: 'name'`, at f40, at full scale. V7 and V9 are
+    measured at f63 against the same props without a mark, 1:2:3 placed by f56, by the commonest
+    colour of the tinted pixels (the letters' solid core, not an edge pixel), after checking that
+    the unmarked words reach 0.9 of the ink on their ground. `black` paints its glyphs white, so V9
+    is Haram night's charcoal with `theme: 'black'` and the default accent `#b8913a`: its tint is
+    `#b19353`, as written. V10's "varies < 1 %" is read as 1 % of the 0-255 range (2.55 levels) of
+    the band's lift over the unmarked frame, along its middle row from cap to cap, the rosette
+    included, and "rosette included" also as the band lifting the ground inside the rosette at least
+    0.6 as much as between the words (52); V10's slow re-run is V10 itself, as Haram night is slow.
+    V11 is a word wash on Al-Fatihah's 1:2:3 (رَبِّ, whose kasra is the line's deepest mark) at f57,
+    at 16:9 and 9:16: `MushafPassage` has no highlight, and the sample has no timings for 2:282 or
+    p.106. Its band is read where it lifts the ground at all, and the lowest mark must sit 2 px
+    inside it, on a row the band still lifts by 15 % of its strength (53). V12 reads the lines
+    inside the jadwal's inner rule (its vertical rules have ink on every row) and adds f160, where
+    ayah 4 rests at 0.6 beside ayah 3, told apart by their rosettes. V13's legend is the block of
+    bands at the foot of the frame, its rows counted, not limited (5.8 wraps them: three at 16:9
+    with both names). V14's size is read against the same translation set at 26 px on a 16:9 frame,
+    as the square root of the ratio of their ink areas (36.0 and 26.0 px measured), and its f110 as
+    a dissolve between ayah 2's translation (f60) and ayah 3's (f140). V15's "lines settled" is the
+    line in place at rest (0.6) at the first word. V18 has no turn (the sample is one page); its
+    band's cross-fade is measured on f100-f114 against the page without the band and the word mark.
+    V19 uses a generated backdrop (a sky with two thin stripes whose distance gives the zoom). V20's
+    dissolve is measured on f96-f130.
 49. **Releases.** The changelogs' sections are "0.2.0 (unreleased)" and "0.6.0 (unreleased)": the
     versions in `package.json` and the studio's peer range on `@tlawat/remotion-mushaf-line` (still
     `>=0.4.1`, though the studio now needs 0.6.0) move in the release commits, as for earlier
@@ -1559,8 +1576,31 @@ Stage R4 (documentation, the demo Root, the design stills):
     does not list it as fixed. (b) EB Garamond and Amiri have no offline source: every composition
     waits for them from Google Fonts and stops with `FONT_NETWORK` without a network (13.7); both
     READMEs say so. (c) The review of 12.3 against a physical mushaf is a person's to do.
-51. **The design stills, round r4** (`bun run --cwd apps/mushaf-studio design`): 27 of 28 measured
+    (d) The framed surah name of the header line (V6's header stills) is drawn in the ink, not the
+    metal: it is a one-colour glyph whose frame and name cannot be told apart by colour.
+51. **The design stills, round r5** (`bun run --cwd apps/mushaf-studio design`): 30 of 31 measured
     cases pass. V10 at 16:9 fails on its seams (lift 14.7-19.7 levels along the band: deviation 15,
     the phase-2 band of 13.2); V10 at 9:16 passes at f60 (the seams come and go with where the tiles
-    fall on the pixel grid). The criteria an eye must judge (the rosettes drawn in line, the card's range order, no lone
-    word on the last line, no banding) are listed as "look" in the report.
+    fall on the pixel grid). The criteria an eye must judge (the rosettes drawn in line, the card's
+    range order, no lone word on the last line, no banding) are listed as "look" in the report.
+    Round r4 counted V9 and V12 as passes that were not: V9 was a white palette on ivory, and V12's
+    line criteria were left out without a word. A criterion that cannot be measured now fails as
+    missing.
+
+Stage R4 review:
+
+52. **Haram night's rosettes have clear fills** (`accent` and `background` `'transparent'`), not
+    `#1a1d20` petals and a `#121416` disc. 5.4 paints the disc in the ground's colour, which on a
+    flat ground cannot be seen, but Haram night is the look whose ayah wash includes the rosette
+    (5.1.3, V10): the opaque disc and petals left a dark hole in the band. With clear fills the
+    rosette is the gold line drawing over whatever is behind it, the ground (V6's "the ground on
+    dark") or the band (V10 measures 19.3 levels of lift inside it, as between the words). Madinah
+    green marks in ink and keeps 6.2's values. A wash chosen on a light look still passes behind its
+    vellum petals and ivory disc, a pale disc in a pale band, as 5.4 gives them.
+53. **The wash is 1.65 em at 55 %** (V11's contingency in 12.2), not 1.55 em at 54 %. Measured on
+    1:2:3 (رَبِّ) at full scale, the kasra under its bāʾ reached the last row of the 1.55 em band's
+    lower feather, where the band lifts the ground by about a tenth of its strength, at 16:9 and
+    9:16 alike: the band's edge cut the mark. At 1.65 em the lowest mark sits 5 px (16:9) and 3 px
+    (9:16) inside the feather, on a row lifted 35-38 % of the band's strength, and the band still
+    ends 51 and 29 px above the next line's marks. `MushafAyahText`'s 1.35 em at 55 % (5.12) is
+    unchanged.

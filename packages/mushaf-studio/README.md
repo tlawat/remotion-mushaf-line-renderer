@@ -583,11 +583,26 @@ card's entrance (0.8 s, 1.13 s slow) + the spacing of the surah's header lines b
 `header` puts any) + `leadInSeconds`, less the time the recording already waits before its first
 word, never negative (`introDelaySeconds()`; 3.869 s for the sample with a 3 s card). A host that
 plays the video next to something synced to the recording (a transcript, a player of its own, the
-Laravel side) maps a video second to the recording's with it:
+Laravel side) maps a video second to the recording's with it. When each ayah plays once
+(`memorize.mode` `'off'`) the mapping is one shift:
 
 ```ts
 const recordingSeconds = videoSeconds - (resolved.introDelaySeconds ?? 0) + resolved.audioOffsetSeconds;
 ```
+
+Under `memorize`, each ayah plays `repeat` times with pauses between, so the video's clock goes back
+to an ayah's start at every play: map through the clip being played (`resolved.clips`, on the
+video's clock like the timings) with `audioTimeAt()`, which also holds the end of a clip through the
+pause after it:
+
+```ts
+import {audioTimeAt} from '@tlawat/mushaf-studio';
+
+const recordingSeconds =
+  audioTimeAt(resolved.clips, videoSeconds) - (resolved.introDelaySeconds ?? 0) + resolved.audioOffsetSeconds;
+```
+
+With one play per ayah `audioTimeAt()` returns `videoSeconds`, so the second form serves both.
 
 Under `hostAudio` nothing is delayed: the template's track decides when the recording is heard,
 and the card covers the start in the page colour. `MushafAyahText` and `MushafPage` keep their card

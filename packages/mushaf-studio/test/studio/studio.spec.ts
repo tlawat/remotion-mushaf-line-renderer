@@ -485,9 +485,10 @@ const NIGHT: Tree = {
   customTheme: {
     base: 'normal',
     frame: '#d8b56a',
-    accent: '#1a1d20',
+    // Clear petals and disc: the look's ayah wash passes behind the rosette (render-design.md, deviation 52).
+    accent: 'transparent',
     detail: '#d8b56a',
-    background: '#121416',
+    background: 'transparent',
     override: ROSETTE_OVERRIDE,
   },
   layout: {background: '#121416', color: '#f1eadb', neighbourOpacity: 0.25, frame: 'none', backgroundImage: ''},

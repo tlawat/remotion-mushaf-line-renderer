@@ -436,11 +436,14 @@ bun scripts/design-check.ts out/design/r1          # measure a round again
 ```
 
 Each case's props (`<case>.json`: the look, the format and what the case changes, whole style
-groups), its stills (`<case>-f060.png`) and its strips (`<case>-strip/`, every frame a PNG) go to
-`out/design/<round>/`, with `report.json`. The round bundles the app with a copy of `public/` that
-adds the backdrop of V19 and the translation of V14 and V15 (Saheeh International, fetched from
-quran.com once, or `--translation <file>`), so nothing is written into the app. A criterion only an
-eye can judge (a rosette drawn in line, a lone word on the last line) is listed as "look".
+groups, and the content a case sets, such as V6's surah header) and its stills (`<case>-f060.png`)
+and strips (`<case>-strip/`, every frame a PNG) go to `out/design/<round>/`, with `report.json`.
+The round bundles the app with a copy of `public/` that adds the backdrop of V19, the sample's
+timings with a one-second pause after ayah 2 (V4-slow, whose dissolve needs room to take its slow
+length) and the translation of V14 and V15 (Saheeh International, fetched from quran.com once, or
+`--translation <file>`), so nothing is written into the app. A criterion only an eye can judge (a
+rosette drawn in line, a lone word on the last line) is listed as "look"; one that could not be
+measured fails as missing.
 
 ## Where the files go
 

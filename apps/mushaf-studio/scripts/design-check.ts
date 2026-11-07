@@ -6,7 +6,8 @@
 // and the colours each case expects are here. Dev only.
 import {existsSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
-import {INOUT} from '@tlawat/mushaf-studio';
+import {dissolve, INOUT} from '@tlawat/mushaf-studio';
+import {SAMPLE_FRAMES} from './design-cases';
 import {
   type Band,
   bandsOf,
@@ -18,6 +19,7 @@ import {
   diffBox,
   diffColumnBands,
   dissolveShares,
+  fullRect,
   groundColorOf,
   hexOf,
   type Image,
@@ -25,7 +27,6 @@ import {
   inkiestPixel,
   inkRowProfile,
   levelOf,
-  maxDiffIn,
   opacityIn,
   pixelAt,
   type Rect,
@@ -59,6 +60,9 @@ export const GEOMETRY = {
   vertical: {width: 1080, height: 1920, glyph: 52, lineBox: 114, marginX: 90},
 } as const;
 
+/** The translation's ink in the Mushaf look (3.1, secondary ink). */
+export const TRANSLATION_INK = '#5a554c';
+
 /** The safe area at full scale: 5 % of the short side. */
 export const SAFE_AREA = 54;
 
@@ -75,12 +79,33 @@ const look = (name: string, detail = 'judged by eye'): CheckResult => check(name
 const missing = (name: string, what: string): CheckResult => check(name, false, `missing: ${what}`);
 const fixed = (n: number, digits = 2): string => n.toFixed(digits);
 
-/** The bands of rows with ink across the whole frame, vowel marks joined to their letters. */
-export const lineBands = (image: Image, ground: Rgb, lineBox: number, threshold = 12): Band[] =>
-  bandsOf(inkRowProfile(image, {x0: 0, y0: 0, x1: image.width, y1: image.height}, ground, threshold), {
+/**
+ * The bands of rows with ink across `rect` (the whole frame by default), vowel marks joined to their
+ * letters. A frame with a jadwal is read inside its inner rule: its vertical rules have ink on every row.
+ */
+export const lineBands = (image: Image, ground: Rgb, lineBox: number, threshold = 12, rect = fullRect(image)): Band[] =>
+  bandsOf(inkRowProfile(image, rect, ground, threshold), {
     min: 1,
     gap: Math.max(2, Math.round(0.12 * lineBox)),
+    origin: rect.y0,
   });
+
+/** Whether a colour is the metal: a gold of some strength (CIE LCh chroma over `chroma`, hue 50°-110°). */
+export const isMetal = (color: Rgb, chroma = 18): boolean => {
+  const lch = chromaHueOf(color);
+  return lch.chroma > chroma && lch.hue >= 50 && lch.hue <= 110;
+};
+
+/** The runs of columns of `rect` with metal in them, left to right: the rosettes of a line, on a ground with no gold. */
+export const metalColumns = (image: Image, rect: Rect, gap = 4): Band[] => {
+  const profile: number[] = [];
+  for (let x = rect.x0; x < rect.x1; x++) {
+    let n = 0;
+    for (let y = rect.y0; y < rect.y1; y++) if (isMetal(pixelAt(image, x, y))) n++;
+    profile.push(n);
+  }
+  return bandsOf(profile, {min: 1, gap, origin: rect.x0});
+};
 
 /** The band nearest a row (by its middle), or `null` for none. */
 export const bandNear = (bands: readonly Band[], y: number): Band | null => {
@@ -286,11 +311,44 @@ export const checkScroll = (images: CaseImages, id: string, to: number, duration
   ];
 };
 
-/** V4, V4-slow, V5, V20's strip: the dissolve between two lines in one place. */
+/**
+ * The start frame and the length (whole frames) of the staggered dissolve (`dissolve()`) that best
+ * fit the measured shares of a strip, outgoing `a` and incoming `b` per frame: how long a change took.
+ */
+export const fitDissolve = (
+  samples: readonly {readonly frame: number; readonly a: number; readonly b: number}[],
+  {from, to, durations}: {from: number; to: number; durations: readonly [number, number]},
+): {readonly start: number; readonly duration: number; readonly error: number} => {
+  let best = {start: from, duration: durations[0], error: Number.POSITIVE_INFINITY};
+  for (let start = from; start <= to; start++) {
+    for (let duration = durations[0]; duration <= durations[1]; duration++) {
+      let error = 0;
+      for (const {frame, a, b} of samples) {
+        // Before its start `dissolve()` gives the outgoing text whole and the incoming one absent.
+        const expected = dissolve(frame - start, duration);
+        error += (a - expected.out) ** 2 + (b - expected.in) ** 2;
+      }
+      if (error < best.error) best = {start, duration, error};
+    }
+  }
+  return best;
+};
+
+/**
+ * V4, V4-slow, V5, V20's strip: the dissolve between two lines in one place. With `duration`, it
+ * must also last that many frames (±2), as `fitDissolve()` reads it off the strip.
+ */
 export const checkDissolve = (
   images: CaseImages,
   id: string,
-  {from, to, ground, ink, shift = 0}: {from: number; to: number; ground: string; ink: string; shift?: number},
+  {
+    from,
+    to,
+    ground,
+    ink,
+    shift = 0,
+    duration,
+  }: {from: number; to: number; ground: string; ink: string; shift?: number; duration?: number},
 ): {readonly checks: CheckResult[]; readonly maxRise: number; readonly outgoingMoved: number} => {
   const g0 = rgbOf(ground);
   const i0 = rgbOf(ink);
@@ -323,6 +381,20 @@ export const checkDissolve = (
   const maxRise = Math.max(0, ...fits.filter((x) => x.b > 0.1).map((x) => x.dy));
   const at102 = fits.find((x) => x.f === 102);
   const series = fits.map((x) => `f${x.f} ${fixed(x.a)}/${fixed(x.b)}`).join(', ');
+  const lasts: CheckResult[] = [];
+  if (duration !== undefined) {
+    const fit = fitDissolve(
+      fits.map((x) => ({frame: x.f, a: x.a, b: x.b})),
+      {from, to, durations: [6, 48]},
+    );
+    lasts.push(
+      check(
+        `lasts ${duration} f`,
+        Math.abs(fit.duration - duration) <= 2,
+        `best fit: from f${fit.start} over ${fit.duration} f (error ${fixed(fit.error, 3)})`,
+      ),
+    );
+  }
   return {
     checks: [
       check(
@@ -342,6 +414,7 @@ export const checkDissolve = (
           ? `least ${fixed(Math.min(...fits.map((x) => x.a + x.b)))}`
           : `blank at ${blank.map((x) => `f${x.f}`).join(' ')}`,
       ),
+      ...lasts,
     ],
     maxRise,
     outgoingMoved,
@@ -349,9 +422,9 @@ export const checkDissolve = (
 };
 
 /** V6: no pink and no mint anywhere (the `normal` palette's rosette fills), on each of three looks. */
-export const checkRosettes = (images: CaseImages, id: string): CheckResult[] => {
-  const shot = images.still(id, 60);
-  if (shot === null) return [missing('still', `${id} f60`)];
+export const checkRosettes = (images: CaseImages, id: string, frame = 60): CheckResult[] => {
+  const shot = images.still(id, frame);
+  if (shot === null) return [missing('still', `${id} f${frame}`)];
   const ground = groundColorOf(shot);
   let pink = 0;
   let mint = 0;
@@ -371,6 +444,27 @@ export const checkRosettes = (images: CaseImages, id: string): CheckResult[] => 
   ];
 };
 
+/**
+ * The commonest colour of the pixels of `rect` that differ from `ref` by more than `threshold`: the
+ * solid core of tinted letters, not one stray edge pixel. `null` when nothing differs.
+ */
+export const dominantChanged = (shot: Image, ref: Image, rect: Rect, threshold = 6): Rgb | null => {
+  const counts = new Map<string, {color: Rgb; n: number}>();
+  for (let y = Math.max(0, rect.y0); y < Math.min(shot.height, rect.y1); y++) {
+    for (let x = Math.max(0, rect.x0); x < Math.min(shot.width, rect.x1); x++) {
+      const c = pixelAt(shot, x, y);
+      if (channelDistance(c, pixelAt(ref, x, y)) <= threshold) continue;
+      const key = hexOf(c);
+      const entry = counts.get(key);
+      if (entry === undefined) counts.set(key, {color: c, n: 1});
+      else entry.n++;
+    }
+  }
+  let best: {color: Rgb; n: number} | null = null;
+  for (const entry of counts.values()) if (best === null || entry.n > best.n) best = entry;
+  return best?.color ?? null;
+};
+
 /** The most inked of the pixels of `rect` that differ from `ref` by more than `threshold`: a tinted letter. */
 export const inkiestChanged = (shot: Image, ref: Image, rect: Rect, ground: Rgb, threshold = 6): Rgb | null => {
   let best: Rgb | null = null;
@@ -386,11 +480,18 @@ export const inkiestChanged = (shot: Image, ref: Image, rect: Rect, ground: Rgb,
 
 /**
  * V7 and V9: the word being recited drawn in the accent, the one before it still letting go at f63.
- * At f56 only 1:2:3 is tinted, which places it; 1:2:4 is what differs at f63 to its left (RTL).
+ * At f56 only 1:2:3 is tinted, which places it; 1:2:4 is what differs at f63 to its left (RTL). The
+ * reference must be legible on its own ground first: a tint measured on a page whose words cannot be
+ * read (a white palette on ivory) proves nothing.
  */
-export const checkTint = (images: CaseImages, id: string, expected: string): CheckResult[] => {
+export const checkTint = (
+  images: CaseImages,
+  id: string,
+  expected: string,
+  inks: {readonly ground: string; readonly ink: string},
+): CheckResult[] => {
   const g = scaled('landscape', 0.5);
-  const ground = rgbOf(INKS.ivory.ground);
+  const ground = rgbOf(inks.ground);
   const shot = images.still(id, 63);
   const ref = images.still(`${id}-ref`, 63);
   const before = images.still(id, 56);
@@ -401,17 +502,25 @@ export const checkTint = (images: CaseImages, id: string, expected: string): Che
   const centre = centreBand(ref, ground, g.lineBox);
   if (centre === null) return [missing('lines', 'no centre line')];
   const rows = rowsRect(shot, centre);
+  const inkiest = inkiestPixel(ref, rows, ground);
+  const reach = (levelOf(inkiest) - levelOf(ground)) / (levelOf(rgbOf(inks.ink)) - levelOf(ground));
+  const out: CheckResult[] = [
+    check(
+      'the unmarked words legible on the ground',
+      reach >= 0.9,
+      `the reference's inkiest pixel ${hexOf(inkiest)}: ${fixed(reach)} of the way from the ground to the ink`,
+    ),
+  ];
   const previous = diffBox(before, beforeRef, 6, rows);
-  if (previous === null) return [check('tinted', false, '1:2:3 is not tinted at f56')];
-  const out: CheckResult[] = [];
-  const word = inkiestChanged(shot, ref, {...rows, x1: previous.x0}, ground);
+  if (previous === null) return [...out, check('tinted', false, '1:2:3 is not tinted at f56')];
+  const word = dominantChanged(shot, ref, {...rows, x1: previous.x0});
   out.push(
     word === null
       ? check(`1:2:4 in ${expected}`, false, 'nothing differs left of 1:2:3')
       : check(
           `1:2:4 in ${expected} (ΔE2000 ≤ 5)`,
           deltaE2000(word, rgbOf(expected)) <= 5,
-          `inkiest tinted pixel ${hexOf(word)}, ΔE ${fixed(deltaE2000(word, rgbOf(expected)), 1)}, hue ${fixed(chromaHueOf(word).hue, 0)}`,
+          `commonest tinted colour ${hexOf(word)}, ΔE ${fixed(deltaE2000(word, rgbOf(expected)), 1)}, hue ${fixed(chromaHueOf(word).hue, 0)}`,
         ),
   );
   const trail = inkiestChanged(shot, ref, {...rows, x0: previous.x0, x1: previous.x1}, ground);
@@ -490,12 +599,11 @@ export const checkAyahWash = (images: CaseImages, id: string, format: keyof type
           `band x ${band.x0}-${band.x1}, ink x ${lineInk.x0}-${lineInk.x1}`,
         ),
   );
-  // Along the band's middle row, where the reference shows the ground (between the letters).
+  // Along the band's middle row, where the reference shows the ground (between the letters), from cap to cap.
   const y = Math.round((band.y0 + band.y1) / 2);
   const cap = Math.round(g.glyph * 0.5);
   const lift: number[] = [];
-  // From the rosette's right (its disc, in the ground's colour, covers the band) to the right cap.
-  for (let x = band.x0 + Math.round(g.glyph * 1.1); x < band.x1 - cap; x++) {
+  for (let x = band.x0 + cap; x < band.x1 - cap; x++) {
     const r = pixelAt(ref, x, y);
     if (channelDistance(r, ground) <= 3) lift.push(levelOf(pixelAt(shot, x, y)) - levelOf(r));
   }
@@ -506,6 +614,11 @@ export const checkAyahWash = (images: CaseImages, id: string, format: keyof type
       lift.length > 0 && spread <= 2.55,
       `${lift.length} px, lift ${fixed(Math.min(...lift), 1)}-${fixed(Math.max(...lift), 1)} levels`,
     ),
+  );
+  out.push(
+    centre === null
+      ? missing('the band under the rosette', 'no line')
+      : bandUnderRosette(shot, ref, band, centre, ground, lift),
   );
   const above = bands.filter((b) => centre !== null && b.end <= centre.start).at(-1);
   const below = bands.find((b) => centre !== null && b.start >= centre.end);
@@ -520,29 +633,100 @@ export const checkAyahWash = (images: CaseImages, id: string, format: keyof type
   return out;
 };
 
-/** V11: a word wash on 1:2:4 holds the marks under its letters, and keeps off the next line. */
-export const checkWordWash = (images: CaseImages, id: string, format: keyof typeof GEOMETRY): CheckResult[] => {
+/** The median of some numbers (`NaN` for none). */
+const median = (values: readonly number[]): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted.length === 0 ? Number.NaN : (sorted[Math.floor(sorted.length / 2)] as number);
+};
+
+/**
+ * V10's "rosette included": inside the rosette at the band's end (the run's last word, the leftmost
+ * in RTL), where the reference shows the ground (its disc and petals, between its gold lines), the
+ * band lifts the ground at least 0.6 as much as it does between the words. A rosette whose fills are
+ * painted in the ground's colour leaves a dark hole in the band, and fails.
+ */
+const bandUnderRosette = (
+  shot: Image,
+  ref: Image,
+  band: Rect,
+  line: Band,
+  ground: Rgb,
+  between: readonly number[],
+): CheckResult => {
+  const rosette = metalColumns(ref, {x0: band.x0, y0: line.start, x1: band.x1, y1: line.end})[0];
+  if (rosette === undefined) return missing('the band under the rosette', 'no rosette at the band’s end');
+  // Its inner half: the disc, clear of the outline and the band's caps.
+  const w = rosette.end - rosette.start;
+  const inner: Rect = {
+    x0: rosette.start + Math.round(0.25 * w),
+    y0:
+      Math.max(band.y0, line.start) + Math.round(0.25 * (Math.min(band.y1, line.end) - Math.max(band.y0, line.start))),
+    x1: rosette.end - Math.round(0.25 * w),
+    y1: Math.min(band.y1, line.end) - Math.round(0.25 * (Math.min(band.y1, line.end) - Math.max(band.y0, line.start))),
+  };
+  const lift: number[] = [];
+  for (let y = inner.y0; y < inner.y1; y++) {
+    for (let x = inner.x0; x < inner.x1; x++) {
+      const r = pixelAt(ref, x, y);
+      if (channelDistance(r, ground) <= 3) lift.push(levelOf(pixelAt(shot, x, y)) - levelOf(r));
+    }
+  }
+  const under = median(lift);
+  const elsewhere = median(between);
+  return check(
+    'the band under the rosette',
+    lift.length > 0 && under >= 0.6 * elsewhere,
+    `lift ${fixed(under, 1)} levels inside the rosette (x ${rosette.start}-${rosette.end}, ${lift.length} px) against ${fixed(elsewhere, 1)} between the words`,
+  );
+};
+
+/**
+ * V11: a word wash on 1:2:3 (رَبِّ, whose kasra is the line's deepest mark) holds the marks under
+ * its letters inside its feather, and keeps off the next line. The band's extent is read where it
+ * lifts the ground at all (1 level); the lowest mark must sit 2 px inside it, on a row the band
+ * still lifts by at least 15 % of its full strength.
+ */
+export const checkWordWash = (
+  images: CaseImages,
+  id: string,
+  format: keyof typeof GEOMETRY,
+  frame: number,
+): CheckResult[] => {
   const g = scaled(format, 1);
-  const shot = images.still(id, 66);
-  const ref = images.still(`${id}-ref`, 66);
-  if (shot === null || ref === null) return [missing('stills', `${id} and ${id}-ref f66`)];
+  const shot = images.still(id, frame);
+  const ref = images.still(`${id}-ref`, frame);
+  if (shot === null || ref === null) return [missing('stills', `${id} and ${id}-ref f${frame}`)];
   const ground = rgbOf(INKS.charcoal.ground);
-  const band = diffBox(shot, ref, 3);
+  const band = diffBox(shot, ref, 1);
   if (band === null) return [check('a band', false, 'nothing differs from the reference')];
   const bands = lineBands(ref, ground, g.lineBox, 8);
   const centre = bandNear(bands, (band.y0 + band.y1) / 2);
   const below = bands.find((b) => centre !== null && b.start >= centre.end);
+  // The word's own columns: inside the band, short of its round ends.
+  const cap = Math.round(0.35 * g.glyph);
   const word = inkBox(
     ref,
-    {x0: band.x0, y0: centre?.start ?? band.y0, x1: band.x1, y1: centre?.end ?? band.y1},
+    {x0: band.x0 + cap, y0: centre?.start ?? band.y0, x1: band.x1 - cap, y1: centre?.end ?? band.y1},
     ground,
   );
+  const liftAt = (y: number): number => {
+    const lift: number[] = [];
+    for (let x = band.x0 + cap; x < band.x1 - cap; x++) {
+      const r = pixelAt(ref, x, y);
+      if (channelDistance(r, ground) <= 3) lift.push(levelOf(pixelAt(shot, x, y)) - levelOf(r));
+    }
+    return median(lift);
+  };
+  const full = liftAt(Math.round((band.y0 + band.y1) / 2));
+  const lowest = word === null ? Number.NaN : liftAt(word.y1 - 1);
   return [
-    check(
-      'marks below the letters inside the band',
-      word !== null && word.y1 <= band.y1 + 1,
-      `word ink to row ${word?.y1 ?? '-'}, band to ${band.y1}`,
-    ),
+    word === null
+      ? missing('marks below the letters inside the band’s feather', 'no ink under the band')
+      : check(
+          'marks below the letters inside the band’s feather',
+          word.y1 <= band.y1 - 2 && lowest >= 0.15 * full,
+          `word ink to row ${word.y1}, band to ${band.y1}; the band lifts the lowest ink row by ${fixed(lowest, 1)} levels of ${fixed(full, 1)}`,
+        ),
     check(
       'the band never touches the next line',
       below === undefined || band.y1 < below.start,
@@ -551,12 +735,17 @@ export const checkWordWash = (images: CaseImages, id: string, format: keyof type
   ];
 };
 
-/** V12: the jadwal at the safe area at 0.45, ayah 2 full, the line below at the neighbour opacity. */
+/**
+ * V12: the jadwal at the safe area at 0.45; ayah 2 full and the line below at the neighbour opacity
+ * (f60); at f160, with ayat 3 and 4 on the centre line, ayah 3 full and ayah 4 at rest (0.6). The
+ * lines are read inside the jadwal's inner rule, and the ayat by the rosettes between them.
+ */
 export const checkJadwal = (images: CaseImages): CheckResult[] => {
   const g = scaled('landscape', 0.5);
   const shot = images.still('V12', 60);
   if (shot === null) return [missing('still', 'V12 f60')];
   const ground = rgbOf(INKS.green.ground);
+  const ink = rgbOf(INKS.green.ink);
   const metal = rgbOf('#cfae63');
   const y = Math.round(shot.height / 2);
   const span = levelOf(metal) - levelOf(ground);
@@ -579,78 +768,187 @@ export const checkJadwal = (images: CaseImages): CheckResult[] => {
       `the outer rule's 2 px (1 at half scale) carry ${fixed(outer)} of the metal`,
     ),
   ];
-  const bands = lineBands(shot, ground, g.lineBox).filter(
-    (b) => b.start > g.safe + 4 && b.end < shot.height - g.safe - 4,
-  );
+  const inside: Rect = {x0: g.safe + 8, y0: g.safe + 8, x1: g.width - g.safe - 8, y1: g.height - g.safe - 8};
+  const row = (b: Band): Rect => ({x0: inside.x0, y0: b.start, x1: inside.x1, y1: b.end});
+  const bands = lineBands(shot, ground, g.lineBox, 12, inside);
   const centre = bandNear(bands, shot.height / 2);
   const below = bands.find((b) => centre !== null && b.start >= centre.end);
-  const ink = rgbOf(INKS.green.ink);
-  const inner = (b: Band): Rect => ({x0: g.safe + 6, y0: b.start, x1: shot.width - g.safe - 6, y1: b.end});
-  if (centre !== null) {
-    const o = opacityIn(shot, inner(centre), ground, ink);
-    out.push(check('ayah 2 full', o >= 0.9, `opacity ${fixed(o)}`));
+  if (centre === null) out.push(missing('ayah 2 full', 'no line inside the jadwal'));
+  else {
+    const o = opacityIn(shot, row(centre), ground, ink);
+    out.push(check('ayah 2 full', o >= 0.9, `opacity ${fixed(o)} (rows ${centre.start}-${centre.end})`));
   }
-  if (below !== undefined) {
-    const o = opacityIn(shot, inner(below), ground, ink);
+  if (below === undefined) out.push(missing('the line below at 0.25', 'no line under the centre inside the jadwal'));
+  else {
+    const o = opacityIn(shot, row(below), ground, ink);
     out.push(check('the line below at 0.25', Math.abs(o - 0.25) <= 0.08, `opacity ${fixed(o)}`));
   }
+  const later = images.still('V12', SAMPLE_FRAMES.ayah3Settled);
+  if (later === null) return [...out, missing('ayah 4 at rest beside ayah 3', 'V12 f160')];
+  const line = bandNear(lineBands(later, ground, g.lineBox, 12, inside), later.height / 2);
+  const rosettes = line === null ? [] : metalColumns(later, row(line));
+  const [fourth, third] = rosettes;
+  if (line === null || fourth === undefined || third === undefined) {
+    return [...out, missing('ayah 4 at rest beside ayah 3', `${rosettes.length} rosettes on the centre line at f160`)];
+  }
+  // RTL: ayah 3 from the line's right to its rosette, ayah 4 from there to its own (the leftmost).
+  const ayah3 = opacityIn(later, {...row(line), x0: third.end + 2}, ground, ink);
+  const ayah4 = opacityIn(later, {...row(line), x0: fourth.end + 2, x1: third.start - 2}, ground, ink);
+  out.push(
+    check('ayah 3 full at f160', ayah3 >= 0.9, `opacity ${fixed(ayah3)}`),
+    check(
+      'ayah 4 at rest beside it (0.6)',
+      Math.abs(ayah4 - 0.6) <= 0.08,
+      `opacity ${fixed(ayah4)}; rosettes at x ${third.start}-${third.end} and ${fourth.start}-${fourth.end}`,
+    ),
+  );
   return out;
 };
 
-/** V13: the legend one centred row in a band of its own, under the lines or the page. */
+/**
+ * The legend at the foot of a frame: the last bands of ink, joined while less than 0.12 of a line box
+ * apart (its wrapped rows, 5.8, and an entry's dots and descenders), and the band above that gap.
+ */
+export const legendRows = (
+  bands: readonly Band[],
+  lineBox: number,
+): {readonly rows: readonly Band[]; readonly above: Band | null} => {
+  const rows: Band[] = [];
+  for (let i = bands.length - 1; i >= 0; i--) {
+    const band = bands[i] as Band;
+    const next = rows[0];
+    if (next !== undefined && next.start - band.end >= 0.12 * lineBox) return {rows, above: band};
+    rows.unshift(band);
+  }
+  return {rows, above: null};
+};
+
+/**
+ * V13: the legend in a band of its own under the lines or the page: a block of small rows (at most
+ * 0.6 of a line box: no Quran line joined to it), clear of the text above, every row centred. Its
+ * rows are counted, not limited: 5.8 wraps the names onto more rows when they do not fit one.
+ */
 export const checkLegend = (images: CaseImages, id: string): CheckResult[] => {
   const g = scaled('landscape', 0.5);
   const shot = images.still(id, 60);
   if (shot === null) return [missing('still', `${id} f60`)];
   const ground = rgbOf(INKS.paper.ground);
   const bands = lineBands(shot, ground, g.lineBox * 0.25, 10);
-  const legend = bands.at(-1);
-  const above = bands.at(-2);
-  if (legend === undefined || above === undefined) return [missing('legend', 'fewer than two bands')];
-  const box = inkBox(shot, rowsRect(shot, legend), ground);
-  const centre = box === null ? Number.NaN : (box.x0 + box.x1) / 2;
+  const {rows, above} = legendRows(bands, g.lineBox);
+  const first = rows[0];
+  const last = rows.at(-1);
+  if (first === undefined || last === undefined || above === null) {
+    return [missing('legend', `${rows.length} bands at the foot, ${above === null ? 'no' : 'a'} text above them`)];
+  }
+  // Its rows, told apart by the empty pixel rows between them.
+  const block: Rect = {x0: 0, y0: first.start, x1: shot.width, y1: last.end};
+  const lines = bandsOf(inkRowProfile(shot, block, ground, 10), {min: 1, gap: 1, origin: block.y0});
+  const centres = lines.map((r) => {
+    const box = inkBox(shot, rowsRect(shot, r), ground);
+    return box === null ? Number.NaN : (box.x0 + box.x1) / 2;
+  });
   return [
     check(
-      'one row in a band of its own',
-      legend.end - legend.start <= 0.35 * g.lineBox && legend.start > above.end,
-      `legend rows ${legend.start}-${legend.end}, the text above ends ${above.end}`,
+      'a band of its own under the text',
+      last.end - first.start <= 0.6 * g.lineBox,
+      `${lines.length} rows over ${first.start}-${last.end}; the text above ends ${above.end}, ${first.start - above.end} px clear`,
     ),
-    check('centred', Math.abs(centre - shot.width / 2) <= 0.03 * shot.width, `centre x ${fixed(centre, 0)}`),
+    check(
+      'every row centred',
+      centres.every((c) => Math.abs(c - shot.width / 2) <= 0.03 * shot.width),
+      `row centres x ${centres.map((c) => fixed(c, 0)).join(', ')}`,
+    ),
     look('pastels not washed out'),
   ];
 };
 
-/** V14: the translation centred, under half the Arabic, at most two lines; changed by f110. */
-export const checkTranslation = (images: CaseImages, id: string, format: keyof typeof GEOMETRY): CheckResult[] => {
+/** The translation under the lines of a frame: its rows (short bands under the centre line) and their box. */
+const translationOf = (
+  image: Image,
+  ground: Rgb,
+  lineBox: number,
+): {readonly rows: readonly Band[]; readonly box: Rect | null} => {
+  const bands = lineBands(image, ground, lineBox * 0.3, 10);
+  const centre = bandNear(bands, image.height / 2);
+  const rows = bands.filter((b) => centre !== null && b.start > centre.end && b.end - b.start < 0.45 * lineBox);
+  const first = rows[0];
+  const last = rows.at(-1);
+  const box =
+    first === undefined || last === undefined
+      ? null
+      : inkBox(image, {x0: 0, y0: first.start, x1: image.width, y1: last.end}, ground);
+  return {rows, box};
+};
+
+/** The ink of `rect` as an area: its coverage summed, so it grows with the square of the type size. */
+export const inkArea = (image: Image, rect: Rect, ground: Rgb, ink: Rgb): number =>
+  coverageOf(image, rect, ground, ink).reduce((sum, v) => sum + Math.max(0, Math.min(1, v)), 0);
+
+/**
+ * V14: the translation centred, at most two lines, drawn at `drawn` px; at f110 mid-dissolve from
+ * ayah 2's translation (f60) to ayah 3's (f140). The size is read against `<id>-ref`, the same
+ * translation set at 26 px on a 16:9 frame (where nothing caps it): the same text at another size
+ * covers an area larger by the square of the sizes' ratio, so the ratio of the square roots of the
+ * two ink areas is the ratio of the sizes, to a pixel's antialiasing. 40 px at 16:9, or 36 px left
+ * uncapped at 9:16, fail.
+ */
+export const checkTranslation = (
+  images: CaseImages,
+  id: string,
+  format: keyof typeof GEOMETRY,
+  drawn: number,
+): CheckResult[] => {
   const g = scaled(format, 0.5);
   const f60 = images.still(id, 60);
   const f110 = images.still(id, 110);
-  if (f60 === null || f110 === null) return [missing('stills', `${id} f60, f110`)];
+  const f140 = images.still(id, SAMPLE_FRAMES.ayah3Translation);
+  const ref = images.still(`${id}-ref`, 60);
+  if (f60 === null || f110 === null || f140 === null || ref === null) {
+    return [missing('stills', `${id} f60, f110, f140 and ${id}-ref f60`)];
+  }
   const ground = rgbOf(INKS.ivory.ground);
-  const size = (format === 'landscape' ? 36 : 26) * 0.5;
-  const bands = lineBands(f60, ground, g.lineBox * 0.3, 10);
-  const centre = bandNear(bands, f60.height / 2);
-  const text = bands.filter((b) => centre !== null && b.start > centre.end && b.end - b.start < 0.45 * g.lineBox);
-  if (text.length === 0) return [missing('translation', 'no small text under the lines')];
-  const box = inkBox(f60, {x0: 0, y0: text[0]?.start ?? 0, x1: f60.width, y1: text.at(-1)?.end ?? 0}, ground);
-  const heights = text.map((b) => b.end - b.start);
-  const tallest = Math.max(...heights);
-  const changed = box === null ? 0 : maxDiffIn(f60, f110, box);
-  return [
-    check('at most 2 lines', text.length <= 2, `${text.length} lines, ${heights.join('/')} px tall`),
+  const ink = rgbOf(TRANSLATION_INK);
+  const {rows, box} = translationOf(f60, ground, g.lineBox);
+  const ruler = translationOf(ref, ground, scaled('landscape', 0.5).lineBox).box;
+  const next = translationOf(f140, ground, g.lineBox).box;
+  if (box === null) return [missing('translation', 'no small text under the lines')];
+  const out: CheckResult[] = [
     check(
-      `${size * 2} px (half scale ${size})`,
-      tallest >= 0.75 * size && tallest <= 1.4 * size,
-      `tallest line ${tallest} px of ink`,
+      'at most 2 lines',
+      rows.length <= 2,
+      `${rows.length} lines, ${rows.map((b) => b.end - b.start).join('/')} px tall`,
     ),
-    check(
-      'centred',
-      box !== null && Math.abs((box.x0 + box.x1) / 2 - f60.width / 2) <= 0.03 * f60.width,
-      `x ${box?.x0}-${box?.x1}`,
-    ),
-    check('changed by f110 (after ayah 2)', changed > 20, `largest change ${changed}`),
-    look('EB Garamond 500'),
+    check('centred', Math.abs((box.x0 + box.x1) / 2 - f60.width / 2) <= 0.03 * f60.width, `x ${box.x0}-${box.x1}`),
   ];
+  if (ruler === null) out.push(missing(`drawn at ${drawn} px`, `no translation in ${id}-ref`));
+  else {
+    const size = 26 * Math.sqrt(inkArea(f60, box, ground, ink) / inkArea(ref, ruler, ground, ink));
+    out.push(
+      check(`drawn at ${drawn} px`, Math.abs(size - drawn) <= 0.04 * drawn, `${fixed(size, 1)} px against 26 px`),
+    );
+  }
+  if (next === null) out.push(missing('mid-dissolve at f110', 'no translation at f140'));
+  else {
+    const rect = grow(
+      {
+        x0: Math.min(box.x0, next.x0),
+        y0: Math.min(box.y0, next.y0),
+        x1: Math.max(box.x1, next.x1),
+        y1: Math.max(box.y1, next.y1),
+      },
+      2,
+    );
+    const fit = dissolveShares(f110, f60, f140, rect, ground, ink);
+    out.push(
+      check(
+        'mid-dissolve at f110 (ayah 2 ended at f106)',
+        fit.a <= 0.9 && fit.b <= 0.9 && fit.a + fit.b >= 0.15,
+        `ayah 2's translation at ${fixed(fit.a)}, ayah 3's at ${fixed(fit.b)}`,
+      ),
+    );
+  }
+  out.push(look('EB Garamond 500'));
+  return out;
 };
 
 /** V15: the intro card on the bare ground, gone by the first word, and the video longer by the delay. */
@@ -864,8 +1162,9 @@ export const CHECKS: Readonly<Record<string, (images: CaseImages) => CheckResult
   V2: checkV2,
   V3: (i) => checkScroll(i, 'V3', 140, 24),
   'V3-slow': (i) => checkScroll(i, 'V3-slow', 150, 34),
-  V4: (i) => checkDissolve(i, 'V4', {from: 96, to: 130, ...INKS.ivory}).checks,
-  'V4-slow': (i) => checkDissolve(i, 'V4-slow', {from: 96, to: 135, ...INKS.ivory}).checks,
+  // Without a pause the change takes `Dmin` at either tempo (4.3); after V4-slow's pause, the slow 28.
+  V4: (i) => checkDissolve(i, 'V4', {from: 96, to: 130, ...INKS.ivory, duration: 10}).checks,
+  'V4-slow': (i) => checkDissolve(i, 'V4-slow', {from: 96, to: 135, ...INKS.ivory, duration: 28}).checks,
   V5: (i) => {
     const d = checkDissolve(i, 'V5', {from: 96, to: 130, ...INKS.ivory, shift: 8});
     return [
@@ -877,18 +1176,21 @@ export const CHECKS: Readonly<Record<string, (images: CaseImages) => CheckResult
   'V6-mushaf': (i) => checkRosettes(i, 'V6-mushaf'),
   'V6-haram-night': (i) => checkRosettes(i, 'V6-haram-night'),
   'V6-madinah-green': (i) => checkRosettes(i, 'V6-madinah-green'),
-  V7: (i) => checkTint(i, 'V7', '#806321'),
+  'V6-header-mushaf': (i) => checkRosettes(i, 'V6-header-mushaf', 40),
+  'V6-header-haram-night': (i) => checkRosettes(i, 'V6-header-haram-night', 40),
+  'V6-header-madinah-green': (i) => checkRosettes(i, 'V6-header-madinah-green', 40),
+  V7: (i) => checkTint(i, 'V7', '#806321', INKS.ivory),
   V8: checkTintAsWash,
-  V9: (i) => checkTint(i, 'V9', '#806321'),
+  V9: (i) => checkTint(i, 'V9', '#b19353', INKS.charcoal),
   V10: (i) => checkAyahWash(i, 'V10', 'landscape'),
   'V10-vertical': (i) => checkAyahWash(i, 'V10-vertical', 'vertical'),
-  V11: (i) => checkWordWash(i, 'V11', 'landscape'),
-  'V11-vertical': (i) => checkWordWash(i, 'V11-vertical', 'vertical'),
+  V11: (i) => checkWordWash(i, 'V11', 'landscape', SAMPLE_FRAMES.word123Washed),
+  'V11-vertical': (i) => checkWordWash(i, 'V11-vertical', 'vertical', SAMPLE_FRAMES.word123Washed),
   V12: checkJadwal,
   V13: (i) => checkLegend(i, 'V13'),
   'V13-page': (i) => checkLegend(i, 'V13-page'),
-  V14: (i) => checkTranslation(i, 'V14', 'landscape'),
-  'V14-vertical': (i) => checkTranslation(i, 'V14-vertical', 'vertical'),
+  V14: (i) => checkTranslation(i, 'V14', 'landscape', 36),
+  'V14-vertical': (i) => checkTranslation(i, 'V14-vertical', 'vertical', 26),
   V15: checkIntro,
   V16: checkCorners,
   V17: (i) => checkEnd(i, 827),

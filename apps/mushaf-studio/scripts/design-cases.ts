@@ -8,13 +8,14 @@ import {
   applyLook,
   defaultMushafAyahTextProps,
   defaultMushafPageProps,
+  defaultMushafPassageProps,
   defaultMushafRecitationProps,
   lookById,
   type MushafFormatId,
 } from '@tlawat/mushaf-studio';
 
 /** The compositions the cases render. */
-export type DesignComposition = 'MushafRecitation' | 'MushafPage' | 'MushafAyahText';
+export type DesignComposition = 'MushafRecitation' | 'MushafPassage' | 'MushafPage' | 'MushafAyahText';
 
 /** A shot of a case: still frames, or a strip (every frame of `from`-`to`, both included). */
 export type DesignShot =
@@ -25,7 +26,7 @@ export type DesignShot =
 export type DesignFrame = number | 'last';
 
 /** A file the case reads from the round's `public/` (`design-stills.ts` provides it). */
-export type DesignAsset = 'translation' | 'backdrop';
+export type DesignAsset = 'translation' | 'backdrop' | 'paused';
 
 /** A plain JSON object: the props groups and the overrides. */
 export type Plain = {readonly [key: string]: unknown};
@@ -40,6 +41,11 @@ export type DesignCase = {
   readonly format: MushafFormatId;
   /** Deep-merged over the style groups after the look and the format. */
   readonly overrides: Plain;
+  /**
+   * Content props written as they are over the Root's (a surah, a header, a timings file): what the
+   * frame shows rather than how. Most cases keep the Root's content.
+   */
+  readonly content?: Plain;
   readonly shots: readonly DesignShot[];
   /** `--scale` of the render: 0.5 unless the case is about fine detail. */
   readonly scale: number;
@@ -70,7 +76,47 @@ export const STYLE_GROUPS = [
 export const ASSET_PATHS: {readonly [A in DesignAsset]: string} = {
   translation: 'design/saheeh-international.json',
   backdrop: 'design/backdrop.png',
+  paused: 'design/timings-paused.json',
 };
+
+/** The bundled sample's timings, which `'paused'` is made from (a path of the app's `public/`). */
+export const SAMPLE_TIMINGS = 'mushaf-studio/fatiha/timings.json';
+
+/** A word or an ayah of a timings file: its times in seconds, and anything else it holds. */
+type TimedEntry = {readonly start: number; readonly end: number; readonly [key: string]: unknown};
+
+/** The parts of a timings file `pausedTimings()` reads. */
+export type TimingsJson = {
+  readonly ayat: readonly (TimedEntry & {readonly ayah: number; readonly words?: readonly TimedEntry[]})[];
+  readonly durationSeconds?: number;
+  readonly [key: string]: unknown;
+};
+
+/**
+ * The timings with `seconds` of silence after ayah `afterAyah`: every later ayah and its words move
+ * that much later, and the file grows by it. The sample is recited without a pause between ayat, so
+ * every line change takes the shortest dissolve (`Dmin`) whatever the tempo; this gives one change
+ * room for its whole dissolve (V4-slow). The audio does not move, so the file is for stills only.
+ */
+export const pausedTimings = <T extends TimingsJson>(
+  timings: T,
+  {afterAyah, seconds}: {afterAyah: number; seconds: number},
+): T => {
+  const later = (entry: TimedEntry): TimedEntry => ({...entry, start: entry.start + seconds, end: entry.end + seconds});
+  // Every field but the times is the file's own, so the result has its type.
+  return {
+    ...timings,
+    ...(timings.durationSeconds === undefined ? {} : {durationSeconds: timings.durationSeconds + seconds}),
+    ayat: timings.ayat.map((ayah) =>
+      ayah.ayah <= afterAyah
+        ? ayah
+        : {...later(ayah), ayah: ayah.ayah, ...(ayah.words === undefined ? {} : {words: ayah.words.map(later)})},
+    ),
+  } as T;
+};
+
+/** The pause `'paused'` puts after ayah 2, the end of the first line: longer than the slow `lineDissolve` (28 f). */
+export const SAMPLE_PAUSE = {afterAyah: 2, seconds: 1} as const;
 
 /**
  * Frames of the bundled Al-Fatihah sample at 30 fps (12.2): ayah 2 is 0.33-3.53 s, its last word
@@ -84,6 +130,12 @@ export const SAMPLE_FRAMES = {
   line2FirstWord: 106,
   lastWordEnd: 827,
   introFirstWord: 126,
+  /** 1:2:3 (رَبِّ, a kasra under its bāʾ) is at full wash, 1:2:2's mark gone: it ends at f58. */
+  word123Washed: 57,
+  /** Line 2 (ayat 3 and 4) settled in the centre slot during ayah 3, which ends at f184. */
+  ayah3Settled: 160,
+  /** Ayah 3's translation fully in (its dissolve ends by f116). */
+  ayah3Translation: 140,
 } as const;
 
 const still = (...frames: DesignFrame[]): DesignShot => ({kind: 'still', frames});
@@ -152,9 +204,14 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     look: 'mushaf',
     format: 'landscape',
     overrides: {layout: {visibleLines: 0}, animation: {tempo: 'slow'}},
+    // A second of silence after ayah 2, so the change has room for its slow 28 frames (see `pausedTimings()`).
+    content: {timingsFile: ASSET_PATHS.paused},
+    // Line 2's first word starts at f136 after the pause: the strip ends before it fills in.
     shots: [strip(96, 135)],
     scale: 0.5,
-    criteria: 'As V4 at the slow tempo',
+    assets: ['paused'],
+    criteria:
+      'As V4 at the slow tempo, after a 1 s pause: line 1 full at f102, the dissolve starting after it and lasting the slow lineDissolve (28 f, the calm 20 × 1.4)',
   },
   {
     id: 'V5',
@@ -177,6 +234,21 @@ export const DESIGN_CASES: readonly DesignCase[] = [
       scale: 1,
       criteria:
         'Rosette outline and numerals in gold line; petals vellum (or the ground on dark); no pink, no mint, no solid gold coin',
+    }),
+  ),
+  // The surah header of each look: the sample starts at ayah 2, so the recitation shows none; the
+  // passage shows Al-Fatihah's from its first ayah, the header line in the centre slot at f40.
+  ...(['mushaf', 'haram-night', 'madinah-green'] as const).map(
+    (look): DesignCase => ({
+      id: `V6-header-${look}`,
+      composition: 'MushafPassage',
+      look,
+      format: 'landscape',
+      overrides: {},
+      content: {surah: 1, fromAyah: 1, toAyah: 2, header: 'name'},
+      shots: [still(40)],
+      scale: 1,
+      criteria: 'The framed surah name and the basmalah’s rosette: no pink, no mint, no solid gold coin',
     }),
   ),
   {
@@ -222,20 +294,23 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     referenceOf: 'V8',
     criteria: 'V8 without a mark',
   },
+  // `black` paints its glyphs white, so it is a theme for a dark ground: Haram night's charcoal.
   {
     id: 'V9',
     composition: 'MushafRecitation',
-    look: 'mushaf',
+    look: 'haram-night',
     format: 'landscape',
-    overrides: {theme: 'black', highlight: {style: 'tint'}},
+    // The default accent, `#b8913a`, whose tint on charcoal 3.1.2 gives (Haram night's own is `#d8b56a`).
+    overrides: {theme: 'black', highlight: {mode: 'word', style: 'tint', color: '#b8913a'}},
     shots: [still(56, 60, 63)],
     scale: 0.5,
-    criteria: '1:2:4 letters in gold (#806321 on this ivory page); rosettes and other words untouched',
+    criteria:
+      '1:2:4 letters in #b19353-ish gold (the tint on charcoal); rosettes and other words untouched; the unmarked words legible on the ground',
   },
   {
     id: 'V9-ref',
     composition: 'MushafRecitation',
-    look: 'mushaf',
+    look: 'haram-night',
     format: 'landscape',
     overrides: {theme: 'black', ...noMark},
     shots: [still(56, 60, 63)],
@@ -274,10 +349,10 @@ export const DESIGN_CASES: readonly DesignCase[] = [
         look: 'haram-night',
         format,
         overrides: {highlight: {mode: 'word'}},
-        shots: [still(66)],
+        shots: [still(SAMPLE_FRAMES.word123Washed)],
         scale: 1,
         criteria:
-          'A word wash on 1:2:4 (kasra under its mim): the marks below the letters stay inside the band; the band never touches the next line',
+          'A word wash on 1:2:3 (رَبِّ, its kasra the deepest mark of the line): the marks below the letters stay inside the band’s feather; the band never touches the next line',
       },
       {
         id: `V11${suffix}-ref`,
@@ -285,7 +360,7 @@ export const DESIGN_CASES: readonly DesignCase[] = [
         look: 'haram-night',
         format,
         overrides: noMark,
-        shots: [still(66)],
+        shots: [still(SAMPLE_FRAMES.word123Washed)],
         scale: 1,
         referenceOf: `V11${suffix}`,
         criteria: `V11${suffix} without a mark`,
@@ -298,10 +373,10 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     look: 'madinah-green',
     format: 'landscape',
     overrides: {},
-    shots: [still(60)],
+    shots: [still(60, SAMPLE_FRAMES.ayah3Settled)],
     scale: 0.5,
     criteria:
-      'Jadwal double rule at the safe area in gold at 0.45; ayah 2 full, the line below at the neighbour opacity',
+      'Jadwal double rule at the safe area in gold at 0.45; ayah 2 full, the line below at the neighbour opacity; at f160 ayah 3 full and ayah 4 beside it at rest (0.6)',
   },
   {
     id: 'V13',
@@ -324,20 +399,36 @@ export const DESIGN_CASES: readonly DesignCase[] = [
     scale: 0.5,
     criteria: 'As V13 on the page: the legend under the page, nothing overlapped',
   },
-  ...(['landscape', 'vertical'] as const).map(
-    (format): DesignCase => ({
-      id: format === 'landscape' ? 'V14' : 'V14-vertical',
-      composition: 'MushafRecitation',
-      look: 'mushaf',
-      format,
-      overrides: {text: {translationFile: ASSET_PATHS.translation}},
-      shots: [still(60, 110)],
-      scale: 0.5,
-      assets: ['translation'],
-      criteria:
-        'Centred EB Garamond 500, 36 px at 16:9 and 26 px at 9:16; at most 2 lines; at f110 mid-dissolve to ayah 3 or there',
-    }),
-  ),
+  ...(['landscape', 'vertical'] as const).flatMap((format): DesignCase[] => {
+    const id = format === 'landscape' ? 'V14' : 'V14-vertical';
+    return [
+      {
+        id,
+        composition: 'MushafRecitation',
+        look: 'mushaf',
+        format,
+        overrides: {text: {translationFile: ASSET_PATHS.translation}},
+        shots: [still(60, 110, SAMPLE_FRAMES.ayah3Translation)],
+        scale: 0.5,
+        assets: ['translation'],
+        criteria:
+          'Centred EB Garamond 500, 36 px at 16:9 and 26 px at 9:16; at most 2 lines; at f110 mid-dissolve from ayah 2’s translation to ayah 3’s (ayah 2 ends at f106)',
+      },
+      // The ruler of the size: the same translation set at 26 px where nothing caps it (16:9).
+      {
+        id: `${id}-ref`,
+        composition: 'MushafRecitation',
+        look: 'mushaf',
+        format: 'landscape',
+        overrides: {text: {translationFile: ASSET_PATHS.translation, translationSize: 26}},
+        shots: [still(60)],
+        scale: 0.5,
+        assets: ['translation'],
+        referenceOf: id,
+        criteria: `${id}'s translation at 26 px on a 16:9 frame: what its drawn size is measured against`,
+      },
+    ];
+  }),
   {
     id: 'V15',
     composition: 'MushafRecitation',
@@ -453,12 +544,14 @@ export const defaultsOf = (composition: DesignComposition): Plain =>
     ? defaultMushafPageProps
     : composition === 'MushafAyahText'
       ? defaultMushafAyahTextProps
-      : defaultMushafRecitationProps;
+      : composition === 'MushafPassage'
+        ? defaultMushafPassageProps
+        : defaultMushafRecitationProps;
 
 /**
  * The props a case renders with: `applyFormat(applyLook(defaults, look), format)` and the case's
- * overrides, cut to the style groups the composition has (whole groups), so `--props` replaces those
- * and the Root keeps the content. A look id that names no look throws.
+ * overrides, cut to the style groups the composition has (whole groups), and the case's content
+ * props, so `--props` replaces those and the Root keeps the rest. A look id that names no look throws.
  */
 export const casePropsFor = (designCase: DesignCase): Plain => {
   const look = lookById(designCase.look);
@@ -467,7 +560,7 @@ export const casePropsFor = (designCase: DesignCase): Plain => {
   const styled = deepMerge(applyFormat(applyLook(base, look), designCase.format), designCase.overrides);
   const out: Record<string, unknown> = {};
   for (const group of STYLE_GROUPS) if (group in base) out[group] = styled[group];
-  return out;
+  return {...out, ...designCase.content};
 };
 
 /** The case of an id, or `null`. */
@@ -533,9 +626,10 @@ Options:
   --jobs <n>             renders at once (default 2)
   -h, --help             this text
 
-Each case's props (style groups only) go to <round>/<case>.json, its stills to
-<round>/<case>-f<frame>.png and its strips to <round>/<case>-strip/. The round's public/ is a copy
-of the app's with the backdrop and the translation added, so nothing is written into the app.
+Each case's props (style groups, and the content a case sets) go to <round>/<case>.json, its stills
+to <round>/<case>-f<frame>.png and its strips to <round>/<case>-strip/. The round's public/ is a copy
+of the app's with the backdrop, the paused timings and the translation added, so nothing is written
+into the app.
 Example:
   bun scripts/design-stills.ts --round r1 -- --browser-executable=/opt/pw-browsers/chromium`;
 

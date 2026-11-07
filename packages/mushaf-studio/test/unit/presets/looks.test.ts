@@ -100,6 +100,18 @@ describe('MUSHAF_LOOKS', () => {
     expect(look('haram-night').patch.background).toEqual({color: '#121416', vignette: 0.22});
   });
 
+  it('leaves Haram night’s rosette fills clear, so its ayah wash passes behind the rosette', () => {
+    expect(look('haram-night').patch.highlight).toMatchObject({mode: 'ayah', style: 'wash'});
+    expect(look('haram-night').patch.customTheme).toMatchObject({
+      frame: '#d8b56a',
+      detail: '#d8b56a',
+      accent: 'transparent',
+      background: 'transparent',
+    });
+    // The other dark look marks in ink: its disc is the ground, as the design gives it.
+    expect(look('madinah-green').patch.customTheme).toMatchObject({accent: '#163225', background: '#10241b'});
+  });
+
   it('is the defaults with the Mushaf look: applied to the recitation’s defaults it changes nothing', () => {
     const mushaf = look('mushaf');
     expect(applyLook(defaultMushafRecitationProps, mushaf)).toEqual(defaultMushafRecitationProps);

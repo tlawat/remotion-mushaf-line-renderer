@@ -11,7 +11,9 @@ import {
   durationFrom,
   needsDuration,
   parseDesignArgs,
+  pausedTimings,
   referenceFor,
+  SAMPLE_PAUSE,
   STYLE_GROUPS,
   selectCases,
   stillArgs,
@@ -69,6 +71,54 @@ describe('the cases of 12.2', () => {
     const ayah = casePropsFor(caseById('V20') as never);
     expect(ayah).not.toHaveProperty('theme');
     expect(ayah).toHaveProperty('highlight', expect.objectContaining({mode: 'word', style: 'wash'}));
+  });
+
+  it('writes the content a case sets beside its style groups, and only the groups its composition has', () => {
+    const slow = casePropsFor(caseById('V4-slow') as never);
+    expect(slow).toMatchObject({timingsFile: ASSET_PATHS.paused});
+    expect(caseById('V4-slow')?.assets).toContain('paused');
+    expect(casePropsFor(caseById('V4') as never)).not.toHaveProperty('timingsFile');
+    const header = casePropsFor(caseById('V6-header-haram-night') as never);
+    expect(header).toMatchObject({surah: 1, fromAyah: 1, header: 'name', layout: {background: '#121416'}});
+    expect(header).not.toHaveProperty('highlight');
+    expect(caseById('V6-header-mushaf')?.composition).toBe('MushafPassage');
+  });
+
+  it('renders the black palette on a dark ground (V9), and measures V14 against a 26 px ruler at 16:9', () => {
+    for (const id of ['V9', 'V9-ref']) {
+      const props = casePropsFor(caseById(id) as never) as {theme: string; layout: {background: string}};
+      expect([props.theme, props.layout.background], id).toEqual(['black', '#121416']);
+    }
+    expect(casePropsFor(caseById('V9') as never)).toMatchObject({highlight: {mode: 'word', style: 'tint'}});
+    for (const id of ['V14', 'V14-vertical']) {
+      const ruler = caseById(`${id}-ref`);
+      expect(ruler?.referenceOf).toBe(id);
+      expect(ruler?.format).toBe('landscape');
+      expect(casePropsFor(ruler as never)).toMatchObject({text: {translationSize: 26}});
+    }
+  });
+
+  it('puts a pause after an ayah, moving every later ayah and its words and nothing before', () => {
+    const timings = {
+      version: 1,
+      durationSeconds: 10,
+      ayat: [
+        {ayah: 2, start: 0.3, end: 3.5, words: [{id: '1:2:1', start: 0.3, end: 3.5}]},
+        {ayah: 3, start: 3.5, end: 6, complete: true, words: [{id: '1:3:1', start: 3.5, end: 6}]},
+      ],
+    };
+    const paused = pausedTimings(timings, SAMPLE_PAUSE);
+    expect(paused.version).toBe(1);
+    expect(paused.durationSeconds).toBe(11);
+    expect(paused.ayat[0]).toEqual(timings.ayat[0]);
+    expect(paused.ayat[1]).toEqual({
+      ayah: 3,
+      start: 4.5,
+      end: 7,
+      complete: true,
+      words: [{id: '1:3:1', start: 4.5, end: 7}],
+    });
+    expect(timings.ayat[1]?.start).toBe(3.5);
   });
 
   it('refuses a look that does not exist', () => {
