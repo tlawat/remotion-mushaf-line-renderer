@@ -62,7 +62,7 @@ export const Note: React.FC<{readonly children: React.ReactNode}> = ({children})
 );
 
 /**
- * Settings the current props make do nothing (`inactive.ts`): greyed out under the reason, and still
+ * Settings that have no effect with the current props (`inactive.ts`): greyed out under the reason, and still
  * usable, so a file can be prepared before the option that shows it is turned on. `reason` `null`
  * shows the children as they are, in the same wrappers, so a reason that comes or goes (an option
  * changed in the Props sidebar) keeps them mounted: focus, a caret and local state stay.
