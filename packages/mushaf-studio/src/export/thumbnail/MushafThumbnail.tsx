@@ -1,9 +1,10 @@
 import {fontSizeForWidth, lineHeightForFontSize, MushafLine, MushafSurahName} from '@tlawat/remotion-mushaf-line';
 import type * as React from 'react';
 import {AbsoluteFill, Img, staticFile, useVideoConfig} from 'remotion';
+import {useStudioFonts} from '../../compositions/fonts';
 import {BACKGROUND_IMAGE_STYLE, fileUrl} from '../../compositions/shared';
 import {MushafStudioError} from '../../errors';
-import {fontPropsFrom} from '../../schema';
+import {fontPropsFrom, studioFontFamily} from '../../schema';
 import {type ResolvedThumbnail, thumbnailSubtitle} from './calculate-metadata';
 import type {MushafThumbnailProps} from './schema';
 
@@ -14,7 +15,8 @@ const NAME_SHARE = 0.75;
  * The video's thumbnail, a still: over the background colour (and image), centred top to bottom,
  * the surah's name in its printed frame (`<MushafSurahName framed>`), the first printed line of
  * `fromAyah` across the measure (`<MushafLine>`), the title and the subtitle. The fonts load behind
- * `delayRender()` in the package's components. Pure in its props.
+ * `delayRender()`: the mushaf's in the package's components, the title's (EB Garamond for `'auto'`)
+ * through `useStudioFonts()`, so the still is never taken in a fallback face. Pure in its props.
  */
 export const MushafThumbnail: React.FC<MushafThumbnailProps> = (props) => {
   const {width} = useVideoConfig();
@@ -26,6 +28,8 @@ export const MushafThumbnail: React.FC<MushafThumbnailProps> = (props) => {
       {prop: 'resolved'},
     );
   }
+  // The book serif of the title and subtitle: the still is not taken before it is in.
+  useStudioFonts();
   const measure = Math.max(1, width - 2 * props.marginX);
   const lineFontSize = fontSizeForWidth(measure);
   const lineHeight = lineHeightForFontSize(lineFontSize);
@@ -49,7 +53,7 @@ export const MushafThumbnail: React.FC<MushafThumbnailProps> = (props) => {
           alignItems: 'center',
           justifyContent: 'center',
           gap: Math.round(props.subtitleSize * 0.4),
-          fontFamily: props.font,
+          fontFamily: studioFontFamily(props.font, 'label'),
           textAlign: 'center',
         }}
       >

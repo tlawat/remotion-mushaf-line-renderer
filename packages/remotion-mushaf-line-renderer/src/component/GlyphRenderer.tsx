@@ -27,6 +27,8 @@ export type GlyphItem = {
   readonly align: 'center' | 'baseline';
   /** Where the glyph sits across the box: `'center'` (default), or against its `'right'` or `'left'` edge. */
   readonly side?: 'center' | 'right' | 'left';
+  /** Its CSS colour; default the inherited one. */
+  readonly color?: string | undefined;
 };
 
 export type GlyphRendererProps = {
@@ -109,13 +111,16 @@ export const GlyphRenderer: React.FC<GlyphRendererProps> = ({
             className={`mushaf-glyph mushaf-glyph--${item.glyph.kind}`}
             data-glyph={item.glyph.kind}
             data-font={font.id}
-            style={buildGlyphStyle({
-              fontFamily: gate.families[font.id] as string,
-              fontSize: item.fontSize,
-              lineHeight,
-              shiftEm: item.align === 'center' ? glyphShiftEm(font, item.glyph) : 0,
-              side: item.side ?? 'center',
-            })}
+            style={{
+              ...buildGlyphStyle({
+                fontFamily: gate.families[font.id] as string,
+                fontSize: item.fontSize,
+                lineHeight,
+                shiftEm: item.align === 'center' ? glyphShiftEm(font, item.glyph) : 0,
+                side: item.side ?? 'center',
+              }),
+              ...(item.color === undefined ? {} : {color: item.color}),
+            }}
           >
             {item.glyph.text}
           </span>
@@ -175,15 +180,23 @@ export const frameFontSize = (def: MushafDefinition, fontSize: number): number =
   return (fontSize * measureEm) / frameEm;
 };
 
-/** The glyphs of a surah header: the frame (unless `framed` is false) with the name over it. */
+/** The glyphs of a surah header: the frame (unless `framed` is false, in `frameColor` when given) with the name over it. */
 export const surahHeaderItems = (
   def: MushafDefinition,
   surah: number,
   fontSize: number,
   framed: boolean,
+  frameColor?: string | undefined,
 ): GlyphItem[] => [
   ...(framed
-    ? [{glyph: def.glyphs.headerFrame, fontSize: frameFontSize(def, fontSize), align: 'center' as const}]
+    ? [
+        {
+          glyph: def.glyphs.headerFrame,
+          fontSize: frameFontSize(def, fontSize),
+          align: 'center' as const,
+          ...(frameColor === undefined ? {} : {color: frameColor}),
+        },
+      ]
     : []),
   {glyph: def.glyphs.surahName(surah), fontSize, align: 'center'},
 ];

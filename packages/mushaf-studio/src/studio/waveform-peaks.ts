@@ -2,9 +2,9 @@
 // as a fine min/max envelope in the store, and cut into as many peaks as the canvas has columns.
 // The peak functions are pure; only `loadWaveform()` touches the network and Web Audio.
 import {staticFile} from 'remotion';
+import {fileUrl} from '../compositions/shared';
 import {MushafStudioError} from '../errors';
-import {describeError, getStudioState, setStudioState, t} from './store';
-import {isUrl} from './studio-api';
+import {describeError, getStudioState, setStudioState, t, withEntry} from './store';
 
 /** The lowest and highest sample of each bucket, in [-1, 1]. Both arrays have one entry per bucket. */
 export type Peaks = {readonly min: Float32Array; readonly max: Float32Array};
@@ -111,7 +111,7 @@ export const peaksBetween = (envelope: WaveformEnvelope, from: number, to: numbe
 };
 
 /** The URL the composition plays an `audioFile` from: a URL as it is, a `public/` path through `staticFile()`. */
-export const audioUrlOf = (audioFile: string): string => (isUrl(audioFile) ? audioFile : staticFile(audioFile));
+export const audioUrlOf = (audioFile: string): string => fileUrl(audioFile, staticFile);
 
 type Decoder = {
   decodeAudioData: (data: ArrayBuffer) => Promise<{
@@ -150,13 +150,24 @@ const setEntry = (url: string, entry: WaveformEntry): void =>
   setStudioState({waveforms: {...getStudioState().waveforms, [url]: entry}});
 
 /**
+ * Forgets the envelope of `url`, so the next `loadWaveform()` decodes it again: the panel calls it
+ * when it rewrites the file under the same path (`writeFile()`).
+ */
+export const forgetWaveform = (url: string): void => {
+  const {waveforms} = getStudioState();
+  if (url in waveforms) setStudioState({waveforms: withEntry(waveforms, url, undefined)});
+};
+
+/**
  * Decodes the recording at `url` once and caches its envelope in the store; a second call for the
- * same URL (React's double effects included) does nothing. Studio only, in the browser only: where
- * there is no Web Audio it records an error entry and fetches nothing. A failure is an entry
- * of its own, never a thrown error, so the waveform says why it is missing.
+ * same URL while it is decoding or decoded (React's double effects included) does nothing. Studio
+ * only, in the browser only: where there is no Web Audio it records an error entry and fetches
+ * nothing. A failure is an entry of its own, never a thrown error, so the waveform says why it is
+ * missing; the next call tries again (the file may be there by then).
  */
 export const loadWaveform = async (url: string): Promise<void> => {
-  if (getStudioState().waveforms[url] !== undefined) return;
+  const entry = getStudioState().waveforms[url];
+  if (entry !== undefined && entry.status !== 'error') return;
   const decoder = audioDecoder();
   if (decoder === null) {
     setEntry(url, {status: 'error', message: t('waveform.noWebAudio')});

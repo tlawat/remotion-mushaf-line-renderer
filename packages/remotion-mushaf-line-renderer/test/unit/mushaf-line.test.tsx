@@ -480,6 +480,117 @@ describe('<MushafLine>', () => {
     ).toBe('');
   });
 
+  it('registers four tint palettes for inkTint on a fixed-ink theme and names them through inkPalette', async () => {
+    const black = {
+      ...justified,
+      theme: 'black' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+    };
+    const seen: Array<((amount: number) => string | undefined) | undefined> = [];
+    const {container} = render(
+      <MushafLine
+        line={black}
+        inkTint="#b19353"
+        wordStyle={(word, ctx) => {
+          seen.push(ctx.inkPalette);
+          return {fontPalette: ctx.inkPalette?.(word.position === 1 ? 1 : 0.3) ?? 'none'};
+        }}
+      />,
+    );
+    await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
+    const palette = seen.at(-1)!;
+    expect(palette(0)).toBeUndefined();
+    expect(palette(0.12)).toBeUndefined();
+    const steps = [0.25, 0.5, 0.75, 1].map((amount) => palette(amount)!);
+    expect(new Set(steps).size).toBe(4);
+    expect(palette(0.3)).toBe(steps[0]);
+    expect(palette(0.9)).toBe(steps[3]);
+    const css = Array.from(document.querySelectorAll('style[data-mushaf-palettes]'))
+      .map((s) => s.textContent ?? '')
+      .join('');
+    const ruleOf = (ident: string) => css.split('\n').find((rule) => rule.includes(`${ident}{`)) ?? '';
+    // Every entry that draws letters (ink 0, silent 1, 2, 15, rules 3-9) moves toward the tint; the
+    // rosette's (10-13) and the rings' (14) keep the theme's colours.
+    expect(ruleOf(steps[3]!)).toContain(
+      'override-colors:0 #b19353,1 #b19353,2 #b19353,3 #b19353,4 #b19353,5 #b19353,6 #b19353,7 #b19353,8 #b19353,9 #b19353,10 #ffffff,11 #ffffff,12 #ffffff,13 #ffffff,14 transparent,15 #b19353',
+    );
+    expect(ruleOf(steps[1]!)).toContain('0 #d8c9a9');
+    expect(ruleOf(steps[1]!)).toContain('7 #d8c9a9');
+    const words = [...container.querySelectorAll<HTMLElement>('.mushaf-word')];
+    expect(words[0]!.style.getPropertyValue('font-palette')).toBe(steps[3]);
+    // The rosette keeps its marker palette whatever wordStyle asks.
+    const marker = container.querySelector<HTMLElement>('.mushaf-word--end')!;
+    expect(marker.style.getPropertyValue('font-palette')).not.toBe(steps[0]);
+    expect(marker.style.getPropertyValue('font-palette')).toMatch(/^--mushaf-qpc-v4-tajweed-p2-palette-5-/);
+  });
+
+  it('tints an ink that follows currentColor from the row colour, as the row rule resolves it', async () => {
+    const normal = {
+      ...justified,
+      theme: 'normal' as const,
+      fontSet: 'qpc-v4-tajweed' as const,
+      fontFamily: 'mushaf-qpc-v4-tajweed-p2',
+    };
+    let palette: ((amount: number) => string | undefined) | undefined;
+    const {container} = render(
+      <MushafLine
+        line={normal}
+        inkTint="#806321"
+        style={{color: 'rgb(28, 26, 22)'}}
+        wordStyle={(_w, ctx) => {
+          palette = ctx.inkPalette;
+          return undefined;
+        }}
+      />,
+    );
+    await waitFor(() => expect(rowOf(container).style.visibility).toBe('visible'));
+    expect(typeof palette).toBe('function');
+    const css = Array.from(document.querySelectorAll('style[data-mushaf-palettes]'))
+      .map((s) => s.textContent ?? '')
+      .join('');
+    // The row's rule holds the computed colour; the tints start from it.
+    expect(paletteRuleFor(rowOf(container))).toContain('0 rgb(28, 26, 22)');
+    expect(css.split('\n').find((rule) => rule.includes(`${palette!(1)}{`))).toContain('0 #806321');
+    // The heavy rā and the madd letters are drawn by the rules' entries, in the ink here: they turn too.
+    expect(css.split('\n').find((rule) => rule.includes(`${palette!(1)}{`))).toContain('7 #806321');
+    expect(css.split('\n').find((rule) => rule.includes(`${palette!(1)}{`))).toContain('5 #806321');
+    expect(css.split('\n').find((rule) => rule.includes(`${palette!(0.5)}{`))).toContain('0 #4e3f1c');
+  });
+
+  it('gives no inkPalette under plain or without a tint, and refuses a bad inkTint', () => {
+    const seen: unknown[] = [];
+    for (const props of [{line: justified, inkTint: '#806321'}, {line: justified}]) {
+      render(
+        <MushafLine
+          {...props}
+          wordStyle={(_w, ctx) => {
+            seen.push(ctx.inkPalette);
+            return undefined;
+          }}
+        />,
+      );
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((palette) => palette === undefined)).toBe(true);
+    expect(() => render(<MushafLine line={justified} inkTint="red;}" />)).toThrow(/inkTint> must be a CSS colour/);
+  });
+
+  it('tells wordStyle the line position: 0 for a lone line', () => {
+    const positions: unknown[] = [];
+    render(
+      <MushafLine
+        line={justified}
+        wordStyle={(_w, ctx) => {
+          positions.push(ctx.linePosition);
+          return undefined;
+        }}
+      />,
+    );
+    expect(positions.length).toBeGreaterThan(0);
+    expect(new Set(positions)).toEqual(new Set([0]));
+  });
+
   it('styles and marks individual words through the per-word hooks', () => {
     const {container} = render(
       <MushafLine
@@ -835,5 +946,110 @@ describe('<MushafLine slice>', () => {
     const whole = render(<MushafLine line={line} />);
     await visible(whole.container);
     expect(rowOf(whole.container).style.fontSize).toBe('168px');
+  });
+});
+
+describe('<MushafLine wordBand>', () => {
+  const bandsOf = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>('.mushaf-line__band'));
+  const visible = (c: HTMLElement) => waitFor(() => expect(rowOf(c).style.visibility).toBe('visible'));
+  // Synthetic page 3 line 2: 2:3:2 (17), 2:3:3 rosette (18), 2:4:1 (19), 2:4:2 rosette (20).
+  const twoAyahs = () => getMushafLine({mushaf: 'qpc-v4', page: 3, line: 2});
+  /**
+   * jsdom has no layout: stands in for one where the row is 400 px wide and each word 100 px, laid
+   * right to left as the row sets them (word i from 300 − 100 i). No canvas, so the boxes are the ink.
+   */
+  const fakeLayout = () =>
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.classList.contains('mushaf-line__row')) {
+        return {
+          x: 0,
+          y: 0,
+          width: 400,
+          height: 0,
+          top: 0,
+          left: 0,
+          right: 400,
+          bottom: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+      const index = this.parentElement ? Array.from(this.parentElement.children).indexOf(this) : 0;
+      const left = 300 - 100 * index;
+      return {
+        x: left,
+        y: 0,
+        width: 100,
+        height: 0,
+        top: 0,
+        left,
+        right: left + 100,
+        bottom: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+
+  it('draws no band layer without wordBand, or when it names no word', async () => {
+    const plain = render(<MushafLine line={await twoAyahs()} />);
+    await visible(plain.container);
+    expect(plain.container.querySelector('.mushaf-line__bands')).toBeNull();
+    cleanup();
+    const none = render(<MushafLine line={await twoAyahs()} wordBand={() => undefined} />);
+    await visible(none.container);
+    expect(none.container.querySelector('.mushaf-line__bands')).toBeNull();
+  });
+
+  it('draws one shape behind an ayah’s run of words, rosette included, under the row', async () => {
+    fakeLayout();
+    const line = await twoAyahs();
+    const {container} = render(
+      <MushafLine
+        line={line}
+        fit="mushaf"
+        fontSize={100}
+        lineHeight={220}
+        wordBand={(word) => (word.ayah === 3 ? {color: 'rgba(177, 147, 83, 0.13)'} : undefined)}
+      />,
+    );
+    await visible(container);
+    const layer = container.querySelector<HTMLElement>('.mushaf-line__bands')!;
+    // Before the row in the DOM, so the row paints over it; hidden and shown with the row.
+    expect(layer.nextElementSibling).toBe(rowOf(container));
+    expect(layer.getAttribute('aria-hidden')).toBe('true');
+    expect(layer.style.visibility).toBe('visible');
+    const bands = bandsOf(container);
+    expect(bands).toHaveLength(1);
+    // Words 17 and 18 sit at 200-400: the band runs 0.35 em past each side.
+    expect(bands[0]!.style.left).toBe('165px');
+    expect(bands[0]!.style.width).toBe('270px');
+    expect(bands[0]!.style.backgroundImage).toContain('rgba(177, 147, 83, 0.13)');
+    // The words carry no background of their own.
+    expect(container.querySelector<HTMLElement>('.mushaf-word')!.style.backgroundImage).toBe('');
+  });
+
+  it('tells wordBand what wordStyle is told, and gives a word a slice hides no band', async () => {
+    fakeLayout();
+    const seen: string[] = [];
+    const {container} = render(
+      <MushafLine
+        line={await twoAyahs()}
+        slice={{ayah: 4}}
+        activeWordId="2:4:1"
+        wordBand={(word, ctx) => {
+          seen.push(`${word.id}:${ctx.active}:${ctx.inSlice}:${ctx.linePosition}`);
+          return {color: '#00000020'};
+        }}
+      />,
+    );
+    await visible(container);
+    // Only the words the slice keeps are asked: 19 (active) and its rosette.
+    expect(new Set(seen)).toEqual(new Set(['2:4:1:true:true:0', '2:4:2:false:true:0']));
+    expect(bandsOf(container)).toHaveLength(1);
+  });
+
+  it('keeps the row hidden until the bands know where the ink is', async () => {
+    const {container} = render(<MushafLine line={await twoAyahs()} wordBand={() => ({color: 'rgba(0, 0, 0, 0.1)'})} />);
+    expect(rowOf(container).style.visibility).toBe('hidden');
+    await visible(container);
+    expect(container.querySelector<HTMLElement>('.mushaf-line__bands')!.style.visibility).toBe('visible');
   });
 });

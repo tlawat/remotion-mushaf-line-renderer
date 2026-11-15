@@ -268,6 +268,25 @@ describe('chapters and description', () => {
     await waitFor(() => expect(getStudioState().notice).toBe('The description is copied: paste it into YouTube.'));
   });
 
+  it('describes the props as they are when clicked, not as the dock last re-rendered with them', async () => {
+    const timings = timingsOf(4, 12);
+    const {rerender} = review(propsWith(timings));
+    // A new resolution with the same timings and another translation: the dock's fingerprint is the
+    // same, so it keeps its copy; the click reads the props the composition has now.
+    const before = propsWith(timings);
+    const renamed: AyahTranslation = {...translation, meta: {...translation.meta, name: 'Clear Quran'}};
+    rerender(
+      <MushafStudioPanel
+        compositionId="MushafRecitation"
+        props={{...before, resolved: {...before.resolved, translation: renamed, translations: [renamed]}}}
+        initialTab="review"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Copy description'}));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText.mock.calls[0]![0]).toContain('Translation: Clear Quran (quran.com)');
+  });
+
   it('falls back to a selected textarea, then shows the text to copy when the browser refuses both', async () => {
     setClipboard(undefined);
     const execCommand = vi.fn(() => true);
@@ -303,7 +322,7 @@ describe('thumbnail', () => {
       theme: 'normal',
     });
     // Not the panel's own composition: nothing pending for it, nothing re-evaluated.
-    expect(getStudioState().pendingPatch).toBeNull();
+    expect(getStudioState().pendingPatches).toEqual({});
     await waitFor(() => expect(getStudioState().busy).toBeNull());
     expect(getStudioState().notice).toBe('MushafThumbnail now shows 1:2-5 and is open in the Studio.');
   });
@@ -329,13 +348,22 @@ describe('thumbnail', () => {
 
   it('takes the lowest and highest ayah timed, and no title without a reciter', () => {
     const props = propsWith(timingsOf(1, 2), '');
-    expect(thumbnailPatchOf(props, {...timingsOf(1, 2), ayat: []})).toEqual({
+    expect(thumbnailPatchOf(props, {...timingsOf(1, 2), ayat: []})).toEqual({surah: 1, fromAyah: 1, toAyah: 0});
+    expect(thumbnailPatchOf(props, timingsOf(3, 2))).toEqual({surah: 1, fromAyah: 2, toAyah: 4});
+    expect(thumbnailPatchOf(propsWith(timingsOf(1, 2), '  '), timingsOf(3, 2))).not.toHaveProperty('title');
+  });
+
+  it("keeps the thumbnail's own title when the composition names no reciter", async () => {
+    review(propsWith(timingsOf(4, 12), ''));
+    fireEvent.click(screen.getByRole('button', {name: 'Thumbnail'}));
+    await waitFor(() => expect(studio.goToComposition).toHaveBeenCalledWith('MushafThumbnail'));
+    expect(saveCall(0).defaultProps({savedDefaultProps: {surah: 36, title: 'My channel', theme: 'normal'}})).toEqual({
       surah: 1,
-      fromAyah: 1,
-      toAyah: 0,
-      title: '',
+      fromAyah: 2,
+      toAyah: 5,
+      title: 'My channel',
+      theme: 'normal',
     });
-    expect(thumbnailPatchOf(props, timingsOf(3, 2))).toEqual({surah: 1, fromAyah: 2, toAyah: 4, title: ''});
   });
 
   it('takes the first surah and its ayahs when the timings cross surahs', () => {
@@ -347,11 +375,46 @@ describe('thumbnail', () => {
         {surah: 114, ayah: 1, start: 2, end: 3},
       ],
     };
-    expect(thumbnailPatchOf(propsWith(timingsOf(1, 2), ''), crossing)).toEqual({
-      surah: 113,
-      fromAyah: 4,
-      toAyah: 5,
-      title: '',
-    });
+    expect(thumbnailPatchOf(propsWith(timingsOf(1, 2), ''), crossing)).toEqual({surah: 113, fromAyah: 4, toAyah: 5});
+  });
+});
+
+describe('in a slot of a template', () => {
+  /** The panel of a slot under `mushaf`, the recitation starting `frameOffset` frames into the template. */
+  const slot = (props: MushafRecitationProps, frameOffset: number) =>
+    render(
+      <MushafStudioPanel
+        compositionId="MyTemplate"
+        props={props}
+        propsKey="mushaf"
+        frameOffset={frameOffset}
+        initialTab="review"
+      />,
+    );
+
+  it("copies the chapters at the video's times: the slot's start later, the first still at 0:00", async () => {
+    const timings = timingsOf(4, 12);
+    slot(propsWith(timings), 150);
+    fireEvent.click(screen.getByRole('button', {name: 'Copy chapters'}));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const chapters = chaptersFromTimings(timings, {offsetSeconds: 5});
+    expect(writeText).toHaveBeenCalledWith(`${chapters.join('\n')}\n`);
+    expect(writeText.mock.calls[0]![0].startsWith('0:00 Al-Fatihah 1:2\n0:17 Al-Fatihah 1:3\n')).toBe(true);
+    // The description carries the same chapters.
+    fireEvent.click(screen.getByRole('button', {name: 'Copy description'}));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls[1]![0]).toContain('0:17 Al-Fatihah 1:3');
+  });
+
+  it('saves the thumbnail without leaving the template, and says where it went', async () => {
+    slot(propsWith(timingsOf(4, 12)), 150);
+    fireEvent.click(screen.getByRole('button', {name: 'Thumbnail'}));
+    await waitFor(() => expect(studio.saveDefaultProps).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getStudioState().busy).toBeNull());
+    expect(saveCall(0).compositionId).toBe('MushafThumbnail');
+    expect(studio.goToComposition).not.toHaveBeenCalled();
+    expect(getStudioState().notice).toBe(
+      'MushafThumbnail now shows 1:2-5. The Studio stays on this template: select MushafThumbnail in the sidebar to see it.',
+    );
   });
 });

@@ -30,6 +30,8 @@ export type ChapterInfoCardProps = {
   readonly accentColor?: string | undefined;
   /** The short text is cut to this many lines, with an ellipsis (default 4); 0 leaves it out. */
   readonly maxLines?: number | undefined;
+  /** Whether the card names the surah itself (default `true`); off under a title that already does (the end card's). */
+  readonly showNames?: boolean | undefined;
   readonly style?: React.CSSProperties | undefined;
   readonly className?: string | undefined;
 };
@@ -48,6 +50,7 @@ export const ChapterInfoCard: React.FC<ChapterInfoCardProps> = ({
   background,
   accentColor,
   maxLines,
+  showNames,
   style,
   className,
 }) => {
@@ -66,28 +69,30 @@ export const ChapterInfoCard: React.FC<ChapterInfoCardProps> = ({
         ...style,
       }}
     >
-      <div
-        data-mushaf-card-part="names"
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'baseline',
-          gap: fontSize * 0.8,
-          fontSize: fontSize * 1.4,
-        }}
-      >
-        <span data-mushaf-card-part="english" style={{fontWeight: 700}}>
-          {info.nameSimple}
-        </span>
-        <span
-          data-mushaf-card-part="arabic"
-          dir="rtl"
-          lang="ar"
-          style={{fontFamily: arabicFontFamily ?? fontFamily, unicodeBidi: 'isolate'}}
+      {showNames === false ? null : (
+        <div
+          data-mushaf-card-part="names"
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'baseline',
+            gap: fontSize * 0.8,
+            fontSize: fontSize * 1.4,
+          }}
         >
-          {info.nameArabic}
-        </span>
-      </div>
+          <span data-mushaf-card-part="english" style={{fontWeight: 700}}>
+            {info.nameSimple}
+          </span>
+          <span
+            data-mushaf-card-part="arabic"
+            dir="rtl"
+            lang="ar"
+            style={{fontFamily: arabicFontFamily ?? fontFamily, unicodeBidi: 'isolate'}}
+          >
+            {info.nameArabic}
+          </span>
+        </div>
+      )}
       <div data-mushaf-card-part="translated" style={{fontSize, fontStyle: 'italic'}}>
         {info.translatedName}
       </div>

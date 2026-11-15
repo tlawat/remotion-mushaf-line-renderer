@@ -108,3 +108,36 @@ describe('TranslationStack', () => {
     );
   });
 });
+
+describe('TranslationStack with the centred layout (render-design.md 5.5)', () => {
+  const layout = {width: 1109, ruleWidth: 185, lineHeight: 1.45};
+
+  it('centres every layer, balanced and fitted, with a short centred hairline 0.5 em apart', () => {
+    const el = stack({layout, ruleThickness: 1}).firstElementChild as HTMLElement;
+    expect(el.style.alignItems).toBe('center');
+    const [first, rule] = [...el.children] as HTMLElement[];
+    expect(first!.style.textAlign).toBe('center');
+    expect(first!.style.lineHeight).toBe('1.45');
+    expect(first!.style.width).toBe('min(1109px, 60ch)');
+    expect(first!.style.textWrap).toBe('balance');
+    expect(rule!.style.width).toBe('185px');
+    // A quarter of the layer's 30 px on each side: the layers 0.5 em apart.
+    expect(rule!.style.margin).toBe('8px auto');
+    expect(rule!.style.background).toBe('rgb(9, 8, 7)');
+    expect(rule!.style.opacity).toBe('0.3');
+  });
+
+  it('dissolves every layer from the leaving ayah, both in one cell', () => {
+    const el = stack({layout, ayahKey: '1:2', outgoing: {ayahKey: '1:1', opacity: 0.4}, textOpacity: 0.3})
+      .firstElementChild as HTMLElement;
+    const first = el.children[0] as HTMLElement;
+    expect(first.style.display).toBe('grid');
+    const leaving = first.querySelector<HTMLElement>('[data-mushaf-translation-part="outgoing"]')!;
+    const coming = first.querySelector<HTMLElement>('[data-mushaf-translation-part="incoming"]')!;
+    expect(leaving.textContent).toBe('In the name of Allāh');
+    expect(leaving.style).toMatchObject({gridArea: '1 / 1', opacity: '0.4'});
+    expect(leaving.getAttribute('aria-hidden')).toBe('true');
+    expect(coming.textContent).toBe('[All] praise is [due] to Allāh');
+    expect(coming.style).toMatchObject({gridArea: '1 / 1', opacity: '0.3'});
+  });
+});

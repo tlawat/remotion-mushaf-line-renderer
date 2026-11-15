@@ -1,7 +1,38 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (unreleased)
 
+### Added
+
+- **Calm motion** (for Quranic text: nothing overshoots, lurches or starts before its word). New
+  `CALM_EASINGS` (`soft`, `inOut`, `sine`, `arrive`: four Bézier curves that never overshoot or
+  lurch) and `fadeRise({distance, easing?, riseEasing?})`, a dissolve whose entering side rises
+  `distance` px into place (opacity on `soft`, the rise on `arrive`) while the exiting side only
+  fades. The README gains "Motion etiquette for Quranic text": no scale, no wipe through words, no
+  overshoot, transitions after the last word.
+- **Where a word's line is.** `WordContext.linePosition`: the signed distance of the word's line from
+  `<MushafLineWindow>`'s centre slot (`index − position`; 0 for a lone `<MushafLine>`), so a word
+  mark can fade with its line during a scroll.
+- **Tinting the ink on a colour theme.** New `inkTint` prop on `<MushafLine>` and
+  `<MushafLineWindow>`: under any colour-font theme (a word's CSS `color` reaches only `plain`),
+  the line registers four palettes mixing every entry that draws letters (ink, silent letters,
+  tajweed rules) toward it, so a whole word turns the tint, and
+  `WordContext.inkPalette(amount)` names the nearest one. `fontPalette` joins the paint-only
+  `wordStyle` properties; it is ignored on the ayah-end rosette, which keeps its marker palette. A
+  malformed `inkTint` is `BAD_COLOR`.
+- **Bands behind words.** New `wordBand` prop on `<MushafLine>` and `<MushafLineWindow>`
+  (`(word, ctx) => {color} | undefined`, its alpha the strength) and `bandShape` (`{height, y,
+  feather, pad, end}` in em). The line draws the bands under its row from where each word's ink is
+  (its box from the layout, widened by its glyphs' overhang on a canvas), one shape per run of
+  touching words of one colour, the stronger band where two meet: an overhanging hamza-wasl alif
+  stays inside its band, and a run shows no seam between words, which a `background` on each word
+  could not avoid. Also exported: `bandBoxes()` (the geometry on its own) and
+  `measureInkOverhang()`; types `WordBand`, `MushafBandShape`, `InkBand`, `BandBox`. DOM contract:
+  `div.mushaf-line__bands > div.mushaf-line__band`, before the row, only while a band is drawn.
+- **A surah header's frame in its own colour.** New `frameColor` prop on `<MushafLine>`,
+  `<MushafLineWindow>` (for `surah_name` lines) and `<MushafSurahName>`: the ornamental frame is a
+  glyph of its own, so it can take the page's gold while the name stays in the ink. A malformed one
+  is `BAD_COLOR`.
 - **Page headers.** New `<MushafPageHeader juz surah>` sets a page's running header as printed: the
   juz's name against the right edge and the surah's name against the left, from QUL's juz-name and
   surah-name page-header fonts (`'header-juz'`, 21 KB, and `'header-surah-name'`,
@@ -10,6 +41,13 @@
   neither is the new `BAD_PAGE_HEADER`. `MushafSharedFont`, `loadSharedFont()`, `getMushafFontFile({font})` and a
   `fontSrc` resolver's shared files gain the two fonts. Surah names in their frame and
   `<MushafJuzName>` are unchanged.
+
+### Deprecated
+
+- `slideFade` (the exiting line keeps rising as it leaves), `revealRtl` (a wipe that shows partial
+  words and sliced rosettes) and `springyTiming` (overshoot-free, but it starts early) do not suit
+  Quranic text. They still work exactly as before; use `fade()`, `fadeRise()` and
+  `enterTiming({easing: CALM_EASINGS.inOut})`.
 
 ## 0.5.0 (2026-10-12)
 

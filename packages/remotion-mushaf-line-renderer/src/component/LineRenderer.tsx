@@ -6,20 +6,31 @@ import {MushafError} from '../errors';
 import {resolveSelection} from '../mushaf/registry';
 import {resolveSlice} from '../resolve/slice';
 import type {MushafLineCommonProps, MushafLineData} from '../types';
+import {bandBoxes} from './bands';
 import {useCanvasGuard} from './hooks/use-canvas-guard';
 import {useFontGate} from './hooks/use-font-gate';
+import {useInkExtents} from './hooks/use-ink-extents';
 import {useLineFit} from './hooks/use-line-fit';
-import {usePaletteRule} from './hooks/use-palette-rule';
+import {inkPaletteFor, letterEntriesOf, usePaletteRule} from './hooks/use-palette-rule';
 import {LineContext, type LineContextValue} from './LineContext';
 import {Presented} from './Presented';
-import {assertSize, buildRootStyle, buildRowStyle, fontSizeForWidth, lineHeightForFontSize} from './styles';
-import {Word} from './Word';
+import {
+  assertSize,
+  buildBandLayerStyle,
+  buildRootStyle,
+  buildRowStyle,
+  fontSizeForWidth,
+  lineHeightForFontSize,
+} from './styles';
+import {Word, wordContextOf} from './Word';
 
 /** The common props with `undefined` allowed, so `<MushafLine>` can forward them as they are. */
 export type LineRendererProps = {
   readonly [K in keyof Omit<MushafLineCommonProps, 'name'>]: MushafLineCommonProps[K] | undefined;
 } & {
   readonly line: MushafLineData;
+  /** Set by `<MushafLineWindow>`: the line's signed distance from the centre slot (`WordContext.linePosition`). Default 0. */
+  readonly linePosition?: number | undefined;
 };
 
 /**
@@ -42,6 +53,10 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   activeWordStyle,
   wordStyle,
   wordClassName,
+  inkTint,
+  wordBand,
+  bandShape,
+  linePosition = 0,
   fontSrc,
   fontFallback,
 }) => {
@@ -68,7 +83,10 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
     fitKey: `${font.fontFamily}/${baseFontSize}/${Math.round(width)}`,
     rowRef,
   });
-  const palettes = usePaletteRule(font.fontFamily, theme, rowRef);
+  const letterEntries = useMemo(() => letterEntriesOf(fontSet.colorParts), [fontSet]);
+  const palettes = usePaletteRule(font.fontFamily, theme, rowRef, {inkTint, inkEntries: letterEntries});
+  const tints = palettes?.tints;
+  const inkPalette = useMemo(() => (tints === undefined ? undefined : inkPaletteFor(tints)), [tints]);
 
   const resolvedFontSize = fitScale === null ? baseFontSize : baseFontSize * fitScale;
 
@@ -80,8 +98,25 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   const requested = useMemo(() => resolveSlice(line, slice === undefined ? line.slice : slice), [line, slice]);
   const resolvedSlice = fitScale === null ? null : requested;
 
-  // Nothing is painted before the line is in its page font, at its final size and in its palette.
-  const ready = font.loaded && fitScale !== null && palettes !== null;
+  // Where each word's ink is, for the bands behind them: measured once the row has its final layout.
+  const sliceKey =
+    resolvedSlice === null
+      ? 'all'
+      : resolvedSlice === 'empty'
+        ? 'empty'
+        : `${resolvedSlice.first}-${resolvedSlice.last}`;
+  const inkExtents = useInkExtents({
+    enabled: wordBand !== undefined,
+    laidOut: font.loaded && fitScale !== null,
+    key: `${font.fontFamily}/${resolvedFontSize}/${Math.round(width)}/${sliceKey}`,
+    font: `${resolvedFontSize}px "${font.fontFamily}"`,
+    rowRef,
+  });
+
+  // Nothing is painted before the line is in its page font, at its final size and in its palette,
+  // and, with bands, before it knows where they go.
+  const ready =
+    font.loaded && fitScale !== null && palettes !== null && (wordBand === undefined || inkExtents !== null);
   const ctx = useMemo<LineContextValue>(
     () => ({
       line,
@@ -96,6 +131,8 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       wordStyle,
       wordClassName,
       slice: resolvedSlice,
+      linePosition,
+      inkPalette,
     }),
     [
       line,
@@ -110,6 +147,8 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
       wordStyle,
       wordClassName,
       resolvedSlice,
+      linePosition,
+      inkPalette,
     ],
   );
 
@@ -128,6 +167,28 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   const enterState = enter ? getEnterState({enter, frame, fps}) : null;
   const exitState = exit ? getExitState({exit, frame, fps, durationInFrames}) : null;
 
+  // The bands behind the words: one shape per colour, drawn under the row from where the ink is.
+  const bands =
+    wordBand !== undefined && inkExtents !== null
+      ? bandBoxes(
+          line.words.flatMap((word, i) => {
+            const extent = inkExtents[i];
+            const context = wordContextOf(ctx, word);
+            if (extent === undefined || !context.inSlice) return [];
+            const band = wordBand(word, context);
+            return band === undefined ? [] : [{left: extent.left, right: extent.right, color: band.color}];
+          }),
+          {fontSize: resolvedFontSize, lineHeight: resolvedLineHeight, shape: bandShape},
+        )
+      : [];
+  const bandLayer =
+    bands.length === 0 ? null : (
+      <div className="mushaf-line__bands" aria-hidden="true" style={buildBandLayerStyle(ready)}>
+        {bands.map((band) => (
+          <div key={band.key} className="mushaf-line__band" style={band.style} />
+        ))}
+      </div>
+    );
   const row = (
     <div
       ref={rowRef}
@@ -149,7 +210,15 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
   );
   // Nested exactly as <TransitionSeries> nests a scene that both enters and exits: the exiting
   // presentation wraps the entering one.
-  let presented: React.ReactNode = row;
+  let presented: React.ReactNode =
+    bandLayer === null ? (
+      row
+    ) : (
+      <>
+        {bandLayer}
+        {row}
+      </>
+    );
   if (enter && enterState) {
     presented = (
       <Presented

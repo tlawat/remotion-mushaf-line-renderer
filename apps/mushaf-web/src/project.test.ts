@@ -27,6 +27,7 @@ import {
   pickRecitation,
   STYLE_FILE,
   setComposition,
+  setFormat,
   setGloss,
   setLook,
   setRange,
@@ -99,31 +100,33 @@ describe('step 1: the recitation and the range', () => {
 
 describe('step 2: the look', () => {
   it('offers the looks designed for the composition', () => {
-    expect(looksForProject(loaded).map((l) => l.id)).toContain('tajweed-light');
-    expect(looksForProject(setComposition(loaded, 'ayah-text')).map((l) => l.id)).not.toContain('tajweed-light');
+    expect(looksForProject(loaded).map((l) => l.id)).toContain('tajweed');
+    expect(looksForProject(setComposition(loaded, 'ayah-text')).map((l) => l.id)).not.toContain('tajweed');
   });
 
   it('applies a look over the defaults and keeps the content', () => {
-    const night = buildRecitationProps(setLook(loaded, 'night'));
-    expect(night.theme).toBe('dark');
-    expect(night.layout.background).toBe('#101418');
+    const night = buildRecitationProps(setLook(loaded, 'haram-night'));
+    expect(night.theme).toBe('custom');
+    expect(night.layout.background).toBe('#121416');
     expect(night.layout.aspect).toBe('16:9');
     expect(night.timingsFile).toBe(fatiha.timingsUrl);
     expect(night.fonts).toBe('cdn');
   });
 
   it('ignores a look the composition is not designed for, and none at all', () => {
-    const ayah = setComposition(setLook(loaded, 'tajweed-light'), 'ayah-text');
+    const ayah = setComposition(setLook(loaded, 'tajweed'), 'ayah-text');
     expect(activeLook(ayah)).toBeNull();
     expect(buildAyahTextProps(ayah).layout).toEqual(defaultMushafAyahTextProps.layout);
     expect(activeLook(setLook(loaded, null))).toBeNull();
     expect(activeLook(setLook(loaded, 'no-such-look'))).toBeNull();
   });
 
-  it('changes the frame with the reel look', () => {
-    const reel = buildProps(setLook(loaded, 'reel'));
-    expect(reel.props.layout.aspect).toBe('9:16');
-    expect(MUSHAF_LOOKS.find((l) => l.id === 'reel')).toBeDefined();
+  it('changes the frame with the vertical format, apart from the look', () => {
+    const reel = buildProps(setFormat(setLook(loaded, 'haram-night'), 'vertical'));
+    expect(reel.props.layout).toMatchObject({aspect: '9:16', marginX: 90, verticalAlign: 0.45});
+    expect(reel.props.layout.background).toBe('#121416');
+    expect(buildProps(setFormat(loaded, null)).props.layout.aspect).toBe('16:9');
+    expect(MUSHAF_LOOKS.every((l) => l.patch.layout?.aspect === undefined)).toBe(true);
   });
 });
 
@@ -201,11 +204,11 @@ describe('step 4: the files and the command', () => {
   });
 
   it('keeps only the style for make --props', () => {
-    const style = styleProps(buildRecitationProps(setTranslation(setLook(loaded, 'night'), 20, 'mem://tr')));
+    const style = styleProps(buildRecitationProps(setTranslation(setLook(loaded, 'haram-night'), 20, 'mem://tr')));
     for (const key of ['audioFile', 'timingsFile', 'fromAyah', 'toAyah', 'resolved', 'splits', 'fonts', 'data']) {
       expect(style).not.toHaveProperty(key);
     }
-    expect(style.theme).toBe('dark');
+    expect(style.theme).toBe('custom');
     expect(style.text).not.toHaveProperty('translationFile');
     expect(style.text).toHaveProperty('translationColor');
     expect(styleProps(buildAyahTextProps(setText(loaded, 'mem://t')))).not.toHaveProperty('textFile');

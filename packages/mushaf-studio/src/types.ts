@@ -76,7 +76,7 @@ export type CatalogueOrigin = {
  * What a timings file keeps of `analyzeAudio()`'s measurements of its recording, under
  * `alignment.audio`: enough for `audio.normalize` (`gainFor()`) and `audio.trimSilence`
  * (`silenceTrimSeconds()`) without downloading the recording again. The names and units are
- * `AudioAnalysis`'s; the glow's levels are not kept (they still need the analysis).
+ * `AudioAnalysis`'s; the per-frame levels are not kept (nothing draws them).
  */
 export type AudioSummary = {
   /** Integrated loudness (BS.1770), LUFS to two decimals; `null` for silence or under 0.4 s of audio. */
@@ -174,7 +174,7 @@ export type Translation = AyahTranslation | WordGloss;
 /**
  * What `calculateMetadata()` measured of the recording (`analyzeAudio()`) and does with it, as plain
  * data in the props: the gain of `audio.normalize`, the silence `audio.trimSilence` skipped, and the
- * levels the background's glow follows.
+ * per-frame levels, which nothing follows any more.
  */
 export type ResolvedAudio = {
   /** `gainFor()` of the analysis under `audio.normalize`, else 1. */
@@ -184,9 +184,15 @@ export type ResolvedAudio = {
   /**
    * The recording's level per frame (0-1, three decimals) from where the composition starts in it,
    * on the recording's clock (`audioClock()`), to the last ayah's end plus a second. Filled for the
-   * background's glow only; `[]` otherwise.
+   * glow the background no longer has, so `[]`: kept so a `resolved` saved before reads the same.
    */
   readonly levels: readonly number[];
+  /**
+   * The frame rate `levels` were measured at: one level per frame of it. A template at 60 fps that
+   * resolved its recitation at 30 still reads the level of the second being heard. Absent in a
+   * `resolved` made before it: the composition's own fps.
+   */
+  readonly levelsFps?: number | undefined;
 };
 
 /** What the end card shows besides the credits, read from its files in `calculateMetadata()`. */
@@ -218,6 +224,13 @@ export type ResolvedExtras = {
   readonly endCard?: ResolvedEndCard | undefined;
   /** `probeVideoSeconds()` of a background video whose `videoSeconds` is 0, when the browser could read it. */
   readonly backgroundVideoSeconds?: number | null | undefined;
+  /**
+   * The composition's length at the frame rate it was resolved for, the end card included: what a
+   * drop-in slot (`<MushafRecitationSlot>`) sizes its `<Sequence>` by. Set by the slot resolvers
+   * (`resolveMushafRecitationSlot()`); absent from `calculateMetadata()`'s, which returns it as the
+   * composition's `durationInFrames`.
+   */
+  readonly durationInFrames?: number | undefined;
 };
 
 /** What `calculateMetadata()` of `<MushafRecitation>` resolves once per render from the content props. */
@@ -238,6 +251,14 @@ export type ResolvedRecitation = ResolvedExtras & {
    */
   readonly audioOffsetSeconds: number;
   /**
+   * Seconds the recording starts later in the video for the intro card (`overlay.title` `intro` or
+   * `both`): its `introSeconds`, the card's entrance and the lead-in, less what the recording
+   * already has before its first word, never negative. Already added to `timings`; the audio starts
+   * there. A video second `v` is the recording's `v − introDelaySeconds + audioOffsetSeconds`.
+   * Absent (0) without the card, and in a `resolved` made before it.
+   */
+  readonly introDelaySeconds?: number | undefined;
+  /**
    * The passage's lines, splits applied, in reading order; the surah's header lines first when
    * `header` put them there, and, across surahs, each later surah's header lines before its ayah 1.
    */
@@ -255,4 +276,12 @@ export type ResolvedRecitation = ResolvedExtras & {
   readonly transliteration: WordGloss | null;
   /** Word ids the Review tab marks, with their reasons. */
   readonly doubtful: Readonly<Record<string, readonly DoubtReason[]>>;
+  /**
+   * The `splits` the Studio's preview left out because they do not fit the lines (`fitSplits()`):
+   * the range or `slice` changed under them. The preview warns and the Lines tab removes them; a
+   * render refuses them (`BAD_LINE_SPLIT`): a server render resolves without leaving them out, so it
+   * is `[]` there, and `<MushafRecitation>` throws when it is not empty outside the preview (the
+   * Studio's in-browser render resolves as the preview does). Absent in a `resolved` made before it.
+   */
+  readonly droppedSplits?: readonly LineSplit[] | undefined;
 };

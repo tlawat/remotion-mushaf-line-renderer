@@ -18,9 +18,9 @@ import {
 } from '../compositions/extras';
 import {recitationDuration} from '../compositions/recitation/calculate-metadata';
 import {
-  audioOffsetFor,
   playableTimings,
   readTimings,
+  recordingOffsetFor,
   shiftTimings,
   timingsInRange,
 } from '../compositions/recitation/resolve';
@@ -144,7 +144,7 @@ export const PAGE_LEAD_IN_SECONDS = defaultAnimation.leadInSeconds;
 /**
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah range
  * (one surah's timings only: timings that cross surahs are used whole) and to the ayahs the
- * recording carries whole, moves them `audioOffsetSeconds` earlier (see `audioOffsetFor()`), finds
+ * recording carries whole, moves them `audioOffsetSeconds` earlier (see `recordingOffsetFor()`), finds
  * the passage's lines (`getMushafLines(recitedRange(...))`, or across surahs
  * `getMushafLinesForRanges(recitedRanges(...))`, unsliced) and schedules them, then loads every
  * page they are on whole (`getMushafLines({page})`) and schedules the pages (`schedulePages()`,
@@ -160,7 +160,7 @@ export const resolvePage = async (props: MushafPageProps, options: ResolvePageOp
   const file = await readTimings(props.timingsFile, io);
   const ranged = timingsInRange(file, props.fromAyah, props.toAyah);
   const played = playableTimings(ranged);
-  const audioOffsetSeconds = audioOffsetFor(file, played, PAGE_LEAD_IN_SECONDS);
+  const audioOffsetSeconds = recordingOffsetFor(props, file, played, PAGE_LEAD_IN_SECONDS);
   const timings = shiftTimings(played, audioOffsetSeconds);
   const theme = themeSelectionFrom(props.theme, props.customTheme);
   const data = dataSourceFrom(props.data, io.staticFile);

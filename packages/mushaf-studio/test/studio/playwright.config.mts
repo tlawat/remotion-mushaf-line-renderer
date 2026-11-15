@@ -24,7 +24,12 @@ export default defineConfig({
     baseURL: `http://localhost:${STUDIO_PORT}`,
     browserName: 'chromium',
     viewport: {width: 1600, height: 1000},
-    launchOptions: {args: ['--enable-features=CanvasDrawElement', '--font-render-hinting=none']},
+    launchOptions: {
+      args: ['--enable-features=CanvasDrawElement', '--font-render-hinting=none'],
+      // A sandbox whose preinstalled Chromium is not the build this Playwright expects names it here;
+      // CI installs the expected one and leaves this unset.
+      ...(process.env.MUSHAF_STUDIO_CHROMIUM ? {executablePath: process.env.MUSHAF_STUDIO_CHROMIUM} : {}),
+    },
     // A sandbox that reaches the internet through a proxy (HTTPS_PROXY) hands it to Chromium too,
     // so the fonts, the catalogue and quran.com are reachable from the page as they are from a shell.
     ...(process.env.HTTPS_PROXY

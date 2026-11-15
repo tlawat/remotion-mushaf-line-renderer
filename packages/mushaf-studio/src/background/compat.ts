@@ -1,4 +1,5 @@
 import type {Layout} from '../schema';
+import {groundOf} from '../schema/color';
 import type {Background} from './schema';
 
 /**
@@ -23,3 +24,16 @@ export const backgroundFor = (
   if (background.kind === 'image' && background.src === '') return {...background, src: layout.backgroundImage};
   return background;
 };
+
+/**
+ * The colour the marks and the text colours are measured against (`groundOf()`), from what
+ * `backgroundFor()` actually paints: props saved with the image in `layout.backgroundImage` (kind
+ * `'color'`) sit on that image, so light ink there reads as a dark ground, never as the page colour
+ * that the image covers. Pure.
+ *
+ * `groundFor(defaultBackground, {background: '#f8f3e6', color: '#f1eadb', backgroundImage: 'bg.jpg'})` is charcoal.
+ */
+export const groundFor = (
+  background: Background,
+  layout: Pick<Layout, 'background' | 'backgroundImage' | 'color'>,
+): string => groundOf(layout, backgroundFor(background, layout).kind);

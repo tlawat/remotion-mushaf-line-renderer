@@ -23,8 +23,14 @@ export type TajweedLegendProps = {
   readonly fontSize: number;
   /** The names' colour, and the swatches' for a theme that paints a rule in `currentColor`. */
   readonly color: string;
-  /** px (default `fontSize`). */
+  /** px (default `fontSize`; 0.5 em in a band). */
   readonly swatchSize?: number | undefined;
+  /**
+   * The render design's band (5.8): one centred row (wrapping when it must), round swatches of
+   * 0.5 em, English names in small caps, 1 em between entries, each entry one unbreakable unit.
+   * `orientation` is then ignored.
+   */
+  readonly band?: boolean | undefined;
   readonly style?: React.CSSProperties | undefined;
   readonly className?: string | undefined;
 };
@@ -46,13 +52,15 @@ export const TajweedLegend: React.FC<TajweedLegendProps> = ({
   fontSize,
   color,
   swatchSize,
+  band,
   style,
   className,
 }) => {
   const items = tajweedLegend(theme, {silent});
   const show = names ?? 'both';
-  const size = swatchSize ?? fontSize;
-  const column = orientation === 'column';
+  const inBand = band === true;
+  const size = swatchSize ?? (inBand ? fontSize * 0.5 : fontSize);
+  const column = !inBand && orientation === 'column';
   return (
     <div
       className={className ? `mushaf-tajweed-legend ${className}` : 'mushaf-tajweed-legend'}
@@ -61,11 +69,12 @@ export const TajweedLegend: React.FC<TajweedLegendProps> = ({
         display: 'flex',
         flexDirection: column ? 'column' : 'row',
         flexWrap: column ? 'nowrap' : 'wrap',
-        gap: `${fontSize * 0.5}px ${fontSize * 1.2}px`,
+        gap: inBand ? `${fontSize * 0.6}px ${fontSize}px` : `${fontSize * 0.5}px ${fontSize * 1.2}px`,
+        ...(inBand ? {justifyContent: 'center'} : {}),
         fontFamily,
         fontSize,
         color,
-        lineHeight: 1.3,
+        lineHeight: inBand ? 1 : 1.3,
         ...style,
       }}
     >
@@ -77,7 +86,12 @@ export const TajweedLegend: React.FC<TajweedLegendProps> = ({
             key={item.id}
             data-rule={item.id}
             data-entry={item.entry}
-            style={{display: 'flex', alignItems: 'center', gap: fontSize * 0.4}}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: fontSize * 0.4,
+              ...(inBand ? {whiteSpace: 'nowrap', flex: 'none'} : {}),
+            }}
           >
             <span
               data-mushaf-legend-part="swatch"
@@ -85,11 +99,18 @@ export const TajweedLegend: React.FC<TajweedLegendProps> = ({
                 flex: 'none',
                 width: size,
                 height: size,
-                borderRadius: size * 0.25,
+                borderRadius: inBand ? '50%' : size * 0.25,
                 background: item.color === 'currentColor' ? color : item.color,
               }}
             />
-            {show === 'arabic' ? null : <span data-mushaf-legend-part="english">{english}</span>}
+            {show === 'arabic' ? null : (
+              <span
+                data-mushaf-legend-part="english"
+                style={inBand ? {fontVariantCaps: 'all-small-caps', letterSpacing: '0.08em'} : undefined}
+              >
+                {english}
+              </span>
+            )}
             {show === 'english' ? null : (
               <span
                 data-mushaf-legend-part="arabic"

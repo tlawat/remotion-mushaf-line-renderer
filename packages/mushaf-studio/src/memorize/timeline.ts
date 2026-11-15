@@ -2,6 +2,7 @@ import type {TransitionTiming} from '@remotion/transitions';
 import {
   type LineSchedule,
   type MushafLineData,
+  type MushafScrollAnchor,
   normalizeTimings,
   type RecitationTimings,
   scrollPosition,
@@ -142,11 +143,11 @@ export const audioClock = (clips: readonly MemorizeClip[]): ((seconds: number) =
   isIdentityTimeline(clips) ? (seconds) => seconds : (seconds) => audioTimeAt(clips, seconds);
 
 /**
- * The repetition counter's text for `clip`: `"2/3"`; `null` when ayahs play once (or before the
+ * The repetition counter's text for `clip`: `"2 / 3"`; `null` when ayahs play once (or before the
  * first clip), where a counter would say nothing.
  */
 export const repeatCounterText = (clip: MemorizeClip | null, repeats: number): string | null =>
-  clip === null || repeats <= 1 ? null : `${clip.repetition}/${repeats}`;
+  clip === null || repeats <= 1 ? null : `${clip.repetition} / ${repeats}`;
 
 /**
  * A line schedule laid on the clip timeline, in seconds of the composition: the leading header
@@ -231,8 +232,10 @@ export const scrollTargetPosition = (options: {
   readonly steps: readonly number[];
   readonly targets: readonly number[];
   readonly timing?: TransitionTiming | undefined;
+  /** Whether a step is where its scroll ends (`'end'`, the default) or where it starts, as in `scrollPosition()`. */
+  readonly anchor?: MushafScrollAnchor | undefined;
 }): number => {
-  const {frame, fps, steps, targets, timing} = options;
+  const {frame, fps, steps, targets, timing, anchor} = options;
   const first = targets[0];
   if (first === undefined) return 0;
   let position = first - 1;
@@ -240,7 +243,8 @@ export const scrollTargetPosition = (options: {
   steps.forEach((step, j) => {
     const target = targets[j] ?? previous;
     // One step alone: its eased progress minus one.
-    const progress = scrollPosition({frame, fps, steps: [step], ...(timing ? {timing} : {})}) + 1;
+    const progress =
+      scrollPosition({frame, fps, steps: [step], ...(timing ? {timing} : {}), ...(anchor ? {anchor} : {})}) + 1;
     position += (target - previous) * progress;
     previous = target;
   });

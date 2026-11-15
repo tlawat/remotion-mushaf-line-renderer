@@ -53,3 +53,52 @@ export const fontPropsFrom = (
   }
   return {props: {fontFallback: pkg}, warning: null};
 };
+
+/** What a text the Studio sets around the lines is: a translation, a gloss, or a label (titles, counter, legend, cards). */
+export type StudioFontRole = 'translation' | 'gloss' | 'label';
+
+/** The book serif of every text the Studio sets around the lines, loaded by `useStudioFonts()`. */
+export const BOOK_SERIF = 'EB Garamond';
+/** The Naskh of the Arabic labels (the intro card's range, the legend's names), loaded by `useStudioFonts()`. */
+export const ARABIC_LABEL_FONT = 'Amiri';
+
+/**
+ * The CSS `font-family` of `'auto'` for a role: EB Garamond (loaded by `useStudioFonts()`), then the
+ * serifs a machine is likely to have, so a render without the web font still sets a serif.
+ */
+const AUTO_FAMILY = `"${BOOK_SERIF}", Georgia, "Noto Serif", serif`;
+
+/** The CSS `font-family` of the Arabic labels: Amiri (loaded), then the Naskhs a machine may have. */
+export const ARABIC_LABEL_FAMILY = `"${ARABIC_LABEL_FONT}", "Noto Naskh Arabic", "Scheherazade New", serif`;
+
+/** How `'auto'` sets each role: the translation and the labels in EB Garamond 500, the gloss in its 400 italic. */
+const AUTO_FACES: Readonly<Record<StudioFontRole, StudioFontStyle>> = {
+  translation: {fontFamily: AUTO_FAMILY, fontWeight: 500},
+  gloss: {fontFamily: AUTO_FAMILY, fontWeight: 400, fontStyle: 'italic'},
+  label: {fontFamily: AUTO_FAMILY, fontWeight: 500},
+};
+
+/** The face of a text: its family and, for `'auto'`, the weight and style of the role. */
+export type StudioFontStyle = {
+  readonly fontFamily: string;
+  readonly fontWeight?: number;
+  readonly fontStyle?: 'italic';
+};
+
+const isAuto = (font: string): boolean => font.trim().toLowerCase() === 'auto';
+
+/**
+ * The CSS `font-family` a font field (`text.glossFont`, `overlay.font`, ...) paints with: its own
+ * value, or for `'auto'` the role's book serif. `studioFontFamily('auto', 'label')` starts with
+ * `"EB Garamond"`; `studioFontFamily('Lora, serif', 'gloss')` is `Lora, serif`.
+ */
+export const studioFontFamily = (font: string, role: StudioFontRole): string =>
+  isAuto(font) ? AUTO_FACES[role].fontFamily : font;
+
+/**
+ * The face a font field paints with, to spread into a style: `'auto'` is EB Garamond 500 for a
+ * translation or a label and EB Garamond 400 italic for the gloss; any other value is its family
+ * alone (weight and style are the text's own).
+ */
+export const studioFontStyle = (font: string, role: StudioFontRole): StudioFontStyle =>
+  isAuto(font) ? AUTO_FACES[role] : {fontFamily: font};

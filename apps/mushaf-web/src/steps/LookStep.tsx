@@ -1,11 +1,14 @@
-// Step 2: the package's looks as cards; one click applies a look over the composition's defaults.
+// Step 2: the package's looks as cards (one click applies a look over the composition's defaults),
+// and the frame shape apart from them.
 import type {MushafLook} from '@tlawat/mushaf-studio';
 import type * as React from 'react';
 import {
   activeLook,
   baseAyahTextProps,
   baseRecitationProps,
+  formatsForProject,
   looksForProject,
+  setFormat,
   setLook,
   type WebProject,
 } from '../project';
@@ -54,9 +57,23 @@ const Card: React.FC<{
 export const LookStep: React.FC<LookStepProps> = ({project, update}) => {
   const current = activeLook(project);
   const props = project.composition === 'recitation' ? baseRecitationProps : baseAyahTextProps;
+  const aspect = formatsForProject().find((format) => format.id === project.formatId)?.aspect ?? props.layout.aspect;
   const base: Swatch = {background: props.layout.background, color: props.layout.color, mark: props.highlight.color};
   return (
     <Step number={2} title="Look" id="step-look">
+      <fieldset className="format-row" aria-label="Format">
+        {formatsForProject().map((format) => (
+          <button
+            key={format.id}
+            type="button"
+            data-format={format.id}
+            aria-pressed={format.aspect === aspect}
+            onClick={() => update((p) => setFormat(p, format.id))}
+          >
+            {format.name} {format.aspect}
+          </button>
+        ))}
+      </fieldset>
       <div className="look-grid">
         <Card look={null} base={base} active={current === null} onPick={() => update((p) => setLook(p, null))} />
         {looksForProject(project).map((look) => (

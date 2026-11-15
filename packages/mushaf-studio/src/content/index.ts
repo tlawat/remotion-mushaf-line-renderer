@@ -13,9 +13,13 @@ export {
 } from './chapter-info';
 export {
   DEFAULT_TEXT_CREDIT,
+  END_CARD_IN_FRAMES,
+  END_CARD_OUT_SECONDS,
   EndCard,
   type EndCardCredits,
   type EndCardProps,
+  type EndCardTitleGlyph,
+  endCardContentOpacity,
   endCardCreditLine,
   endCardOpacity,
 } from './EndCard';

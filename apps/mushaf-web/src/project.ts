@@ -3,13 +3,16 @@
 // one builder per composition. The page resolves the props itself (the `<Player>` never runs
 // `calculateMetadata()`), so everything here is synchronous and testable without a browser.
 import {
+  applyFormat,
   applyLook,
   defaultMushafAyahTextProps,
   defaultMushafRecitationProps,
   type Layout,
   looksFor,
+  MUSHAF_FORMATS,
   MUSHAF_LOOKS,
   type MushafAyahTextProps,
+  type MushafFormatId,
   type MushafLook,
   type MushafLookKind,
   type MushafRecitationProps,
@@ -45,6 +48,8 @@ export type WebProject = {
   readonly toAyah: number;
   /** A `MUSHAF_LOOKS` id, or `null` for the composition's defaults. */
   readonly lookId: string | null;
+  /** A `MUSHAF_FORMATS` id, or `null` for the composition's own frame. */
+  readonly formatId: MushafFormatId | null;
   /** quran.com translation resource id, or `null` for none. */
   readonly translationId: number | null;
   /** `mem://` URLs of the current surah's files, `''` while there is none. */
@@ -59,6 +64,7 @@ export const initialProject: WebProject = {
   fromAyah: 0,
   toAyah: 0,
   lookId: null,
+  formatId: null,
   translationId: null,
   translationUrl: '',
   glossUrl: '',
@@ -116,6 +122,15 @@ export const activeLook = (project: WebProject): MushafLook | null => {
 /** Step 2: pick a look (`null` for the defaults). */
 export const setLook = (project: WebProject, lookId: string | null): WebProject => ({...project, lookId});
 
+/** Step 2: the frame shapes offered, as the Studio's Format row has them. */
+export const formatsForProject = (): typeof MUSHAF_FORMATS => MUSHAF_FORMATS;
+
+/** Step 2: pick a frame shape (`null` for the composition's own); it never changes the look. */
+export const setFormat = (project: WebProject, formatId: MushafFormatId | null): WebProject => ({
+  ...project,
+  formatId,
+});
+
 /** Step 3: the translation; `null` drops it. The URL is the current surah's file, `''` while it loads. */
 export const setTranslation = (project: WebProject, translationId: number | null, url = ''): WebProject => ({
   ...project,
@@ -151,9 +166,11 @@ export const baseAyahTextProps: MushafAyahTextProps = {
   textFile: '',
 };
 
+/** The look, then the format: they commute, the order is only for reading. */
 const withLook = <P extends Record<string, unknown>>(props: P, project: WebProject): P => {
   const look = activeLook(project);
-  return look ? applyLook(props, look) : props;
+  const styled = look ? applyLook(props, look) : props;
+  return project.formatId === null ? styled : applyFormat(styled, project.formatId);
 };
 
 /** `<MushafRecitation>`'s props for the project, `resolved` left `null` for the page to fill. */

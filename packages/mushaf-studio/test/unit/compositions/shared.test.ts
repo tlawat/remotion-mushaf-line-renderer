@@ -78,7 +78,10 @@ describe('blockGeometry and the block styles', () => {
 
   it('sets the lines between the margins, verticalAlign of the room left, visibleLines tall (one when replaced in place)', () => {
     const g = blockGeometry(defaultLayout, size);
-    expect(g.measure).toBe(1680);
+    // The design's 190 px margins at 16:9: a 1540 px measure, a 90 px glyph, a 198 px line box.
+    expect(g.measure).toBe(1540);
+    expect(g.fontSize).toBe(90);
+    expect(g.lineHeight).toBe(198);
     expect(g.slots).toBe(3);
     expect(g.blockHeight).toBe(3 * g.lineHeight);
     expect(g.top).toBe(Math.round((1080 - g.blockHeight) / 2));
@@ -95,23 +98,24 @@ describe('blockGeometry and the block styles', () => {
     expect(linesBlockStyle(g, defaultLayout)).toEqual({
       position: 'absolute',
       top: g.top,
-      left: 120,
-      width: 1680,
+      left: 190,
+      width: 1540,
       height: g.blockHeight,
     });
     expect(linesBlockStyle(g, {...defaultLayout, offsetY: -50}).transform).toBe('translateY(-50px)');
     const below = translationBlockStyle(g, defaultLayout, defaultText, 1080);
-    expect(below).toEqual({position: 'absolute', left: 120, width: 1680, top: g.top + g.blockHeight + 24});
+    // 0.4 of a line box (198 px at 16:9) away from the lines, on either side.
+    expect(below).toEqual({position: 'absolute', left: 190, width: 1540, top: g.top + g.blockHeight + 79});
     const above = translationBlockStyle(g, defaultLayout, {...defaultText, translationPosition: 'above'}, 1080);
-    expect(above).toEqual({position: 'absolute', left: 120, width: 1680, bottom: 1080 - g.top + 24});
+    expect(above).toEqual({position: 'absolute', left: 190, width: 1540, bottom: 1080 - g.top + 79});
     expect(translationBlockStyle(g, defaultLayout, {...defaultText, translationOffsetY: 30}, 1080).transform).toBe(
       'translateY(30px)',
     );
     expect(glossBlockStyle(g, defaultLayout, defaultText)).toEqual({
       position: 'absolute',
-      left: 120,
-      width: 1680,
-      bottom: 34,
+      left: 190,
+      width: 1540,
+      bottom: 30,
     });
   });
 

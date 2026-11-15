@@ -2,6 +2,7 @@
 // `public/mushaf-studio/<project>/project.json` (and as a download), or import such a file back.
 import type * as React from 'react';
 import {useRef, useState} from 'react';
+import {followsHostAudio, hostAudioOf} from '../audio/host';
 import {MushafStudioError} from '../errors';
 import {
   downloadText,
@@ -12,8 +13,18 @@ import {
   readFileText,
   validateProjectFile,
 } from './project';
-import {runStudioTask, setStudioState, t as tNow, useStudioState, useT} from './store';
-import {type PropsPatch, patchProps, projectPath, staticFileList, writeJsonFile} from './studio-api';
+import {
+  getStudioState,
+  runStudioTask,
+  type StudioTarget,
+  setStudioState,
+  targetKeyOf,
+  t as tNow,
+  useStudioState,
+  useT,
+  withEntry,
+} from './store';
+import {latestPanelProps, type PropsPatch, patchProps, projectPath, staticFileList, writeJsonFile} from './studio-api';
 import {colors, styles} from './styles';
 import type {StudioCompositionProps} from './tab-props';
 
@@ -32,9 +43,11 @@ export const exportProject = async (
 /**
  * Imports a project file's text into the composition: validated, refused when its props are for
  * the other kind of composition or when `public/` lacks a file it needs (all of them named), else
- * its props saved with `patchProps()`.
+ * its props saved with `patchProps()`, all but `hostAudio`: a composition that follows its template's
+ * track stops following it when the project brings another `audioFile`. The Look tab's undo of the
+ * target is forgotten: the looks it would go back through were applied to the props the import replaced.
  */
-export const importProject = async (compositionId: string, props: StudioCompositionProps, text: string) => {
+export const importProject = async (target: StudioTarget | string, props: StudioCompositionProps, text: string) => {
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -53,15 +66,24 @@ export const importProject = async (compositionId: string, props: StudioComposit
       tNow('project.missing', {count: missing.length, files: missing.map((f) => `public/${f}`).join(', ')}),
       {missing},
     );
-  await patchProps(compositionId, project.props as PropsPatch);
+  // `hostAudio` is the target's (an older file, or the schema's default, may carry one): the composition
+  // follows the template's track only while it plays the same recording, the rule a new recording follows.
+  const {hostAudio: _hostAudio, ...imported} = project.props;
+  const sameAudio = imported.audioFile === undefined || imported.audioFile === props.audioFile;
+  const patch =
+    followsHostAudio(props) && !sameAudio
+      ? {...imported, hostAudio: {...hostAudioOf(props), enabled: false}}
+      : imported;
+  await patchProps(target, patch as PropsPatch);
+  setStudioState({lookUndo: withEntry(getStudioState().lookUndo, targetKeyOf(target), undefined)});
   return project;
 };
 
 export const ProjectMenu: React.FC<{
-  readonly compositionId: string;
+  readonly target: StudioTarget;
   readonly props: StudioCompositionProps;
   readonly project: string | undefined;
-}> = ({compositionId, props, project}) => {
+}> = ({target, props, project}) => {
   const t = useT();
   const {busy} = useStudioState();
   const [open, setOpen] = useState(false);
@@ -70,7 +92,9 @@ export const ProjectMenu: React.FC<{
   const onExport = () => {
     setOpen(false);
     void runStudioTask(tNow('project.busy.export'), async () => {
-      const path = await exportProject(compositionId, props, project);
+      // The props as they are now, not the dock's memoized copy (a Props-sidebar edit of a group the
+      // dock does not show still belongs in the project).
+      const path = await exportProject(target.compositionId, latestPanelProps(target, props), project);
       setStudioState({notice: tNow('project.exported', {path})});
     });
   };
@@ -78,7 +102,7 @@ export const ProjectMenu: React.FC<{
   const onImport = (file: File) => {
     setOpen(false);
     void runStudioTask(tNow('project.busy.import'), async () => {
-      const imported = await importProject(compositionId, props, await readFileText(file));
+      const imported = await importProject(target, props, await readFileText(file));
       setStudioState({notice: tNow('project.imported', {name: file.name, count: imported.files.length})});
     });
   };

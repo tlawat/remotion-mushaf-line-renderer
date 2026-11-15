@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import {Sequence} from 'remotion';
 import {describeValue, MushafError} from '../errors';
+import {assertCssColor} from '../mushaf/colors';
 import {assertSlice} from '../resolve/slice';
 import {assertLineData} from '../resolve/validate-line-data';
 import type {MushafDataOptions, MushafLineData, MushafLineProps, MushafSelection} from '../types';
@@ -45,11 +46,18 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    inkTint,
+    wordBand,
+    bandShape,
     framed,
+    frameColor,
     fontSrc,
     fontFallback,
   } = props;
   if (slice !== undefined && slice !== null) assertSlice('<MushafLine slice>', slice);
+  // It goes into a palette rule: checked like a theme colour, so it can never close the rule.
+  if (inkTint !== undefined) assertCssColor('<MushafLine inkTint>', inkTint);
+  if (frameColor !== undefined) assertCssColor('<MushafLine frameColor>', frameColor);
   const common = {
     style,
     className,
@@ -63,7 +71,11 @@ export const MushafLine: React.FC<MushafLineProps> = (props) => {
     activeWordStyle,
     wordStyle,
     wordClassName,
+    inkTint,
+    wordBand,
+    bandShape,
     framed,
+    frameColor,
     fontSrc,
     fontFallback,
   };

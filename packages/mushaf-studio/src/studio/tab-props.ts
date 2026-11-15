@@ -5,18 +5,30 @@ import type {AyahTranslation, ResolvedRecitation} from '../types';
 import type {ResolvedAyahText} from '../unicode/resolve';
 import type {MushafAyahTextProps} from '../unicode/schema';
 import type {MushafStudioPanelProps} from './index';
+import type {StudioTarget} from './store';
 import type {PropsPatch} from './studio-api';
 
-/** The props of a composition that renders the panel: `<MushafRecitation>`'s, `<MushafAyahText>`'s or `<MushafPage>`'s. */
-export type StudioCompositionProps = MushafStudioPanelProps['props'];
+/**
+ * The props of a composition that renders the panel: `<MushafRecitation>`'s, `<MushafAyahText>`'s
+ * or `<MushafPage>`'s. A slot that holds `null` is shown to the tabs as its kind's empty props
+ * (`emptySlotPropsFor()`).
+ */
+export type StudioCompositionProps = NonNullable<MushafStudioPanelProps['props']>;
 
 /** What every tab receives from the dock. */
 export type TabProps = {
   readonly compositionId: string;
+  /** What the tab's saves go to (`patchProps(target, ...)`) and what its state in the store is filed under (`targetKeyOf()`). */
+  readonly target: StudioTarget;
   readonly props: StudioCompositionProps;
   readonly project: string | undefined;
   /** The composition's frame rate, for `seek()`. */
   readonly fps: number;
+  /**
+   * The Studio frame the recitation's frame 0 is at: a slot's start in its template, 0 for a
+   * composition of its own. Every seek adds it (`seekTo()`), the waveform's playhead subtracts it.
+   */
+  readonly frameOffset: number;
 };
 
 /**
@@ -44,9 +56,12 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 /** What `calculateMetadata()` puts in `props.resolved`: a recitation's (lines, schedule), an ayah text's (ayahs) or a page's (pages). */
 export type StudioResolved = ResolvedRecitation | ResolvedAyahText | ResolvedPage;
 
-/** `props.resolved` is `z.any()` in every schema; this is what `calculateMetadata()` puts there. */
+/**
+ * `props.resolved` is `z.any()` in every schema; this is what `calculateMetadata()` puts there.
+ * `null` until it has, and for what a slot resolver leaves when the props failed (`slotErrorOf()`).
+ */
 export const resolvedOf = (props: StudioCompositionProps): StudioResolved | null =>
-  (props.resolved ?? null) as StudioResolved | null;
+  isRecord(props.resolved) && 'timings' in props.resolved ? (props.resolved as StudioResolved) : null;
 
 /** Whether `resolved` is a recitation's, with printed lines and their schedule (a page's lines carry no schedule). */
 export const hasLines = (resolved: StudioResolved): resolved is ResolvedRecitation => 'schedule' in resolved;
@@ -58,11 +73,16 @@ export const isPageResolved = (resolved: StudioResolved): resolved is ResolvedPa
 export const isAyahTextResolved = (resolved: StudioResolved): resolved is ResolvedAyahText => 'ayahs' in resolved;
 
 /**
- * Seconds the composition skips of the recording, already taken off `resolved.timings`: a
- * its `audioOffsetSeconds` (an ayah text has one only when it skips a leading silence); else 0.
+ * Seconds of the recording before the composition's frame 0, already taken off `resolved.timings`:
+ * its `audioOffsetSeconds` (an ayah text has one only when it skips a leading silence), less the
+ * intro card's `introDelaySeconds` (the recording starts that much into the video); else 0. A
+ * composition second `t` is the recording's `t + audioOffsetOf(resolved)`.
  */
-export const audioOffsetOf = (resolved: StudioResolved | null): number =>
-  resolved !== null && 'audioOffsetSeconds' in resolved ? (resolved.audioOffsetSeconds ?? 0) : 0;
+export const audioOffsetOf = (resolved: StudioResolved | null): number => {
+  if (resolved === null || !('audioOffsetSeconds' in resolved)) return 0;
+  const delay = 'introDelaySeconds' in resolved ? (resolved.introDelaySeconds ?? 0) : 0;
+  return Math.round(((resolved.audioOffsetSeconds ?? 0) - delay) * 1e6) / 1e6;
+};
 
 /**
  * The ayah translations `calculateMetadata()` loaded, one per layer (`translations`), else the one

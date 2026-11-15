@@ -12,11 +12,12 @@ import {
   scheduleLines,
 } from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
+import {assertNoHostRepeats, hostAudioOf} from '../../audio/host';
 import {describeValue, MushafStudioError} from '../../errors';
-import {applySplits, doubtfulWords} from '../../lines';
+import {applySplits, doubtfulWords, fitSplits} from '../../lines';
 import {clipTimeline, type MemorizeClip} from '../../memorize/timeline';
 import {dataSourceFrom, type Memorize, themeSelectionFrom} from '../../schema';
-import type {ResolvedRecitation, StudioTimings, StudioTimingsV1, StudioTimingsV2} from '../../types';
+import type {LineSplit, ResolvedRecitation, StudioTimings, StudioTimingsV1, StudioTimingsV2} from '../../types';
 import {loadTranslationLayers, recitedPassageOf, resolveEndCardContent, translationLayerSpecs} from '../extras';
 import {
   fileUrl,
@@ -35,6 +36,12 @@ export type ResolveRecitationOptions = {
   readonly staticFile?: ((path: string) => string) | undefined;
   /** `calculateMetadata()`'s `abortSignal`: the Studio aborts a resolution it no longer needs. */
   readonly signal?: AbortSignal | undefined;
+  /**
+   * Leave out the `splits` that do not fit the lines (`fitSplits()`, listed in `droppedSplits`)
+   * instead of refusing them with `BAD_LINE_SPLIT`: what the Studio's preview asks, so the panel
+   * that removes them stays on screen. Off by default: a render refuses them.
+   */
+  readonly lenientSplits?: boolean | undefined;
 };
 
 const bad = (message: string, details: Readonly<Record<string, unknown>> = {}): MushafStudioError =>
@@ -199,6 +206,22 @@ export const audioOffsetFor = (file: StudioTimings, played: StudioTimings, leadI
 };
 
 /**
+ * `audioOffsetFor()`, or under `hostAudio` the second of the template's track heard at the
+ * composition's frame 0 (`hostAudio.offsetSeconds`, negative when the track starts later): the
+ * template plays the audio, so where the composition starts in it is the template's, not chosen
+ * for the first line's entrance.
+ */
+export const recordingOffsetFor = (
+  props: object,
+  file: StudioTimings,
+  played: StudioTimings,
+  leadInSeconds: number,
+): number => {
+  const host = hostAudioOf(props);
+  return host.enabled ? roundTime(host.offsetSeconds) : audioOffsetFor(file, played, leadInSeconds);
+};
+
+/**
  * The timings `offset` seconds earlier: every ayah and word, and the sidecar's words and segments,
  * which share the recording's base. The same object for an offset of 0, so a file played from its
  * start keeps its identity (and its byte-for-byte round trip).
@@ -235,6 +258,8 @@ export type ResolvedRecitationWithClips = ResolvedRecitation & {readonly clips: 
 type PassageLines = {
   /** The lines found for the timings, splits applied, without the leading header lines. */
   readonly split: readonly MushafLineData[];
+  /** The splits left out (lenient only). */
+  readonly droppedSplits: readonly LineSplit[];
   /** `split` with the leading header lines first. */
   readonly lines: readonly MushafLineData[];
   readonly schedule: readonly LineSchedule[];
@@ -244,6 +269,18 @@ type LineSources = {
   readonly theme: MushafThemeSelection;
   readonly data: MushafDataSource | undefined;
   readonly spacingSeconds: number;
+  readonly lenientSplits: boolean;
+};
+
+/** The splits applied: strictly (`applySplits()`), or leaving out what does not fit (`fitSplits()`). */
+const withSplits = (
+  found: readonly MushafLineData[],
+  splits: readonly LineSplit[],
+  lenient: boolean,
+): {readonly split: readonly MushafLineData[]; readonly droppedSplits: readonly LineSplit[]} => {
+  if (!lenient) return {split: applySplits(found, splits), droppedSplits: []};
+  const fitted = fitSplits(found, splits);
+  return {split: fitted.lines, droppedSplits: fitted.dropped};
 };
 
 /**
@@ -254,10 +291,10 @@ type LineSources = {
 const oneSurahLines = async (
   timings: StudioTimingsV1,
   props: MushafRecitationProps,
-  {theme, data, spacingSeconds}: LineSources,
+  {theme, data, spacingSeconds, lenientSplits}: LineSources,
 ): Promise<PassageLines> => {
   const found = await getMushafLines({...recitedRange(timings), theme, slice: props.slice, data});
-  const split = applySplits(found, props.splits);
+  const {split, droppedSplits} = withSplits(found, props.splits, lenientSplits);
   const timed = scheduleLines(split, timings, {occurrence: props.highlight.occurrence});
   if (timed.length === 0) {
     const {first, last} = bounds(timings);
@@ -272,7 +309,7 @@ const oneSurahLines = async (
       ? await surahHeaderLines(timings.surah, split[0], props.header, {theme, data})
       : [];
   const schedule = withHeaderSlots(timed, headers.length, spacingSeconds);
-  return {split, lines: headers.length === 0 ? split : [...headers, ...split], schedule};
+  return {split, droppedSplits, lines: headers.length === 0 ? split : [...headers, ...split], schedule};
 };
 
 /**
@@ -285,10 +322,10 @@ const oneSurahLines = async (
 const acrossSurahsLines = async (
   timings: StudioTimingsV2,
   props: MushafRecitationProps,
-  {theme, data, spacingSeconds}: LineSources,
+  {theme, data, spacingSeconds, lenientSplits}: LineSources,
 ): Promise<PassageLines> => {
   const found = await getMushafLinesForRanges(recitedRanges(timings), {theme, slice: props.slice, data});
-  const split = applySplits(found, props.splits);
+  const {split, droppedSplits} = withSplits(found, props.splits, lenientSplits);
   if (scheduleLines(split, timings, {occurrence: props.highlight.occurrence}).length === 0) {
     throw bad(
       `No line of ayahs ${spanText(timings)} carries a timed word; the timings and the mushaf data do not agree. Realign the recording.`,
@@ -301,20 +338,22 @@ const acrossSurahsLines = async (
     from.ayah === 1 && first ? await surahHeaderLines(from.surah, first, props.header, {theme, data}) : [];
   const lines = headers.length === 0 ? split : [...headers, ...split];
   const timed = scheduleLines(lines, timings, {occurrence: props.highlight.occurrence});
-  return {split, lines, schedule: withInnerHeaderSlots(timed, lines, timings, spacingSeconds)};
+  return {split, droppedSplits, lines, schedule: withInnerHeaderSlots(timed, lines, timings, spacingSeconds)};
 };
 
 /**
  * Resolves the content props once: fetches and validates the timings, trims them to the ayah
  * range (one surah's timings only: timings that cross surahs are used whole) and to the ayahs the
- * recording carries whole, moves them `audioOffsetSeconds` earlier (see `audioOffsetFor()`), finds
+ * recording carries whole, moves them `audioOffsetSeconds` earlier (see `recordingOffsetFor()`), finds
  * the lines (`getMushafLines(recitedRange(...))`, or `getMushafLinesForRanges(recitedRanges(...))`
- * across surahs, sliced), applies the splits, schedules the lines (after the surah's header lines
+ * across surahs, sliced), applies the splits (refusing one that does not fit, or, with
+ * `lenientSplits`, leaving it out and listing it in `droppedSplits`), schedules the lines (after the surah's header lines
  * when `header` asks for them and the recitation starts at ayah 1, see `surahHeaderLines()` and
  * `withHeaderSlots()`; across surahs each later surah's header lines come before its ayah 1, see
  * `withInnerHeaderSlots()`), loads the translation and gloss files, and marks the doubtful
  * words of the whole range (an incomplete ayah's words included), and lays out the clip timeline
- * of `memorize` (each ayah played `repeat` times). Pure given `fetch`;
+ * of `memorize` (each ayah played `repeat` times; refused under `hostAudio`, see
+ * `assertNoHostRepeats()`). Pure given `fetch`;
  * `calculateMetadata()` is this plus the size and duration.
  */
 export const resolveRecitation = async (
@@ -328,17 +367,19 @@ export const resolveRecitation = async (
     staticFile: options.staticFile ?? remotionStaticFile,
     ...(options.signal ? {signal: options.signal} : {}),
   };
+  assertNoHostRepeats(props, props.memorize);
   const file = await readTimings(props.timingsFile, io);
   const inRange = timingsInRange(file, props.fromAyah, props.toAyah);
   const played = playableTimings(inRange);
-  const audioOffsetSeconds = audioOffsetFor(file, played, props.animation.leadInSeconds);
+  const audioOffsetSeconds = recordingOffsetFor(props, file, played, props.animation.leadInSeconds);
   const timings = shiftTimings(played, audioOffsetSeconds);
   const sources = {
     theme: themeSelectionFrom(props.theme, props.customTheme),
     data: dataSourceFrom(props.data, io.staticFile),
     spacingSeconds: headerSeconds(props.overlay),
+    lenientSplits: options.lenientSplits === true,
   };
-  const {split, lines, schedule} =
+  const {split, droppedSplits, lines, schedule} =
     timings.version === 1
       ? await oneSurahLines(timings, props, sources)
       : await acrossSurahsLines(timings, props, sources);
@@ -363,6 +404,7 @@ export const resolveRecitation = async (
     gloss,
     transliteration,
     doubtful: doubtfulWords(inRange, {threshold: props.review.confidenceThreshold}),
+    droppedSplits,
     clips: clipTimeline(timings, props.memorize),
     endCard,
   };
@@ -387,5 +429,28 @@ export const skipRecitationStart = (
     audioOffsetSeconds: roundTime(resolved.audioOffsetSeconds + seconds),
     schedule: resolved.schedule.map((slot) => ({...slot, start: earlier(slot.start), end: earlier(slot.end)})),
     clips: clipTimeline(timings, memorize),
+  };
+};
+
+/**
+ * A resolved recitation that starts `seconds` later in the video, for the intro card
+ * (`introDelaySeconds()`): the timings, the schedule and the clip timeline move that much later,
+ * and `introDelaySeconds` says by how much, so a host can map video time to recording time
+ * (`recording = video − introDelaySeconds + audioOffsetSeconds`). The same object for 0.
+ */
+export const delayRecitationStart = (
+  resolved: ResolvedRecitationWithClips,
+  seconds: number,
+  memorize: Pick<Memorize, 'mode' | 'repeat' | 'pauseSeconds'>,
+): ResolvedRecitationWithClips => {
+  if (seconds === 0) return resolved;
+  const timings = shiftTimings(resolved.timings, -seconds);
+  const later = (t: number): number => roundTime(t + seconds);
+  return {
+    ...resolved,
+    timings,
+    schedule: resolved.schedule.map((slot) => ({...slot, start: later(slot.start), end: later(slot.end)})),
+    clips: clipTimeline(timings, memorize),
+    introDelaySeconds: roundTime((resolved.introDelaySeconds ?? 0) + seconds),
   };
 };

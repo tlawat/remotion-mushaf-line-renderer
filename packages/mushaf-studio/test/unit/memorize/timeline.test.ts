@@ -142,8 +142,8 @@ describe('clipAt and audioTimeAt', () => {
 describe('repeatCounterText', () => {
   it('says which play of how many, and nothing for one play or before the first clip', () => {
     const clips = clipTimeline(timings, memorize({repeat: 3}));
-    expect(repeatCounterText(clipAt(clips, 4), 3)).toBe('2/3');
-    expect(repeatCounterText(clips[2]!, 3)).toBe('3/3');
+    expect(repeatCounterText(clipAt(clips, 4), 3)).toBe('2 / 3');
+    expect(repeatCounterText(clips[2]!, 3)).toBe('3 / 3');
     expect(repeatCounterText(null, 3)).toBeNull();
     expect(repeatCounterText(clips[0]!, 1)).toBeNull();
   });

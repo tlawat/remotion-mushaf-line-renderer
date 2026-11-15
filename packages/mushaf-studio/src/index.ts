@@ -7,6 +7,7 @@ export * from './background';
 // Captions
 export * from './captions';
 // Compositions
+export {BOOK_SERIF_REQUEST, STUDIO_FONT_REQUESTS, useStudioFonts} from './compositions/fonts';
 export * from './compositions/passage';
 export * from './compositions/recitation';
 // Content
@@ -33,8 +34,10 @@ export * from './presets';
 export * from './qud';
 // Schema
 export * from './schema';
+// Drop-in slots
+export * from './slots';
 // Studio
-export {isInStudio, MushafStudioPanel, type MushafStudioPanelProps} from './studio';
+export {isInStudio, MushafStudioPanel, type MushafStudioPanelKind, type MushafStudioPanelProps} from './studio';
 // Translations
 export * from './translations';
 // Types

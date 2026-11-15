@@ -5,7 +5,7 @@ import {describeValue, MushafStudioError} from '../errors';
 
 /**
  * The writing systems the translations quran.com offers are set in, each with the web fonts that
- * cover it. `latin` covers Latin, Cyrillic, Greek and Vietnamese (both its families do); `arabic` is
+ * cover it. `latin` covers Latin, Cyrillic, Greek and Vietnamese (all its families do); `arabic` is
  * Naskh for Arabic and the languages written like it (Sindhi, Pashto, Kurdish, Uyghur, ...);
  * `urdu` is Nastaliq; `persian` is Persian and Dari.
  */
@@ -49,12 +49,12 @@ const withLatin = (subset: string): readonly string[] => [subset, 'latin', 'lati
 
 /**
  * The web fonts per script. Every family is on Google Fonts (checked against its CSS2 API,
- * 2026-10): `Noto Serif` and `Lora` for Latin, `Noto Naskh Arabic` and `Amiri` for Arabic, `Noto
+ * 2026-10): `EB Garamond` (the design's book serif), `Noto Serif` and `Lora` for Latin, `Noto Naskh Arabic` and `Amiri` for Arabic, `Noto
  * Nastaliq Urdu`, `Vazirmatn` for Persian, the Noto Sans family of each Indic, South-East Asian and
  * African script, and `Noto Sans SC` (Chinese), `Noto Sans JP` and `Noto Sans KR` for CJK.
  */
 export const SCRIPT_FONTS: Readonly<Record<ScriptId, ScriptFonts>> = {
-  latin: {script: 'latin', families: ['Noto Serif', 'Lora'], direction: 'ltr', subsets: LATIN_SUBSETS},
+  latin: {script: 'latin', families: ['EB Garamond', 'Noto Serif', 'Lora'], direction: 'ltr', subsets: LATIN_SUBSETS},
   arabic: {script: 'arabic', families: ['Noto Naskh Arabic', 'Amiri'], direction: 'rtl', subsets: withLatin('arabic')},
   urdu: {script: 'urdu', families: ['Noto Nastaliq Urdu'], direction: 'rtl', subsets: withLatin('arabic')},
   persian: {script: 'persian', families: ['Vazirmatn'], direction: 'rtl', subsets: withLatin('arabic')},
@@ -150,6 +150,8 @@ export const GOOGLE_FONTS_CSS_API = 'https://fonts.googleapis.com/css2';
 export type WebFontOptions = {
   /** The weights to load, 100-900 (default `[400]`). */
   readonly weights?: readonly number[] | undefined;
+  /** The weights to load in italic as well, 100-900 (default none): `[400]` adds the regular italic. */
+  readonly italics?: readonly number[] | undefined;
   /**
    * Only these characters: Google answers with one small face per weight holding just them
    * (`&text=`), the way to load a CJK family. Order and repeats do not matter.
@@ -200,10 +202,14 @@ const textKey = (text: string): string => [...new Set(Array.from(text))].sort().
 
 /**
  * The CSS2 URL of a family: `https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=block`,
- * weights sorted and once each, `&text=` with the characters of `text` once each. Throws
- * `BAD_STUDIO_PROP` for an empty family or a weight outside 100-900.
+ * weights sorted and once each, `&text=` with the characters of `text` once each. With `italics`
+ * the axis is `ital,wght` (`EB+Garamond:ital,wght@0,400;0,500;1,400`). Throws `BAD_STUDIO_PROP`
+ * for an empty family or a weight outside 100-900.
  */
-export const googleFontsCssUrl = (family: string, options: Pick<WebFontOptions, 'weights' | 'text'> = {}): string => {
+export const googleFontsCssUrl = (
+  family: string,
+  options: Pick<WebFontOptions, 'weights' | 'italics' | 'text'> = {},
+): string => {
   const name = family.trim();
   if (!name) {
     throw new MushafStudioError('BAD_STUDIO_PROP', 'useWebFont(): the family is empty; name a Google Fonts family.', {
@@ -211,8 +217,14 @@ export const googleFontsCssUrl = (family: string, options: Pick<WebFontOptions, 
     });
   }
   const weights = normaliseWeights(name, options.weights);
+  const italics =
+    options.italics === undefined || options.italics.length === 0 ? [] : normaliseWeights(name, options.italics);
   const text = options.text === undefined ? '' : textKey(options.text);
-  const familyParam = `${encodeURIComponent(name).replace(/%20/g, '+')}:wght@${weights.join(';')}`;
+  const axes =
+    italics.length === 0
+      ? `wght@${weights.join(';')}`
+      : `ital,wght@${[...weights.map((w) => `0,${w}`), ...italics.map((w) => `1,${w}`)].join(';')}`;
+  const familyParam = `${encodeURIComponent(name).replace(/%20/g, '+')}:${axes}`;
   return `${GOOGLE_FONTS_CSS_API}?family=${familyParam}&display=block${text ? `&text=${encodeURIComponent(text)}` : ''}`;
 };
 

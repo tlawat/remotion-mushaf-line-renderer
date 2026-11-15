@@ -232,6 +232,20 @@ button.primary {
   margin-top: 0.2em;
 }
 
+.format-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  border: none;
+}
+
+.format-row button[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 .look-grid {
   display: grid;
   gap: 8px;

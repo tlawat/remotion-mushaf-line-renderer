@@ -299,7 +299,7 @@ describe('Align with the cache', () => {
       'fetch',
       vi.fn(async () => ({ok: true, status: 200, blob: async () => recording('audio')})),
     );
-    store.setStudioState({uploadedAudio: 'mushaf-studio/p/take.m4a'});
+    store.setStudioState({uploadedAudio: {MushafRecitation: 'mushaf-studio/p/take.m4a'}});
     render(
       <MushafStudioPanel compositionId="MushafRecitation" props={defaultMushafRecitationProps} initialTab="align" />,
     );

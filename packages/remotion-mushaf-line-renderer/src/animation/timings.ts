@@ -33,6 +33,24 @@ export const ENTER_EASING = Easing.bezier(0.2, 0, 0, 1);
  */
 export const EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
 
+/**
+ * The four curves of calm motion, for Quranic text: nothing lurches, nothing overshoots, and a
+ * change never starts with a jump. `soft` for arrivals (a mark, an ink fill, a fade-in), `inOut`
+ * for what moves and comes to rest (a mark letting go, a window's scroll), `sine` for fade-outs and
+ * cards, `arrive` for the slight rise of an entering line. Over 5 frames `soft` runs 0, .30, .68,
+ * .89, .98, 1; over 24 frames `inOut` is .003 at frame 1 and .50 at frame 12.
+ *
+ * ```ts
+ * enterTiming({durationInFrames: 24, easing: CALM_EASINGS.inOut}); // the Studio's window scroll
+ * ```
+ */
+export const CALM_EASINGS = {
+  soft: Easing.bezier(0.25, 0.1, 0.25, 1),
+  inOut: Easing.bezier(0.45, 0, 0.55, 1),
+  sine: Easing.bezier(0.37, 0, 0.63, 1),
+  arrive: Easing.bezier(0.33, 0, 0.2, 1),
+} as const;
+
 const DEFAULT_ENTER_SECONDS = 0.5;
 /** Exits are deliberately shorter than entrances: the eye needs less time to let something go. */
 const DEFAULT_EXIT_SECONDS = 0.32;
@@ -69,6 +87,9 @@ export const exitTiming = easedTiming(EXIT_EASING, DEFAULT_EXIT_SECONDS);
 /**
  * A spring instead of a curve, for motion that settles physically. `damping: 200` (the default) does
  * not overshoot; lower it for a bounce. Duration is measured from the spring unless you pin it.
+ *
+ * @deprecated Overshoot-free but starts early; not recommended for Quranic text. Use `enterTiming()`
+ * with `CALM_EASINGS.inOut`.
  */
 export const springyTiming = ({
   config,

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {describeValue, MushafStudioError} from '../errors';
 import type {AyahTranslation} from '../types';
-import {type TranslationAlign, TranslationBlock} from './TranslationBlock';
+import {type OutgoingAyah, type TranslationAlign, TranslationBlock} from './TranslationBlock';
 
 /** One translation of a `<TranslationStack>`, with its own type. */
 export type TranslationLayer = {
@@ -9,8 +9,24 @@ export type TranslationLayer = {
   readonly fontFamily: string;
   /** px. */
   readonly fontSize: number;
+  /** CSS `font-weight`; unset: the font's regular. */
+  readonly fontWeight?: number | undefined;
   readonly color: string;
   readonly direction: 'ltr' | 'rtl';
+};
+
+/**
+ * The centred layout of the render design (5.5): every layer centred, at most `width` px wide (and
+ * 60 ch), balanced, an ayah too long for two lines drawn at 0.85 of its size, the layers 0.5 em
+ * apart with a centred hairline `ruleWidth` px wide between them.
+ */
+export type TranslationStackLayout = {
+  /** px of the text's measure: `0.72 × measure` of the lines. */
+  readonly width: number;
+  /** px of the hairline between two layers: `0.12 × measure`. */
+  readonly ruleWidth: number;
+  /** In ems (1.45). */
+  readonly lineHeight: number;
 };
 
 export type TranslationStackProps = {
@@ -30,6 +46,12 @@ export type TranslationStackProps = {
   readonly ruleOpacity?: number | undefined;
   /** 0-1: the whole stack's opacity (the composition fades it with its line). */
   readonly opacity?: number | undefined;
+  /** The centred, fitted layout; unset: every layer at its size, aligned by `align`, a full-width rule. */
+  readonly layout?: TranslationStackLayout | undefined;
+  /** The ayah leaving during a dissolve, in every layer (`shownAyahAt()`); `null` for none. */
+  readonly outgoing?: OutgoingAyah | null | undefined;
+  /** 0-1: the incoming ayah's opacity during a dissolve (default 1). */
+  readonly textOpacity?: number | undefined;
   readonly style?: React.CSSProperties | undefined;
   readonly className?: string | undefined;
 };
@@ -40,7 +62,9 @@ export const MAX_TRANSLATION_LAYERS = 3;
 /**
  * Several translations of the same ayah stacked, each a `<TranslationBlock>` with its own font,
  * size, colour and direction, separated by a thin rule. Every block keeps its height when it has
- * no text for the ayah, so the layout never jumps. Nothing for an empty `layers`; more than three is
+ * no text for the ayah, so the layout never jumps. With `layout`, the stack is the render design's:
+ * centred and fitted, a short centred hairline between layers. With `outgoing`, every layer
+ * dissolves from the leaving ayah to `ayahKey`. Nothing for an empty `layers`; more than three is
  * a `BAD_STUDIO_PROP`. Pure in its props.
  */
 export const TranslationStack: React.FC<TranslationStackProps> = ({
@@ -52,6 +76,9 @@ export const TranslationStack: React.FC<TranslationStackProps> = ({
   ruleThickness,
   ruleOpacity,
   opacity,
+  layout,
+  outgoing,
+  textOpacity,
   style,
   className,
 }) => {
@@ -65,34 +92,52 @@ export const TranslationStack: React.FC<TranslationStackProps> = ({
   const first = layers[0];
   if (!first) return null;
   const space = gap ?? 12;
+  const rule = (layer: TranslationLayer): React.CSSProperties =>
+    layout === undefined
+      ? {
+          height: ruleThickness ?? 1,
+          margin: `${space}px 0`,
+          background: ruleColor ?? first.color,
+          opacity: ruleOpacity ?? 0.35,
+        }
+      : {
+          // Half of the 0.5 em between the layers on each side of a centred hairline.
+          height: ruleThickness ?? 1,
+          width: layout.ruleWidth,
+          margin: `${Math.round(layer.fontSize * 0.25)}px auto`,
+          background: ruleColor ?? layer.color,
+          opacity: ruleOpacity ?? 0.3,
+        };
   return (
     <div
       className={className ? `mushaf-translation-stack ${className}` : 'mushaf-translation-stack'}
       data-ayah-key={ayahKey ?? undefined}
-      style={{display: 'flex', flexDirection: 'column', opacity: opacity ?? 1, ...style}}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        ...(layout === undefined ? {} : {alignItems: 'center'}),
+        opacity: opacity ?? 1,
+        ...style,
+      }}
     >
       {layers.map((layer, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: a layer is a position (top, middle, bottom); one translation may fill two.
         <React.Fragment key={i}>
-          {i > 0 ? (
-            <div
-              data-mushaf-rule=""
-              style={{
-                height: ruleThickness ?? 1,
-                margin: `${space}px 0`,
-                background: ruleColor ?? first.color,
-                opacity: ruleOpacity ?? 0.35,
-              }}
-            />
-          ) : null}
+          {i > 0 ? <div data-mushaf-rule="" style={rule(layer)} /> : null}
           <TranslationBlock
             translation={layer.translation}
             ayahKey={ayahKey}
             fontFamily={layer.fontFamily}
             fontSize={layer.fontSize}
+            fontWeight={layer.fontWeight}
             color={layer.color}
             direction={layer.direction}
-            align={align}
+            align={layout === undefined ? align : 'center'}
+            lineHeight={layout?.lineHeight}
+            fitWidth={layout?.width}
+            outgoing={outgoing}
+            textOpacity={textOpacity}
+            style={layout === undefined ? undefined : {width: `min(${layout.width}px, 60ch)`, maxWidth: '100%'}}
           />
         </React.Fragment>
       ))}

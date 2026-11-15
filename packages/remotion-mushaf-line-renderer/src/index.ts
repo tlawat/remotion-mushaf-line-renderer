@@ -1,5 +1,7 @@
 // Component
 
+export type {FadeRiseProps} from './animation/presentations/fade-rise';
+export {fadeRise, fadeRiseStyle} from './animation/presentations/fade-rise';
 export type {RevealRtlProps} from './animation/presentations/reveal-rtl';
 export {revealRtl, revealRtlStyle} from './animation/presentations/reveal-rtl';
 export type {SlideFadeProps} from './animation/presentations/slide-fade';
@@ -7,7 +9,9 @@ export {slideFade, slideFadeStyle} from './animation/presentations/slide-fade';
 export {scrollPosition} from './animation/scroll-position';
 export type {MushafSpringTimingOptions, MushafTimingOptions} from './animation/timings';
 // Animation
-export {ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from './animation/timings';
+export {CALM_EASINGS, ENTER_EASING, EXIT_EASING, enterTiming, exitTiming, springyTiming} from './animation/timings';
+export type {BandBox, BandBoxesOptions, InkBand, InkOverhang} from './component/bands';
+export {bandBoxes, measureInkOverhang} from './component/bands';
 export {MushafJuzName} from './component/JuzName';
 export {MushafLine} from './component/MushafLine';
 export {MushafLineWindow} from './component/MushafLineWindow';
@@ -55,6 +59,7 @@ export type {
   LoadMushafDataOptions,
   LoadPageFontOptions,
   LoadSharedFontOptions,
+  MushafBandShape,
   MushafColorPart,
   MushafDataSource,
   MushafFontFallback,
@@ -99,6 +104,7 @@ export type {
   ScheduleLinesOptions,
   ScrollPositionOptions,
   SurahAyahTiming,
+  WordBand,
   WordContext,
   WordOccurrence,
   WordTiming,

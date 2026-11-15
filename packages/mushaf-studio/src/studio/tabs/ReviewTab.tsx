@@ -22,7 +22,9 @@ import {
   runStudioTask,
   type StudioSession,
   setStudioState,
+  targetKeyOf,
   t as tNow,
+  useStudioDraft,
   useStudioState,
   useT,
 } from '../store';
@@ -45,6 +47,18 @@ import {Waveform, type WaveformView} from '../Waveform';
 import {ExportRow} from './ExportRow';
 
 type Span = {readonly start: number; readonly end: number};
+
+/**
+ * What the tab keeps of the user's unsaved work in the store (`useStudioDraft()`), in recording
+ * (file) time, for the timings file it was made on: a draft of another file is not shown or applied.
+ */
+type TimedDraft<T> = {readonly file: string; readonly value: T};
+
+/** The split options the tab starts with. */
+const DEFAULT_SPLIT = {maxVerses: 1, maxWords: 0, maxDuration: 30, stopSigns: false};
+
+/** A span moved `by` seconds, to the millisecond: composition time to recording time and back. */
+const moved = (span: Span, by: number): Span => ({start: roundMs(span.start + by), end: roundMs(span.end + by)});
 
 /** Seconds around the selected segment the waveform shows by default. */
 const DEFAULT_ZOOM_PADDING = 2;
@@ -136,9 +150,11 @@ const isTyping = (target: EventTarget): boolean =>
 /**
  * Review: the aligner's segments with their confidence, the words with their times, the waveform,
  * a comparison with another timings file, split and re-align; and a keyboard for going through the
- * doubtful words (see `REVIEW_SHORTCUTS`).
+ * doubtful words (see `REVIEW_SHORTCUTS`). The unapplied nudges, the re-align boundaries, the split
+ * options and the selected word stay in the store by target through a tab switch; nudges and
+ * boundaries are kept in recording time, as the file and the aligner's session have them.
  */
-export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fps}) => {
+export const ReviewTab: React.FC<TabProps> = ({target, props, project, fps, frameOffset}) => {
   const {session, busy, showDoubts} = useStudioState();
   const t = useT();
   const resolved = resolvedOf(props);
@@ -146,16 +162,28 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const alignment = timings?.alignment ?? null;
   // An ayah text has no `review` props: it marks no doubtful word, and the list uses the default threshold.
   const threshold = isAyahTextProps(props) ? DEFAULT_CONFIDENCE_THRESHOLD : props.review.confidenceThreshold;
+  const draftKey = targetKeyOf(target);
+  const file = props.timingsFile;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const [pending, setPending] = useState<ReadonlyMap<string, Span>>(() => new Map());
+  // Kept in the store by target, so a tab switch loses none of it; nudges and boundaries in
+  // recording time, so a change of `audioOffsetSeconds` (the range, the lead-in, the trim) leaves them right.
+  const [pendingDraft, setPendingDraft] = useStudioDraft<TimedDraft<Readonly<Record<string, Span>>> | null>(
+    draftKey,
+    'review.pending',
+    null,
+  );
   const [splitOpen, setSplitOpen] = useState(false);
-  const [split, setSplit] = useState({maxVerses: 1, maxWords: 0, maxDuration: 30, stopSigns: false});
+  const [split, setSplit] = useStudioDraft(draftKey, 'review.split', DEFAULT_SPLIT);
   const [realignOpen, setRealignOpen] = useState(false);
   /** The user's boundaries; `null` means "as the segments are", so a new alignment shows its own. */
-  const [boundaries, setBoundaries] = useState<readonly Span[] | null>(null);
+  const [boundariesDraft, setBoundariesDraft] = useStudioDraft<TimedDraft<readonly Span[]> | null>(
+    draftKey,
+    'review.boundaries',
+    null,
+  );
   /** The word the keyboard edits (`ReviewWord.key`), and the segment the waveform zooms to. */
-  const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
+  const [selectedWord, setSelectedWord] = useStudioDraft<string | null>(draftKey, 'review.selectedWord', null);
+  const [selectedSegment, setSelectedSegment] = useStudioDraft<number | null>(draftKey, 'review.selectedSegment', null);
   const [zoomPadding, setZoomPadding] = useState(DEFAULT_ZOOM_PADDING);
   const [help, setHelp] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -181,6 +209,16 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
 
   const working = busy !== null;
   const offset = audioOffsetOf(resolved);
+  /** The unapplied nudges by word key, in recording time. */
+  const pendingFile: Readonly<Record<string, Span>> = pendingDraft?.file === file ? pendingDraft.value : {};
+  /** The same in composition time, as the lists show the words. */
+  const pending: ReadonlyMap<string, Span> = new Map(
+    Object.entries(pendingFile).map(([word, span]) => [word, moved(span, -offset)]),
+  );
+  const clearPending = () => setPendingDraft(null);
+  const boundaries = boundariesDraft?.file === file ? boundariesDraft.value : null;
+  const setBoundaries = (next: readonly Span[] | null) =>
+    setBoundariesDraft(next === null ? null : {file, value: next});
   const segments: readonly AlignmentSegment[] = alignment?.segments ?? [];
   const low = segments.filter((s) => s.confidence < threshold).length;
   const missing = segments.filter((s) => s.hasMissingWords).length;
@@ -188,7 +226,9 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
   const repeats = segments.filter((s) => s.hasRepeatedWords).length;
   const incomplete = timings.ayat.filter((a) => a.complete === false).length;
   const wordCount = alignment ? alignment.words.length : timings.ayat.reduce((n, a) => n + (a.words?.length ?? 0), 0);
-  const segmentBoundaries: readonly Span[] = segments.map((s) => ({start: s.timeFrom, end: s.timeTo}));
+  // In recording time, every segment: the session holds the whole recording, and a re-align replaces
+  // the whole file's alignment, the segments outside the played range included.
+  const segmentBoundaries: readonly Span[] = segments.map((s) => moved({start: s.timeFrom, end: s.timeTo}, offset));
   const shownBoundaries = boundaries ?? segmentBoundaries;
   const sessionMatches: StudioSession | null =
     session !== null && alignment?.audioId !== undefined && alignment.audioId === session.audioId ? session : null;
@@ -209,41 +249,46 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
       setSelectedSegment((current) => (expanded.has(key) && current === number ? null : number));
     }
   };
-  const edit = (key: string, span: Span) => setPending((current) => new Map(current).set(key, span));
+  /** Keeps a nudge the lists made (composition time) in recording time. */
+  const edit = (word: string, span: Span) =>
+    setPendingDraft((current) => ({
+      file,
+      value: {...(current?.file === file ? current.value : {}), [word]: moved(span, offset)},
+    }));
 
   /** Selects a word: the keyboard edits it, its row opens, the waveform zooms to its segment, the playhead moves to it. */
   const select = (word: ReviewWord, seek: boolean) => {
     setSelectedWord(word.key);
     setExpanded((current) => (current.has(word.group) ? current : new Set(current).add(word.group)));
     if (word.group.startsWith('s')) setSelectedSegment(Number(word.group.slice(1)));
-    if (seek) seekToTime(word.start, fps);
+    if (seek) seekToTime(word.start, fps, frameOffset);
   };
 
   /** Writes new timings where the composition reads them (or into the project when it reads a URL) and re-resolves. */
   const writeTimings = async (next: StudioTimings): Promise<void> => {
     const current = props.timingsFile;
-    const target = isUrl(current) ? projectPath(project, `${stemOf(current) || 'timings'}.timings.json`) : current;
-    await writeJsonFile(target, next);
-    if (target === current) reevaluate();
-    else await patchProps(compositionId, {timingsFile: target});
+    const path = isUrl(current) ? projectPath(project, `${stemOf(current) || 'timings'}.timings.json`) : current;
+    await writeJsonFile(path, next);
+    if (path === current) reevaluate();
+    else await patchProps(target, {timingsFile: path});
   };
 
   const applyEdits = () => {
-    const edits = pending;
+    const edits = pendingFile;
     void runStudioTask(tNow('review.busy.reading'), async () => {
       const at = new Date().toISOString();
-      // The tab shows composition time: the file's times moved `audioOffsetSeconds` earlier and cut to the
-      // range. The edit goes into the file itself, every time moved back; the occurrences are the same
-      // in both, the cut drops whole ayahs only and the move keeps the order.
-      const file = await readTimingsFile(props.timingsFile);
+      // The tab shows composition time (the file's times moved `audioOffsetSeconds` earlier and cut to
+      // the range) and keeps the nudges in the file's own time. The edit goes into the file itself; the
+      // occurrences are the same in both, the cut drops whole ayahs only and the move keeps the order.
+      const current = await readTimingsFile(props.timingsFile);
       // All at once: applied one by one, each sort would renumber the occurrences the next edit names.
-      const nudges = [...edits].map(([key, span]) => {
-        const {id, occurrence} = parseWordKey(key);
-        return {id, occurrenceIndex: occurrence, start: span.start + offset, end: span.end + offset, at};
+      const nudges = Object.entries(edits).map(([word, span]) => {
+        const {id, occurrence} = parseWordKey(word);
+        return {id, occurrenceIndex: occurrence, start: span.start, end: span.end, at};
       });
       setStudioState({busy: tNow('review.busy.writing')});
-      await writeTimings(nudgeWords(file, nudges));
-      setPending(new Map());
+      await writeTimings(nudgeWords(current, nudges));
+      clearPending();
     });
   };
 
@@ -267,7 +312,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
       (entry): entry is string => typeof entry === 'string' && entry !== '',
     );
     setStudioState({session: {...live, align}, notice: notices.length > 0 ? notices.join(' ') : null});
-    setPending(new Map());
+    clearPending();
     setBoundaries(null);
   };
 
@@ -406,7 +451,8 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
             threshold={threshold}
             selected={selectedSegment}
             fps={fps}
-            onSeek={(time) => seekToTime(time, fps)}
+            frameOffset={frameOffset}
+            onSeek={(time) => seekToTime(time, fps, frameOffset)}
           />
           <div style={{...styles.row, marginTop: 4}}>
             <input
@@ -441,7 +487,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
                   data-segment={segment.segment}
                   data-doubtful={isDoubtfulSegment(segment, threshold) ? 'true' : 'false'}
                   style={styles.listRow(open)}
-                  onClick={() => seekTo(segment.timeFrom, fps)}
+                  onClick={() => seekTo(segment.timeFrom, fps, frameOffset)}
                 >
                   <div style={styles.row}>
                     <Button
@@ -517,7 +563,7 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
             });
             return (
               // biome-ignore lint/a11y/useKeyWithClickEvents: the row is a seek target; the expand button is keyboard-reachable
-              <li key={key} style={styles.listRow(open)} onClick={() => seekTo(ayah.start, fps)}>
+              <li key={key} style={styles.listRow(open)} onClick={() => seekTo(ayah.start, fps, frameOffset)}>
                 <div style={styles.row}>
                   <Button
                     variant="ghost"
@@ -558,26 +604,29 @@ export const ReviewTab: React.FC<TabProps> = ({compositionId, props, project, fp
           <Button variant="primary" onClick={applyEdits} disabled={working || pending.size === 0}>
             {t('review.apply', {count: pending.size})}
           </Button>
-          <Button onClick={() => setPending(new Map())} disabled={pending.size === 0}>
+          <Button onClick={clearPending} disabled={pending.size === 0}>
             {t('review.discard')}
           </Button>
         </div>
         <Note>{t('review.applyNote', {file: props.timingsFile})}</Note>
       </Section>
       <ExportRow
+        target={target}
         props={props}
         project={project}
+        fps={fps}
+        frameOffset={frameOffset}
         writeTimings={async (next) => {
           await writeTimings(next);
           // The nudges were made on the times the import replaced.
-          setPending(new Map());
+          clearPending();
         }}
       />
       <Disclosure title={t('compare.title')} open={compareOpen} onToggle={() => setCompareOpen((o) => !o)}>
         <CompareTimings
           timingsFile={isUrl(props.timingsFile) ? '' : props.timingsFile}
           offset={offset}
-          onSeek={(time) => seekToTime(time, fps)}
+          onSeek={(time) => seekToTime(time, fps, frameOffset)}
         />
         <Note>{t('compare.note')}</Note>
       </Disclosure>

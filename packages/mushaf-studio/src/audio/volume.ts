@@ -1,6 +1,6 @@
 // What the composition does with an analysis: the normalising gain, the volume curve for
-// `<Audio volume={(f) => ...}>`, the extra offset that skips the leading silence, and the glow's
-// level on a frame. Pure and deterministic: these run on every frame of a render.
+// `<Audio volume={(f) => ...}>`, the extra offset that skips the leading silence, and a level on a
+// frame (which nothing on screen follows any more). Pure and deterministic: these run on every frame of a render.
 import type {AudioAnalysis} from './analyze';
 
 /** Four decimals: stable values, free of float noise. */
@@ -90,7 +90,7 @@ export const silenceTrimSeconds = (
 };
 
 /**
- * The glow's level at `frame` of the file (the composition frame plus the audio offset in frames):
+ * The recording's level at `frame` of the file (the composition frame plus the audio offset in frames):
  * the mean of `levels` over `radius` frames either side (default 2), so it swells rather than
  * flickers. Frames outside the file count as silence. 0-1, four decimals; pure.
  */

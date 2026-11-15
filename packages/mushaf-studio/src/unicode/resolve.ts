@@ -1,5 +1,6 @@
 import {normalizeTimings} from '@tlawat/remotion-mushaf-line';
 import {staticFile as remotionStaticFile} from 'remotion';
+import {assertNoHostRepeats, hostAudioOf} from '../audio/host';
 import {
   loadTranslationLayers,
   recitedPassageOf,
@@ -32,10 +33,13 @@ export type ResolvedAyahText = ResolvedExtras & {
   /**
    * Trimmed to the range (one surah's timings only: timings across surahs are used whole), without
    * the ayahs the recording does not carry whole; moved `audioOffsetSeconds` earlier when
-   * `audio.trimSilence` skipped the recording's leading silence.
+   * `audio.trimSilence` skipped the recording's leading silence, or under `hostAudio`.
    */
   readonly timings: StudioTimings;
-  /** Seconds of the recording skipped before frame 0 (`audio.trimSilence`); 0 or unset: the file's own times. */
+  /**
+   * Seconds of the recording skipped before frame 0 (`audio.trimSilence`, or `hostAudio.offsetSeconds`,
+   * negative when the template's track starts later); 0 or unset: the file's own times.
+   */
   readonly audioOffsetSeconds?: number | undefined;
   readonly text: AyahWords;
   /** The first translation shown (`translations[0]`), or `null`. */
@@ -58,7 +62,8 @@ const bad = (message: string, details: Readonly<Record<string, unknown>>): Musha
  * Resolves the content props once: fetches and validates the timings and trims them to the ayah
  * range (as `<MushafRecitation>` does: timings across surahs are used whole, and the text file
  * must then hold every surah they name), loads the text file and the ayah translation, and pairs
- * every timed ayah with its words, and lays out the clip timeline of `memorize`. The text is read from `public/` only, never fetched from
+ * every timed ayah with its words, and lays out the clip timeline of `memorize` (repeats are refused
+ * under `hostAudio`, whose offset moves the timings). The text is read from `public/` only, never fetched from
  * quran.com here, so renders are offline and reproducible. Throws `BAD_STUDIO_PROP` for an empty
  * `textFile`, a text in a script the font does not set, or an ayah the text does not hold. Pure
  * given `fetch`; `calculateMetadata()` is this plus the size and duration.
@@ -75,7 +80,14 @@ export const resolveAyahText = async (
       {prop: 'textFile'},
     );
   }
-  const timings = trimTimings(await readTimings(props.timingsFile, io), props.fromAyah, props.toAyah);
+  assertNoHostRepeats(props, props.memorize);
+  // Under hostAudio the template's track sets the clock: the timings move to the second it plays at frame 0.
+  const host = hostAudioOf(props);
+  const offset = host.enabled ? Math.round(host.offsetSeconds * 1e6) / 1e6 : 0;
+  const timings = shiftTimings(
+    trimTimings(await readTimings(props.timingsFile, io), props.fromAyah, props.toAyah),
+    offset,
+  );
   const keys = new Set(ayahKeysOf(timings));
   const [text, translations, endCard] = await Promise.all([
     loadAyahWords(fileUrl(props.textFile, io.staticFile), {fetch: io.fetch}),
@@ -108,6 +120,7 @@ export const resolveAyahText = async (
   });
   return {
     timings,
+    ...(offset === 0 ? {} : {audioOffsetSeconds: offset}),
     text,
     translation: translations[0] ?? null,
     translations,

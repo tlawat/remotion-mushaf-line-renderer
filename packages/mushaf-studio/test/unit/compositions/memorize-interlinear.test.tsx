@@ -109,7 +109,10 @@ vi.mock('@tlawat/remotion-mushaf-line', async (importOriginal) => {
   };
   return {...actual, MushafLine, MushafLineWindow, MushafSurahName: () => null};
 });
-vi.mock('../../../src/translations', () => ({
+vi.mock('../../../src/translations', async () => ({
+  glossStripState: (
+    await vi.importActual<typeof import('../../../src/translations/GlossStrip')>('../../../src/translations/GlossStrip')
+  ).glossStripState,
   ayahKeyOf: (id: string | null) => (id ? id.split(':').slice(0, 2).join(':') : null),
   TranslationBlock: () => null,
   TranslationStack: () => null,
@@ -154,6 +157,11 @@ const audios = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>('[
 const counter = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-mushaf-overlay="repeat-counter"]');
 const stylesOf = (element: HTMLElement): Record<string, {opacity?: number} | null> =>
   JSON.parse(element.dataset.wordStyles!);
+/** Memorisation hid nothing: every word is at least at the ink's rest (0.6), none hidden or faint. */
+const hidesNothing = (styles: Record<string, {opacity?: number} | null>): boolean =>
+  Object.values(styles).every((style) => (style?.opacity ?? 1) >= 0.6);
+/** From the labels' rest (0.7 of the gloss ink) to the marked word's full ink: shown, not hidden or faint. */
+const shownLabel = (opacity: string): boolean => Number(opacity) >= 0.7 && Number(opacity) <= 1;
 const at = (seconds: number) => {
   remotion.state.frame = Math.round(seconds * 30);
 };
@@ -179,7 +187,7 @@ describe('<MushafRecitation> memorisation', () => {
     expect(audios(c)).toHaveLength(1);
     expect(JSON.parse(windowOf(c).dataset.steps!)).not.toBeNull();
     expect(counter(c)).toBeNull();
-    expect(Object.values(stylesOf(windowOf(c))).every((s) => s === null)).toBe(true);
+    expect(hidesNothing(stylesOf(windowOf(c)))).toBe(true);
   });
 
   it('repeat: one trimmed audio per clip, at the clip’s frame, and the counter', () => {
@@ -195,12 +203,32 @@ describe('<MushafRecitation> memorisation', () => {
     });
     const sequence = second.closest<HTMLElement>('[data-sequence]')!;
     expect(sequence.dataset).toMatchObject({from: String(Math.round(3.891 * 30)), sequence: 'Ayah 2 (2/3)'});
-    expect(counter(c)!.textContent).toBe('2/3');
-    // The title label sits top right by default: the counter goes top left.
-    expect(counter(c)!.style.left).toBe('28px');
-    expect(counter(c)!.style.color).toBe('rgb(27, 27, 27)');
+    // 4 s, three frames into the second play: the counter dissolves from "1 / 3" over 12 frames.
+    expect(counter(c)!.querySelector('[data-mushaf-overlay-part="outgoing"]')!.textContent).toBe('1 / 3');
+    cleanup();
+    at(4.5);
+    const settled = mount(props({memorize: memorize({mode: 'repeat', ...three})}, {audioOffsetSeconds: 2}));
+    // Plain text in the label face, no pill, top left (the title label's corner is top right),
+    // inside the safe area, at 60 % of the label ink.
+    expect(counter(settled)!.textContent).toBe('2 / 3');
+    expect(counter(settled)!.style).toMatchObject({left: '54px', top: '54px', opacity: '0.6', background: ''});
+    expect(counter(settled)!.style.color).toBe('rgb(90, 85, 76)');
+    cleanup();
+    // With the jadwal drawn, the counter sits inside its inner rule, not across the gold.
+    const ruled = mount(
+      props(
+        {
+          memorize: memorize({mode: 'repeat', ...three}),
+          layout: {...defaultMushafRecitationProps.layout, frame: 'hairline'},
+        },
+        {audioOffsetSeconds: 2},
+      ),
+    );
+    expect(counter(ruled)!.style).toMatchObject({left: '76px', top: '76px'});
+    cleanup();
+    const c2 = mount(props({memorize: memorize({mode: 'repeat', ...three})}, {audioOffsetSeconds: 2}));
     // Repeat hides nothing.
-    expect(Object.values(stylesOf(windowOf(c))).every((s) => s === null)).toBe(true);
+    expect(hidesNothing(stylesOf(windowOf(c2)))).toBe(true);
   });
 
   it('restarts the highlight with each play, and scrolls the window by position', () => {
@@ -226,21 +254,28 @@ describe('<MushafRecitation> memorisation', () => {
     cleanup();
     at(3.891 + 1.2);
     const second = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'blank-upcoming', ...three})}))));
-    expect(Object.values(second).every((s) => s === null)).toBe(true);
+    expect(hidesNothing(second)).toBe(true);
   });
 
   it('blank-all hides what earlier ayahs recited; first-letters is a faint outline in the printed lines', () => {
     const clips = clipTimeline(timings, {mode: 'blank-all', ...three});
     const ayah3 = clips.find((clip) => clip.ayah === 3)!;
+    // Ayah 2's words were shown at the end of its last play: they go back to hidden over 12 frames.
     at(ayah3.compositionFrom + 0.05);
+    const going = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'blank-all', ...three})}))));
+    expect(going['1:2:1']?.opacity).toBeGreaterThan(0.9);
+    cleanup();
+    at(ayah3.compositionFrom + 0.45);
     const blankAll = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'blank-all', ...three})}))));
     expect(blankAll['1:2:1']).toEqual({opacity: 0});
+    // Being recited: shown, its ink filled in.
     expect(blankAll['1:3:1']).toBeNull();
     expect(blankAll['1:3:2']).toEqual({opacity: 0});
     cleanup();
     const firstLetters = stylesOf(windowOf(mount(props({memorize: memorize({mode: 'first-letters', ...three})}))));
     expect(firstLetters['1:2:1']).toBeNull();
-    expect(firstLetters['1:3:2']).toEqual({opacity: 0.12});
+    // The ghost on the ivory page: 0.14.
+    expect(firstLetters['1:3:2']).toEqual({opacity: 0.14});
   });
 
   it('times the lines per clip when shown one at a time', () => {
@@ -274,7 +309,8 @@ describe('<MushafRecitation> interlinear glosses', () => {
     expect(plainHeight(noGloss)).toBe(base);
     cleanup();
     const on = mount(props({text}, {gloss}));
-    const extra = interlinearExtraHeight(1, interlinearFontSize(text.glossSize, 98));
+    // The 16:9 glyph size at the design's margins: 90 px.
+    const extra = interlinearExtraHeight(1, interlinearFontSize(text.glossSize, 90));
     expect(plainHeight(on)).toBe(base + extra);
     expect(JSON.parse(windowOf(on).dataset.lineStyle!)).toEqual({transform: `translateY(${-extra / 2}px)`});
     expect(on.querySelector('[data-gloss-strip]')).toBeNull();
@@ -296,8 +332,8 @@ describe('<MushafRecitation> interlinear glosses', () => {
       props({text, layout: {...defaultMushafRecitationProps.layout, visibleLines: 0}}, {gloss, transliteration: gloss}),
     );
     const line = c.querySelector<HTMLElement>('.mushaf-line-mock')!;
-    const extra = interlinearExtraHeight(2, interlinearFontSize(text.glossSize, 98));
-    expect(Number(line.dataset.lineHeight)).toBe(216 + extra);
+    const extra = interlinearExtraHeight(2, interlinearFontSize(text.glossSize, 90));
+    expect(Number(line.dataset.lineHeight)).toBe(198 + extra);
     expect(JSON.parse(line.dataset.style!)).toEqual({transform: `translateY(${-extra / 2}px)`});
   });
 });
@@ -328,30 +364,31 @@ describe('<MushafRecitation> interlinear glosses under a memorisation mode', () 
     expect(label(c, '1:2:4').style.opacity).toBe('0');
     expect(label(c, '1:2:4').dataset.visibility).toBe('hidden');
     expect(label(c, '1:3:1').style.opacity).toBe('0');
-    // Recited: shown, as its word is.
+    // Recited: shown, as its word is, at the labels' rest.
     expect(words['1:2:1']).toBeNull();
-    expect(label(c, '1:2:1').style.opacity).toBe('');
+    expect(label(c, '1:2:1').style.opacity).toBe('0.7');
     expect(label(c, '1:2:1').dataset.visibility).toBeUndefined();
-    // The active word: shown, in the highlight colour.
+    // The word being marked: its label at full ink, in the accent.
     expect(windowOf(c).dataset.activeWordId).toBe('1:2:2');
     expect(label(c, '1:2:2').dataset.active).toBe('true');
-    expect(label(c, '1:2:2').style.opacity).toBe('');
+    expect(label(c, '1:2:2').style.opacity).toBe('1');
     expect(label(c, '1:2:2').style.color).not.toBe('');
     expect(delays.open.size).toBe(0);
     cleanup();
     // The second play reveals everything, the labels with the words.
     at(3.891 + 1.2);
     const second = mountWithRows('blank-upcoming');
-    for (const id of ['1:2:1', '1:2:2', '1:2:4', '1:3:1']) expect(label(second, id).style.opacity).toBe('');
+    for (const id of ['1:2:1', '1:2:2', '1:2:4', '1:3:1'])
+      expect(shownLabel(label(second, id).style.opacity)).toBe(true);
   });
 
   it('first-letters leaves a faint label under a faint word', () => {
     at(1.5);
     const c = mountWithRows('first-letters');
-    expect(stylesOf(windowOf(c))['1:2:4']).toEqual({opacity: 0.12});
-    expect(label(c, '1:2:4').style.opacity).toBe('0.12');
+    expect(stylesOf(windowOf(c))['1:2:4']).toEqual({opacity: 0.14});
+    expect(label(c, '1:2:4').style.opacity).toBe('0.14');
     expect(label(c, '1:2:4').dataset.visibility).toBe('faint');
-    expect(label(c, '1:2:1').style.opacity).toBe('');
+    expect(label(c, '1:2:1').style.opacity).toBe('0.7');
   });
 
   it('with memorize off (or repeat) every label is shown as before', () => {
@@ -361,7 +398,7 @@ describe('<MushafRecitation> interlinear glosses under a memorisation mode', () 
       const all = Array.from(c.querySelectorAll<HTMLElement>('[data-interlinear-label]'));
       expect(all.map((l) => l.dataset.interlinearLabel).sort()).toEqual(['1:2:1', '1:2:2', '1:2:4', '1:3:1']);
       for (const l of all) {
-        expect(l.style.opacity).toBe('');
+        expect(shownLabel(l.style.opacity)).toBe(true);
         expect(l.dataset.visibility).toBeUndefined();
       }
       expect(label(c, '1:2:4').textContent).toBe('worlds');

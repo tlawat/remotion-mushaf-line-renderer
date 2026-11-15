@@ -1,18 +1,18 @@
 // The page's geometry in the four frame shapes and the grid rows.
 import {fontSizeForWidth, lineHeightForFontSize} from '@tlawat/remotion-mushaf-line';
 import {describe, expect, it} from 'vitest';
-import {LINES_PER_PAGE, pageBox, pageGeometry, rowOf} from '../../../src/page';
-import {ASPECTS, defaultLayout, sizeForAspect} from '../../../src/schema';
+import {LINES_PER_PAGE, PAGE_FIT, pageBox, pageGeometry, rowOf} from '../../../src/page';
+import {ASPECTS, sizeForAspect} from '../../../src/schema';
 
-const room = (size: {width: number; height: number}, marginX = defaultLayout.marginX) => ({
-  x: size.width - 2 * marginX,
-  y: size.height - 2 * Math.round(marginX / 2),
+const room = (size: {width: number; height: number}) => ({
+  x: Math.floor(PAGE_FIT.width * size.width),
+  y: Math.floor(PAGE_FIT.height * size.height),
 });
 
 describe('pageGeometry', () => {
-  it.each(ASPECTS)('%s: the largest page that fits between the margins, centred, sized from its measure', (aspect) => {
+  it.each(ASPECTS)('%s: the largest page that fits 84 % of the width and 92 % of the height, centred', (aspect) => {
     const size = sizeForAspect(aspect);
-    const g = pageGeometry(defaultLayout, size);
+    const g = pageGeometry(size);
     const {x, y} = room(size);
     expect(g.fontSize).toBe(fontSizeForWidth(g.measure));
     expect(g.lineHeight).toBe(lineHeightForFontSize(g.fontSize));
@@ -28,32 +28,43 @@ describe('pageGeometry', () => {
     expect(g.textTop).toBe(g.band + g.padY);
   });
 
-  it('fills a tall frame across and a wide or square one top to bottom', () => {
-    const tall = sizeForAspect('9:16');
-    expect(pageBox(pageGeometry(defaultLayout, tall).measure + 1).width).toBeGreaterThan(room(tall).x);
+  it('scales the page to 92 % of the height at 16:9 and to 84 % of the width at 9:16', () => {
+    const wide = pageGeometry(sizeForAspect('16:9'));
+    // Within one step of the type size, which is whole px.
+    expect(wide.height / 1080).toBeGreaterThan(0.87);
+    expect(wide.height / 1080).toBeLessThanOrEqual(0.92);
+    const tall = pageGeometry(sizeForAspect('9:16'));
+    expect(tall.width / 1080).toBeGreaterThan(0.82);
+    expect(tall.width / 1080).toBeLessThanOrEqual(0.84);
+    expect(pageBox(tall.measure + 1).width).toBeGreaterThan(room(sizeForAspect('9:16')).x);
     for (const aspect of ['16:9', '1:1', '4:5'] as const) {
       const size = sizeForAspect(aspect);
-      const g = pageGeometry(defaultLayout, size);
+      const g = pageGeometry(size);
       expect(pageBox(g.measure + 1).height, aspect).toBeGreaterThan(room(size).y);
       expect(g.width, aspect).toBeLessThan(room(size).x);
     }
   });
 
-  it('gives the 16:9 page the height of the frame and the same proportions in every shape', () => {
-    const wide = pageGeometry(defaultLayout, sizeForAspect('16:9'));
-    expect(wide.measure).toBeGreaterThan(400);
-    expect(wide.height / wide.width).toBeGreaterThan(1.5);
+  it('keeps the same proportions in every shape', () => {
     const ratios = ASPECTS.map((aspect) => {
-      const g = pageGeometry(defaultLayout, sizeForAspect(aspect));
+      const g = pageGeometry(sizeForAspect(aspect));
       return g.height / g.width;
     });
-    for (const ratio of ratios) expect(ratio).toBeCloseTo(ratios[0]!, 1);
+    // The same up to the rounding of whole-px type sizes and line boxes.
+    for (const ratio of ratios) expect(Math.abs(ratio - ratios[0]!)).toBeLessThan(0.1);
   });
 
-  it('shrinks with wider margins and is the same for the same arguments', () => {
-    const size = sizeForAspect('9:16');
-    expect(pageGeometry({marginX: 300}, size).measure).toBeLessThan(pageGeometry({marginX: 120}, size).measure);
-    expect(pageGeometry(defaultLayout, size)).toEqual(pageGeometry(defaultLayout, size));
+  it('fits the page around a reserved band and centres it in the room left, the same for the same arguments', () => {
+    const size = sizeForAspect('16:9');
+    const free = pageGeometry(size);
+    const reserved = pageGeometry(size, {top: 0, bottom: 200});
+    expect(reserved.height).toBeLessThanOrEqual(1080 - 200);
+    expect(reserved.measure).toBeLessThan(free.measure);
+    expect(reserved.top + reserved.height).toBeLessThanOrEqual(1080 - 200);
+    expect(Math.abs(reserved.top - (880 - reserved.top - reserved.height))).toBeLessThanOrEqual(1);
+    const above = pageGeometry(size, {top: 200, bottom: 0});
+    expect(above.top).toBeGreaterThanOrEqual(200);
+    expect(pageGeometry(size)).toEqual(pageGeometry(size));
   });
 });
 

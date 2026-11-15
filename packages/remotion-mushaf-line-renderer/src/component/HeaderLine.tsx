@@ -20,6 +20,7 @@ export const HeaderLine: React.FC<LineRendererProps> = ({
   style,
   className,
   framed = true,
+  frameColor,
   fontSrc,
   fontFallback,
 }) => {
@@ -36,7 +37,7 @@ export const HeaderLine: React.FC<LineRendererProps> = ({
   }
   const items =
     line.type === 'surah_name'
-      ? surahHeaderItems(def, line.surahNumber as number, baseFontSize, framed)
+      ? surahHeaderItems(def, line.surahNumber as number, baseFontSize, framed, frameColor)
       : [{glyph: def.glyphs.basmalah, fontSize: baseFontSize, align: 'baseline' as const}];
   return (
     <GlyphRenderer

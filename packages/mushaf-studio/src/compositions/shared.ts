@@ -270,22 +270,29 @@ export type BlockGeometry = {
   readonly top: number;
 };
 
+/** px of the frame kept clear of the lines at the top and the bottom (a legend's band). */
+export type BlockReserve = {readonly top: number; readonly bottom: number};
+
 /**
  * The lines' block for a layout in a frame of `size`: the package's default type size is for a line
  * spanning the whole width, so the measure sets it. `extraLineHeight` (px, default 0) grows every
  * line slot past the package's line height: the room the interlinear glosses take under the words.
+ * `reserve` keeps bands at the top and bottom clear (`legendReserve()`): the block is placed by
+ * `verticalAlign` in what is left.
  */
 export const blockGeometry = (
   layout: Pick<Layout, 'marginX' | 'visibleLines' | 'verticalAlign'>,
   size: {readonly width: number; readonly height: number},
-  options: {readonly extraLineHeight?: number | undefined} = {},
+  options: {readonly extraLineHeight?: number | undefined; readonly reserve?: BlockReserve | undefined} = {},
 ): BlockGeometry => {
   const measure = size.width - 2 * layout.marginX;
   const fontSize = fontSizeForWidth(measure);
   const lineHeight = lineHeightForFontSize(fontSize) + (options.extraLineHeight ?? 0);
   const slots = layout.visibleLines === 0 ? 1 : layout.visibleLines;
   const blockHeight = slots * lineHeight;
-  const top = Math.round((size.height - blockHeight) * layout.verticalAlign);
+  const above = options.reserve?.top ?? 0;
+  const room = size.height - above - (options.reserve?.bottom ?? 0);
+  const top = above + Math.round((room - blockHeight) * layout.verticalAlign);
   return {measure, fontSize, lineHeight, slots, blockHeight, top};
 };
 
@@ -306,14 +313,17 @@ export const linesBlockStyle = (
   ...offsetStyle(layout.offsetY),
 });
 
-/** The translation block: under the lines (`below`) or over them (`above`), 0.6 em away, `text.translationOffsetY` down. */
+/**
+ * The translation block: under the lines (`below`, its top `0.4 × lineBox` under them) or over them
+ * (`above`, its bottom the same gap over them), between the margins, `text.translationOffsetY` down.
+ */
 export const translationBlockStyle = (
   geometry: BlockGeometry,
   layout: Pick<Layout, 'marginX'>,
-  text: Pick<Text, 'translationPosition' | 'translationSize' | 'translationOffsetY'>,
+  text: Pick<Text, 'translationPosition' | 'translationOffsetY'>,
   height: number,
 ): React.CSSProperties => {
-  const gap = Math.round(text.translationSize * 0.6);
+  const gap = Math.round(geometry.lineHeight * 0.4);
   return {
     position: 'absolute',
     left: layout.marginX,
@@ -324,6 +334,19 @@ export const translationBlockStyle = (
     ...offsetStyle(text.translationOffsetY),
   };
 };
+
+/**
+ * The centred translation layout under (or over) lines of `geometry` (render-design.md 5.5): the
+ * text at most `0.72 × measure` (and 60 ch) wide, lines 1.45 apart, a `0.12 × measure` hairline
+ * between layers.
+ */
+export const translationLayoutFor = (
+  geometry: Pick<BlockGeometry, 'measure'>,
+): {readonly width: number; readonly ruleWidth: number; readonly lineHeight: number} => ({
+  width: Math.round(0.72 * geometry.measure),
+  ruleWidth: Math.round(0.12 * geometry.measure),
+  lineHeight: 1.45,
+});
 
 /** The gloss strip: along the bottom edge, one gloss size up, between the margins. */
 export const glossBlockStyle = (

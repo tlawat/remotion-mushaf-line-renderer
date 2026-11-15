@@ -2,5 +2,13 @@
 // line is pure data on top of the package's word-range slice (`{fromWordId, toWordId}`): the line
 // appears twice in the passage, each half a timed slot of its own in `scheduleLines()`.
 export {doubtfulWords} from './doubtful';
-export {applySplits, splitLineAt, wordIdAt} from './split';
+export {
+  applySplits,
+  droppedSplitsError,
+  droppedSplitsWarning,
+  type FittedSplits,
+  fitSplits,
+  splitLineAt,
+  wordIdAt,
+} from './split';
 export {wordStarts} from './word-starts';

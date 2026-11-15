@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// The background under jsdom with `remotion` mocked: the style of each kind and fit, the Ken Burns
-// transform over the composition, the dim layer, the glow and its opacity from the audio level, and
-// the video's loop.
+// The background under jsdom with `remotion` mocked: the style of each kind and fit, the slow zoom
+// over the composition, the dim layer, no glow (nothing follows the audio), and the video's loop.
 import {cleanup, render} from '@testing-library/react';
 import type * as React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -34,16 +33,21 @@ const {
   backgroundBaseStyle,
   backgroundSchema,
   defaultBackground,
-  GLOW_REST,
-  glowOpacity,
-  glowStyle,
+  dimLayer,
+  Jadwal,
+  jadwalOpacity,
+  jadwalRules,
   kenBurnsTransform,
   MushafBackground,
   mediaBoxStyle,
   mediaStyle,
+  NOISE_OPACITY,
   showsMedia,
+  vignetteRgb,
+  vignetteStyle,
 } = await import('../../../src/background');
 type Background = import('../../../src/background').Background;
+const {frameGeometry} = await import('../../../src/schema/tokens');
 
 const background = (changes: Partial<Background> = {}): Background => ({...defaultBackground, ...changes});
 const at = (frame: number, props: React.ComponentProps<typeof MushafBackground>) => {
@@ -61,8 +65,12 @@ describe('backgroundSchema', () => {
     for (const [name, field] of Object.entries(backgroundSchema.shape)) expect(field.description, name).toBeTruthy();
     expect(backgroundSchema.safeParse(background({blur: 41})).success).toBe(false);
     expect(backgroundSchema.safeParse(background({dim: 1.1})).success).toBe(false);
-    expect(backgroundSchema.safeParse(background({kenBurnsScale: 1.31})).success).toBe(false);
+    expect(backgroundSchema.safeParse(background({kenBurnsScale: 1.06})).success).toBe(false);
     expect(backgroundSchema.safeParse(background({kenBurnsScale: 0.9})).success).toBe(false);
+    expect(backgroundSchema.safeParse(background({vignette: 0.42})).success).toBe(false);
+    // The removed values are refused: migrateMushafProps() maps them.
+    expect(backgroundSchema.safeParse({...defaultBackground, kenBurns: 'pan-left'}).success).toBe(false);
+    expect('glow' in backgroundSchema.shape).toBe(false);
   });
 });
 
@@ -72,7 +80,7 @@ describe('backgroundBaseStyle / showsMedia / mediaStyle', () => {
     expect(backgroundBaseStyle(background({kind: 'image', color: '#123456'}))).toEqual({backgroundColor: '#123456'});
     expect(
       backgroundBaseStyle(background({kind: 'gradient', gradient: {from: '#000000', to: '#ffffff', angle: 135}})),
-    ).toEqual({backgroundColor: '#fbf7ee', backgroundImage: 'linear-gradient(135deg, #000000, #ffffff)'});
+    ).toEqual({backgroundColor: '#f8f3e6', backgroundImage: 'linear-gradient(135deg, #000000, #ffffff)'});
   });
 
   it('shows media for an image or a video with a src only', () => {
@@ -114,20 +122,24 @@ describe('kenBurnsTransform', () => {
     expect(kenBurnsTransform('slow-zoom', 1.2, 300, 301)).toBe('scale(1.2)');
   });
 
-  it('pans across the margin the scale gives, edge to edge', () => {
-    // At 1.2 the picture overhangs by 0.2 / 2.4 of its width on each side: 8.3333%.
-    expect(kenBurnsTransform('pan-left', 1.2, 0, 301)).toBe('scale(1.2) translateX(8.3333%)');
-    expect(kenBurnsTransform('pan-left', 1.2, 150, 301)).toBe('scale(1.2) translateX(0%)');
-    expect(kenBurnsTransform('pan-left', 1.2, 300, 301)).toBe('scale(1.2) translateX(-8.3333%)');
-    expect(kenBurnsTransform('pan-right', 1.2, 0, 301)).toBe('scale(1.2) translateX(-8.3333%)');
-    expect(kenBurnsTransform('pan-right', 1.2, 300, 301)).toBe('scale(1.2) translateX(8.3333%)');
+  it('eases the zoom on SINE: slow at the start and the end, never past the scale', () => {
+    // A quarter of the way in, the eased zoom is behind a linear one; three quarters in, ahead of it.
+    const quarter = Number(/scale\(([\d.]+)\)/.exec(kenBurnsTransform('slow-zoom', 1.04, 75, 301)!)![1]);
+    const threeQuarters = Number(/scale\(([\d.]+)\)/.exec(kenBurnsTransform('slow-zoom', 1.04, 225, 301)!)![1]);
+    expect(quarter).toBeLessThan(1.01);
+    expect(quarter).toBeGreaterThan(1);
+    expect(threeQuarters).toBeGreaterThan(1.03);
+    expect(threeQuarters).toBeLessThan(1.04);
+    for (let f = 0; f <= 300; f += 10) {
+      const scale = Number(/scale\(([\d.]+)\)/.exec(kenBurnsTransform('slow-zoom', 1.05, f, 301)!)![1]);
+      expect(scale).toBeLessThanOrEqual(1.05);
+    }
   });
 
   it('clamps outside the composition, holds still for one frame, and is nothing for none', () => {
     expect(kenBurnsTransform('slow-zoom', 1.2, -5, 301)).toBe('scale(1)');
     expect(kenBurnsTransform('slow-zoom', 1.2, 400, 301)).toBe('scale(1.2)');
     expect(kenBurnsTransform('slow-zoom', 1.2, 0, 1)).toBe('scale(1)');
-    expect(kenBurnsTransform('pan-left', 1, 150, 301)).toBe('scale(1) translateX(0%)');
     expect(kenBurnsTransform('none', 1.2, 150, 301)).toBeUndefined();
   });
 
@@ -135,29 +147,6 @@ describe('kenBurnsTransform', () => {
     expect(mediaBoxStyle(background({kenBurns: 'slow-zoom', kenBurnsScale: 1.3}), 300, 301).transform).toBe(
       'scale(1.3)',
     );
-  });
-});
-
-describe('glowOpacity / glowStyle', () => {
-  it('rises from the resting share of the strength at silence to the strength at the loudest', () => {
-    expect(glowOpacity(0, 0.8)).toBe(0.28); // GLOW_REST × 0.8
-    expect(glowOpacity(0.5, 0.8)).toBe(0.54);
-    expect(glowOpacity(1, 0.8)).toBe(0.8);
-  });
-
-  it('clamps the level and the strength, and reads a non-number as silence', () => {
-    expect(glowOpacity(2, 0.8)).toBe(0.8);
-    expect(glowOpacity(-1, 0.8)).toBe(glowOpacity(0, 0.8));
-    expect(glowOpacity(Number.NaN, 1)).toBe(GLOW_REST);
-    expect(glowOpacity(1, 0)).toBe(0);
-  });
-
-  it('centres the ellipse where the lines are and swells with the level', () => {
-    const style = glowStyle({color: '#c8a45c', strength: 1}, 1, 0.3);
-    expect(style.backgroundImage).toBe('radial-gradient(ellipse 60% 40% at 50% 30%, #c8a45c, transparent 70%)');
-    expect(style.opacity).toBe(1);
-    expect(style.transform).toBe('scale(1.08)');
-    expect(glowStyle({color: '#c8a45c', strength: 1}, 0).transform).toBe('scale(1)');
   });
 });
 
@@ -210,18 +199,180 @@ describe('<MushafBackground>', () => {
     expect(part(at(300, {background: changes}), 'media')!.style.transform).toBe('scale(1.2)');
   });
 
+  it('keeps an image or a video dimmed to its floor: black under light ink, a page veil under dark ink', () => {
+    const image = background({kind: 'image', src: 'sky.jpg'});
+    expect(dimLayer(image, {background: '#121416', color: '#f1eadb'})).toEqual({color: '#000', opacity: 0.45});
+    expect(dimLayer({...image, dim: 0.6}, {background: '#121416', color: '#f1eadb'})).toEqual({
+      color: '#000',
+      opacity: 0.6,
+    });
+    expect(dimLayer(image, {background: '#f8f3e6', color: '#1c1a16'})).toEqual({color: '#f8f3e6', opacity: 0.55});
+    // A colour or a gradient takes dim as set; without layout, so does an image.
+    expect(dimLayer(background({kind: 'gradient'}), {background: '#121416', color: '#f1eadb'})).toBeNull();
+    expect(dimLayer(background({kind: 'gradient', dim: 0.2}), {background: '#121416', color: '#f1eadb'})).toEqual({
+      color: '#000',
+      opacity: 0.2,
+    });
+    expect(dimLayer(image)).toBeNull();
+    // An image without a src shows none: the colour is the page, dimmed as set.
+    expect(dimLayer(background({kind: 'image', src: ''}), {background: '#121416', color: '#f1eadb'})).toBeNull();
+  });
+
+  it('draws the floor over a media background when the layout is given', () => {
+    const c = at(0, {
+      background: background({kind: 'video', src: 'bg/waves.mp4'}),
+      layout: {background: '#f8f3e6', color: '#1c1a16'},
+    });
+    expect(part(c, 'dim')!.style.opacity).toBe('0.55');
+    expect(part(c, 'dim')!.style.backgroundColor).toBe('rgb(248, 243, 230)');
+  });
+
   it('dims with a black layer at the dim opacity, over any kind', () => {
     const c = at(0, {background: background({kind: 'gradient', dim: 0.4})});
     expect(part(c, 'dim')!.style.opacity).toBe('0.4');
     expect(part(c, 'dim')!.style.backgroundColor).toBe('rgb(0, 0, 0)');
   });
 
-  it('shows the glow when enabled, its opacity from the audio level', () => {
-    const glow = {enabled: true, color: '#c8a45c', strength: 0.8};
-    expect(part(at(0, {background: background({glow})}), 'glow')!.style.opacity).toBe('0.28');
+  it('draws no glow, even for props that still carry one', () => {
+    const legacy = {...background(), glow: {enabled: true, color: '#c8a45c', strength: 0.8}} as Background;
+    expect(part(at(0, {background: legacy}), 'glow')).toBeNull();
+  });
+});
+
+describe('vignette', () => {
+  it('darkens toward black on a dark ground and toward a deeper shade of the page on a light one', () => {
+    expect(vignetteRgb('#121416')).toBe('0, 0, 0');
+    const [r, g, b] = vignetteRgb('#f8f3e6').split(', ').map(Number) as [number, number, number];
+    // Warm: red over blue, as the ivory is, and clearly darker than it.
+    expect(r).toBeGreaterThan(b);
+    expect(g).toBeGreaterThan(b);
+    expect(r).toBeLessThan(0xf8 - 20);
+    expect(r).toBeGreaterThan(0xf8 - 60);
+  });
+
+  it('is a radial gradient clear over the middle, nothing at 0', () => {
+    expect(vignetteStyle(0.22, '#121416')).toEqual({
+      backgroundImage: 'radial-gradient(ellipse 60% 50% at 50% 48%, transparent 55%, rgba(0, 0, 0, 0.22) 100%)',
+    });
+    expect(vignetteStyle(0, '#121416')).toBeNull();
+  });
+
+  it('reaches the frame: a clear share at the middle of each edge, all of it at the corners', () => {
+    // The share of `vignette` the CSS gradient paints at (x, y), from its own ellipse and stops.
+    const [, rx, ry, cx, cy, clear] = vignetteStyle(0.22, '#121416')!
+      .backgroundImage!.toString()
+      .match(/ellipse (\d+)% (\d+)% at (\d+)% (\d+)%, transparent (\d+)%/)!
+      .map(Number) as [number, number, number, number, number, number];
+    for (const [width, height] of [
+      [1920, 1080],
+      [1080, 1920],
+      [1080, 1080],
+    ] as const) {
+      const share = (x: number, y: number) => {
+        const r = Math.hypot(
+          (x - (cx / 100) * width) / ((rx / 100) * width),
+          (y - (cy / 100) * height) / ((ry / 100) * height),
+        );
+        return Math.min(1, Math.max(0, (r - clear / 100) / (1 - clear / 100)));
+      };
+      // The middle stays clear; the sides take over half of it, the top and bottom most of it.
+      expect(share(width / 2, height / 2)).toBe(0);
+      expect(share(0.3 * width, 0.4 * height)).toBe(0);
+      expect(share(0, height / 2)).toBeGreaterThan(0.5);
+      expect(share(width, height / 2)).toBeGreaterThan(0.5);
+      expect(share(width / 2, 0)).toBeGreaterThan(0.85);
+      expect(share(width / 2, height)).toBe(1);
+      for (const [x, y] of [
+        [0, 0],
+        [width, 0],
+        [0, height],
+        [width, height],
+      ] as const)
+        expect(share(x, y)).toBe(1);
+    }
+  });
+
+  it('draws the vignette and its fixed noise over the background, and neither without a vignette', () => {
+    const layout = {background: '#121416', color: '#f1eadb'};
+    let c = at(0, {background: background({vignette: 0.2}), layout});
+    expect(part(c, 'vignette')!.style.backgroundImage).toContain('rgba(0, 0, 0, 0.2)');
+    const noise = part(c, 'noise')!;
+    expect(noise.style.opacity).toBe(String(NOISE_OPACITY));
+    // Zero-mean: a grain around 50 % grey (taken in sRGB), laid on where that grey changes nothing.
+    expect(noise.style.mixBlendMode).toBe('overlay');
+    expect(noise.querySelector('filter')!.getAttribute('color-interpolation-filters')).toBe('sRGB');
+    const matrix = noise.querySelector('feColorMatrix')!.getAttribute('values')!.split(' ').map(Number);
+    for (const row of [0, 1, 2]) {
+      const gains = matrix.slice(row * 5, row * 5 + 3);
+      expect(gains.reduce((sum, gain) => sum + gain, 0)).toBeCloseTo(1, 3);
+      expect(matrix[row * 5 + 4]).toBe(0);
+    }
+    expect(matrix.slice(15)).toEqual([0, 0, 0, 0, 1]);
+    const turbulence = noise.querySelector('feTurbulence')!;
+    expect([
+      turbulence.getAttribute('baseFrequency'),
+      turbulence.getAttribute('numOctaves'),
+      turbulence.getAttribute('seed'),
+    ]).toEqual(['0.9', '1', '7']);
+    // The rect points at its own filter.
+    const id = noise.querySelector('filter')!.id;
+    expect(noise.querySelector('rect')!.getAttribute('filter')).toBe(`url(#${id})`);
+    expect(id).toMatch(/^[\w-]+$/);
     cleanup();
-    expect(part(at(0, {background: background({glow}), audioLevel: 1}), 'glow')!.style.opacity).toBe('0.8');
-    cleanup();
-    expect(part(at(0, {background: background({glow: {...glow, strength: 0}})}), 'glow')).toBeNull();
+    c = at(0, {background: background(), layout});
+    expect(part(c, 'vignette')).toBeNull();
+    expect(part(c, 'noise')).toBeNull();
+  });
+});
+
+describe('jadwal', () => {
+  it('puts the outer rule at the safe area, 2 u thick, and the inner one 6 u inside it, 1 u thick', () => {
+    expect(jadwalRules(1920, 1080)).toEqual({outer: {inset: 54, width: 2}, inner: {inset: 62, width: 1}});
+    expect(jadwalRules(1080, 1920)).toEqual({outer: {inset: 54, width: 2}, inner: {inset: 62, width: 1}});
+    expect(jadwalRules(3840, 2160)).toEqual({outer: {inset: 108, width: 4}, inner: {inset: 124, width: 2}});
+  });
+
+  it('keeps the furniture inside its inner rule by half a label, at every format', () => {
+    for (const [width, height] of [
+      [1920, 1080],
+      [1080, 1920],
+      [1080, 1080],
+      [1080, 1350],
+      [3840, 2160],
+    ] as const) {
+      const {inner} = jadwalRules(width, height);
+      const plain = frameGeometry(width, height);
+      const inside = frameGeometry(width, height, {jadwal: true});
+      const clear = inner.inset + inner.width + Math.round(0.5 * plain.label);
+      expect(inside.safe, `${width}x${height}`).toBeGreaterThanOrEqual(Math.ceil(clear));
+      expect(inside.top).toBe(Math.max(plain.top, inside.safe));
+      expect(inside.bottom).toBe(Math.max(plain.bottom, inside.safe));
+      expect([inside.label, inside.unit]).toEqual([plain.label, plain.unit]);
+    }
+    expect(frameGeometry(1920, 1080, {jadwal: true})).toEqual({safe: 76, label: 26, unit: 1, top: 76, bottom: 76});
+    expect(frameGeometry(1080, 1920, {jadwal: true})).toEqual({safe: 82, label: 37, unit: 1, top: 230, bottom: 346});
+    expect(frameGeometry(1920, 1080, {jadwal: false})).toEqual(frameGeometry(1920, 1080));
+  });
+
+  it('is 0.55 on a light ground and 0.45 on a dark one, in the metal', () => {
+    expect(jadwalOpacity('#f8f3e6')).toBe(0.55);
+    expect(jadwalOpacity('#10241b')).toBe(0.45);
+    remotion.state.width = 1920;
+    remotion.state.height = 1080;
+    const c = render(<Jadwal metal="#cfae63" ground="#10241b" />).container;
+    const root = c.querySelector<HTMLElement>('[data-mushaf-jadwal]')!;
+    expect(root.style.opacity).toBe('0.45');
+    const outer = c.querySelector<HTMLElement>('[data-mushaf-jadwal-rule="outer"]')!;
+    const inner = c.querySelector<HTMLElement>('[data-mushaf-jadwal-rule="inner"]')!;
+    expect([outer.style.left, outer.style.top, outer.style.border]).toEqual([
+      '54px',
+      '54px',
+      '2px solid rgb(207, 174, 99)',
+    ]);
+    expect([inner.style.right, inner.style.bottom, inner.style.border]).toEqual([
+      '62px',
+      '62px',
+      '1px solid rgb(207, 174, 99)',
+    ]);
   });
 });

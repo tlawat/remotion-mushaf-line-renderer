@@ -86,6 +86,9 @@ const SlideFadePresentation: React.FC<TransitionPresentationComponentProps<Slide
  *
  * Same shape as `fade()` from `@remotion/transitions/fade`, so it also works in a real
  * `<TransitionSeries>`.
+ *
+ * @deprecated A line that keeps rising as it leaves, a quarter of its box, reads as a subtitle. Use
+ * `fadeRise()`: the same entrance at a fixed distance in px, and an exit that does not move.
  */
 export const slideFade = (props?: SlideFadeProps): TransitionPresentation<SlideFadeProps> => ({
   component: SlideFadePresentation,

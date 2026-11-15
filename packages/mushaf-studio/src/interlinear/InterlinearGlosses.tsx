@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {useDelayRender} from 'remotion';
+import {interpolateColors, useDelayRender} from 'remotion';
 import {visibilityStyle} from '../memorize/visibility';
 import type {WordGloss} from '../types';
 import {fitLabelSize, interlinearRowHeight, type LabelPlacement, placeLabels} from './layout';
@@ -13,9 +13,16 @@ export type InterlinearGlossesProps = {
   readonly gloss: WordGloss | null;
   /** The word-by-word transliteration, a second label row; `null` leaves it out. */
   readonly transliteration: WordGloss | null;
-  /** The word being recited (`MushafWord.id`): its label alone takes `activeColor`. `null` for none. */
+  /** The word being recited (`MushafWord.id`): its label gets `data-active`. `null` for none. */
   readonly activeWordId: string | null;
+  /**
+   * The accent of the label of the word being marked (`legibleAccent()`): the labels rest at 0.7 of
+   * the gloss ink and the marked word's label goes to full ink in this colour with its emphasis.
+   * Omitted: every label at full gloss ink, nothing marked.
+   */
   readonly activeColor?: string | undefined;
+  /** How strongly each word is marked now (`wordEmphasis()`), 0-1. Default: 1 for `activeWordId`, 0 for the rest. */
+  readonly emphasisOf?: ((id: string) => number) | undefined;
   /**
    * What each word shows under a memorisation mode (`glossVisibilityFrom()`): a hidden word's label
    * is hidden too (opacity 0, keeping its place and its fit), a faint word's equally faint. Omitted:
@@ -66,6 +73,9 @@ const LAYER_STYLE: React.CSSProperties = {
   wordSpacing: 'normal',
 };
 
+/** The labels' opacity while their word is not marked: 0.7 of the gloss ink. */
+const LABEL_REST = 0.7;
+
 const LABEL = 'Mushaf Studio: measuring the printed words for the interlinear glosses';
 
 /** The attribute a label's text carries: what its fitted size is stored under. */
@@ -92,6 +102,7 @@ export const InterlinearGlosses: React.FC<InterlinearGlossesProps> = ({
   transliteration,
   activeWordId,
   activeColor,
+  emphasisOf,
   visibilityOf,
   fontFamily,
   fontSize,
@@ -203,6 +214,10 @@ export const InterlinearGlosses: React.FC<InterlinearGlossesProps> = ({
         const lines = texts(placement.id);
         if (lines.every((line) => line === '')) return null;
         const active = activeColor !== undefined && placement.id === activeWordId;
+        const emphasis =
+          activeColor === undefined
+            ? undefined
+            : Math.min(1, Math.max(0, emphasisOf?.(placement.id) ?? (placement.id === activeWordId ? 1 : 0)));
         const visibility = visibilityOf?.(placement.id) ?? 'shown';
         return (
           <div
@@ -216,7 +231,12 @@ export const InterlinearGlosses: React.FC<InterlinearGlossesProps> = ({
               left: placement.left,
               width: placement.width,
               textAlign: 'center',
-              ...(active ? {color: activeColor} : {}),
+              ...(emphasis === undefined || activeColor === undefined
+                ? {}
+                : {
+                    opacity: Math.round((LABEL_REST + (1 - LABEL_REST) * emphasis) * 10_000) / 10_000,
+                    ...(emphasis > 0 ? {color: interpolateColors(emphasis, [0, 1], [color, activeColor])} : {}),
+                  }),
               ...visibilityStyle(visibility),
             }}
           >
